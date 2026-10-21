@@ -5,14 +5,14 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/kb/services/kbservice"
 )
 
-type OpenVaultRequest struct {
-	Tenant uint64     `json:"tenant,string"`
+type OpenVolumeRequest struct {
+	Tenant uint64     `json:"tenant,string,omitempty"`
 	Path   VolumePath `json:"path"`
 }
 
-// ToArgs converts the request to the service's OpenVaultArgs.
-func (r OpenVaultRequest) ToArgs() kbservice.OpenVaultArgs {
-	return kbservice.OpenVaultArgs{
+// ToArgs converts the request to the service's OpenVolumeArgs.
+func (r OpenVolumeRequest) ToArgs() kbservice.OpenVolumeArgs {
+	return kbservice.OpenVolumeArgs{
 		ServiceArgs: features.ServiceArgs{Tenant: r.Tenant},
 		Path:        r.Path.ToVolumePath(),
 	}

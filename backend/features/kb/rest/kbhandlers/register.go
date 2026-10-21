@@ -20,5 +20,5 @@ func (kbh *KnowledgeBaseHandler) Register(router gin.IRouter, service kbservice.
 		c.JSON(http.StatusOK, gin.H{"message": "Hello world from the Knowledge Base"})
 	})
 
-	group.POST("/vaults/open", kbh.OpenVault)
+	group.POST("/volumes/open", kbh.OpenVolume)
 }

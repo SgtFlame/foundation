@@ -5,20 +5,20 @@ import (
 )
 
 type Service interface {
-	OpenVaultAsync(args OpenVaultArgs) *OpenVaultRequest
-	OpenVault(args OpenVaultArgs) OpenVaultResponse
+	OpenVolumeAsync(args OpenVolumeArgs) *OpenVolumeRequest
+	OpenVolume(args OpenVolumeArgs) OpenVolumeResponse
 }
 
-type OpenVaultArgs struct {
+type OpenVolumeArgs struct {
 	features.ServiceArgs
 	Path VolumePath
 }
 
-type OpenVaultRequest struct {
-	Response chan *OpenVaultResponse
+type OpenVolumeRequest struct {
+	Response chan *OpenVolumeResponse
 }
 
-type OpenVaultResponse struct {
-	Common  features.ServiceResponse
-	VaultID uint64
+type OpenVolumeResponse struct {
+	Common   features.ServiceResponse
+	VolumeID uint64
 }

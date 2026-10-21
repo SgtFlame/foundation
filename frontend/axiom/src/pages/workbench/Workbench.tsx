@@ -1,12 +1,28 @@
 import { Layout, Model, type IJsonModel } from 'flexlayout-react'
 import 'flexlayout-react/style/light.css'
-import { factory } from './ComponentFactory.tsx'
+import { createFactory } from './ComponentFactory.tsx'
 import { EditorRegistry } from './EditorRegistry.ts'
 import LeftMenuSidebar from './LeftMenuSidebar.tsx'
 
 const json: IJsonModel = {
   global: { tabSetEnableDeleteWhenEmpty: true },
-  borders: [],
+  borders: [
+    {
+      type: 'border',
+      location: 'right',
+      selected: -1,
+      size: 480,
+      children: [
+        {
+          type: 'tab',
+          id: 'devtools',
+          name: 'DevTools',
+          component: 'devtools',
+          enableClose: false,
+        },
+      ],
+    },
+  ],
   layout: {
     type: 'row',
     weight: 100,
@@ -16,6 +32,7 @@ const json: IJsonModel = {
 
 const model = Model.fromJson(json)
 const registry = new EditorRegistry(model)
+const factory = createFactory(registry)
 
 function Workbench() {
   return (

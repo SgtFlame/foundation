@@ -98,6 +98,11 @@ func (vp *VolumePath) Type(t string) *VolumePath {
 	return vp
 }
 
+// Folders returns a copy of the folder segments.
+func (vp *VolumePath) Folders() []string {
+	return slices.Clone(vp.folders)
+}
+
 func (vp *VolumePath) Build() (string, error) {
 	if vp.err != nil {
 		return "", vp.err
@@ -124,6 +129,24 @@ func (vp *VolumePath) setErr(err error) bool {
 		vp.err = err
 	}
 	return err == nil
+}
+
+// SplitFile splits a file name into its base name and content type; ok is false
+// for an unknown extension or a base name that is not a valid path segment.
+func SplitFile(name string) (base, fileType string, ok bool) {
+	ext := filepath.Ext(name)
+	base = strings.TrimSuffix(name, ext)
+	for t, e := range typeExtensions {
+		if e == ext && validateSegment("file", base) == nil {
+			return base, t, true
+		}
+	}
+	return "", "", false
+}
+
+// ValidateFolder reports whether name can be used as a volume path folder.
+func ValidateFolder(name string) error {
+	return validateSegment("folder", name)
 }
 
 func validateSegment(kind, segment string) error {

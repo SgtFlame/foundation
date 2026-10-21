@@ -5,8 +5,12 @@ Copyright © 2026 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"github.com/SgtFlame/foundation/backend/features/kb/rest/collabhandlers"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/kbhandlers"
-	"github.com/SgtFlame/foundation/backend/features/kb/services/kbservice/impl"
+	"github.com/SgtFlame/foundation/backend/features/kb/rest/volumehandlers"
+	collabimpl "github.com/SgtFlame/foundation/backend/features/kb/services/collabservice/impl"
+	kbimpl "github.com/SgtFlame/foundation/backend/features/kb/services/kbservice/impl"
+	volumeimpl "github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice/impl"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 )
@@ -27,17 +31,29 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var kbOpts []impl.Option
+		var kbOpts []kbimpl.Option
+		var volumeOpts []volumeimpl.Option
+		var collabOpts []collabimpl.Option
 		if serveKBRoot != "" {
-			kbOpts = append(kbOpts, impl.WithRoot(serveKBRoot))
+			kbOpts = append(kbOpts, kbimpl.WithRoot(serveKBRoot))
+			volumeOpts = append(volumeOpts, volumeimpl.WithRoot(serveKBRoot))
+			collabOpts = append(collabOpts, collabimpl.WithRoot(serveKBRoot))
 		}
-		kbService := impl.CreateService(kbOpts...)
+		kbService := kbimpl.CreateService(kbOpts...)
+		volumeService := volumeimpl.CreateService(volumeOpts...)
+		collabService := collabimpl.CreateService(collabOpts...)
 
 		router := gin.Default()
 		api := router.Group("/api/v1")
 
 		kbHandler := &kbhandlers.KnowledgeBaseHandler{}
 		kbHandler.Register(api, kbService)
+
+		volumeHandler := &volumehandlers.VolumeHandler{}
+		volumeHandler.Register(api, volumeService)
+
+		collabHandler := &collabhandlers.CollabHandler{}
+		collabHandler.Register(api, collabService)
 
 		return router.Run(serveAddr)
 	},

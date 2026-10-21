@@ -1,0 +1,94 @@
+import { lazy, Suspense, useCallback, useMemo } from 'react'
+import { Box, CircularProgress, Stack } from '@mui/material'
+import { Layout, Model, type IJsonModel, type TabNode } from 'flexlayout-react'
+import type { CollabSession } from './collab/CollabSession.ts'
+import { useCollabSession, useCollabState } from './collab/useCollabSession.ts'
+import MarkdownStatusBar from './MarkdownStatusBar.tsx'
+import type { MarkdownObject } from './MarkdownObject.ts'
+
+// Each view is its own chunk, so its editor library loads only when shown
+const LivePreviewView = lazy(() => import('./live/LivePreviewView.tsx'))
+const SourceView = lazy(() => import('./source/SourceView.tsx'))
+const WysiwygView = lazy(() => import('./wysiwyg/WysiwygView.tsx'))
+
+const json: IJsonModel = {
+  global: { tabEnableClose: false, tabSetEnableMaximize: false },
+  borders: [],
+  layout: {
+    type: 'row',
+    weight: 100,
+    children: [
+      {
+        type: 'tabset',
+        weight: 100,
+        children: [
+          { type: 'tab', name: 'Live Preview', component: 'live' },
+          { type: 'tab', name: 'Source', component: 'source' },
+          { type: 'tab', name: 'WYSIWYG', component: 'wysiwyg' },
+        ],
+      },
+    ],
+  },
+}
+
+const loading = <CircularProgress size={28} sx={{ m: 2 }} />
+
+// Each view binds to the session's shared document; views appear once it has loaded
+function MarkdownView({ session, component }: { session: CollabSession; component: string }) {
+  switch (component) {
+    case 'live':
+      return (
+        <Suspense fallback={loading}>
+          <LivePreviewView session={session} />
+        </Suspense>
+      )
+    case 'source':
+      return (
+        <Suspense fallback={loading}>
+          <SourceView session={session} />
+        </Suspense>
+      )
+    case 'wysiwyg':
+      return (
+        <Suspense fallback={loading}>
+          <WysiwygView session={session} />
+        </Suspense>
+      )
+    default:
+      return null
+  }
+}
+
+function SessionLayout({ session }: { session: CollabSession }) {
+  // One model per editor, unlike DevToolsTab's single module-level model
+  const model = useMemo(() => Model.fromJson(json), [])
+  const state = useCollabState(session)
+  const factory = useCallback(
+    (node: TabNode) => <MarkdownView session={session} component={node.getComponent() ?? ''} />,
+    [session],
+  )
+
+  return (
+    <Stack sx={{ height: '100%', minHeight: 0 }}>
+      <Box sx={{ position: 'relative', flexGrow: 1 }}>
+        {state.loaded ? (
+          <Layout model={model} factory={factory} />
+        ) : (
+          <Stack sx={{ height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+            <CircularProgress size={28} />
+          </Stack>
+        )}
+      </Box>
+      <MarkdownStatusBar state={state} />
+    </Stack>
+  )
+}
+
+// Edits a markdown file with everyone who has it open: Live Preview, Source
+// and WYSIWYG views of the same document, autosaved by the server-elected writer
+function MarkdownEditor({ object }: { object: MarkdownObject }) {
+  const session = useCollabSession(object.fileId)
+  return <SessionLayout session={session} />
+}
+
+export default MarkdownEditor

@@ -11,7 +11,7 @@ import (
 // Option configures the service created by CreateService.
 type Option func(*service)
 
-// WithRoot sets the absolute directory that vault paths are resolved against.
+// WithRoot sets the absolute directory that volume paths are resolved against.
 func WithRoot(root string) Option {
 	return func(s *service) {
 		s.root = root
@@ -27,10 +27,7 @@ var (
 // applied by the first call; later calls return the existing instance.
 func CreateService(opts ...Option) kbservice.Service {
 	once.Do(func() {
-		instance = &service{
-			root:   defaultRoot(),
-			vaults: map[string]uint64{},
-		}
+		instance = &service{root: defaultRoot()}
 		for _, opt := range opts {
 			opt(instance)
 		}

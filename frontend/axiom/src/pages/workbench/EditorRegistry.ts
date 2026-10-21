@@ -1,14 +1,19 @@
 import { Actions, DockLocation, type Model } from 'flexlayout-react'
 import type { BarObject } from '../../editors/bar/BarObject.ts'
 import type { FooObject } from '../../editors/foo/FooObject.ts'
+import type { MarkdownObject } from '../../editors/markdown/MarkdownObject.ts'
+import type { VolumeObject } from '../../editors/volume/VolumeObject.ts'
 import type { VolumesObject } from '../../editors/volumes/VolumesObject.ts'
 
-export type EditableObject = FooObject | BarObject | VolumesObject
+// An object may set its own tab text (name) and tab hover text (helpText)
+export type EditableObject = FooObject | BarObject | VolumesObject | VolumeObject | MarkdownObject
 
 const editorNames: Record<EditableObject['kind'], string> = {
   foo: 'Foo',
   bar: 'Bar',
   volumes: 'Volumes',
+  volume: 'Volume',
+  markdown: 'Markdown',
 }
 
 export class EditorRegistry {
@@ -34,7 +39,8 @@ export class EditorRegistry {
         {
           type: 'tab',
           id: tabId,
-          name: `${editorNames[object.kind]} ${object.id}`,
+          name: 'name' in object ? object.name : `${editorNames[object.kind]} ${object.id}`,
+          helpText: 'helpText' in object ? object.helpText : undefined,
           component: object.kind,
           config: { object },
         },
