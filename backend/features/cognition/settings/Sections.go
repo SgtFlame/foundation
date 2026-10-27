@@ -1,5 +1,5 @@
 // Package cognitionsettings declares the cognition section
-// (documentation/plans/Cognition.md › Execution): a run's limits and how
+// (documentation/Cognition.md › Execution): a run's limits and how
 // long its trace is kept.
 package cognitionsettings
 

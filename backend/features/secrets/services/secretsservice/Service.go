@@ -1,5 +1,5 @@
 // Package secretsservice maintains the server's secrets for Application
-// Administrators (documentation/plans/Secrets.md › secretsservice). It is
+// Administrators (documentation/Secrets.md › secretsservice). It is
 // write-only: no operation ever returns a secret's value.
 package secretsservice
 

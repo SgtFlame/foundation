@@ -1,6 +1,6 @@
 // Package fuse is the one implementation of weighted Reciprocal Rank Fusion,
 // shared by indexservice.Find and the retrieval engine
-// (documentation/plans/ContextRetrieval.md).
+// (documentation/ContextRetrieval.md).
 package fuse
 
 import "sort"

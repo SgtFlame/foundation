@@ -1,6 +1,6 @@
 // Package conversation keeps chat conversations and their rounds, and
 // declares the chat.contextProvider point that adds context to a round's
-// prompt (documentation/plans/ChatCompletion.md). conversationservice runs
+// prompt (documentation/ChatCompletion.md). conversationservice runs
 // the rounds; Chronicle's pipeline (Chronicle.md) later runs inside Send.
 package conversation
 

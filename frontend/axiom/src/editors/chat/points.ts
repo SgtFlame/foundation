@@ -1,4 +1,4 @@
-// Extension points owned by the chat surfaces (documentation/plans/ChatCompletion.md)
+// Extension points owned by the chat surfaces (documentation/ChatCompletion.md)
 
 import type { ComponentType } from 'react'
 import type { EditorRegistry } from '../../pages/workbench/EditorRegistry.ts'
@@ -64,7 +64,7 @@ export interface ClientToolCardProps {
 }
 
 // A tool the model calls that runs in this browser
-// (documentation/plans/WorkbenchContext.md › Client tools). The id is the
+// (documentation/WorkbenchContext.md › Client tools). The id is the
 // tool's name. It may only read the workbench or change what the user sees
 // (ui); changing data is for server tools, which ask first. A tool with a
 // Card waits for the user to answer it there instead of running.

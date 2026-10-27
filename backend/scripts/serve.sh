@@ -7,11 +7,46 @@ set -uo pipefail
 backend="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$backend"
 
+# Local environment (GEMINI_API_KEY and so on); see setEnv.example.sh
+if [[ -f scripts/setEnv.sh ]]; then
+  echo "serve.sh: sourcing scripts/setEnv.sh" >&2
+  source scripts/setEnv.sh
+fi
+
 cli=out/cli
 next=out/cli.next
 pid=""
 
 log() { echo "serve.sh: $*" >&2; }
+
+# build runs scripts/build.sh -o "$1", logging a heartbeat every 30s so a
+# long build (minutes; far longer the first time, see build.sh) is not
+# mistaken for a hang.
+heartbeat=""
+build() {
+  local started now status
+  started="$(date +%s)"
+  log "building $1 (usually takes a few minutes)..."
+  (
+    while sleep 30 && kill -0 $$ 2>/dev/null; do
+      now="$(date +%s)"
+      log "still building $1 ($((now - started))s elapsed)..."
+    done
+  ) &
+  heartbeat=$!
+  scripts/build.sh -o "$1"
+  status=$?
+  kill "$heartbeat" 2>/dev/null
+  wait "$heartbeat" 2>/dev/null
+  heartbeat=""
+  now="$(date +%s)"
+  if [[ $status -eq 0 ]]; then
+    log "built $1 in $((now - started))s"
+  else
+    log "build of $1 failed after $((now - started))s"
+  fi
+  return $status
+}
 
 start() {
   "$cli" serve "$@" &
@@ -30,6 +65,10 @@ stop() {
     wait "$pid" 2>/dev/null
   fi
   pid=""
+  if [[ -n "$heartbeat" ]]; then
+    kill "$heartbeat" 2>/dev/null
+    heartbeat=""
+  fi
 }
 
 trap 'stop; exit 0' INT TERM
@@ -64,7 +103,7 @@ else
   }
 fi
 
-until scripts/build.sh -o "$cli"; do
+until build "$cli"; do
   log "build failed; waiting for a change"
   wait_for_change
 done
@@ -73,7 +112,7 @@ start "$@"
 while true; do
   wait_for_change
   log "change detected, rebuilding"
-  if scripts/build.sh -o "$next"; then
+  if build "$next"; then
     stop
     rm -f "$cli"
     mv "$next" "$cli"

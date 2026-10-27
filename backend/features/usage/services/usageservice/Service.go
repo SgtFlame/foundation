@@ -8,7 +8,7 @@ import (
 )
 
 // Service reads the usage records of the principal's tenant: summed for the
-// Dashboard, or one by one (documentation/plans/Usage.md).
+// Dashboard, or one by one (documentation/Usage.md).
 type Service interface {
 	Summary(args SummaryArgs) SummaryResponse
 	Records(args RecordsArgs) RecordsResponse

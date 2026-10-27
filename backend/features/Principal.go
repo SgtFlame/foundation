@@ -9,7 +9,7 @@ const (
 	PrincipalUser    PrincipalKind = "user"
 	PrincipalService PrincipalKind = "service" // background work, such as indexing
 	// PrincipalAnonymous is a request with no valid session once login is
-	// required; it may only sign in (documentation/plans/MultiTenant.md).
+	// required; it may only sign in (documentation/MultiTenant.md).
 	PrincipalAnonymous PrincipalKind = "anonymous"
 )
 
@@ -31,7 +31,7 @@ const (
 
 // GlobalTenantID is the reserved global tenant, which holds content shared
 // with every tenant, such as approved Chronicle entries
-// (documentation/plans/MultiTenant.md › Sharing Chronicles). Nobody signs
+// (documentation/MultiTenant.md › Sharing Chronicles). Nobody signs
 // in to it: it has no row and no members.
 const GlobalTenantID uint64 = 2
 

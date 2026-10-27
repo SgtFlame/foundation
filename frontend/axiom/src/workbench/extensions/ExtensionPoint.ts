@@ -1,5 +1,5 @@
 // Extension points: named places a feature lets other features contribute
-// to, like Eclipse's. See documentation/plans/Contributors.md.
+// to, like Eclipse's. See documentation/Contributors.md.
 
 // What a when() predicate can look at, e.g. { surface: 'chat' }
 export type ContributionContext = Record<string, unknown>

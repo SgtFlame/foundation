@@ -1,5 +1,5 @@
 // Package chronicletools contributes Chronicle's tools
-// (documentation/plans/Tools.md): chronicle.search and chronicle.getEntry,
+// (documentation/Tools.md): chronicle.search and chronicle.getEntry,
 // which cite the entries they return, and chronicle.updateEntry, which asks
 // first and keeps the summaries it replaces, to restore.
 package chronicletools

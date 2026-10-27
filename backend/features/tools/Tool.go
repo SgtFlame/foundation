@@ -1,5 +1,5 @@
 // Package tools is function calling for chat and agents
-// (documentation/plans/Tools.md): the tools.tool point, the calls the model
+// (documentation/Tools.md): the tools.tool point, the calls the model
 // makes, and Loop, the one tool loop, which chat's Send and Cognition's
 // Agent node both run.
 package tools

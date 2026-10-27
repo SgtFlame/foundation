@@ -1,4 +1,4 @@
-// Package engine runs Cognition graphs (documentation/plans/Cognition.md ›
+// Package engine runs Cognition graphs (documentation/Cognition.md ›
 // Execution). Slice 7 builds linear exec flow and pure nodes: exec flow is
 // followed from the triggering event node, one node at a time, and a pure
 // node runs when a downstream node pulls one of its outputs, once per run.

@@ -1,4 +1,4 @@
-// Administration › Roles: the Role Editor (documentation/plans/RBAC.md)
+// Administration › Roles: the Role Editor (documentation/RBAC.md)
 export class RolesObject {
   readonly kind = 'roles'
   readonly id = 'all'

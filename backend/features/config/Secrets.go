@@ -19,7 +19,7 @@ const SecretKeyEnv = "FOUNDATION_SECRET_KEY"
 // Cipher encrypts secrets at rest with AES-256-GCM: secret settings without
 // Vault, and the JWT signing key. Each ciphertext is bound to its section and
 // path, so it cannot be moved to another key. With Vault its key is
-// server/db-key in the bootstrap bundle (documentation/plans/Secrets.md).
+// server/db-key in the bootstrap bundle (documentation/Secrets.md).
 type Cipher struct {
 	aead cipher.AEAD
 }

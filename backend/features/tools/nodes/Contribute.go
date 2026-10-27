@@ -1,5 +1,5 @@
 // Package toolsnodes contributes the Cognition Agent node
-// (documentation/plans/Cognition.md, Tools.md): the tool loop as a node.
+// (documentation/Cognition.md, Tools.md): the tool loop as a node.
 // It runs unattended, so its write tools are denied (they need the user's
 // approval) and it has no client tools.
 package toolsnodes

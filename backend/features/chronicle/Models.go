@@ -1,4 +1,4 @@
-// Package chronicle is Chronicle memory (documentation/plans/Chronicle.md):
+// Package chronicle is Chronicle memory (documentation/Chronicle.md):
 // entries, kept per user as a tree of parents with related links between
 // them, and what the conversation rounds did to them. chronicleservice
 // edits the entries; the chronicle context provider runs stage 1 (context

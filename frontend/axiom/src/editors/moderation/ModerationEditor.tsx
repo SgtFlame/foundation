@@ -1,4 +1,4 @@
-// The moderation queue (documentation/plans/MultiTenant.md › Sharing
+// The moderation queue (documentation/MultiTenant.md › Sharing
 // Chronicles): requests to share a Chronicle entry with every tenant. A
 // moderator of the owner's tenant approves first, then a global moderator,
 // whose approval copies the entry into the global tenant. Each request

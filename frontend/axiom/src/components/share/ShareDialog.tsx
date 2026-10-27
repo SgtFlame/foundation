@@ -1,4 +1,4 @@
-// The Share dialog (documentation/plans/RBAC.md › The Role Editor): who
+// The Share dialog (documentation/RBAC.md › The Role Editor): who
 // holds which role on one resource (a Volume, the tenant, the
 // application), granting a role to a member with an optional expiry, and
 // revoking. Grants on the resource's ancestors apply too and are listed

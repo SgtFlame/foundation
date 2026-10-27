@@ -1,5 +1,5 @@
 // What the signed-in user may do, for hiding or disabling what they may not
-// (documentation/plans/RBAC.md › Services: useCan). The server's check is
+// (documentation/RBAC.md › Services: useCan). The server's check is
 // authoritative; this mirrors its rules over the user's grants from
 // GET /authz/me: a grant on a path covers it and everything under it, the
 // self actions need no grant, and a user-owned type under "user:<id>" is

@@ -1,5 +1,5 @@
 // Package usage records the tokens and cost of every AI call
-// (documentation/plans/Usage.md). Decorators wrap the chat and embed
+// (documentation/Usage.md). Decorators wrap the chat and embed
 // providers, so every call is counted whichever service or feature made it;
 // usageservice reads the records back.
 package usage

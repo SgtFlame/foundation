@@ -1,6 +1,6 @@
 // Client for the backend bootstrap REST handlers
 // (backend/features/secrets/rest/bootstraphandlers): whether the server is
-// sealed, starting, ready or degraded (documentation/plans/Secrets.md ›
+// sealed, starting, ready or degraded (documentation/Secrets.md ›
 // Sealed start). It needs no session. Unsealing is for unseal.sh only
 // (Secrets question 3), so the browser never handles a token.
 

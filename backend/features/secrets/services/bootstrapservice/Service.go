@@ -1,5 +1,5 @@
 // Package bootstrapservice serves the sealed start
-// (documentation/plans/Secrets.md › Sealed start): the state, which anyone
+// (documentation/Secrets.md › Sealed start): the state, which anyone
 // may read, and unsealing with a response-wrapped SecretID. Its routes are
 // the only ones a sealed server answers.
 package bootstrapservice

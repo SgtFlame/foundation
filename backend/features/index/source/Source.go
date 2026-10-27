@@ -1,5 +1,5 @@
 // Package indexsource contributes the index's chunks to retrieval as the
-// library source (documentation/plans/ContextRetrieval.md): Volume text,
+// library source (documentation/ContextRetrieval.md): Volume text,
 // on the Library side of the Chronicle ↔ Library dial.
 package indexsource
 

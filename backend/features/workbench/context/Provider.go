@@ -1,5 +1,5 @@
 // Package workbenchcontext is the server side of the workbench context
-// (documentation/plans/WorkbenchContext.md): the chat.contextProvider that
+// (documentation/WorkbenchContext.md): the chat.contextProvider that
 // renders the browser's snapshot of open editors as a section of the prompt.
 package workbenchcontext
 

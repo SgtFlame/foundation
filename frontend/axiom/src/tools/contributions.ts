@@ -1,4 +1,4 @@
-// Tools in the browser (documentation/plans/Tools.md, WorkbenchContext.md):
+// Tools in the browser (documentation/Tools.md, WorkbenchContext.md):
 // the conversation's Tools switch and the client tools the model may call
 import BuildIcon from '@mui/icons-material/Build'
 import { lazy } from 'react'

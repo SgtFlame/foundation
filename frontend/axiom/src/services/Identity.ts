@@ -1,6 +1,6 @@
 // Client for the backend identity REST handlers
 // (backend/features/identity/rest/identityhandlers): sign-in, sessions and
-// the user's own account (documentation/plans/MultiTenant.md). The session's
+// the user's own account (documentation/MultiTenant.md). The session's
 // tokens are HTTP-only cookies the browser never reads; responses carry only
 // the access token's expiry. These requests never refresh the session
 // themselves (noRefresh).

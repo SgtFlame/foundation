@@ -1,5 +1,5 @@
 // Package secrets keeps the server's secrets in HashiCorp Vault
-// (documentation/plans/Secrets.md). With a Vault address, serve starts
+// (documentation/Secrets.md). With a Vault address, serve starts
 // sealed: it serves only the bootstrap routes until an operator hands it a
 // response-wrapped AppRole SecretID (Secrets question 1), then logs in, reads
 // its bootstrap bundle (<mount>/server/*) and finishes starting.

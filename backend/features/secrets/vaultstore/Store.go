@@ -1,5 +1,5 @@
 // Package vaultstore keeps secret settings in Vault's KV v2 mount, at
-// config/<scope>/<section>/<path> (documentation/plans/Secrets.md ›
+// config/<scope>/<section>/<path> (documentation/Secrets.md ›
 // SecretStore). A Configuration value holds only {"$vault": {"version": n}}.
 package vaultstore
 

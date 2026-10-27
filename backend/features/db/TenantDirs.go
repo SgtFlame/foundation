@@ -10,7 +10,7 @@ import (
 )
 
 // Each tenant keeps its own LanceDB directory under one root, so removing a
-// tenant drops its directory (documentation/plans/MultiTenant.md › Storage):
+// tenant drops its directory (documentation/MultiTenant.md › Storage):
 // <data-dir>/lancedb/<tenantId>/.
 
 // TenantDir is tenant's directory under root.

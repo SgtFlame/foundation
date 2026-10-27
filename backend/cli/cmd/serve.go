@@ -141,7 +141,7 @@ Without Vault, secret settings are encrypted with $FOUNDATION_SECRET_KEY, or
 sealed: it listens, but answers only /api/v1/bootstrap until an operator
 runs backend/scripts/secrets/unseal.sh, then reads its database key and
 provider keys from Vault and keeps secret settings there. See
-documentation/plans/Secrets.md and "cli secrets".
+documentation/Secrets.md and "cli secrets".
 
 Until accounts are set up (the /setup page) serve runs in single-user mode,
 with no sign-in. Afterwards every request needs a session. Tenants, users
@@ -183,7 +183,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 
 		// The server listens at once, behind a gate that serves only the
 		// bootstrap routes until startup is done. With Vault it first waits
-		// to be unsealed (documentation/plans/Secrets.md › Sealed start)
+		// to be unsealed (documentation/Secrets.md › Sealed start)
 		vaultAddr := serveVaultAddr
 		if vaultAddr == "" {
 			vaultAddr = os.Getenv("FOUNDATION_VAULT_ADDR")

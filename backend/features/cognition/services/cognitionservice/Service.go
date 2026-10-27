@@ -6,7 +6,7 @@ import (
 )
 
 // Service serves Cognition graphs and their run traces to the Cognition
-// Editor (documentation/plans/Cognition.md › Services and REST). Slice 7
+// Editor (documentation/Cognition.md › Services and REST). Slice 7
 // serves the built-in graphs read-only; drafts, publishing and runs from
 // the editor come later. Runs are private to the principal who caused them.
 type Service interface {

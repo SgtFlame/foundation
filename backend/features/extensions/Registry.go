@@ -1,6 +1,6 @@
 // Package extensions lets features contribute to named extension points that
 // other features declare, instead of being wired in by hand (see
-// documentation/plans/Contributors.md). There are no init() side effects:
+// documentation/Contributors.md). There are no init() side effects:
 // serve.go creates the Registry and calls each feature's Contribute(reg) in
 // order, and tests build their own.
 package extensions

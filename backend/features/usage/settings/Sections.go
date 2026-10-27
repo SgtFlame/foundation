@@ -1,5 +1,5 @@
 // Package usagesettings declares the usage feature's settings section
-// (documentation/plans/Usage.md › Built in slice 4) and the Go type it
+// (documentation/Usage.md › Built in slice 4) and the Go type it
 // decodes into with config.Read.
 package usagesettings
 

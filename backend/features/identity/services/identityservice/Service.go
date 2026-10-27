@@ -6,7 +6,7 @@ import (
 )
 
 // Service signs users in and out and keeps their sessions
-// (documentation/plans/MultiTenant.md › Built in slice 10). Its operations
+// (documentation/MultiTenant.md › Built in slice 10). Its operations
 // that start a session return it for the handler to put in cookies.
 type Service interface {
 	// Status is whether sign-in is required and who is signed in.

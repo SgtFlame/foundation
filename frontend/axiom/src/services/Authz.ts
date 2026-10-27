@@ -1,6 +1,6 @@
 // Client for the backend authz REST handlers
 // (backend/features/authz/rest/authzhandlers): what the principal may do,
-// resource types, roles and grants (documentation/plans/RBAC.md).
+// resource types, roles and grants (documentation/RBAC.md).
 
 import { http, type ResponseStatus } from './http/client.ts'
 

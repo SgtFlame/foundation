@@ -9,10 +9,10 @@ import (
 )
 
 // Service is a thin wrapper over VictoriaLogs' HTTP API
-// (documentation/plans/Logging.md › Reading): it scopes every query to the
+// (documentation/Logging.md › Reading): it scopes every query to the
 // principal's tenant unless they may read all logs, limits rows and time
 // ranges, and turns LogsQL parse errors into 400s with their position. Stats
-// and StatsRange come with the Dashboard (documentation/plans/Usage.md).
+// and StatsRange come with the Dashboard (documentation/Usage.md).
 type Service interface {
 	Status(args StatusArgs) StatusResponse
 	Query(args QueryArgs) QueryResponse

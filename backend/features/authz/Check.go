@@ -1,4 +1,4 @@
-// Package authz decides what a principal may do (documentation/plans/RBAC.md).
+// Package authz decides what a principal may do (documentation/RBAC.md).
 // Every service operation calls Check at its start with the principal from
 // its ServiceArgs.
 //

@@ -10,7 +10,7 @@
 //
 // Records go through slog, so they carry the request's trace from ctx. Their
 // fields are named as in the frontend LogRecord and in VictoriaLogs (see
-// documentation/plans/Logging.md).
+// documentation/Logging.md).
 package logging
 
 import (

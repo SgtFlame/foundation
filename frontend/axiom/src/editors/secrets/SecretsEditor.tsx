@@ -1,4 +1,4 @@
-// The Secrets editor (documentation/plans/Secrets.md › The Secrets editor):
+// The Secrets editor (documentation/Secrets.md › The Secrets editor):
 // the server's secrets in Vault and the app scope's secret settings, for
 // Application Administrators. It is write-only: it shows whether each
 // secret is set, its version and who changed it last, never a value. A new

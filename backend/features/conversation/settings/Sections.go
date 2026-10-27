@@ -1,5 +1,5 @@
 // Package conversationsettings declares the chat sections
-// (documentation/plans/ChatCompletion.md) and the Go types they decode into
+// (documentation/ChatCompletion.md) and the Go types they decode into
 // with config.Read.
 package conversationsettings
 

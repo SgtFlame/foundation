@@ -1,4 +1,4 @@
-// Extension points owned by the Dashboard (documentation/plans/Usage.md › Dashboard)
+// Extension points owned by the Dashboard (documentation/Usage.md › Dashboard)
 
 import type { ComponentType } from 'react'
 import type { EditorRegistry } from '../../pages/workbench/EditorRegistry.ts'

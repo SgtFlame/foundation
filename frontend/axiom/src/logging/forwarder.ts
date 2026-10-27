@@ -1,7 +1,7 @@
 // Forwards browser records to the server's log storage (POST /logs/ingest)
 // in batches, from the level the logging settings name (warn by default), so
 // they sit next to the server's records of the same trace in the Log
-// Explorer (documentation/plans/Logging.md).
+// Explorer (documentation/Logging.md).
 
 import { API_BASE } from '../services/http/client.ts'
 import { Logs, type BrowserError, type BrowserRecord } from '../services/Logs.ts'

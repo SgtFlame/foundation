@@ -166,7 +166,7 @@ export interface TailOptions {
   signal: AbortSignal
 }
 
-// Full logging for one user (documentation/plans/Logging.md)
+// Full logging for one user (documentation/Logging.md)
 export interface UserLevel {
   userId: string
   level: string // debug

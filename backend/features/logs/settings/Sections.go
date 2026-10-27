@@ -1,5 +1,5 @@
 // Package logssettings declares the logging settings section
-// (documentation/plans/Logging.md › Configuration) and the Go type it
+// (documentation/Logging.md › Configuration) and the Go type it
 // decodes into with config.Read.
 package logssettings
 

@@ -1,5 +1,5 @@
 // Package kbtools contributes the knowledge base's tools
-// (documentation/plans/Tools.md): kb.search and kb.read, which cite what
+// (documentation/Tools.md): kb.search and kb.read, which cite what
 // they find like retrieval does, and kb.createNote and kb.edit, which ask
 // first. Paths are relative to the knowledge base root, with '/', as the
 // citations name them ("veritas/notes.md").

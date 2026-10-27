@@ -1,5 +1,5 @@
 // Package retrievalcontext is the RAG Search chat.contextProvider
-// (documentation/plans/ChatCompletion.md › ChatContextSettingsContributor):
+// (documentation/ChatCompletion.md › ChatContextSettingsContributor):
 // it runs retrieval for the round's message with the conversation's dials,
 // and hands Send the segments to inject and cite.
 package retrievalcontext

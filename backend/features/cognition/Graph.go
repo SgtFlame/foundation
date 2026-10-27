@@ -1,5 +1,5 @@
 // Package cognition is the Cognition Engine's model
-// (documentation/plans/Cognition.md): graphs of typed nodes and edges, the
+// (documentation/Cognition.md): graphs of typed nodes and edges, the
 // node types contributed on the cognition.node point, the built-in graphs on
 // cognition.graph, the data types on cognition.type, validation, and the
 // tables a run's trace is kept in. The engine that runs graphs is

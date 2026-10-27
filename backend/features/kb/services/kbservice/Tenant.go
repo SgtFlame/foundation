@@ -7,7 +7,7 @@ import (
 
 // Volumes, their index and their collaboration rooms belong to the default
 // tenant until each tenant has its own knowledge base root
-// (documentation/plans/MultiTenant.md › Built in slice 10). Other tenants
+// (documentation/MultiTenant.md › Built in slice 10). Other tenants
 // see no Volumes: the REST routes refuse them, the library source finds
 // nothing, and the kb tools fail.
 

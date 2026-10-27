@@ -56,7 +56,7 @@ type VictoriaOptions struct {
 	Errors        io.Writer // where a failing or recovered target is reported; stderr
 }
 
-// Victoria stores records in VictoriaLogs (documentation/plans/Logging.md ›
+// Victoria stores records in VictoriaLogs (documentation/Logging.md ›
 // Storage). Its Handler queues each record as a JSON line, and a worker posts
 // them to /insert/jsonline in batches. It never blocks a request: when the
 // queue is full the oldest records are dropped and counted, and failed posts
@@ -122,7 +122,7 @@ func (v *Victoria) Handler() slog.Handler {
 }
 
 // UserLevel is one user's lowest stored level until a time: full logging
-// for one user (documentation/plans/Logging.md).
+// for one user (documentation/Logging.md).
 type UserLevel struct {
 	Level slog.Level
 	Until time.Time

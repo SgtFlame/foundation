@@ -8,7 +8,7 @@ Volumes can create `.md` files (`Volume.createFile`), but nothing can open or ed
 
 Editing is **multi-user and autosaved** with the common standard for shared text editing: a **Yjs CRDT** synced over **WebSocket** using the y-websocket wire protocol (y-protocols sync + awareness). All three views bind to one `Y.Text`, so edits in any view, in any browser, show up everywhere. Remote cursors come from Yjs awareness.
 
-**Build order:** Common, then B (Monaco), then A (Live Preview), then C (WYSIWYG). Monaco has a native Yjs binding, so it proves the collab pipeline with the least code. Implement one section per session. When implementation starts, copy this plan to `documentation/plans/markdown-editor/MarkdownEditor.md`, which is the repo convention.
+**Build order:** Common, then B (Monaco), then A (Live Preview), then C (WYSIWYG). Monaco has a native Yjs binding, so it proves the collab pipeline with the least code. Implement one section per session. When implementation starts, copy this plan to `documentation/MarkdownEditor.md`, which is the repo convention.
 
 ---
 
