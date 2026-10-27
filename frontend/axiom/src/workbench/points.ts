@@ -53,13 +53,20 @@ export interface WorkbenchContext {
   registry: EditorRegistry
 }
 
+// What a side view gets: collapsed is true while a collapsible view is
+// narrowed to its icons
+export interface SideViewProps extends WorkbenchContext {
+  collapsed?: boolean
+}
+
 // A view in the workbench's left side bar, chosen from its vertical tabs
 // (an activity bar); clicking the open view's tab hides the side bar
 export interface SideViewContribution extends Contribution {
   title: string
   icon: ComponentType<{ fontSize?: 'small' | 'medium' }>
   width?: number // the side bar's width when this view is open, in pixels
-  component: ComponentType<WorkbenchContext> // usually lazy(() => import(...))
+  collapsible?: boolean // a chevron narrows the view to its own width, with collapsed set
+  component: ComponentType<SideViewProps> // usually lazy(() => import(...))
 }
 
 export const sideViews = defineExtensionPoint<SideViewContribution>(

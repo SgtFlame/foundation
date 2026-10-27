@@ -10,5 +10,6 @@ extensions.contribute(sideViews, {
   title: 'Editors',
   icon: AppsIcon,
   width: 220,
+  collapsible: true,
   component: lazy(() => import('./EditorsView.tsx')),
 })
