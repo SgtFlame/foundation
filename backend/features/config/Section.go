@@ -1,5 +1,5 @@
 // Package config holds what features need to declare, store and read
-// settings (documentation/plans/Configuration.md): the config.section
+// settings (documentation/Configuration.md): the config.section
 // extension point, the schema subset sections are validated against, the
 // Configuration tables, secret encryption, and typed reads. configservice
 // serves them.

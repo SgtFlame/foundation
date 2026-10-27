@@ -74,7 +74,7 @@ type CompleteArgs struct {
 	Temperature *float32
 	MaxTokens   *int
 	JSONSchema  json.RawMessage // optional; asks for a JSON reply matching this schema
-	// Tools the model may call (documentation/plans/Tools.md); its calls come
+	// Tools the model may call (documentation/Tools.md); its calls come
 	// back in the response's Message.ToolCalls, and tools.Loop runs them.
 	Tools      []ToolSpec
 	ToolChoice string // a ToolChoice constant

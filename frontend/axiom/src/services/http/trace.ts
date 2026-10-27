@@ -1,5 +1,5 @@
 // Every request carries a trace ID in X-Trace-Id, so its browser records and
-// the server's records for it share one trace (documentation/plans/Logging.md).
+// the server's records for it share one trace (documentation/Logging.md).
 
 export const TRACE_HEADER = 'X-Trace-Id'
 

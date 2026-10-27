@@ -1,2 +1,3 @@
 out/
 third_party/
+scripts/setEnv.sh

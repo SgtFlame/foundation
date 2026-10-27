@@ -37,7 +37,7 @@ function Tile({ label, totals }: { label: string; totals: UsageTotals }) {
   )
 }
 
-// Usage & cost (documentation/plans/Usage.md › Dashboard): totals, cost per
+// Usage & cost (documentation/Usage.md › Dashboard): totals, cost per
 // day stacked by level, model or feature, the costliest conversations, and
 // what indexing cost
 function UsageWidget({ refresh }: DashboardWidgetProps) {

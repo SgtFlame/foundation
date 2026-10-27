@@ -23,7 +23,7 @@ import { chatClientTools, chatCommands, type ChatCommandContext, type ChatComman
 const tokensOf = (chars: number) => Math.ceil(chars / 4)
 
 // AgentOS › Chat: a continuous scroll of conversations, streamed from the
-// server with Chronicle memory (documentation/plans/ChatCompletion.md,
+// server with Chronicle memory (documentation/ChatCompletion.md,
 // Chronicle.md)
 // The data of the chronicle follower's followed event
 interface ChronicleChanges {

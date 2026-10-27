@@ -1,5 +1,5 @@
 // Package chroniclecontext puts Chronicle memory into chat rounds
-// (documentation/plans/Chronicle.md) by running the built-in Personal
+// (documentation/Chronicle.md) by running the built-in Personal
 // Cognition graph (chronicle/nodes): the chronicle chat.contextProvider runs
 // its On user message event (the Candidates step and stage 1) for each
 // message and pins the entries it returns in the prompt; the chronicle

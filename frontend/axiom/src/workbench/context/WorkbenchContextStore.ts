@@ -1,5 +1,5 @@
 // What the user is doing in the workbench, kept in this browser tab only
-// (documentation/plans/WorkbenchContext.md): the open editors, what each one
+// (documentation/WorkbenchContext.md): the open editors, what each one
 // is editing, and the subjects recently focused or edited. Chat sends a small
 // snapshot of it with every message, so the assistant can tell what "this"
 // refers to. Identity is never part of it: the server knows who is asking.

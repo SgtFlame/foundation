@@ -1,5 +1,5 @@
 // Shows the sealed page while the server waits to be unsealed or is still
-// starting (documentation/plans/Secrets.md › Sealed start), and the app once
+// starting (documentation/Secrets.md › Sealed start), and the app once
 // it is ready. A server that cannot be reached at all is left to the pages,
 // which already say so.
 

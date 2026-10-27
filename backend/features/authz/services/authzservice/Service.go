@@ -7,7 +7,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/authz"
 )
 
-// Service administers access (documentation/plans/RBAC.md › Services):
+// Service administers access (documentation/RBAC.md › Services):
 // the resource types, roles and grants the Role Editor and the Share
 // dialog show, and what the principal may do, for the browser's useCan.
 // Custom roles belong to the principal's tenant.

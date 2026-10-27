@@ -1,5 +1,5 @@
 // Package retrieval is the context retrieval engine's shared types
-// (documentation/plans/ContextRetrieval.md): the retrieval.source point,
+// (documentation/ContextRetrieval.md): the retrieval.source point,
 // the segments sources return, what a round injected, and the feedback that
 // grounds later retrievals. retrievalservice runs the pipeline.
 package retrieval

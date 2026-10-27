@@ -1,7 +1,7 @@
 // Client for the backend secrets REST handlers
 // (backend/features/secrets/rest/secretshandlers): the server's secrets in
 // Vault and the app scope's secret settings, write-only
-// (documentation/plans/Secrets.md). No response ever carries a value.
+// (documentation/Secrets.md). No response ever carries a value.
 
 import { http, type ResponseStatus } from './http/client.ts'
 

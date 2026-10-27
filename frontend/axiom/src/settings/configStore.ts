@@ -1,5 +1,5 @@
 // Caches resolved settings sections for the browser and refetches one when
-// the server says it changed (documentation/plans/Configuration.md). Every
+// the server says it changed (documentation/Configuration.md). Every
 // read goes through useConfig or useSetting.
 
 import { useEffect, useSyncExternalStore } from 'react'

@@ -6,7 +6,7 @@ import (
 )
 
 // Service manages users, for administrators (the User editor;
-// documentation/plans/MultiTenant.md › Built in slice 10). Users are
+// documentation/MultiTenant.md › Built in slice 10). Users are
 // disabled, never deleted, so what they own keeps an owner.
 type Service interface {
 	List(args ListArgs) ListResponse

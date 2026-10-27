@@ -35,7 +35,7 @@ type Gate interface {
 	RunClient(call ToolCall, wait time.Duration) (json.RawMessage, error)
 }
 
-// Loop is the tool loop (seam 4 in documentation/plans/Index.md): chat's
+// Loop is the tool loop (seam 4 in documentation/BuildHistory.md): chat's
 // Send runs it, and Cognition's Agent node wraps it. Each call is a
 // ToolCall record, stored in DB when it ends.
 type Loop struct {

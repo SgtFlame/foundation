@@ -18,7 +18,7 @@ func (r SecretRef) Name() string {
 }
 
 // SecretStore keeps the values of secret settings
-// (documentation/plans/Secrets.md › SecretStore). A Configuration value holds
+// (documentation/Secrets.md › SecretStore). A Configuration value holds
 // only the placeholder Put returns, which Get turns back into the value.
 type SecretStore interface {
 	// Put stores value and returns the placeholder kept in its place.

@@ -1,4 +1,4 @@
-// Extension points owned by Settings (documentation/plans/Configuration.md)
+// Extension points owned by Settings (documentation/Configuration.md)
 
 import type { ComponentType } from 'react'
 import { defineExtensionPoint, type Contribution } from '../workbench/extensions/index.ts'

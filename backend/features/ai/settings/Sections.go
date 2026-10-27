@@ -1,5 +1,5 @@
 // Package aisettings declares the ai feature's settings sections
-// (documentation/plans/Configuration.md › First sections) and the Go types
+// (documentation/Configuration.md › First sections) and the Go types
 // they decode into with config.Read.
 package aisettings
 

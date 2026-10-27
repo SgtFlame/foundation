@@ -45,6 +45,7 @@ case "$(uname -m)" in
   *) echo "build.sh: unsupported architecture $(uname -m)" >&2; exit 1 ;;
 esac
 
+echo "build.sh: resolving lancedb-go (may download Go modules)..." >&2
 lancedb_dir="$(go list -m -f '{{.Dir}}' github.com/lancedb/lancedb-go)"
 lancedb_version="$(go list -m -f '{{.Version}}' github.com/lancedb/lancedb-go)"
 libdir="$backend/third_party/lancedb/$lancedb_version"
@@ -110,6 +111,7 @@ export CGO_LDFLAGS="$lib $syslibs"
 case "$mode" in
   build)
     mkdir -p "$(dirname "$out")"
+    echo "build.sh: compiling and linking $out with CGO (go build; a few minutes, linking is the slow part)..." >&2
     go build -o "$out" ./cli
     ;;
   test) go test "${@:-./...}" ;;

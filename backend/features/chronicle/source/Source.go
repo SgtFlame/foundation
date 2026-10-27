@@ -1,5 +1,5 @@
 // Package chroniclesource contributes Chronicle entries to retrieval as the
-// chronicle source (documentation/plans/ContextRetrieval.md): the
+// chronicle source (documentation/ContextRetrieval.md): the
 // principal's active entries, on the Chronicle side of the
 // Chronicle ↔ Library dial.
 package chroniclesource

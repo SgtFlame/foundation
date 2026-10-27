@@ -60,7 +60,7 @@ function Dial({
 }
 
 // RAG Search: whether retrieval runs for the conversation, the preset chips,
-// the two dials (documentation/plans/ContextRetrieval.md) and Top-K, the
+// the two dials (documentation/ContextRetrieval.md) and Top-K, the
 // most segments injected. The server's "rag" context provider reads them.
 function RagControl({ value, onChange }: ContextControlProps) {
   const presets = useSetting<Preset[]>('chat.context.presets', 'presets', 'user') ?? []

@@ -6,7 +6,7 @@ import (
 )
 
 // Service manages tenants and their members, for administrators
-// (the Tenant editor; documentation/plans/MultiTenant.md › Built in slice 10).
+// (the Tenant editor; documentation/MultiTenant.md › Built in slice 10).
 type Service interface {
 	List(args ListArgs) ListResponse
 	Create(args CreateArgs) CreateResponse

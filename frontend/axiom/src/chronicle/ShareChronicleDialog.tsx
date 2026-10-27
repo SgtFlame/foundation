@@ -1,4 +1,4 @@
-// Sharing one of your Chronicle entries (documentation/plans/MultiTenant.md
+// Sharing one of your Chronicle entries (documentation/MultiTenant.md
 // › Sharing Chronicles): with your tenant at once, or with every tenant once
 // a moderator of your tenant and then a global moderator approve. Others
 // may use a shared entry but never change it; the global copy is what you

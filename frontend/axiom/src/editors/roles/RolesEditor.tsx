@@ -1,4 +1,4 @@
-// The Role Editor (documentation/plans/RBAC.md › The Role Editor): the roles
+// The Role Editor (documentation/RBAC.md › The Role Editor): the roles
 // of this tenant (built-in ones read-only), each with its permission matrix
 // and who holds it where, and an access checker. The matrix is built from
 // the server's resource types: a row per type, grouped by feature, a column

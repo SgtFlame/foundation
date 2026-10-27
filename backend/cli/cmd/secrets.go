@@ -25,7 +25,7 @@ var (
 )
 
 // secretsCmd groups the operator's commands for the server's secrets
-// (documentation/plans/Secrets.md). They use the operator's own VAULT_ADDR
+// (documentation/Secrets.md). They use the operator's own VAULT_ADDR
 // and VAULT_TOKEN, and should run while serve is stopped.
 var secretsCmd = &cobra.Command{
 	Use:   "secrets",

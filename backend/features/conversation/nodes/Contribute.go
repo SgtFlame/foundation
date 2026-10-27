@@ -1,5 +1,5 @@
 // Package conversationnodes contributes Chat's Cognition events and data
-// types (documentation/plans/Cognition.md › How chat uses it): On user
+// types (documentation/Cognition.md › How chat uses it): On user
 // message, which starts a round's context gathering, and On reply, which
 // follows a successful reply. Their outputs are the run's inputs, named by
 // the pin IDs below.

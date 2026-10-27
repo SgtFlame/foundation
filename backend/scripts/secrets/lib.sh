@@ -1,4 +1,4 @@
-# Sourced by the secrets scripts (documentation/plans/Secrets.md). They talk
+# Sourced by the secrets scripts (documentation/Secrets.md). They talk
 # to Vault's HTTP API with curl and jq, as the operator: VAULT_ADDR and the
 # operator's own VAULT_TOKEN. Secret values and tokens never go on a command
 # line, so they stay out of shell history and ps: values are read from

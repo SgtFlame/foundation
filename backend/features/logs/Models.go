@@ -8,7 +8,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/db"
 )
 
-// UserLogLevel is full logging for one user (documentation/plans/Logging.md):
+// UserLogLevel is full logging for one user (documentation/Logging.md):
 // until ExpiresAt, the user's browser forwards and the server stores their
 // records from Level up. It lives in the application database.
 type UserLogLevel struct {

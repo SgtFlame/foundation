@@ -6,7 +6,7 @@ import (
 )
 
 // Service finds the context for a chat round across every retrieval.source
-// (documentation/plans/ContextRetrieval.md): each source's vector and
+// (documentation/ContextRetrieval.md): each source's vector and
 // keyword rankings are fused by Reciprocal Rank Fusion weighted by the
 // Lexical ↔ Semantic dial, multiplied by the Chronicle ↔ Library dial and by
 // the grounding feedback has earned, then deduplicated and cut to Top-K and

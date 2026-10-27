@@ -1,5 +1,5 @@
 // Package retrievalsettings declares the retrieval sections
-// (documentation/plans/ContextRetrieval.md › Configuration sections) and the
+// (documentation/ContextRetrieval.md › Configuration sections) and the
 // Go types they decode into with config.Read.
 package retrievalsettings
 

@@ -1,5 +1,5 @@
 // Package vault is the small part of HashiCorp Vault's HTTP API Foundation
-// uses (documentation/plans/Secrets.md): unwrapping a SecretID, AppRole
+// uses (documentation/Secrets.md): unwrapping a SecretID, AppRole
 // login, renewing the token, and a KV v2 mount. It is plain net/http, so the
 // server does not carry Vault's own SDK.
 package vault

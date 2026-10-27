@@ -1,4 +1,4 @@
-// The browser's session (documentation/plans/MultiTenant.md › Built in
+// The browser's session (documentation/MultiTenant.md › Built in
 // slice 10). The tokens are HTTP-only cookies; this keeps what the server
 // says about them: whether sign-in is required, who is signed in, and when
 // the access token expires. It refreshes the session a minute before then,

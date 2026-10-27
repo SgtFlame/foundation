@@ -3,7 +3,7 @@ package features
 import "context"
 
 // Meta says what a piece of work is for, so the usage it causes can be
-// attributed (documentation/plans/Usage.md). Callers set what they know and
+// attributed (documentation/Usage.md). Callers set what they know and
 // leave the rest empty.
 type Meta struct {
 	Feature        string // e.g. "chat", "embed-index", "embed-query"

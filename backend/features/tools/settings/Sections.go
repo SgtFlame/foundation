@@ -1,5 +1,5 @@
 // Package toolssettings declares the tools section
-// (documentation/plans/Tools.md): the tool loop's limits, and the tools
+// (documentation/Tools.md): the tool loop's limits, and the tools
 // turned off for everyone.
 package toolssettings
 

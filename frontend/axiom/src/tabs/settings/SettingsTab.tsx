@@ -1,4 +1,4 @@
-// The Settings border tab (documentation/plans/Configuration.md): a search
+// The Settings border tab (documentation/Configuration.md): a search
 // box and scope selector, a category tree from every section's category, and
 // the forms of the selected category's sections.
 

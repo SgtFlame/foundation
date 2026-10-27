@@ -8,7 +8,7 @@ import (
 )
 
 // Service stores and resolves the settings sections registered on
-// config.Sections (documentation/plans/Configuration.md). Values are layered
+// config.Sections (documentation/Configuration.md). Values are layered
 // defaults → the server's secrets → env (non-secret keys) → app → tenant →
 // user, and flag or env
 // values win over everything for secrets. Resolved, from config.Reader, is

@@ -1,7 +1,7 @@
 // Package identity is who uses Foundation: tenants, users and their
 // memberships, local sign-in with argon2id passwords, and sessions as a
 // short-lived JWT plus a rotating refresh token
-// (documentation/plans/MultiTenant.md › Built in slice 10). Its tables live
+// (documentation/MultiTenant.md › Built in slice 10). Its tables live
 // in the application database, which spans tenants.
 package identity
 

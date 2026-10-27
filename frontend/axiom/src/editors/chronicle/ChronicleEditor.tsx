@@ -116,7 +116,7 @@ function RoundList({ rounds, onRestore }: { rounds: readonly LinkedRound[]; onRe
   )
 }
 
-// Edits one Chronicle entry (documentation/plans/Chronicle.md): its title,
+// Edits one Chronicle entry (documentation/Chronicle.md): its title,
 // type and parent, the short summary context matching reads, the full
 // summary the reply reads, the full context, the type's fields, related
 // entries, and the conversation rounds that made or changed it
