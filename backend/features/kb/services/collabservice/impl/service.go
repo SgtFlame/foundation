@@ -10,6 +10,7 @@ import (
 type service struct {
 	root        string
 	gracePeriod time.Duration // how long an empty room is kept, so a reload rejoins it
+	events      volumeservice.FileEvents
 
 	mu     sync.Mutex
 	rooms  map[uint64]*room
@@ -35,3 +36,5 @@ func (s *service) dropRoom(r *room) {
 func (s *service) rel(p string) string {
 	return volumeservice.Rel(s.root, p)
 }
+
+var log = volumeservice.Log.Tags("collab")

@@ -1,5 +1,6 @@
 // A y-websocket compatible provider for the backend's collab rooms, with our
-// own control messages (role, seeded, ready, save, saved, compact) on top of
+// own control messages (role, seeded, ready, save, saved, compact, edit,
+// edited) on top of
 // the standard sync and awareness messages.
 
 import * as decoding from 'lib0/decoding'
@@ -16,7 +17,7 @@ const messageCompacted = 101
 
 // A control message; which fields are set depends on op
 export interface Control {
-  op: 'role' | 'seeded' | 'ready' | 'save' | 'saved' | 'compact'
+  op: 'role' | 'seeded' | 'ready' | 'save' | 'saved' | 'compact' | 'edit' | 'edited'
   writer?: boolean
   ready?: boolean
   dirty?: boolean
@@ -25,6 +26,8 @@ export interface Control {
   code?: number
   message?: string
   at?: number
+  id?: string // edit, and the edited answer to it
+  edits?: { find: string; replace: string }[]
 }
 
 export interface CollabProviderEvents {

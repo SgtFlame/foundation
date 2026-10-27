@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
+	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 )
 
 // Option configures the service created by CreateService.
@@ -16,6 +17,13 @@ type Option func(*service)
 func WithRoot(root string) Option {
 	return func(s *service) {
 		s.root = root
+	}
+}
+
+// WithFileEvents sets the bus that saved files are announced on.
+func WithFileEvents(events volumeservice.FileEvents) Option {
+	return func(s *service) {
+		s.events = events
 	}
 }
 

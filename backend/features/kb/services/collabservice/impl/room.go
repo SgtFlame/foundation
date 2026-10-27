@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 )
@@ -29,6 +28,11 @@ type client struct {
 	send      chan []byte
 	cancel    context.CancelFunc
 	clientIDs map[uint64]bool // Yjs client IDs this connection announced in awareness
+	// readOnly connections may read the Volume but not write it: their
+	// updates are dropped (but for seeding, as the only writer there is)
+	// and their saves ignored, and a writable connection takes the writer
+	// role from them.
+	readOnly bool
 }
 
 func newClient(conn collabservice.Conn, cancel context.CancelFunc) *client {
@@ -76,14 +80,15 @@ type room struct {
 	compacting bool
 	awareness  map[uint64]awarenessEntry
 	teardown   *time.Timer
+	edits      map[string]chan control // edits sent to the writer, by ID, until it answers
 }
 
 func newRoom(svc *service, id uint64, file string) *room {
-	return &room{id: id, file: file, svc: svc, awareness: map[uint64]awarenessEntry{}}
+	return &room{id: id, file: file, svc: svc, awareness: map[uint64]awarenessEntry{}, edits: map[string]chan control{}}
 }
 
 // join adds c to the room, asks it for its state and tells it its role.
-func (r *room) join(c *client) *features.ServiceResponse {
+func (r *room) join(c *client) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.teardown != nil {
@@ -96,6 +101,10 @@ func (r *room) join(c *client) *features.ServiceResponse {
 		c.queue(awarenessMessage(encodeAwareness(r.awarenessEntries())))
 	}
 	if r.writer == nil {
+		return r.elect(c)
+	}
+	if r.writer.readOnly && !c.readOnly && r.seeded {
+		r.writer.queue(controlMessage(control{Op: "role", Ready: true}))
 		return r.elect(c)
 	}
 	c.queue(controlMessage(control{Op: "role", Ready: r.seeded}))
@@ -128,8 +137,18 @@ func (r *room) leave(c *client) {
 		if !r.seeded && len(r.log) > 0 {
 			r.markSeeded()
 		}
+		// The oldest writable connection takes over, else the oldest
+		slices.SortStableFunc(r.clients, func(a, b *client) int {
+			switch {
+			case a.readOnly == b.readOnly:
+				return 0
+			case a.readOnly:
+				return 1
+			}
+			return -1
+		})
 		for len(r.clients) > 0 {
-			if failed := r.elect(r.clients[0]); failed == nil {
+			if err := r.elect(r.clients[0]); err == nil {
 				break
 			}
 			r.clients[0].cancel()
@@ -144,12 +163,12 @@ func (r *room) leave(c *client) {
 
 // elect makes c the writer, sending it the file to seed the document with if
 // that has not happened yet. Called with the lock held.
-func (r *room) elect(c *client) *features.ServiceResponse {
+func (r *room) elect(c *client) error {
 	role := control{Op: "role", Writer: true, Ready: r.seeded, Dirty: r.dirty}
 	if !r.seeded {
 		content, err := os.ReadFile(r.file)
 		if err != nil {
-			return volumeservice.Fail(http.StatusInternalServerError, "cannot read %q: %s", r.svc.rel(r.file), err)
+			return log.With("file", r.svc.rel(r.file)).Wrapf(err, "cannot read %q", r.svc.rel(r.file))
 		}
 		seed := string(content)
 		role.Seed = &seed
@@ -180,6 +199,9 @@ func (r *room) handle(c *client, msg []byte) {
 			r.sendLog(c)
 			return
 		}
+		if c.readOnly && (c != r.writer || r.seeded) {
+			return // only a read-only writer's seed gets through
+		}
 		r.addUpdate(c, payload)
 	case msgAwareness:
 		update := d.bytes()
@@ -209,7 +231,15 @@ func (r *room) handle(c *client, msg []byte) {
 		case "seeded":
 			r.markSeeded()
 		case "save":
+			if c.readOnly {
+				return
+			}
 			r.save(ctl.Markdown)
+		case "edited":
+			if done, ok := r.edits[ctl.ID]; ok {
+				delete(r.edits, ctl.ID)
+				done <- ctl
+			}
 		}
 	case msgCompacted:
 		update := d.bytes()
@@ -266,10 +296,12 @@ func (r *room) save(markdown string) {
 	}
 	if err != nil {
 		_ = os.Remove(tmp)
+		log.With("file", r.svc.rel(r.file)).Error(context.Background(), err, "cannot save %q", r.svc.rel(r.file))
 		saved.Code = http.StatusInternalServerError
 		saved.Message = "cannot save " + r.svc.rel(r.file)
 	} else {
 		r.dirty = false
+		r.svc.events.Publish(volumeservice.FileEvent{Op: volumeservice.FileChanged, File: r.file})
 	}
 	r.broadcast(nil, controlMessage(saved))
 }
@@ -289,6 +321,27 @@ func (r *room) awarenessEntries() []awarenessEntry {
 		entries = append(entries, entry)
 	}
 	return entries
+}
+
+// sendEdit asks the writer to apply edits, returning where its answer
+// arrives; ok is false when the room has no seeded writer to ask.
+func (r *room) sendEdit(id string, edits []collabservice.Edit) (<-chan control, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.writer == nil || !r.seeded || r.writer.readOnly {
+		return nil, false
+	}
+	done := make(chan control, 1)
+	r.edits[id] = done
+	r.writer.queue(controlMessage(control{Op: "edit", ID: id, Edits: edits}))
+	return done, true
+}
+
+// forgetEdit drops an edit nobody answered.
+func (r *room) forgetEdit(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.edits, id)
 }
 
 // empty reports whether the room has no clients.

@@ -7,14 +7,13 @@ import (
 )
 
 type ListFolderRequest struct {
-	Tenant uint64           `json:"tenant,string,omitempty"`
-	Path   kbdto.VolumePath `json:"path"`
+	Path kbdto.VolumePath `json:"path"`
 }
 
 // ToArgs converts the request to the service's ListFolderArgs.
-func (r ListFolderRequest) ToArgs() volumeservice.ListFolderArgs {
+func (r ListFolderRequest) ToArgs(args features.ServiceArgs) volumeservice.ListFolderArgs {
 	return volumeservice.ListFolderArgs{
-		ServiceArgs: features.ServiceArgs{Tenant: r.Tenant},
+		ServiceArgs: args,
 		Path:        r.Path.ToVolumePath(),
 	}
 }

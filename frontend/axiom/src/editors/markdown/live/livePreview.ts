@@ -130,10 +130,10 @@ function activeLines(state: EditorState): Set<number> {
   return lines
 }
 
-function buildDecorations(view: EditorView): DecorationSet {
+function buildDecorations(view: EditorView, revealSelection: boolean): DecorationSet {
   const { state } = view
   const doc = state.doc
-  const active = activeLines(state)
+  const active = revealSelection ? activeLines(state) : new Set<number>()
   const isActive = (pos: number) => active.has(doc.lineAt(pos).number)
   const decorations: Range<Decoration>[] = []
 
@@ -262,13 +262,15 @@ function buildDecorations(view: EditorView): DecorationSet {
   return Decoration.set(decorations, true)
 }
 
-export function livePreview() {
+// revealSelection: false renders every line, for read-only text such as
+// chat replies
+export function livePreview({ revealSelection = true }: { revealSelection?: boolean } = {}) {
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet
 
       constructor(view: EditorView) {
-        this.decorations = buildDecorations(view)
+        this.decorations = buildDecorations(view, revealSelection)
       }
 
       update(update: ViewUpdate) {
@@ -278,7 +280,7 @@ export function livePreview() {
           update.viewportChanged ||
           syntaxTree(update.startState) !== syntaxTree(update.state)
         ) {
-          this.decorations = buildDecorations(update.view)
+          this.decorations = buildDecorations(update.view, revealSelection)
         }
       }
     },

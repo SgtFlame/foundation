@@ -18,6 +18,13 @@ func WithRoot(root string) Option {
 	}
 }
 
+// WithFileEvents sets the bus that created files are announced on.
+func WithFileEvents(events volumeservice.FileEvents) Option {
+	return func(s *service) {
+		s.events = events
+	}
+}
+
 var (
 	instance *service
 	once     sync.Once

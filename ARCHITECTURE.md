@@ -20,6 +20,7 @@ The main React entry point is `frontend/axiom` but this will be refactored so th
 `LanceDB` - Vector DB for RAG and BM25
 `Gin`
 `GORM`
+`samber/oops` - Structured errors, and the base of the `logging` builder
 
 ### Relational Database
 

@@ -1,19 +1,12 @@
 import { Actions, DockLocation, type Model } from 'flexlayout-react'
-import type { BarObject } from '../../editors/bar/BarObject.ts'
-import type { FooObject } from '../../editors/foo/FooObject.ts'
-import type { MarkdownObject } from '../../editors/markdown/MarkdownObject.ts'
-import type { VolumeObject } from '../../editors/volume/VolumeObject.ts'
-import type { VolumesObject } from '../../editors/volumes/VolumesObject.ts'
+import { extensions } from '../../workbench/extensions/index.ts'
+import { editors, type EditableObject } from '../../workbench/points.ts'
 
-// An object may set its own tab text (name) and tab hover text (helpText)
-export type EditableObject = FooObject | BarObject | VolumesObject | VolumeObject | MarkdownObject
+export type { EditableObject } from '../../workbench/points.ts'
 
-const editorNames: Record<EditableObject['kind'], string> = {
-  foo: 'Foo',
-  bar: 'Bar',
-  volumes: 'Volumes',
-  volume: 'Volume',
-  markdown: 'Markdown',
+// The tab an object is edited in
+export function tabIdOf(object: EditableObject): string {
+  return `${object.kind}:${object.id}`
 }
 
 export class EditorRegistry {
@@ -23,9 +16,11 @@ export class EditorRegistry {
     this.model = model
   }
 
-  // Focuses the object's editor tab if one is open, otherwise opens a new one
+  // Focuses the object's editor tab if one is open, otherwise opens a new
+  // one. The tab shows the workbench.editor contribution of the object's
+  // kind, or a placeholder when there is none.
   edit(object: EditableObject) {
-    const tabId = `${object.kind}:${object.id}`
+    const tabId = tabIdOf(object)
     if (this.model.getNodeById(tabId)) {
       this.model.doAction(Actions.selectTab(tabId))
       return
@@ -34,13 +29,14 @@ export class EditorRegistry {
     const tabset = this.model.getActiveTabset() ?? this.model.getFirstTabSet()
     if (!tabset) return
 
+    const editorName = extensions.get(editors).find((c) => c.id === object.kind)?.name ?? object.kind
     this.model.doAction(
       Actions.addNode(
         {
           type: 'tab',
           id: tabId,
-          name: 'name' in object ? object.name : `${editorNames[object.kind]} ${object.id}`,
-          helpText: 'helpText' in object ? object.helpText : undefined,
+          name: object.name ?? `${editorName} ${object.id}`,
+          helpText: object.helpText,
           component: object.kind,
           config: { object },
         },
@@ -50,5 +46,22 @@ export class EditorRegistry {
         true,
       ),
     )
+  }
+
+  // Focuses an open editor tab; false when there is no such tab
+  focus(tabId: string): boolean {
+    if (!this.model.getNodeById(tabId)) return false
+    this.model.doAction(Actions.selectTab(tabId))
+    return true
+  }
+
+  // Renames an open editor tab, e.g. after its object is renamed
+  rename(tabId: string, name: string) {
+    if (this.model.getNodeById(tabId)) this.model.doAction(Actions.renameTab(tabId, name))
+  }
+
+  // Closes an editor tab, e.g. after its object is deleted
+  close(tabId: string) {
+    if (this.model.getNodeById(tabId)) this.model.doAction(Actions.deleteTab(tabId))
   }
 }

@@ -71,7 +71,7 @@ export function installCapture(instance: AxiosInstance) {
       requestHeaders: headersOf(config.headers),
       requestBody: config.data,
     })
-    httpLog.Tags(method).With('id', id, 'url', url).debug('→ %s %s', method, url)
+    httpLog.Tags(method).Trace(config.traceId ?? '').With('id', id, 'url', url).debug('→ %s %s', method, url)
     return config
   })
 
@@ -83,6 +83,7 @@ export function installCapture(instance: AxiosInstance) {
         complete(entry.id, entry.startedAt, response)
         httpLog
           .Tags(entry.method)
+          .Trace(response.config.traceId ?? '')
           .With('id', entry.id, 'url', entry.url, 'status', response.status)
           .debug('← %d %s %s', response.status, entry.method, entry.url)
       }
@@ -95,6 +96,7 @@ export function installCapture(instance: AxiosInstance) {
 
       const logger = httpLog
         .Tags(entry.method)
+        .Trace(error.config?.traceId ?? '')
         .With('id', entry.id, 'url', entry.url)
         .fromError(error)
       if (error.response) {

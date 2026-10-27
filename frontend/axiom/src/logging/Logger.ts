@@ -97,11 +97,14 @@ export class Logger {
     this.err = err
   }
 
-  // This builder's context layered over a wrapped OopsError's context
+  // This builder's context layered over a wrapped OopsError's context. An
+  // error that carries a trace (a ServiceError) gives its trace, so the
+  // record leads to the server's records of the request.
   private contextOver(error: unknown): LogContext {
     const inner = error instanceof OopsError ? error.context : emptyContext
     return {
-      ...inner,
+      trace: traceOf(error),
+      ...definedOnly(inner),
       ...definedOnly(this.context),
       tags: [...inner.tags, ...this.context.tags],
       attrs: { ...inner.attrs, ...this.context.attrs },
@@ -210,7 +213,26 @@ export class Logger {
     }
     logStore.push(record)
     if (import.meta.env.DEV) mirror(record)
+    for (const sink of sinks) sink(record)
   }
+}
+
+type LogSink = (record: LogRecord) => void
+
+const sinks = new Set<LogSink>()
+
+// Hands every record logged from now on to sink, such as the forwarder that
+// sends them to the server; returns a function that removes it
+export function addLogSink(sink: LogSink): () => void {
+  sinks.add(sink)
+  return () => {
+    sinks.delete(sink)
+  }
+}
+
+function traceOf(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('trace' in error)) return undefined
+  return typeof error.trace === 'string' ? error.trace : undefined
 }
 
 function definedOnly(context: LogContext): Partial<LogContext> {

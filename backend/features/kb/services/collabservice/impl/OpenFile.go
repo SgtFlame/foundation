@@ -14,23 +14,29 @@ import (
 )
 
 // OpenFile returns the collaboration room for the file at args.Path, creating
-// it if nobody has the file open. The file must exist inside a volume.
+// it if nobody has the file open. The file must exist inside a volume the
+// principal may read; without volume.write the file opens read-only.
 func (s *service) OpenFile(args collabservice.OpenFileArgs) collabservice.OpenFileResponse {
+	sa := args.ServiceArgs
 	if !slices.Contains(volumeservice.FileTypes, args.Type) {
-		return collabservice.OpenFileResponse{Common: *volumeservice.Fail(http.StatusBadRequest, "unsupported file type %q", args.Type)}
+		return collabservice.OpenFileResponse{Common: *sa.Fail(http.StatusBadRequest, log.Code("unsupported_file_type").Errorf("unsupported file type %q", args.Type))}
 	}
 	path := args.Path
 	path.Type(args.Type)
-	file, failed := volumeservice.Resolve(s.root, path, true)
+	file, failed := volumeservice.Resolve(sa, s.root, path, true)
 	if failed == nil {
-		failed = s.statFile(file)
+		failed = s.statFile(sa, file)
 	}
 	if failed == nil && !volumeservice.InsideVolume(s.root, filepath.Dir(file)) {
-		failed = volumeservice.Fail(http.StatusBadRequest, "%q is not inside a volume", s.rel(file))
+		failed = sa.Fail(http.StatusBadRequest, log.Code("not_in_volume").Errorf("%q is not inside a volume", s.rel(file)))
+	}
+	if failed == nil {
+		failed = volumeservice.Check(sa, s.root, filepath.Dir(file), "read")
 	}
 	if failed != nil {
 		return collabservice.OpenFileResponse{Common: *failed}
 	}
+	readOnly := !volumeservice.May(sa, s.root, filepath.Dir(file), "write")
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -40,19 +46,19 @@ func (s *service) OpenFile(args collabservice.OpenFileArgs) collabservice.OpenFi
 		s.rooms[r.id] = r
 		s.byPath[file] = r
 	}
-	return collabservice.OpenFileResponse{Common: volumeservice.OK(), FileID: r.id}
+	return collabservice.OpenFileResponse{Common: features.OK(), FileID: r.id, ReadOnly: readOnly}
 }
 
 // statFile checks that file exists and is a regular file.
-func (s *service) statFile(file string) *features.ServiceResponse {
+func (s *service) statFile(sa features.ServiceArgs, file string) *features.ServiceResponse {
 	info, err := os.Stat(file)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		return volumeservice.Fail(http.StatusNotFound, "%q does not exist", s.rel(file))
+		return sa.Fail(http.StatusNotFound, log.Code("file_not_found").Errorf("%q does not exist", s.rel(file)))
 	case err != nil:
-		return volumeservice.Fail(http.StatusInternalServerError, "%s", err)
+		return sa.Fail(http.StatusInternalServerError, log.Wrap(err))
 	case !info.Mode().IsRegular():
-		return volumeservice.Fail(http.StatusBadRequest, "%q is not a file", s.rel(file))
+		return sa.Fail(http.StatusBadRequest, log.Code("not_a_file").Errorf("%q is not a file", s.rel(file)))
 	}
 	return nil
 }

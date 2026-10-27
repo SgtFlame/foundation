@@ -1,9 +1,12 @@
 package volumedto
 
-import "github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
+import (
+	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
+	"github.com/SgtFlame/foundation/backend/features/rest"
+)
 
 type ListFolderResponse struct {
-	Message  string        `json:"message,omitempty"`
+	rest.Status
 	IsVolume bool          `json:"isVolume"`
 	Folders  []FolderEntry `json:"folders"`
 	Files    []FileEntry   `json:"files"`
@@ -21,7 +24,7 @@ func ListFolderResponseFrom(resp volumeservice.ListFolderResponse) ListFolderRes
 		files[i] = FileEntryFrom(entry)
 	}
 	return ListFolderResponse{
-		Message:  resp.Common.Message,
+		Status:   rest.StatusFrom(resp.Common),
 		IsVolume: resp.IsVolume,
 		Folders:  folders,
 		Files:    files,

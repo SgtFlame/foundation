@@ -15,24 +15,39 @@ import FolderIcon from '@mui/icons-material/Folder'
 import LibraryAddIcon from '@mui/icons-material/LibraryAdd'
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks'
 import RefreshIcon from '@mui/icons-material/Refresh'
+import ShareIcon from '@mui/icons-material/Share'
 import FolderBreadcrumbs from '../../components/folders/FolderBreadcrumbs.tsx'
 import NameDialog from '../../components/folders/NameDialog.tsx'
 import ToolbarAction from '../../components/folders/ToolbarAction.tsx'
+import ShareDialog from '../../components/share/ShareDialog.tsx'
+import { KnowledgeBase } from '../../services/KnowledgeBase.ts'
+import { tenantOf, useCan } from '../../session/permissions.ts'
+import { useSession } from '../../session/session.ts'
 import { useFolderListing } from '../../components/folders/useFolderListing.ts'
 import { log } from '../../logging/index.ts'
-import type { EditorRegistry } from '../../pages/workbench/EditorRegistry.ts'
+import { useWorkbenchSubject } from '../../workbench/context/WorkbenchContext.ts'
+import type { EditorProps } from '../../workbench/points.ts'
 import { Volume } from '../../services/Volume.ts'
 import { openVolume } from '../volume/openVolume.ts'
 import type { VolumesObject } from './VolumesObject.ts'
 
 // Navigates the knowledge base root: open folders, make and remove folders,
-// and convert a folder into a volume. Double-clicking a volume opens it in a
+// convert a folder into a volume, and share a volume (the Share dialog, for
+// whoever may grant there). Double-clicking a volume opens it in a
 // VolumeEditor.
-function VolumesEditor({ registry }: { object: VolumesObject; registry: EditorRegistry }) {
+function VolumesEditor({ registry, tabId }: EditorProps<VolumesObject>) {
   const [folders, setFolders] = useState<string[]>([])
   const [selected, setSelected] = useState<string>()
+  useWorkbenchSubject(
+    tabId,
+    { type: 'folder', id: `/${folders.join('/')}`, label: folders.at(-1) ?? 'Knowledge base', summary: 'A knowledge base folder' },
+    { selection: selected ? { items: [selected] } : undefined },
+  )
   const [newFolderOpen, setNewFolderOpen] = useState(false)
+  const [sharing, setSharing] = useState<{ resource: string; name: string }>()
   const listing = useFolderListing(folders)
+  const session = useSession()
+  const can = useCan()
 
   const navigate = (next: string[]) => {
     setFolders(next)
@@ -96,6 +111,19 @@ function VolumesEditor({ registry }: { object: VolumesObject; registry: EditorRe
         >
           <LibraryAddIcon fontSize="small" />
         </ToolbarAction>
+        <ToolbarAction
+          title="Share volume"
+          disabled={!selectedEntry?.isVolume || !can('grant.read', `${tenantOf(session)}/kb`)}
+          onClick={() =>
+            void listing.run(async () => {
+              if (!selectedPath || !selected) return
+              const { volumeId } = await KnowledgeBase.openVolume({ path: selectedPath })
+              if (volumeId) setSharing({ resource: `${tenantOf(session)}/volume:${volumeId}`, name: selected })
+            })
+          }
+        >
+          <ShareIcon fontSize="small" />
+        </ToolbarAction>
       </Stack>
 
       {listing.error && (
@@ -134,6 +162,8 @@ function VolumesEditor({ registry }: { object: VolumesObject; registry: EditorRe
           </List>
         )}
       </Box>
+
+      {sharing && <ShareDialog resource={sharing.resource} title={sharing.name} onClose={() => setSharing(undefined)} />}
 
       <NameDialog
         open={newFolderOpen}

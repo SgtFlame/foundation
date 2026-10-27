@@ -21,7 +21,8 @@ import FolderBreadcrumbs from '../../components/folders/FolderBreadcrumbs.tsx'
 import NameDialog from '../../components/folders/NameDialog.tsx'
 import ToolbarAction from '../../components/folders/ToolbarAction.tsx'
 import { useFolderListing } from '../../components/folders/useFolderListing.ts'
-import type { EditorRegistry } from '../../pages/workbench/EditorRegistry.ts'
+import { useWorkbenchSubject } from '../../workbench/context/WorkbenchContext.ts'
+import type { EditorProps } from '../../workbench/points.ts'
 import { Volume, fileTypes } from '../../services/Volume.ts'
 import { openMarkdown } from '../markdown/openMarkdown.ts'
 import { openVolume } from './openVolume.ts'
@@ -33,9 +34,14 @@ function fileLabel(name: string, type: string): string {
 }
 
 // Browses one volume: open subfolders, and make folders and files
-function VolumeEditor({ object, registry }: { object: VolumeObject; registry: EditorRegistry }) {
+function VolumeEditor({ object, registry, tabId }: EditorProps<VolumeObject>) {
   const [subfolders, setSubfolders] = useState<string[]>([])
   const [selected, setSelected] = useState<string>()
+  useWorkbenchSubject(
+    tabId,
+    { type: 'volume', id: object.tsid, label: object.name, summary: `/${[...object.path, ...subfolders].join('/')}` },
+    { selection: selected ? { items: [selected.split(':')[1]] } : undefined },
+  )
   const [dialog, setDialog] = useState<'folder' | 'file'>()
   const [fileType, setFileType] = useState<string>(fileTypes[0].type)
   const path = [...object.path, ...subfolders]

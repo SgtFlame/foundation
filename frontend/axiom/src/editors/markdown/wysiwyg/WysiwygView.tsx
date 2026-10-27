@@ -52,7 +52,7 @@ function WysiwygEditor({ session, readOnly }: { session: CollabSession; readOnly
 // A WYSIWYG view in Milkdown, synced with the session's shared text through markdown
 function WysiwygView({ session }: { session: CollabSession }) {
   const state = useCollabState(session)
-  const readOnly = state.status === 'closed'
+  const readOnly = state.status === 'closed' || state.readOnly
 
   return (
     <MilkdownProvider>

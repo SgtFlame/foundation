@@ -1,6 +1,6 @@
 // Client for the backend Volume REST handlers (backend/features/kb/rest/volumehandlers)
 
-import { http } from './http/client.ts'
+import { http, type ResponseStatus } from './http/client.ts'
 import type { VolumePath } from './KnowledgeBase.ts'
 
 export { ServiceError } from './http/client.ts'
@@ -23,53 +23,44 @@ export interface FileEntry {
 export const fileTypes = [{ type: 'markdown', label: 'Markdown', extension: '.md' }] as const
 
 export interface ListFolderRequest {
-  tenant?: string
   path: VolumePath
 }
 
-export interface ListFolderResponse {
-  message?: string
+export interface ListFolderResponse extends ResponseStatus {
   isVolume: boolean
   folders: FolderEntry[]
   files: FileEntry[]
 }
 
 export interface MakeFolderRequest {
-  tenant?: string
   path: VolumePath
 }
 
-export interface MakeFolderResponse {
-  message?: string
+export interface MakeFolderResponse extends ResponseStatus {
 }
 
 export interface RemoveFolderRequest {
-  tenant?: string
   path: VolumePath
 }
 
-export interface RemoveFolderResponse {
-  message?: string
+export interface RemoveFolderResponse extends ResponseStatus {
 }
 
 export interface CreateVolumeRequest {
-  tenant?: string
   path: VolumePath
 }
 
-export interface CreateVolumeResponse {
-  message?: string
+export interface CreateVolumeResponse extends ResponseStatus {
   volumeId?: string
 }
 
 export interface CreateFileRequest {
-  tenant?: string
   path: VolumePath // folders down to the file's name, without its extension
   type: string
+  content?: string // the new file's text; omitted makes it empty
 }
 
-export interface CreateFileResponse {
-  message?: string
+export interface CreateFileResponse extends ResponseStatus {
 }
 
 export const Volume = {

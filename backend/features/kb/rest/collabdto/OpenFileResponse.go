@@ -1,14 +1,18 @@
 package collabdto
 
-import "github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
+import (
+	"github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
+	"github.com/SgtFlame/foundation/backend/features/rest"
+)
 
 type OpenFileResponse struct {
-	Message string `json:"message,omitempty"`
-	FileID  uint64 `json:"fileId,string,omitempty"`
+	rest.Status
+	FileID   uint64 `json:"fileId,string,omitempty"`
+	ReadOnly bool   `json:"readOnly,omitempty"`
 }
 
 // OpenFileResponseFrom converts the service's OpenFileResponse; its code is
 // carried by the HTTP status rather than the body.
 func OpenFileResponseFrom(resp collabservice.OpenFileResponse) OpenFileResponse {
-	return OpenFileResponse{Message: resp.Common.Message, FileID: resp.FileID}
+	return OpenFileResponse{Status: rest.StatusFrom(resp.Common), FileID: resp.FileID, ReadOnly: resp.ReadOnly}
 }

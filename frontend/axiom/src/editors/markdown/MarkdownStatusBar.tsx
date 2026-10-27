@@ -26,6 +26,11 @@ function MarkdownStatusBar({ state }: { state: CollabState }) {
       sx={{ alignItems: 'center', gap: 1, px: 1, py: 0.25, borderTop: 1, borderColor: 'divider' }}
     >
       <Chip size="small" label={chip.label} color={chip.color} variant="outlined" />
+      {state.readOnly && (
+        <Tooltip title="You may read this Volume but not change it">
+          <Chip size="small" label="Read-only" variant="outlined" />
+        </Tooltip>
+      )}
       <Typography
         variant="caption"
         color={state.saveError || state.status === 'closed' ? 'error' : 'text.secondary'}

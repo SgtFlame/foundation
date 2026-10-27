@@ -7,14 +7,13 @@ import (
 )
 
 type CreateVolumeRequest struct {
-	Tenant uint64           `json:"tenant,string,omitempty"`
-	Path   kbdto.VolumePath `json:"path"`
+	Path kbdto.VolumePath `json:"path"`
 }
 
 // ToArgs converts the request to the service's CreateVolumeArgs.
-func (r CreateVolumeRequest) ToArgs() volumeservice.CreateVolumeArgs {
+func (r CreateVolumeRequest) ToArgs(args features.ServiceArgs) volumeservice.CreateVolumeArgs {
 	return volumeservice.CreateVolumeArgs{
-		ServiceArgs: features.ServiceArgs{Tenant: r.Tenant},
+		ServiceArgs: args,
 		Path:        r.Path.ToVolumePath(),
 	}
 }

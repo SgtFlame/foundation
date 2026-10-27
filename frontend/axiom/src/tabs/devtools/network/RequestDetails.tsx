@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Box, Tab, Tabs, Typography } from '@mui/material'
 import type { NetworkEntry } from '../../../services/http/NetworkStore.ts'
-import JsonView from '../json/JsonView.tsx'
+import JsonView from '../../../components/json/JsonView.tsx'
 import { formatSize } from './format.ts'
 
 type DetailTab = 'headers' | 'payload' | 'preview' | 'response' | 'timing'

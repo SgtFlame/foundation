@@ -1,6 +1,6 @@
 // Client for the backend Knowledge Base REST handlers (backend/features/kb/rest)
 
-import { http } from './http/client.ts'
+import { http, type ResponseStatus } from './http/client.ts'
 
 export { ServiceError } from './http/client.ts'
 
@@ -14,12 +14,10 @@ export interface VolumePath {
 }
 
 export interface OpenVolumeRequest {
-  tenant?: string
   path: VolumePath
 }
 
-export interface OpenVolumeResponse {
-  message?: string
+export interface OpenVolumeResponse extends ResponseStatus {
   volumeId?: string
 }
 

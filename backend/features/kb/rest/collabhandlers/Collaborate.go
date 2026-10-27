@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
+	"github.com/SgtFlame/foundation/backend/features/rest"
 	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 )
@@ -17,7 +18,7 @@ import (
 func (ch *CollabHandler) Collaborate(c *gin.Context) {
 	fileID, err := strconv.ParseUint(c.Param("fileId"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid file id"})
+		c.JSON(http.StatusBadRequest, rest.Status{Message: "invalid file id", ErrorCode: "bad_request"})
 		return
 	}
 
@@ -28,9 +29,9 @@ func (ch *CollabHandler) Collaborate(c *gin.Context) {
 	ws.SetReadLimit(16 << 20)
 
 	resp := ch.service.Collaborate(collabservice.CollaborateArgs{
-		Ctx:    c.Request.Context(),
-		FileID: fileID,
-		Conn:   conn{ws},
+		ServiceArgs: rest.Args(c),
+		FileID:      fileID,
+		Conn:        conn{ws},
 	})
 	if resp.Common.Code >= 300 {
 		ws.Close(websocket.StatusCode(4000+int(resp.Common.Code)), resp.Common.Message)

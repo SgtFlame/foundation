@@ -7,14 +7,13 @@ import (
 )
 
 type MakeFolderRequest struct {
-	Tenant uint64           `json:"tenant,string,omitempty"`
-	Path   kbdto.VolumePath `json:"path"`
+	Path kbdto.VolumePath `json:"path"`
 }
 
 // ToArgs converts the request to the service's MakeFolderArgs.
-func (r MakeFolderRequest) ToArgs() volumeservice.MakeFolderArgs {
+func (r MakeFolderRequest) ToArgs(args features.ServiceArgs) volumeservice.MakeFolderArgs {
 	return volumeservice.MakeFolderArgs{
-		ServiceArgs: features.ServiceArgs{Tenant: r.Tenant},
+		ServiceArgs: args,
 		Path:        r.Path.ToVolumePath(),
 	}
 }

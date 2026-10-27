@@ -8,6 +8,7 @@ import { log } from '../../../logging/index.ts'
 import { Collab } from '../../../services/Collab.ts'
 import { CollabProvider, type Control } from '../../../services/collab/CollabProvider.ts'
 import { bridgeCursor, trackCursorSource } from './cursorBridge.ts'
+import { placeEdits } from './edits.ts'
 import { localUser, type LocalUser } from './localUser.ts'
 
 export type CollabStatus = 'connecting' | 'syncing' | 'ready' | 'offline' | 'closed'
@@ -18,6 +19,7 @@ export interface Peer extends LocalUser {
 
 export interface CollabState {
   status: CollabStatus
+  readOnly: boolean // the user may not write the Volume, so the views do not edit
   loaded: boolean // the document has been ready at least once, so views can show it
   writer: boolean
   saving: boolean
@@ -25,6 +27,7 @@ export interface CollabState {
   saveError?: string
   closedReason?: string
   peers: readonly Peer[]
+  selection?: [number, number] // the local user's selected lines (from 1), when a range is selected
 }
 
 const saveDelayMs = 1000
@@ -40,15 +43,16 @@ export class CollabSession {
   readonly awareness = new Awareness(this.doc)
   private provider?: CollabProvider
   private readonly listeners = new Set<Listener>()
-  private state: CollabState = { status: 'connecting', loaded: false, writer: false, saving: false, peers: [] }
+  private state: CollabState
   private synced = false
   private ready = false
   private lastSavedText?: string
   private saveTimer?: ReturnType<typeof setTimeout>
   private untrackCursor?: () => void
 
-  constructor(fileId: string) {
+  constructor(fileId: string, readOnly = false) {
     this.fileId = fileId
+    this.state = { status: 'connecting', readOnly, loaded: false, writer: false, saving: false, peers: [] }
   }
 
   // Connects to the file's room; stop() disconnects, and the session can be started again
@@ -126,7 +130,29 @@ export class CollabSession {
       case 'compact':
         this.provider?.sendCompacted(Y.encodeStateAsUpdate(this.doc))
         break
+      case 'edit':
+        this.applyEdits(control)
+        break
     }
+  }
+
+  // The writer applies a kb.edit tool call's edits to the shared text, so
+  // every view and peer sees them, and answers whether they applied
+  private applyEdits(control: Control) {
+    if (!this.state.writer || !control.id) return
+    const placed = placeEdits(this.ytext.toString(), control.edits ?? [])
+    if (typeof placed === 'string') {
+      this.provider?.sendControl({ op: 'edited', id: control.id, code: 409, message: placed })
+      return
+    }
+    this.doc.transact(() => {
+      for (const e of placed) {
+        this.ytext.delete(e.index, e.length)
+        this.ytext.insert(e.index, e.replace)
+      }
+    }, 'tool')
+    logger.With('fileId', this.fileId).info('applied %d edits from a tool', placed.length)
+    this.provider?.sendControl({ op: 'edited', id: control.id, code: 200 })
   }
 
   private readonly onDocUpdate = () => {
@@ -145,7 +171,7 @@ export class CollabSession {
     clearTimeout(this.saveTimer)
     this.saveTimer = undefined
     const markdown = this.ytext.toString()
-    if (!this.state.writer || markdown === this.lastSavedText) return
+    if (!this.state.writer || this.state.readOnly || markdown === this.lastSavedText) return // the room ignores a read-only save
     logger.With('fileId', this.fileId).debug('saving %d characters', markdown.length)
     this.provider?.sendControl({ op: 'save', markdown })
     this.update({ saving: true })
@@ -158,6 +184,14 @@ export class CollabSession {
       if (clientId !== this.doc.clientID && user) peers.push({ clientId, ...user })
     })
     this.update({ peers })
+  }
+
+  // Live Preview and Source report the local selection here, for the
+  // workbench context; undefined when nothing is selected
+  setSelection(lines?: [number, number]) {
+    const now = this.state.selection
+    if (now?.[0] === lines?.[0] && now?.[1] === lines?.[1]) return
+    this.update({ selection: lines })
   }
 
   private updateStatus() {

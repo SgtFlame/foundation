@@ -1,6 +1,8 @@
 import { Layout, Model, type IJsonModel, type TabNode } from 'flexlayout-react'
+import ExtensionsViewer from './extensions/ExtensionsViewer.tsx'
 import LogViewer from './log/LogViewer.tsx'
 import NetworkViewer from './network/NetworkViewer.tsx'
+import UsageViewer from './usage/UsageViewer.tsx'
 
 const json: IJsonModel = {
   global: { tabEnableClose: false, tabSetEnableMaximize: false },
@@ -15,6 +17,8 @@ const json: IJsonModel = {
         children: [
           { type: 'tab', id: 'devtools:network', name: 'Network', component: 'network' },
           { type: 'tab', id: 'devtools:log', name: 'Log', component: 'log' },
+          { type: 'tab', id: 'devtools:extensions', name: 'Extensions', component: 'extensions' },
+          { type: 'tab', id: 'devtools:usage', name: 'Usage', component: 'usage' },
         ],
       },
     ],
@@ -29,12 +33,17 @@ function factory(node: TabNode) {
       return <NetworkViewer />
     case 'log':
       return <LogViewer />
+    case 'extensions':
+      return <ExtensionsViewer />
+    case 'usage':
+      return <UsageViewer />
     default:
       return null
   }
 }
 
-// Developer tools: captured backend traffic and the structured log
+// Developer tools: captured backend traffic, the structured log, the extension
+// registry and the recorded AI usage
 function DevToolsTab() {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>

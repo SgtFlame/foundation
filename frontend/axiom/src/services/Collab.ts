@@ -1,6 +1,6 @@
 // Client for the backend Collab REST handlers (backend/features/kb/rest/collabhandlers)
 
-import { API_BASE, http } from './http/client.ts'
+import { API_BASE, http, type ResponseStatus } from './http/client.ts'
 import type { VolumePath } from './KnowledgeBase.ts'
 
 export { ServiceError } from './http/client.ts'
@@ -9,14 +9,13 @@ export { ServiceError } from './http/client.ts'
 // strings, since a JavaScript number cannot hold every uint64.
 
 export interface OpenFileRequest {
-  tenant?: string
   path: VolumePath // folders down to the file's name, without its extension
   type: string
 }
 
-export interface OpenFileResponse {
-  message?: string
+export interface OpenFileResponse extends ResponseStatus {
   fileId?: string // the collaboration room, shared by everyone editing the file
+  readOnly?: boolean // you may read the Volume but not write it: the room drops your edits
 }
 
 export const Collab = {

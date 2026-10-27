@@ -8,7 +8,7 @@ This plan adds:
 - **Storage**: values live in SQLite tables `Configuration` and `ConfigurationRevision`, served by a `config` feature.
 - **Settings tab**: a right-border tab beside DevTools that edits every section, rendered generically from its schema.
 
-Status: partly built. Slice 2 built `configservice` (app scope in the UI), the generic Settings tab and the sections `ai.providers`, `ai.models` and `ai.chat.levels`; see [Built in slice 2](#built-in-slice-2).
+Status: partly built. Slice 2 built `configservice` (app scope in the UI), the generic Settings tab and the sections `ai.providers`, `ai.models` and `ai.chat.levels`; see [Built in slice 2](#built-in-slice-2). Slice 11 enabled the tenant and user scopes in the UI, with who may write each ([Built in slice 11](#built-in-slice-11)).
 
 Decision: scopes are layered **app → tenant → user**. The v1 UI edits the app scope; the tables and resolution support all three.
 
@@ -92,7 +92,7 @@ Today's `serve` flags remain as bootstrap fallbacks at step 2, so a fresh instal
   - `useSetting(sectionId, path)` returns one value. Components use it to read settings, for example the composer reads `ai.chat.levels`.
 - **Settings tab** (`src/tabs/settings/`)
   - It is a right-border tab next to DevTools, contributed to `workbench.borderTab` (built in slice 1) from `src/settings/contributions.ts`: `{ id: 'settings', source: 'settings', name: 'Settings', location: 'right', component: lazy(...) }`.
-  - **Header**: a search box that filters by title, description and key, plus a **scope selector**. Only *App* is enabled until there is auth.
+  - **Header**: a search box that filters by title, description and key, plus a **scope selector**. *Built in slice 11*: all three scopes are enabled; see [Built in slice 11](#built-in-slice-11).
   - **Left**: a category tree built from the `category` paths of every contributed section.
   - **Right**: the forms of the selected category's sections. Each section is either the generic form or the contributor's `Editor`.
   - **Per leaf**: a source badge (*default*, *env*, *app*, …) and "Reset to inherited". A `restart` key shows a "needs restart" note.
@@ -119,6 +119,23 @@ Today's `serve` flags remain as bootstrap fallbacks at step 2, so a fresh instal
 - **`index`**: `debounce`, `chunkSize`, `overlap` (`restart`).
 - **`logging`**: the VictoriaLogs host and port, optional credentials, the minimum level stored, and frontend log forwarding ([Logging.md](Logging.md)).
 - **`ui.appearance`** (client-only): theme and density.
+
+## Built in slice 4
+- **New sections**
+  - **`chat`** (AI › Chat): the system prompt, the rounds of history sent, and the title level, at the app, tenant and user scopes.
+  - **`chat.context.defaults.workbench`** (AI › Chat › Context).
+  - **`usage.capture`** (System).
+- **Sections derived from another point**: a section can be declared from another point's contributions. `conversationsettings.Contribute` adds a `chat.context.defaults.<id>` section for every `chat.contextProvider`, from the provider's `Schema` and `Defaults`, so it runs after them in `serve.go`. That is how the browser's per-conversation controls get defaults Settings can edit, while browser-only sections cannot be stored.
+- **Reading at user scope**: the Chat editor reads `ai.chat.levels`, `chat` and the context defaults at the `user` scope, the values that apply to the person chatting. It reads `ai.models` at `app`, its only scope.
+- **The levels are live**: `chatservice` resolves levels through `config.Read` on every call, so a change in Settings applies to the next message. `--chat-model` is now only the model for calls that name no level.
+
+## Built in slice 5
+- **New sections**
+  - **`retrieval`** and **`retrieval.feedback`** (AI › Retrieval, app scope): the pipeline's constants and the grounding multiplier.
+  - **`chat.context.presets`** (AI › Chat › Context, all scopes): the RAG Search preset chips.
+  - **`chat.context.defaults.rag`**: derived from the `rag` provider, like the workbench's.
+- **A `ref` may be empty**: `chat.context.defaults.rag`'s `preset` refers to `chat.context.presets#presets`, and an empty value (*Custom*) passes, as `Set` only checks non-empty refs.
+- See [ContextRetrieval.md › Built in slice 5](ContextRetrieval.md#built-in-slice-5).
 
 ## Open questions
 Moved here from [TODO.md](TODO.md):
@@ -178,7 +195,38 @@ Who may edit which scope has moved to [RBAC.md](RBAC.md).
 
 **Not built yet**
 - `Export` and `Import`.
-- Tenant and user scopes in the UI.
+- Tenant and user scopes in the UI. *Built in slice 11.*
 - Storage for browser-only (`ui.*`) sections.
-- The other first sections: `ai.chat.stages`, `ai.embed`, `chat.modes`, `cognition`, `retrieval`, `index` and `logging`.
+- The other first sections: `ai.chat.stages`, `ai.embed`, `chat.modes`, `cognition`, `retrieval` and `index`. (`logging` came in slice 3; `chat`, the `chat.context.defaults.*` sections and `usage.capture` in slice 4.)
 - Schema `migrate` in the browser.
+
+## Built in slice 6
+- **`ai.chat.stages`** (AI › Chat › *Internal stages*, all scopes): `match` and `memory`, levels by reference to `ai.chat.levels`, both Fast. A stage naming no level, or one that does not exist, uses the default level.
+- **`chat.context.defaults.chronicle`** (AI › Chat › Context): `enabled`, `topK` (5), `match` and `update`, declared from the `chronicle` provider like every provider's defaults. A conversation's `chronicle` settings also hold `checked` (the entries checked in the Chronicles view), which is not in the schema and so never a default.
+- **`chat.context.defaults.rag`** gains `sources.chronicle` (on).
+- **`chat`**: `historyRounds` is now titled *Window*, with a default of 15 (was 50).
+
+## Built in slice 7
+- **`cognition`** (AI › Cognition, app scope): `maxSteps` (1000) and `maxWallSeconds` (300) per run, `maxValueKB` (256: a larger traced value keeps only a preview), and retention, `keepRuns` (50) and `keepDays` (7). A trace is kept while it is among its graph's last `keepRuns` runs *or* younger than `keepDays` (Cognition question 5).
+
+## Built in slice 8
+- **`tools`** (AI › Tools, app and tenant scope): `maxSteps` (8), `maxResultKB` (32), `timeoutSeconds` (30), `clientTimeoutSeconds` (30) and `disabled`, a list of tool names never offered. See [Tools.md › Built in slice 8](Tools.md#built-in-slice-8).
+- **`chat.context.defaults.tools`** (AI › Chat › Context › Tools): `{"enabled": true}`, the default of each conversation's Tools switch.
+
+## Built in slice 11
+- **Who writes each scope** (RBAC question 1): `config.write` on `app/config:<id>` (*Super Administrator*), on `tenant:<id>/config:<id>` (*Owner* and *Administrator*), and on `user:<id>/config:<id>` (everyone, their own: `config` is a user-owned resource type). A patch that touches a `secret` field also needs `config.writeSecrets`. Reading is the `self` class: everyone.
+- **The scope selector** in Settings is live. It opens at *App* for those who may write it, and at *User* for everyone else. Its tooltip says when a scope is read-only for you.
+- A section you may not write at the chosen scope shows a *Read-only* chip in place of Save and Discard, and every control is disabled. List controls and secret inputs now also respect a field's allowed scopes.
+- The browser reads settings at the **user scope** by default (`useConfig`, `useSetting`), so tenant and user overrides take effect in the browser as they do on the server.
+- **Not yet**: app-scope settings in the application database (`db.ForTenant`). Per-tenant provider keys were built in slice 12.
+
+## Built in slice 12
+See [Secrets.md › Built in slice 12](Secrets.md#built-in-slice-12).
+- **`SecretStore`**: `configservice` no longer calls `config.Cipher` itself. It keeps secrets through a `config.SecretStore` (`configimpl.WithSecrets`): `config.CipherStore` without Vault (`WithCipher`, as before), and `vaultstore` with it, which leaves `{"$vault": {"version": n}}` in the row. A save writes only the secrets it changed, and deletes those it cleared.
+- **A new source, `server`**: `configimpl.WithServerSecret` sets the server's own secret from Vault's bootstrap bundle, under every stored scope (`server/gemini-api-key` for `ai.providers` › `gemini.apiKey`). Layering is now defaults → server → env (plain keys) → app → tenant → user, with a flag or env var still winning for secrets.
+- **`ai.providers` at every scope** (Secrets question 7): a tenant or a user may set their own key, used for their calls.
+- **Who writes secrets**: plain settings need `config.write`; secrets need `secret.write` on `app` at the app scope (an *Application Administrator*), and `config.writeSecrets` at a tenant or user scope. Settings lets a user edit only the fields they may write, and a secret they may not write at the app scope says "Managed by an Application Administrator".
+- **No hint with Vault** (Secrets question 4): the view of a secret is `{set}` only. Without Vault the hint stays.
+- A value that could not be read from the store (Vault unreachable) is dropped from that read, and the resolved section is not cached, so it is read again next time.
+- `Config.set` in the browser is not captured in DevTools' Network tab when the patch carries a secret.
+

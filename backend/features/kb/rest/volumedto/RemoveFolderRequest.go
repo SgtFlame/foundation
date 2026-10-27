@@ -7,14 +7,13 @@ import (
 )
 
 type RemoveFolderRequest struct {
-	Tenant uint64           `json:"tenant,string,omitempty"`
-	Path   kbdto.VolumePath `json:"path"`
+	Path kbdto.VolumePath `json:"path"`
 }
 
 // ToArgs converts the request to the service's RemoveFolderArgs.
-func (r RemoveFolderRequest) ToArgs() volumeservice.RemoveFolderArgs {
+func (r RemoveFolderRequest) ToArgs(args features.ServiceArgs) volumeservice.RemoveFolderArgs {
 	return volumeservice.RemoveFolderArgs{
-		ServiceArgs: features.ServiceArgs{Tenant: r.Tenant},
+		ServiceArgs: args,
 		Path:        r.Path.ToVolumePath(),
 	}
 }

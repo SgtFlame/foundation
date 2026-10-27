@@ -107,7 +107,10 @@ func TestRoomSeedRelaySaveHandover(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := newService(WithRoot(root), WithGracePeriod(time.Hour))
+	events := volumeservice.NewFileEvents()
+	saved := make(chan volumeservice.FileEvent, 1)
+	events.Subscribe(func(e volumeservice.FileEvent) { saved <- e })
+	s := newService(WithRoot(root), WithGracePeriod(time.Hour), WithFileEvents(events))
 	open := func() uint64 {
 		path := kbservice.NewVolumePath().Folder("vol", "note")
 		resp := s.OpenFile(collabservice.OpenFileArgs{Path: *path, Type: "markdown"})
@@ -150,6 +153,14 @@ func TestRoomSeedRelaySaveHandover(t *testing.T) {
 	b.expectControl(t, "saved", func(c control) bool { return c.Op == "saved" && c.Code == 200 })
 	if content, _ := os.ReadFile(file); string(content) != "hello world" {
 		t.Fatalf("file holds %q", content)
+	}
+	select {
+	case e := <-saved:
+		if e.Op != volumeservice.FileChanged || e.File != file {
+			t.Fatalf("save published %+v", e)
+		}
+	default:
+		t.Fatal("save published no file event")
 	}
 
 	// Only the writer may save

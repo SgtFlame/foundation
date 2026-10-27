@@ -3,6 +3,9 @@ package impl
 import (
 	"net/http"
 	"os"
+	"path/filepath"
+
+	"github.com/SgtFlame/foundation/backend/features"
 
 	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 )
@@ -10,12 +13,16 @@ import (
 // RemoveFolder removes the last folder of args.Path. Only empty folders that
 // are not volumes are removed, so no content is ever deleted.
 func (s *service) RemoveFolder(args volumeservice.RemoveFolderArgs) volumeservice.RemoveFolderResponse {
-	dir, failed := s.resolve(args.Path, true)
+	sa := args.ServiceArgs
+	dir, failed := s.resolve(sa, args.Path, true)
 	if failed == nil {
-		failed = s.statFolder(dir)
+		failed = s.statFolder(sa, dir)
+	}
+	if failed == nil {
+		failed = volumeservice.Check(sa, s.root, filepath.Dir(dir), "write")
 	}
 	if failed == nil && isVolume(dir) {
-		failed = fail(http.StatusConflict, "folder %q is a volume", s.rel(dir))
+		failed = sa.Fail(http.StatusConflict, log.Code("folder_is_volume").Errorf("folder %q is a volume", s.rel(dir)))
 	}
 	if failed != nil {
 		return volumeservice.RemoveFolderResponse{Common: *failed}
@@ -24,16 +31,16 @@ func (s *service) RemoveFolder(args volumeservice.RemoveFolderArgs) volumeservic
 	entries, err := os.ReadDir(dir)
 	switch {
 	case err != nil:
-		failed = fail(http.StatusInternalServerError, "%s", err)
+		failed = sa.Fail(http.StatusInternalServerError, log.Wrap(err))
 	case len(entries) > 0:
-		failed = fail(http.StatusConflict, "folder %q is not empty", s.rel(dir))
+		failed = sa.Fail(http.StatusConflict, log.Code("folder_not_empty").Errorf("folder %q is not empty", s.rel(dir)))
 	default:
 		if err := os.Remove(dir); err != nil {
-			failed = fail(http.StatusInternalServerError, "%s", err)
+			failed = sa.Fail(http.StatusInternalServerError, log.Wrap(err))
 		}
 	}
 	if failed != nil {
 		return volumeservice.RemoveFolderResponse{Common: *failed}
 	}
-	return volumeservice.RemoveFolderResponse{Common: ok()}
+	return volumeservice.RemoveFolderResponse{Common: features.OK()}
 }

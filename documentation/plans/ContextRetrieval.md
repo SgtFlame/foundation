@@ -9,7 +9,7 @@ Large context windows, plain RAG and keyword-only search each fail in their own 
 
 The design follows Tony Richards' "Deterministic Context Control: Dual-Axis Ingestion & Post-Execution Grounding" (Sep 2026).
 
-Status: planned. It generalizes the RRF that `indexservice.Find` already implements (`index/services/indexservice/impl/fuse.go`).
+Status: partly built. Slice 5 built the engine with the library source, the RAG Search provider and control, citations, the Context inspector and 👍/👎/🚫 feedback; see [Built in slice 5](#built-in-slice-5). Slice 6 added the `chronicle` source and pinned items; see [Built in slice 6](#built-in-slice-6). The rounds source and the *Flagged segments* widget wait.
 
 ## User controls
 These are per conversation: a `chat.contextSettings` contribution (`rag`, see [ChatCompletion.md](ChatCompletion.md)). The defaults live in configuration.
@@ -135,13 +135,103 @@ Moved here from [TODO.md](TODO.md):
 1. **Axis 2 mapping**:
    - *Proposal*: exponential multipliers `B^(±a/5)` with B = 4, so ±5 favors one side 16:1 but never excludes the other.
    - *Alternative*: linear, where ±5 removes the other side entirely.
-   - *Decision*:
+   - *Decision*: (after seeing) built on the proposal in slice 5. With only the library source, the dial moves every score by the same multiplier, so its effect shows once Chronicle memory arrives (slice 6).
 2. **Thumbs down**:
    - *Proposal*: 👎 *Incorrect* lowers the weight of the round's segments but keeps the round in the window, so the user can correct the model next turn. Only 🚫 *Ignore* removes it.
    - This differs from the first Chronicle article.
-   - *Decision*:
+   - *Decision*: (after seeing) built on the proposal in slice 5.
 3. **Past rounds as a memory source**:
    - *Proposal*: index the text of every non-ignored round in a LanceDB `rounds` table, searched across all conversations, not only the current one.
-   - *Decision*:
+   - *Decision*: (after seeing) not built in slice 6. Chronicle entries carry what outlives the window, so the `rounds` source waits until memory has been seen with a real model.
 
 Who feedback affects (global, per tenant or per user) has moved to [MultiTenant.md](MultiTenant.md).
+
+## Built in slice 5
+**The feature** (`backend/features/retrieval`)
+- **Shared types** (package `retrieval`)
+  - `retrieval.Sources`, the backend point `retrieval.source`.
+  - A source is a struct contribution `{Descriptor, Title, Axis, VectorSearch, KeywordSearch}`, rather than the interface sketched above, matching `chat.contextProvider`. The searches get the call context, from which `features.CallFrom` reads the principal.
+  - `Segment{SourceID, ID, Key, Title, Text, Location}`. `ID` is unique within the source and is what RRF fuses on (a chunk's path and ordinal). `Key` is what feedback counts against (the chunk's content hash).
+  - `Scored` adds `Number`, `Keys` (every feedback key it covers), `Also` (other paths with the same text), `Score`, `RRF`, `AxisMult`, `Grounding`, both ranks, `Pinned` and `Tokens`.
+- **One RRF**: `features/retrieval/fuse` holds the generic `fuse.Fuse`, and `indexservice.Find` now uses it. `fuse.go` in the index only groups chunks into documents.
+- **`retrievalservice.Retrieve`** (`POST /api/v1/retrieval/retrieve`, action `retrieval.read`)
+  - Args: `Query`, `LexicalSemantic` and `ChronicleLibrary` (−5…5), `TopK` (1…50, 0 for the default), `ContextWindow`, `Sources` and `VolumeIDs`.
+  - The pipeline is as planned: one query embedding (`embed-query`), both searches per source concurrently, per-source RRF, the axis multiplier, the grounding multiplier, then window assembly.
+  - **The budget** is `min(budgetShare × contextWindow, maxBudgetTokens)`. Gemini's windows are about a million tokens, so a share alone would allow far more than the prompt's 48 KB context cap. `maxBudgetTokens` (10 000) keeps the two consistent.
+  - **No API key**: when the query cannot be embedded, retrieval falls back to the keyword ranking alone and says so (`VectorSkipped`), rather than failing the round. A failed source is logged and skipped.
+  - **Merging**: chunks of one file merge when their byte ranges overlap or touch and both texts still match their ranges. The merged segment keeps the higher score and carries every merged chunk's feedback key, so a vote reaches all of them.
+- **The library source**: `indexsource.Contribute` (`features/index/source`), searching the `lancestore` store. Each chunk is located from its sidecar, and only when the sidecar's hash matches the stored chunk.
+  - `indexservice.Match` gained `Hash`, which `lancestore` now returns.
+  - `serve.go` opens LanceDB before the registry is built, so the source can be contributed with it.
+- **Tables**
+  - **`RoundSegment`**: as planned, plus `Number`, `OtherKeys`, `Title`, `Snippet` (400 bytes), `Location` (JSON), `Also` and every score. A round's sources and Context inspector therefore read from it alone, with no re-retrieval.
+  - **`SegmentFeedback`** (table `segment_feedback`): `db.Tenanted`, so feedback is **per tenant** (MultiTenant question 1, on its proposal).
+  - **`retrieval.Vote`** moves counts from a round's old verdict to its new one inside the caller's transaction.
+- **Settings** (`retrievalsettings`)
+  - **`retrieval`** (AI › Retrieval, app scope): `rrfK`, `candidateFactor`, `minCandidates`, `axisBase`, `defaultTopK`, `budgetShare` and `maxBudgetTokens`.
+  - **`retrieval.feedback`**: `gamma`, `min` and `max`.
+  - **`chat.context.presets`** (AI › Chat › Context, all scopes): *Code lookup* (−4, +3, 8), *Brainstorm* (+4, 0, 12) and *Recall* (0, −4, 8).
+
+**RAG Search** (`retrievalcontext`, the `rag` context provider)
+- **Settings**: `enabled`, `preset`, `lexicalSemantic`, `chronicleLibrary`, `topK` and `sources` (`{library: true}`). Their defaults section is `chat.context.defaults.rag`, declared like every provider's.
+- **Gather** runs `Retrieve` with the conversation's dials and the round's model's context window (`GatherArgs.ContextWindow`, new). It returns one `ContextItem` per segment, carrying the segment (`ContextItem.Segment`, new).
+- **Late binding**: the provider is contributed before the retrieval service exists, because configuration needs the finished registry first. `serve.go` therefore hands it a function returning the service.
+- **In `Send`**
+  - The prompt numbers citable items `[1]…[n]` in the order they fit. It adds one instruction to cite them inline and never invent a number.
+  - It stores the round's `RoundSegment`s and sends them as a `sources` event before the first delta.
+  - `rounds` returns each round's segments, and `POST /conversation/feedback` sets the verdict.
+
+**Feedback**
+- **The verdict** is `Round.Feedback`: `""`, `up`, `down` or `ignore`.
+  - 👍 and 👎 move the round's segment counts, and changing the verdict moves the vote.
+  - 🚫 drops the round from later rounds' history (`InHistory` and `Send`'s history query). It also takes back a 👍 or 👎.
+- **Nothing reads 👎 rounds yet**: they are kept for the *Flagged segments* widget and the moderation queue.
+
+**Frontend**
+- **Clients**: `src/services/Retrieval.ts` (new, with a `/api/v1/retrieval` proxy). `Conversation.ts` gained `RoundSegment`, `Round.feedback`, `Round.segments`, `onSources` and `feedback()`.
+- **`src/retrieval/`**: the RAG Search `chat.contextSettings` contribution (`RagControl`).
+  - It has the on/off switch, preset chips (choosing one sets the dials; moving a dial makes it *Custom*), the two 11-step dials, Top-K and the Volumes source switch.
+- **`src/components/chat/`**
+  - `RoundSources`: the Sources row and the Context inspector, a table of #, source, segment, vector/keyword ranks, RRF, axis ×, grounding ×, score and tokens.
+  - `FeedbackButtons`: shown on hover, and stays visible once a verdict is set. An ignored round is greyed out.
+- **Citations**: `MarkdownText` takes `citations`.
+  - Lezer parses `[1]` and `[1][3]` as links, and Live Preview would hide their brackets. Valid numbers are therefore swapped for `⟦n⟧` before rendering and shown as chips (`components/markdown/citations.ts`).
+  - Clicking a chip, or a source's title, opens the file at its lines through `openMarkdownAt`. The lines are asked for through `editors/markdown/reveal.ts`, which Live Preview reads once the document has loaded, even in a new tab.
+
+**Not yet**
+- **Sources**: the Chronicle and rounds sources (slice 6).
+- **Window assembly**: pinned items.
+- **Controls**: the context budget control, and the volume filter in the popover (`VolumeIDs` exists in the API).
+- **Sampling**: the Advanced temperature, Top-P and sampling Top-K overrides (ChatCompletion gap 6).
+- **Surfacing feedback**: the *Flagged segments* widget, and listing 👎 rounds for review.
+- **Plumbing**: DevTools showing a round's retrieval, and merging that bridges two kept segments (a chunk joining both neighbours merges into one of them only).
+
+**Verification of slice 5**
+- **Backend tests**
+  - `retrievalservice/impl/Retrieve_test.go`: fusion, the axis multipliers, grounding after votes, a moved vote, tenant isolation, source selection, the keyword fallback, merging, deduplication, the budget and Top-K.
+  - `conversationservice/impl/Send_test.go`: numbered citations in the prompt, the `sources` event, stored segments, feedback moves and 🚫 history.
+  - `index/source/Source_test.go`: titles.
+- **Against a stub Gemini**: a real server was run against a local stand-in for the Gemini API (`GOOGLE_GEMINI_BASE_URL`), with hashed bag-of-words embeddings and a reply citing `[1][2]`.
+  - Files were indexed, and `retrieve` ranked them.
+  - A round streamed `sources` before its deltas, and 👍 moved the grounding to √2.
+- **Headless Chromium against `yarn dev`**
+  - The RAG Search popover and presets.
+  - Citation chips, the Sources row and the inspector (Axis × 2.30 under *Code lookup*, Grounding × 1.41 after 👍).
+  - A citation opening `indexing.md` with the cited lines selected.
+- **Not verified**: replies from a real model, which may cite differently or not at all. The stub's reply always cites. This is part of the ★ review.
+
+### Decisions to review after seeing it
+1. Sources are struct contributions on a backend point, like context providers.
+2. Feedback is per tenant (MultiTenant question 1's proposal).
+3. 👎 keeps the round in the window, and 🚫 removes it and takes back its vote (question 2's proposal).
+4. The Axis 2 mapping is exponential with B = 4 (question 1's proposal).
+5. A round stores everything its inspector shows, so old rounds explain themselves even after reindexing.
+6. Without an embedding, retrieval falls back to keywords instead of failing the round.
+7. The context budget is capped at `maxBudgetTokens` (10 000), not only a share of the window.
+
+## Built in slice 6
+- **The `chronicle` source** (`features/chronicle/source`, see [Chronicle.md › Built in slice 6](Chronicle.md#built-in-slice-6)): the principal's active entries from LanceDB's `entries` table, on the Chronicle axis. A segment's `ID` and `Key` are the entry's ID, and `Location.EntryID` (new) makes its citation open the entry.
+- **RAG Search** searches it by default (`sources: {library, chronicle}`, with a *Chronicles* switch), so the Chronicles ↔ Library dial now moves results between memory and Volumes.
+- **Pinned items** come from the `chronicle` context provider, not from retrieval's window assembly: `Send` puts pinned items first, in their provider's order, and a segment two providers found goes in once, pinned. They count against the prompt's 48 KB cap, not retrieval's token budget.
+- **`Scored.Reason`** (and `RoundSegment.Reason`) says why a pinned segment is in: `checked`, `parent`, or `stage 1 · retrieved|active|linked`. The Context inspector shows it as *Why*.
+- **Not yet**: the `rounds` source (question 3), the *Flagged segments* widget, and caching the query embedding, which stage 1's candidate retrieval and RAG Search now each make.

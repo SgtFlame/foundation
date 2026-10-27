@@ -21,7 +21,7 @@ Back end:
 
 ```bash
 cd backend
-go run cli/main.go serve
+./scripts/serve.sh
 ```
 
 Then navigate to port 5173 in your browser (typically http://localhost:5173 but your setup might be different).

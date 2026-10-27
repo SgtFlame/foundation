@@ -1,0 +1,50 @@
+{
+  "name": "Personal",
+  "description": "The default chat mode: chooses the Chronicle entries each message needs, and keeps them up to date after each reply.",
+  "kind": "mode",
+  "version": 1,
+  "nodes": [
+    {"id": "onMessage", "type": "event.userMessage", "position": {"x": 0, "y": 40}},
+    {"id": "settings", "type": "chronicle.settings", "position": {"x": 300, "y": 300}},
+    {"id": "candidates", "type": "chronicle.candidates", "position": {"x": 620, "y": 0}},
+    {"id": "match", "type": "chronicle.match", "position": {"x": 960, "y": 0}},
+    {"id": "items", "type": "chronicle.contextItems", "position": {"x": 1300, "y": 260}},
+    {"id": "returnItems", "type": "flow.return", "title": "Return items", "position": {"x": 1600, "y": 40},
+      "config": {"outputs": [{"id": "items", "name": "Items", "type": "ContextItem[]"}]}},
+
+    {"id": "onReply", "type": "event.reply", "position": {"x": 0, "y": 620}},
+    {"id": "replySettings", "type": "chronicle.settings", "position": {"x": 300, "y": 840}},
+    {"id": "update?", "type": "flow.branch", "title": "Update memory?", "position": {"x": 620, "y": 620}},
+    {"id": "used", "type": "chronicle.usedEntries", "position": {"x": 620, "y": 800}},
+    {"id": "update", "type": "chronicle.update", "position": {"x": 960, "y": 620}, "config": {"maxProposals": 3}},
+    {"id": "returnChanges", "type": "flow.return", "title": "Return changes", "position": {"x": 1300, "y": 620},
+      "config": {"outputs": [{"id": "changes", "name": "Changes", "type": "Changes"}]}}
+  ],
+  "edges": [
+    {"from": {"node": "onMessage", "pin": "then"}, "to": {"node": "candidates", "pin": "then"}},
+    {"from": {"node": "onMessage", "pin": "settings"}, "to": {"node": "settings", "pin": "settings"}},
+    {"from": {"node": "onMessage", "pin": "text"}, "to": {"node": "candidates", "pin": "text"}},
+    {"from": {"node": "onMessage", "pin": "window"}, "to": {"node": "candidates", "pin": "window"}},
+    {"from": {"node": "settings", "pin": "checked"}, "to": {"node": "candidates", "pin": "checked"}},
+    {"from": {"node": "settings", "pin": "retrieve"}, "to": {"node": "candidates", "pin": "retrieve"}},
+    {"from": {"node": "candidates", "pin": "then"}, "to": {"node": "match", "pin": "then"}},
+    {"from": {"node": "onMessage", "pin": "text"}, "to": {"node": "match", "pin": "text"}},
+    {"from": {"node": "onMessage", "pin": "window"}, "to": {"node": "match", "pin": "window"}},
+    {"from": {"node": "candidates", "pin": "candidates"}, "to": {"node": "match", "pin": "candidates"}},
+    {"from": {"node": "settings", "pin": "topK"}, "to": {"node": "match", "pin": "topK"}},
+    {"from": {"node": "settings", "pin": "match"}, "to": {"node": "match", "pin": "match"}},
+    {"from": {"node": "match", "pin": "selection"}, "to": {"node": "items", "pin": "selection"}},
+    {"from": {"node": "match", "pin": "then"}, "to": {"node": "returnItems", "pin": "then"}},
+    {"from": {"node": "items", "pin": "items"}, "to": {"node": "returnItems", "pin": "items"}},
+
+    {"from": {"node": "onReply", "pin": "then"}, "to": {"node": "update?", "pin": "then"}},
+    {"from": {"node": "onReply", "pin": "settings"}, "to": {"node": "replySettings", "pin": "settings"}},
+    {"from": {"node": "replySettings", "pin": "update"}, "to": {"node": "update?", "pin": "condition"}},
+    {"from": {"node": "update?", "pin": "true"}, "to": {"node": "update", "pin": "then"}},
+    {"from": {"node": "onReply", "pin": "round"}, "to": {"node": "update", "pin": "round"}},
+    {"from": {"node": "onReply", "pin": "segments"}, "to": {"node": "used", "pin": "segments"}},
+    {"from": {"node": "used", "pin": "used"}, "to": {"node": "update", "pin": "used"}},
+    {"from": {"node": "update", "pin": "then"}, "to": {"node": "returnChanges", "pin": "then"}},
+    {"from": {"node": "update", "pin": "changes"}, "to": {"node": "returnChanges", "pin": "changes"}}
+  ]
+}

@@ -20,7 +20,13 @@ function SourceView({ session }: { session: CollabSession }) {
     const model = editor?.getModel()
     if (!editor || !model) return
     const binding = new MonacoBinding(session.ytext, model, new Set([editor]), session.awareness)
-    return () => binding.destroy()
+    const selection = editor.onDidChangeCursorSelection(({ selection: s }) =>
+      session.setSelection(s.isEmpty() ? undefined : [s.startLineNumber, s.endLineNumber]),
+    )
+    return () => {
+      selection.dispose()
+      binding.destroy()
+    }
   }, [editor, session])
 
   return (
@@ -34,7 +40,7 @@ function SourceView({ session }: { session: CollabSession }) {
         minimap: { enabled: false },
         automaticLayout: true,
         scrollBeyondLastLine: false,
-        readOnly: state.status === 'closed',
+        readOnly: state.status === 'closed' || state.readOnly,
       }}
     />
   )

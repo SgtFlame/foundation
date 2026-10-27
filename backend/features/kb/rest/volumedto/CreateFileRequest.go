@@ -7,16 +7,17 @@ import (
 )
 
 type CreateFileRequest struct {
-	Tenant uint64           `json:"tenant,string,omitempty"`
-	Path   kbdto.VolumePath `json:"path"`
-	Type   string           `json:"type"`
+	Path    kbdto.VolumePath `json:"path"`
+	Type    string           `json:"type"`
+	Content string           `json:"content,omitempty"` // the new file's text; omitted makes it empty
 }
 
 // ToArgs converts the request to the service's CreateFileArgs.
-func (r CreateFileRequest) ToArgs() volumeservice.CreateFileArgs {
+func (r CreateFileRequest) ToArgs(args features.ServiceArgs) volumeservice.CreateFileArgs {
 	return volumeservice.CreateFileArgs{
-		ServiceArgs: features.ServiceArgs{Tenant: r.Tenant},
+		ServiceArgs: args,
 		Path:        r.Path.ToVolumePath(),
 		Type:        r.Type,
+		Content:     r.Content,
 	}
 }

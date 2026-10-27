@@ -71,6 +71,8 @@ type CreateFileArgs struct {
 	features.ServiceArgs
 	Path kbservice.VolumePath // the folders down to the file's name, without its extension
 	Type string               // one of FileTypes
+	// Content is the new file's text; empty makes an empty file.
+	Content string
 }
 
 type CreateFileResponse struct {

@@ -21,6 +21,20 @@ export default defineConfig({
   server: {
     proxy: {
       '/api/v1/kb': { target: 'http://localhost:8080', ws: true },
+      '/api/v1/ai': { target: 'http://localhost:8080' },
+      '/api/v1/index': { target: 'http://localhost:8080' },
+      '/api/v1/extensions': { target: 'http://localhost:8080' },
+      '/api/v1/config': { target: 'http://localhost:8080' },
+      '/api/v1/usage': { target: 'http://localhost:8080' },
+      '/api/v1/logs': { target: 'http://localhost:8080' },
+      '/api/v1/conversation': { target: 'http://localhost:8080' },
+      '/api/v1/retrieval': { target: 'http://localhost:8080' },
+      '/api/v1/chronicle': { target: 'http://localhost:8080' },
+      '/api/v1/cognition': { target: 'http://localhost:8080' },
+      '/api/v1/identity': { target: 'http://localhost:8080' },
+      '/api/v1/authz': { target: 'http://localhost:8080' },
+      '/api/v1/secrets': { target: 'http://localhost:8080' },
+      '/api/v1/bootstrap': { target: 'http://localhost:8080' },
     },
   },
 })

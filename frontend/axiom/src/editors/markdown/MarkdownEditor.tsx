@@ -1,6 +1,9 @@
-import { lazy, Suspense, useCallback, useMemo } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo } from 'react'
 import { Box, CircularProgress, Stack } from '@mui/material'
 import { Layout, Model, type IJsonModel, type TabNode } from 'flexlayout-react'
+import type * as Y from 'yjs'
+import { useWorkbenchContext, useWorkbenchSubject } from '../../workbench/context/WorkbenchContext.ts'
+import type { EditorProps } from '../../workbench/points.ts'
 import type { CollabSession } from './collab/CollabSession.ts'
 import { useCollabSession, useCollabState } from './collab/useCollabSession.ts'
 import MarkdownStatusBar from './MarkdownStatusBar.tsx'
@@ -84,10 +87,34 @@ function SessionLayout({ session }: { session: CollabSession }) {
   )
 }
 
+// Tells the workbench context what this editor edits, its selected lines,
+// and when the local user edits it
+function useMarkdownSubject(tabId: string, object: MarkdownObject, session: CollabSession) {
+  const state = useCollabState(session)
+  const store = useWorkbenchContext()
+  useWorkbenchSubject(
+    tabId,
+    { type: 'markdown', id: object.fileId, label: object.name, summary: object.helpText },
+    { selection: state.selection ? { lines: state.selection } : undefined, dirty: state.saving },
+  )
+  useEffect(() => {
+    let last = 0
+    const observer = (_: Y.YTextEvent, transaction: Y.Transaction) => {
+      // Edits from a view carry its binding as origin; seeding, remote updates and tool edits do not count
+      if (!transaction.local || transaction.origin == null || transaction.origin === 'tool' || Date.now() - last < 5000) return
+      last = Date.now()
+      store.touch(tabId, 'edited')
+    }
+    session.ytext.observe(observer)
+    return () => session.ytext.unobserve(observer)
+  }, [session, store, tabId])
+}
+
 // Edits a markdown file with everyone who has it open: Live Preview, Source
 // and WYSIWYG views of the same document, autosaved by the server-elected writer
-function MarkdownEditor({ object }: { object: MarkdownObject }) {
-  const session = useCollabSession(object.fileId)
+function MarkdownEditor({ object, tabId }: EditorProps<MarkdownObject>) {
+  const session = useCollabSession(object.fileId, object.readOnly)
+  useMarkdownSubject(tabId, object, session)
   return <SessionLayout session={session} />
 }
 

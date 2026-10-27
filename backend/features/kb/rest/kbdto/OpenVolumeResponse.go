@@ -1,9 +1,12 @@
 package kbdto
 
-import "github.com/SgtFlame/foundation/backend/features/kb/services/kbservice"
+import (
+	"github.com/SgtFlame/foundation/backend/features/kb/services/kbservice"
+	"github.com/SgtFlame/foundation/backend/features/rest"
+)
 
 type OpenVolumeResponse struct {
-	Message  string `json:"message,omitempty"`
+	rest.Status
 	VolumeID uint64 `json:"volumeId,string,omitempty"`
 }
 
@@ -11,7 +14,7 @@ type OpenVolumeResponse struct {
 // carried by the HTTP status rather than the body.
 func OpenVolumeResponseFrom(resp kbservice.OpenVolumeResponse) OpenVolumeResponse {
 	return OpenVolumeResponse{
-		Message:  resp.Common.Message,
+		Status:   rest.StatusFrom(resp.Common),
 		VolumeID: resp.VolumeID,
 	}
 }

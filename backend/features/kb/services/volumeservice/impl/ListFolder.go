@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/SgtFlame/foundation/backend/features"
+
 	"github.com/SgtFlame/foundation/backend/features/kb/services/kbservice"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 )
@@ -13,9 +15,13 @@ import (
 // Folders that cannot be used as path folders (hidden or dotted names) and
 // files of unknown types are skipped.
 func (s *service) ListFolder(args volumeservice.ListFolderArgs) volumeservice.ListFolderResponse {
-	dir, failed := s.resolve(args.Path, false)
+	sa := args.ServiceArgs
+	dir, failed := s.resolve(sa, args.Path, false)
 	if failed == nil {
-		failed = s.statFolder(dir)
+		failed = s.statFolder(sa, dir)
+	}
+	if failed == nil {
+		failed = volumeservice.Check(sa, s.root, dir, "read")
 	}
 	if failed != nil {
 		return volumeservice.ListFolderResponse{Common: *failed}
@@ -23,7 +29,7 @@ func (s *service) ListFolder(args volumeservice.ListFolderArgs) volumeservice.Li
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return volumeservice.ListFolderResponse{Common: *fail(http.StatusInternalServerError, "%s", err)}
+		return volumeservice.ListFolderResponse{Common: *sa.Fail(http.StatusInternalServerError, log.Wrap(err))}
 	}
 
 	folders := []volumeservice.FolderEntry{}
@@ -46,7 +52,7 @@ func (s *service) ListFolder(args volumeservice.ListFolderArgs) volumeservice.Li
 	}
 
 	return volumeservice.ListFolderResponse{
-		Common:   ok(),
+		Common:   features.OK(),
 		IsVolume: isVolume(dir),
 		Folders:  folders,
 		Files:    files,

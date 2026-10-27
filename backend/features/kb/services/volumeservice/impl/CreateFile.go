@@ -8,24 +8,29 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 )
 
-// CreateFile creates an empty file of args.Type at args.Path. Files can only be
+// CreateFile creates a file of args.Type at args.Path holding args.Content. Files can only be
 // created inside a volume, in a folder that exists.
 func (s *service) CreateFile(args volumeservice.CreateFileArgs) volumeservice.CreateFileResponse {
+	sa := args.ServiceArgs
 	if !slices.Contains(volumeservice.FileTypes, args.Type) {
-		return volumeservice.CreateFileResponse{Common: *fail(http.StatusBadRequest, "unsupported file type %q", args.Type)}
+		return volumeservice.CreateFileResponse{Common: *sa.Fail(http.StatusBadRequest, log.Code("unsupported_file_type").Errorf("unsupported file type %q", args.Type))}
 	}
 	path := args.Path
 	path.Type(args.Type)
-	file, failed := s.resolve(path, true)
+	file, failed := s.resolve(sa, path, true)
 	parent := filepath.Dir(file)
 	if failed == nil {
-		failed = s.statFolder(parent)
+		failed = s.statFolder(sa, parent)
 	}
 	if failed == nil && !s.insideVolume(parent) {
-		failed = fail(http.StatusBadRequest, "folder %q is not inside a volume", s.rel(parent))
+		failed = sa.Fail(http.StatusBadRequest, log.Code("not_in_volume").Errorf("folder %q is not inside a volume", s.rel(parent)))
+	}
+	if failed == nil {
+		failed = volumeservice.Check(sa, s.root, parent, "write")
 	}
 	if failed != nil {
 		return volumeservice.CreateFileResponse{Common: *failed}
@@ -34,16 +39,21 @@ func (s *service) CreateFile(args volumeservice.CreateFileArgs) volumeservice.Cr
 	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	switch {
 	case errors.Is(err, fs.ErrExist):
-		failed = fail(http.StatusConflict, "%q already exists", s.rel(file))
+		failed = sa.Fail(http.StatusConflict, log.Code("file_exists").Errorf("%q already exists", s.rel(file)))
 	case err != nil:
-		failed = fail(http.StatusInternalServerError, "%s", err)
+		failed = sa.Fail(http.StatusInternalServerError, log.Wrap(err))
 	default:
-		if err := f.Close(); err != nil {
-			failed = fail(http.StatusInternalServerError, "%s", err)
+		_, err = f.WriteString(args.Content)
+		if closeErr := f.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			failed = sa.Fail(http.StatusInternalServerError, log.Wrap(err))
 		}
 	}
 	if failed != nil {
 		return volumeservice.CreateFileResponse{Common: *failed}
 	}
-	return volumeservice.CreateFileResponse{Common: ok()}
+	s.events.Publish(volumeservice.FileEvent{Op: volumeservice.FileCreated, File: file})
+	return volumeservice.CreateFileResponse{Common: features.OK()}
 }

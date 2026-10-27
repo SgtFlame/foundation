@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box,
-  Chip,
-  Collapse,
+  Button,
   IconButton,
   MenuItem,
   Select,
@@ -14,12 +13,10 @@ import {
   Typography,
 } from '@mui/material'
 import BlockIcon from '@mui/icons-material/Block'
-import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined'
-import ErrorIcon from '@mui/icons-material/Error'
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
-import WarningIcon from '@mui/icons-material/Warning'
-import { logLevels, logStore, type LogLevel, type LogRecord } from '../../../logging/index.ts'
-import JsonView from '../json/JsonView.tsx'
+import JsonView from '../../../components/json/JsonView.tsx'
+import LogRow, { details } from '../../../components/logs/LogRow.tsx'
+import { openLogs } from '../../../editors/logs/openLogs.ts'
+import { logLevels, logStore, type LogLevel } from '../../../logging/index.ts'
 import { useStore } from '../useStore.ts'
 
 const levelLabels: Record<LogLevel, string> = {
@@ -27,81 +24,6 @@ const levelLabels: Record<LogLevel, string> = {
   info: 'Info',
   warn: 'Warnings',
   error: 'Errors',
-}
-
-const levelStyles: Record<LogLevel, { icon: typeof InfoOutlinedIcon; color?: string; bg?: string }> = {
-  debug: { icon: BugReportOutlinedIcon, color: 'text.secondary' },
-  info: { icon: InfoOutlinedIcon },
-  warn: { icon: WarningIcon, color: '#5c3c00', bg: '#fffbe5' },
-  error: { icon: ErrorIcon, color: '#e00', bg: '#fff0f0' },
-}
-
-function time(date: Date): string {
-  return date.toLocaleTimeString(undefined, { hour12: false }) + `.${String(date.getMilliseconds()).padStart(3, '0')}`
-}
-
-// The oops context of a record, shown when it is expanded
-function details(record: LogRecord): Record<string, unknown> {
-  const fields: Record<string, unknown> = {
-    domain: record.domain,
-    tags: record.tags.length ? record.tags : undefined,
-    code: record.code,
-    trace: record.trace,
-    span: record.span,
-    hint: record.hint,
-    public: record.public,
-    user: record.user,
-    attrs: Object.keys(record.attrs).length ? record.attrs : undefined,
-    error: record.error,
-  }
-  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined))
-}
-
-function LogRow({ record }: { record: LogRecord }) {
-  const [open, setOpen] = useState(false)
-  const style = levelStyles[record.level]
-  const Icon = style.icon
-  const extra = details(record)
-  const expandable = Object.keys(extra).some((key) => key !== 'domain' && key !== 'tags')
-
-  return (
-    <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: style.bg, color: style.color, fontSize: 12 }}>
-      <Stack
-        direction="row"
-        spacing={0.75}
-        onClick={() => expandable && setOpen((open) => !open)}
-        sx={{ alignItems: 'flex-start', px: 1, py: 0.25, cursor: expandable ? 'pointer' : 'default' }}
-      >
-        <Icon sx={{ fontSize: 14, mt: '1px' }} />
-        <Box component="span" sx={{ color: 'text.secondary', fontFamily: 'monospace', flexShrink: 0 }}>
-          {time(record.time)}
-        </Box>
-        {record.domain && (
-          <Box component="span" sx={{ fontWeight: 600, flexShrink: 0 }}>
-            [{record.domain}]
-          </Box>
-        )}
-        {record.tags.map((tag) => (
-          <Chip key={tag} label={tag} size="small" sx={{ height: 16, fontSize: 10 }} />
-        ))}
-        <Box component="span" sx={{ fontFamily: 'monospace', wordBreak: 'break-word', flexGrow: 1 }}>
-          {record.message}
-        </Box>
-        {record.code && (
-          <Box component="span" sx={{ color: 'text.secondary', flexShrink: 0 }}>
-            {record.code}
-          </Box>
-        )}
-      </Stack>
-      {expandable && (
-        <Collapse in={open} unmountOnExit>
-          <Box sx={{ pl: 4, pr: 1, pb: 0.5, color: 'text.primary' }}>
-            <JsonView value={extra} />
-          </Box>
-        </Collapse>
-      )}
-    </Box>
-  )
 }
 
 // A subset of Chrome DevTools' Console panel over logStore
@@ -183,7 +105,23 @@ function LogViewer() {
       </Stack>
       <Box ref={listRef} sx={{ flexGrow: 1, overflow: 'auto', minHeight: 0 }}>
         {visible.map((record) => (
-          <LogRow key={record.id} record={record} />
+          <LogRow
+            key={record.id}
+            record={record}
+            expanded={
+              record.trace ? (
+                <>
+                  <JsonView value={details(record)} />
+                  <Button
+                    size="small"
+                    onClick={() => openLogs({ query: `trace:=${JSON.stringify(record.trace)}`, range: { relative: '24h' } })}
+                  >
+                    Show in Log Explorer
+                  </Button>
+                </>
+              ) : undefined
+            }
+          />
         ))}
         {visible.length === 0 && (
           <Typography sx={{ p: 2, fontSize: 12, color: 'text.secondary', textAlign: 'center' }}>

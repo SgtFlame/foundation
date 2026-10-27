@@ -120,6 +120,8 @@ Why sections: fixed 4 KB windows over the whole file would shift every later chu
 - **lancedb-go version:** FTS exists only on lancedb-go's `main` branch; the last release, v0.1.2, rejects FTS queries. `go.mod` therefore pins a `main` commit (`v0.1.3-0.20260509194607-fa14ce29c772`) with no prebuilt native library, and `build.sh` compiles it from source (see Scripts). When lancedb-go releases a version with FTS and binaries, pin it and drop the source build.
 
 ### `Find`: weighted Reciprocal Rank Fusion (`impl/Find.go`, `impl/fuse.go`)
+Since slice 5 the fusion itself is `features/retrieval/fuse`, shared with the retrieval engine ([ContextRetrieval.md](ContextRetrieval.md#built-in-slice-5)); `impl/fuse.go` only groups chunks into documents. Search results (`indexservice.Match`) now carry each chunk's `Hash`.
+
 Inputs:
 - `query`
 - `weight` ∈ [0, 1]: the vector search's share, with keyword search getting `1 - weight`
