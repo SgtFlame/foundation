@@ -38,6 +38,7 @@ type round struct {
 	history      []conversation.Round       // the window: the rounds sent as history, oldest first
 	settings     map[string]json.RawMessage // the context settings, by provider ID
 	segments     []retrieval.RoundSegment   // what the round injected, once stored
+	debug        bool                       // the conversation's Debug setting: log its AI calls in detail
 }
 
 // Send stores the message as a new round and streams the reply in the
@@ -150,6 +151,7 @@ func (s *service) start(args conversationservice.SendArgs) (*round, *features.Se
 // when the user stops it, so its writes do not use the request's context.
 func (s *service) reply(args conversationservice.SendArgs, r *round, events chan<- conversationservice.SendEvent) {
 	defer close(events)
+	r.debug = debugging(s.settingsOf(args, r, conversation.DebugID, nil))
 	ctx := args.Context()
 	emit := func(e conversationservice.SendEvent) {
 		select {
@@ -167,7 +169,7 @@ func (s *service) reply(args conversationservice.SendArgs, r *round, events chan
 	}
 	messages = append(messages, chatservice.Message{Role: chatservice.RoleUser, Content: r.round.Text})
 	call := args.ServiceArgs
-	call.Meta = features.Meta{Feature: "chat", Level: r.level.ID, ConversationID: r.conversation.ID, RoundID: r.round.ID}
+	call.Meta = features.Meta{Feature: "chat", Level: r.level.ID, ConversationID: r.conversation.ID, RoundID: r.round.ID, Debug: r.debug}
 	system, cited := prompt(r.chat.SystemPrompt, s.gather(args, r))
 	if r.segments = s.storeSegments(args, r, cited); len(r.segments) > 0 {
 		emit(conversationservice.SendEvent{Kind: conversationservice.EventSources, Segments: r.segments})
@@ -247,7 +249,7 @@ func (s *service) reply(args conversationservice.SendArgs, r *round, events chan
 func (s *service) follow(args conversationservice.SendArgs, r *round, emit func(conversationservice.SendEvent)) {
 	call := args.ServiceArgs
 	call.Ctx = context.WithoutCancel(args.Context())
-	call.Meta = features.Meta{ConversationID: r.conversation.ID, RoundID: r.round.ID}
+	call.Meta = features.Meta{ConversationID: r.conversation.ID, RoundID: r.round.ID, Debug: r.debug}
 	for _, f := range conversation.RoundFollowers.All(s.registry) {
 		if f.Follow == nil {
 			continue
@@ -294,7 +296,7 @@ func (s *service) title(args features.ServiceArgs, r *round) string {
 		level = r.level
 	}
 	call := args
-	call.Meta = features.Meta{Feature: "chat-title", Level: level.ID, ConversationID: r.conversation.ID}
+	call.Meta = features.Meta{Feature: "chat-title", Level: level.ID, ConversationID: r.conversation.ID, Debug: r.debug}
 	resp := s.chat.Complete(chatservice.CompleteArgs{
 		ServiceArgs: call,
 		Level:       level.ID,

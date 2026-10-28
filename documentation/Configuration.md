@@ -105,7 +105,7 @@ The sections the server declares (the rest of the plan's list is in [plans/Confi
     - optional `tiers` (`{ aboveInputTokens, inputPerMTok, outputPerMTok }`, for Gemini Pro's >200k prompt price);
     - `effectiveFrom`.
   - **Pricing lives on the model, not on the level**, so two levels that share a model share one price. Cost is computed and stored when a call is recorded, so editing a price never rewrites history ([Usage.md](Usage.md)).
-- **`ai.chat.levels`**: an array of levels, by default **Fast** ⚡ (`gemini-2.5-flash-lite`), **Standard** 💡 (`gemini-2.5-flash`) and **Deep** 🧪 (`gemini-2.5-pro`). Each level has `id`, `label`, `icon`, `modelRef` (→ `ai.models`), `temperature`, `maxOutputTokens`, `thinkingBudget` and `default: bool`.
+- **`ai.chat.levels`**: an array of levels, by default **Fast** ⚡ (`gemini-3.5-flash-lite`), **Standard** 💡 (`gemini-3.8-flash`) and **Deep** 🧪 (`gemini-2.5-pro`). Each level has `id`, `label`, `icon`, `modelRef` (→ `ai.models`), `temperature`, `maxOutputTokens`, `thinkingBudget` and `default: bool`.
 - **`ai.chat.stages`**: the level each internal call uses, for example Chronicle stage 1 → Fast and the memory update → Fast, so the user's choice only affects the reply.
 - **`cognition`**: default run limits (steps, wall time, tokens, cost, loop iterations) and trace retention.
 - **`retrieval`**, **`retrieval.feedback`** and **`chat.context.presets`**: the retrieval engine's constants, grounding multiplier and dial presets ([ContextRetrieval.md](ContextRetrieval.md)).

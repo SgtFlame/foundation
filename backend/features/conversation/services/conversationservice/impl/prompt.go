@@ -25,7 +25,7 @@ func (s *service) gather(args conversationservice.SendArgs, r *round) []conversa
 	results := make([][]conversation.ContextItem, len(providers))
 	// The providers' own calls (stage 1, query embeddings) are attributed to the round
 	call := args.ServiceArgs
-	call.Meta = features.Meta{ConversationID: r.conversation.ID, RoundID: r.round.ID}
+	call.Meta = features.Meta{ConversationID: r.conversation.ID, RoundID: r.round.ID, Debug: r.debug}
 	var wg sync.WaitGroup
 	for i, p := range providers {
 		settings := s.settingsOf(args, r, p.ID, p.Defaults)
@@ -67,6 +67,16 @@ func enabled(settings json.RawMessage) bool {
 	}
 	_ = json.Unmarshal(settings, &v)
 	return v.Enabled == nil || *v.Enabled
+}
+
+// debugging is the debug provider's "enabled" setting, which, unlike the
+// others, is off unless set to true.
+func debugging(settings json.RawMessage) bool {
+	var v struct {
+		Enabled bool `json:"enabled"`
+	}
+	_ = json.Unmarshal(settings, &v)
+	return v.Enabled
 }
 
 // prompt is the system prompt followed by the context: pinned segments

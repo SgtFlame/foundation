@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/SgtFlame/foundation/backend/features"
-	"github.com/SgtFlame/foundation/backend/features/ai/settings"
+	aisettings "github.com/SgtFlame/foundation/backend/features/ai/settings"
 	"github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/config/services/configservice"
 	"github.com/SgtFlame/foundation/backend/features/db"
@@ -103,7 +103,7 @@ func TestEnvWinsForSecretsOnly(t *testing.T) {
 	if len(levels.Levels) != 1 {
 		t.Fatalf("env levels not applied over defaults: %+v", levels)
 	}
-	set(t, s, aisettings.LevelsID, `{"levels": [{"id": "a", "label": "A", "modelRef": "gemini-2.5-flash", "default": true}]}`, 0)
+	set(t, s, aisettings.LevelsID, `{"levels": [{"id": "a", "label": "A", "modelRef": "gemini-3.8-flash", "default": true}]}`, 0)
 	levels, _ = config.Read[aisettings.Levels](s, local, aisettings.LevelsID)
 	if len(levels.Levels) != 1 || levels.Levels[0].ID != "a" {
 		t.Errorf("stored levels should win over env: %+v", levels)

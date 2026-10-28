@@ -5,12 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/ai/providers"
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
 	"github.com/SgtFlame/foundation/backend/features/ai/services/embedservice"
@@ -21,7 +24,7 @@ import (
 const (
 	DefaultEmbedModel      = "gemini-embedding-001"
 	DefaultEmbedDimensions = 768
-	DefaultChatModel       = "gemini-2.5-flash"
+	DefaultChatModel       = "gemini-3.8-flash"
 )
 
 // maxBatch is how many texts the Gemini API embeds in one request.
@@ -205,13 +208,17 @@ func (p *Provider) Complete(ctx context.Context, in chatservice.ChatInput) (chat
 	if err != nil {
 		return chatservice.ChatOutput{}, err
 	}
+	debugRequest(ctx, in.Model, contents, config)
+	start := time.Now()
 	resp, err := client.Models.GenerateContent(ctx, in.Model, contents, config)
 	if err != nil {
+		debugFailure(ctx, in.Model, start, err)
 		return chatservice.ChatOutput{}, wrap(err)
 	}
 	out := chatservice.ChatOutput{Content: resp.Text()}
 	collect(&out, resp)
 	out.ToolCalls = toolCalls(resp)
+	debugReply(ctx, in.Model, start, out)
 	return out, nil
 }
 
@@ -224,10 +231,13 @@ func (p *Provider) Stream(ctx context.Context, in chatservice.ChatInput, onDelta
 	if err != nil {
 		return chatservice.ChatOutput{}, err
 	}
+	debugRequest(ctx, in.Model, contents, config)
+	start := time.Now()
 	var out chatservice.ChatOutput
 	var text strings.Builder
 	for resp, err := range client.Models.GenerateContentStream(ctx, in.Model, contents, config) {
 		if err != nil {
+			debugFailure(ctx, in.Model, start, err)
 			return chatservice.ChatOutput{}, wrap(err)
 		}
 		if piece := resp.Text(); piece != "" {
@@ -240,6 +250,7 @@ func (p *Provider) Stream(ctx context.Context, in chatservice.ChatInput, onDelta
 		out.ToolCalls = append(out.ToolCalls, toolCalls(resp)...)
 	}
 	out.Content = text.String()
+	debugReply(ctx, in.Model, start, out)
 	return out, nil
 }
 
@@ -286,8 +297,7 @@ func request(in chatservice.ChatInput) ([]*genai.Content, *genai.GenerateContent
 		config.MaxOutputTokens = int32(*in.MaxTokens)
 	}
 	if in.ThinkingBudget != nil {
-		budget := int32(*in.ThinkingBudget)
-		config.ThinkingConfig = &genai.ThinkingConfig{ThinkingBudget: &budget}
+		config.ThinkingConfig = thinking(in.Model, *in.ThinkingBudget)
 	}
 	if len(in.JSONSchema) > 0 {
 		var schema any
@@ -320,6 +330,22 @@ func request(in chatservice.ChatInput) ([]*genai.Content, *genai.GenerateContent
 		config.ToolConfig = &genai.ToolConfig{FunctionCallingConfig: &genai.FunctionCallingConfig{Mode: mode}}
 	}
 	return contents, config, nil
+}
+
+// thinking is the config for a thinking budget. Gemini 3 models think in
+// levels and refuse a budget of 0 as an invalid argument, so 0 asks them for
+// their least thinking instead: the minimal level on Flash models, low on
+// the others, which have no minimal level.
+func thinking(model string, budget int) *genai.ThinkingConfig {
+	model = strings.TrimPrefix(model, "models/")
+	if budget == 0 && !strings.HasPrefix(model, "gemini-1") && !strings.HasPrefix(model, "gemini-2") {
+		if strings.Contains(model, "flash") {
+			return &genai.ThinkingConfig{ThinkingLevel: genai.ThinkingLevelMinimal}
+		}
+		return &genai.ThinkingConfig{ThinkingLevel: genai.ThinkingLevelLow}
+	}
+	b := int32(budget)
+	return &genai.ThinkingConfig{ThinkingBudget: &b}
 }
 
 // responseOf is a tool result as Gemini's function response, which must be
@@ -379,6 +405,95 @@ func finishReason(r genai.FinishReason) string {
 	}
 	return strings.ToLower(string(r))
 }
+
+// debugging reports whether the call's Meta asks for its details to be logged.
+func debugging(ctx context.Context) bool {
+	_, meta, ok := features.CallFrom(ctx)
+	return ok && meta.Debug
+}
+
+// debugRequest logs what is sent to Gemini when the call is debugged: the
+// config as JSON, without the system instruction's text, and the shape of
+// the contents. Prompts and replies are never logged.
+func debugRequest(ctx context.Context, model string, contents []*genai.Content, config *genai.GenerateContentConfig) {
+	if !debugging(ctx) {
+		return
+	}
+	shown := *config
+	system := 0
+	if config.SystemInstruction != nil {
+		for _, part := range config.SystemInstruction.Parts {
+			system += len(part.Text)
+		}
+		shown.SystemInstruction = nil
+	}
+	configJSON, _ := json.Marshal(&shown)
+	shapes := make([]string, len(contents))
+	for i, c := range contents {
+		shapes[i] = shape(c)
+	}
+	log.With("model", model, "config", string(configJSON), "systemBytes", system, "contents", strings.Join(shapes, " | ")).
+		Info(ctx, "gemini request to %s: %d contents, config %s", model, len(contents), configJSON)
+}
+
+// shape describes a content without its text: its role and each part's
+// kind, with a text's length and a call's or response's function name.
+func shape(c *genai.Content) string {
+	parts := make([]string, 0, len(c.Parts))
+	for _, part := range c.Parts {
+		var desc string
+		switch {
+		case part == nil:
+			desc = "nil"
+		case part.FunctionCall != nil:
+			desc = "call:" + part.FunctionCall.Name
+		case part.FunctionResponse != nil:
+			desc = "response:" + part.FunctionResponse.Name
+		default:
+			desc = fmt.Sprintf("text:%d", len(part.Text))
+		}
+		if part != nil && len(part.ThoughtSignature) > 0 {
+			desc += "+signature"
+		}
+		parts = append(parts, desc)
+	}
+	return c.Role + "[" + strings.Join(parts, ",") + "]"
+}
+
+// debugFailure logs Gemini's whole error, with its status and details,
+// when the call is debugged; the error users see carries its message only.
+func debugFailure(ctx context.Context, model string, start time.Time, err error) {
+	if !debugging(ctx) {
+		return
+	}
+	b := log.With("model", model, "elapsedMs", time.Since(start).Milliseconds())
+	if apiErr, ok := errors.AsType[genai.APIError](err); ok {
+		details, _ := json.Marshal(apiErr.Details)
+		b.With("httpStatus", apiErr.Code, "status", apiErr.Status, "details", string(details)).
+			Warn(ctx, "gemini refused the request to %s: %d %s: %s; details %s", model, apiErr.Code, apiErr.Status, apiErr.Message, details)
+		return
+	}
+	b.Warn(ctx, "gemini request to %s failed: %v", model, err)
+}
+
+// debugReply logs how a debugged call ended: its finish reason, usage and
+// tool calls, without the reply's text.
+func debugReply(ctx context.Context, model string, start time.Time, out chatservice.ChatOutput) {
+	if !debugging(ctx) {
+		return
+	}
+	names := make([]string, len(out.ToolCalls))
+	for i, c := range out.ToolCalls {
+		names[i] = c.Name
+	}
+	log.With("model", model, "elapsedMs", time.Since(start).Milliseconds(), "finishReason", out.FinishReason,
+		"inputTokens", out.Usage.InputTokens, "outputTokens", out.Usage.OutputTokens, "thinkingTokens", out.Usage.ThinkingTokens,
+		"replyBytes", len(out.Content), "toolCalls", strings.Join(names, ",")).
+		Info(ctx, "gemini reply from %s: finish %q, %d input, %d output and %d thinking tokens, %d bytes, tool calls [%s]",
+			model, out.FinishReason, out.Usage.InputTokens, out.Usage.OutputTokens, out.Usage.ThinkingTokens, len(out.Content), strings.Join(names, ","))
+}
+
+var log = providers.Log.Tags("gemini")
 
 // wrap turns a Gemini API error into a providers.Error with a matching status.
 func wrap(err error) error {

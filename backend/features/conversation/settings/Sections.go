@@ -24,6 +24,12 @@ type Chat struct {
 // Contribute registers the chat section, and a defaults section for every
 // chat.contextProvider, so it must run after the providers have registered.
 func Contribute(reg *extensions.Registry) {
+	conversation.ContextProviders.Register(reg, conversation.ContextProvider{
+		Descriptor: extensions.Descriptor{ID: conversation.DebugID, Order: 900, Source: "conversation"},
+		Title:      "Debug",
+		Schema:     json.RawMessage(`{"type": "object", "properties": {"enabled": {"type": "boolean", "title": "Debug", "description": "Log every AI call of a round in detail on the server: the level, model and settings sent, the shape of the request, and the provider's full error. Prompts and replies are not logged."}}}`),
+		Defaults:   json.RawMessage(`{"enabled": false}`),
+	})
 	config.Sections.Register(reg, config.Section{
 		Descriptor:  extensions.Descriptor{ID: ID, Order: 130, Source: "conversation"},
 		Title:       "Chat",

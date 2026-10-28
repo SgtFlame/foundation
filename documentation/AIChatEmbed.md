@@ -55,11 +55,14 @@ Both services follow the CLAUDE.md service layout. The provider is passed in wit
   |---|---|---|
   | `--embed-model` | `gemini-embedding-001` | |
   | `--embed-dims` | `768` | sent as `outputDimensionality`. Gemini normalizes only at its native 3072, so the provider L2-normalizes smaller vectors |
-  | `--chat-model` | `gemini-2.5-flash` | |
+  | `--chat-model` | `gemini-3.8-flash` | |
 
 - Chat maps `assistant` to Gemini's `model` role. `JSONSchema` becomes `responseMimeType: application/json` plus `responseJsonSchema`.
 - **Configuration**: these flags become bootstrap fallbacks once the `config` feature exists. The API key, the model catalog with its pricing, the chat levels and the embed model then live in configuration sections (`ai.providers`, `ai.models`, `ai.chat.levels`, `ai.embed`; see [Configuration.md](Configuration.md)). Every provider call is recorded with its tokens and cost ([Usage.md](Usage.md)).
 - **Adding a provider** (OpenAI, Azure AI) is a new `providers/<name>/` implementing the same two interfaces, selected in `serve.go`. Nothing else changes.
+
+### Thinking on Gemini 3
+Gemini 3 models think in levels (`thinkingLevel`) and refuse a `thinkingBudget` of 0 with a bare 400 *Request contains an invalid argument*. The provider (`thinking` in `gemini/Provider.go`) sends a level's budget of 0 to a Gemini 3 model as its least thinking, `MINIMAL` on Flash models and `LOW` on the others; Gemini 1 and 2 models, and every other budget (-1 included), keep the budget.
 
 ## `index` feature: `backend/features/index/`
 

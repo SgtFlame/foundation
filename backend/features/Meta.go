@@ -13,6 +13,9 @@ type Meta struct {
 	FileID         uint64
 	RunID          uint64 // the Cognition run, and NodeID the node in it, that made the call
 	NodeID         string
+	// Debug logs the work's AI calls in detail: a conversation's Debug
+	// setting, for finding why a provider refuses a request.
+	Debug bool
 }
 
 // WithFeature is m with Feature set, unless it already has one.
