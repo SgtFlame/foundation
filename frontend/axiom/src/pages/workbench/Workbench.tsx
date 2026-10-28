@@ -1,5 +1,5 @@
 import { Layout, Model, TabNode, TabSetNode, type IJsonModel } from 'flexlayout-react'
-import 'flexlayout-react/style/light.css'
+import 'flexlayout-react/style/dark.css'
 import { useEffect } from 'react'
 import { logsOn } from '../../editors/logs/LogsObject.ts'
 import { onOpenLogs } from '../../editors/logs/openLogs.ts'

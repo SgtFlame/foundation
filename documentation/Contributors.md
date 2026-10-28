@@ -91,7 +91,11 @@ The backend points are `config.section`, `chat.contextProvider`, `chat.roundFoll
 - **The contribution**: `{ id: <kind>, name, component }`. The id is the kind, and `component` is usually `lazy(...)`.
   - `component` receives `EditorProps<T>`: `{ object, registry, tabId }`.
   - It is typed `ComponentType<EditorProps<never>>`, so an editor declaring its own object type is accepted.
+<<<<<<< HEAD
+- **Each editor folder** has a `contributions.ts`: volumes, volume, markdown, logs and chat.
+=======
 - **Each editor folder** has a `contributions.ts`: foo, bar, volumes, volume, markdown, logs and chat.
+>>>>>>> main
 - **`ComponentFactory`** special-cases only `borderTab`. Every other tab renders through `EditorHost`, which shows "No editor is available for `<kind>`" when no contribution matches.
 - **`EditorRegistry.edit`**: names a tab `<editor name> <id>` when its object has no name, and exports `tabIdOf(object)`.
 - **Tab names**: `VolumesObject` gained `name = 'Volumes'`. Its tab had read "Volumes volumes" from the `<editor name> <id>` fallback.
