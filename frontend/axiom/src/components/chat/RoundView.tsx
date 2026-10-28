@@ -1,4 +1,5 @@
-import { Alert, Box, Chip, CircularProgress, Paper, Stack, Tooltip, Typography } from '@mui/material'
+import { Alert, Box, Chip, CircularProgress, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import { roundStopped, type RoundFeedback, type RoundSegment } from '../../services/Conversation.ts'
 import MarkdownText from '../markdown/MarkdownText.tsx'
 import FeedbackButtons from './FeedbackButtons.tsx'
@@ -43,6 +44,7 @@ function RoundView({ round, levels, onOpenSegment, onFeedback, onAnswerTool, cli
   }
   const streaming = round.status === 0
   const failed = round.status >= 300 && round.status !== roundStopped
+  const failure = round.error || `The reply failed (${round.status}).`
   const segments = round.segments ?? []
   const citations = segments.length > 0 ? { titles: segments.map((s) => s.title), onCite: (n: number) => onOpenSegment?.(segments[n - 1]) } : undefined
   const ignored = round.feedback === 'ignore'
@@ -105,13 +107,35 @@ function RoundView({ round, levels, onOpenSegment, onFeedback, onAnswerTool, cli
           The reply reached the level's output limit.
         </Typography>
       )}
-      {failed && <Alert severity="error">{round.error || `The reply failed (${round.status}).`}</Alert>}
+      {failed && (
+        <Alert
+          severity="error"
+          action={
+            <Tooltip title="Copy the error">
+              <IconButton size="small" color="inherit" aria-label="Copy the error" onClick={() => void navigator.clipboard?.writeText(failure)}>
+                <ContentCopyIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          }
+        >
+          {failure}
+        </Alert>
+      )}
       {!streaming && (
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          {judgeable && onFeedback && (
-            <Box className="round-feedback" sx={{ opacity: round.feedback ? 1 : 0, transition: 'opacity 120ms', '&:focus-within': { opacity: 1 } }}>
-              <FeedbackButtons value={round.feedback} onChange={(f) => onFeedback(round, f)} />
-            </Box>
+          {round.reply && (
+            <Stack
+              direction="row"
+              className="round-feedback"
+              sx={{ alignItems: 'center', opacity: round.feedback ? 1 : 0, transition: 'opacity 120ms', '&:focus-within': { opacity: 1 } }}
+            >
+              <Tooltip title="Copy the reply">
+                <IconButton size="small" aria-label="Copy the reply" onClick={() => void navigator.clipboard?.writeText(round.reply)} sx={{ opacity: 0.6 }}>
+                  <ContentCopyIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+              {judgeable && onFeedback && <FeedbackButtons value={round.feedback} onChange={(f) => onFeedback(round, f)} />}
+            </Stack>
           )}
           <Typography className="round-footer" variant="caption" color="text.secondary" sx={{ opacity: 0, transition: 'opacity 120ms' }}>
             {footer(round, levels)}
