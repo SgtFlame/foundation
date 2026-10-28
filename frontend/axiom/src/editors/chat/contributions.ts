@@ -1,15 +1,26 @@
+import BugReportIcon from '@mui/icons-material/BugReport'
 import ChatIcon from '@mui/icons-material/Chat'
 import { lazy } from 'react'
 import { ChatObject } from './ChatObject.ts'
 import { extensions } from '../../workbench/extensions/index.ts'
 import { commands, editors } from '../../workbench/points.ts'
-import { chatCommands } from './points.ts'
+import DebugControl from './DebugControl.tsx'
+import { chatCommands, chatContextSettings } from './points.ts'
 
 extensions.contribute(editors, {
   id: 'chat',
   source: 'chat',
   name: 'Chat',
   component: lazy(() => import('./ChatEditor.tsx')),
+})
+
+extensions.contribute(chatContextSettings, {
+  id: 'debug',
+  source: 'chat',
+  order: 900,
+  title: 'Debug',
+  icon: BugReportIcon,
+  Control: DebugControl,
 })
 
 extensions.contribute(chatCommands, {

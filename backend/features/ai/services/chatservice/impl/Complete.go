@@ -9,11 +9,15 @@ import (
 func (s *service) Complete(args chatservice.CompleteArgs) chatservice.CompleteResponse {
 	ctx, in, failed := s.input(&args)
 	if failed != nil {
+		debugFailed(args, failed)
 		return chatservice.CompleteResponse{Common: *failed}
 	}
+	debugInput(args, in, false)
 	out, err := s.provider.Complete(ctx, in)
 	if err != nil {
-		return chatservice.CompleteResponse{Common: *args.Fail(providers.Code(err), providers.Wrap(err))}
+		failed := args.Fail(providers.Code(err), providers.Wrap(err))
+		debugFailed(args, failed)
+		return chatservice.CompleteResponse{Common: *failed}
 	}
 	return response(args, in, out)
 }

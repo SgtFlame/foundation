@@ -3,7 +3,9 @@ package impl
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/ai/providers"
@@ -117,6 +119,45 @@ func response(args chatservice.CompleteArgs, in chatservice.ChatInput, out chats
 		FinishReason: out.FinishReason,
 		Usage:        out.Usage,
 	}
+}
+
+// debugInput logs how a debugged call was resolved: what it is for, its
+// level and model, and the settings the provider gets.
+func debugInput(args chatservice.CompleteArgs, in chatservice.ChatInput, stream bool) {
+	if !args.Meta.Debug {
+		return
+	}
+	roles := make([]string, len(in.Messages))
+	for i, m := range in.Messages {
+		roles[i] = string(m.Role)
+	}
+	tools := make([]string, len(in.Tools))
+	for i, t := range in.Tools {
+		tools[i] = t.Name
+	}
+	log.With("feature", args.Meta.Feature, "level", args.Meta.Level, "model", in.Model, "stream", stream,
+		"temperature", deref(in.Temperature), "maxTokens", deref(in.MaxTokens), "thinkingBudget", deref(in.ThinkingBudget),
+		"messages", strings.Join(roles, ","), "tools", strings.Join(tools, ","), "toolChoice", in.ToolChoice, "jsonSchemaBytes", len(in.JSONSchema)).
+		Info(args.Context(), "chat call for %q at level %q: model %s, temperature %s, max tokens %s, thinking budget %s, %d messages, %d tools",
+			args.Meta.Feature, args.Meta.Level, in.Model, deref(in.Temperature), deref(in.MaxTokens), deref(in.ThinkingBudget), len(in.Messages), len(in.Tools))
+}
+
+// debugFailed logs a debugged call's failure at warn, since Fail logs a 4xx
+// only at debug.
+func debugFailed(args chatservice.CompleteArgs, failed *features.ServiceResponse) {
+	if !args.Meta.Debug {
+		return
+	}
+	log.With("feature", args.Meta.Feature, "level", args.Meta.Level, "status", failed.Code, "errorCode", failed.ErrorCode).
+		Warn(args.Context(), "chat call for %q at level %q failed with %d %s: %s", args.Meta.Feature, args.Meta.Level, failed.Code, failed.ErrorCode, failed.Message)
+}
+
+// deref is a setting for the logs: its value, or "default" when unset.
+func deref[T any](v *T) string {
+	if v == nil {
+		return "default"
+	}
+	return fmt.Sprint(*v)
 }
 
 var log = providers.Log.Tags("chat")

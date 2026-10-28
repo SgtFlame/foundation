@@ -153,9 +153,9 @@ var modelsSchema = `{
 // checked 2026-10-22.
 const modelsDefaults = `{
   "models": [
-    {"id": "gemini-2.5-flash-lite", "title": "Gemini 2.5 Flash-Lite", "provider": "gemini", "model": "gemini-2.5-flash-lite", "kind": "chat", "contextWindow": 1048576,
+    {"id": "gemini-3.5-flash-lite", "title": "Gemini 3.5 Flash-Lite", "provider": "gemini", "model": "gemini-3.5-flash-lite", "kind": "chat", "contextWindow": 1048576,
      "pricing": {"currency": "USD", "inputPerMTok": 0.10, "cachedInputPerMTok": 0.01, "outputPerMTok": 0.40}},
-    {"id": "gemini-2.5-flash", "title": "Gemini 2.5 Flash", "provider": "gemini", "model": "gemini-2.5-flash", "kind": "chat", "contextWindow": 1048576,
+    {"id": "gemini-3.8-flash", "title": "Gemini 3.8 Flash", "provider": "gemini", "model": "gemini-3.8-flash", "kind": "chat", "contextWindow": 1048576,
      "pricing": {"currency": "USD", "inputPerMTok": 0.30, "cachedInputPerMTok": 0.03, "outputPerMTok": 2.50}},
     {"id": "gemini-2.5-pro", "title": "Gemini 2.5 Pro", "provider": "gemini", "model": "gemini-2.5-pro", "kind": "chat", "contextWindow": 1048576,
      "pricing": {"currency": "USD", "inputPerMTok": 1.25, "cachedInputPerMTok": 0.125, "outputPerMTok": 10.00,
@@ -193,8 +193,8 @@ const levelsSchema = `{
 
 const levelsDefaults = `{
   "levels": [
-    {"id": "fast", "label": "Fast", "icon": "⚡", "modelRef": "gemini-2.5-flash-lite", "temperature": 1, "maxOutputTokens": 8192, "thinkingBudget": 0, "default": false},
-    {"id": "standard", "label": "Standard", "icon": "💡", "modelRef": "gemini-2.5-flash", "temperature": 1, "maxOutputTokens": 16384, "thinkingBudget": -1, "default": true},
+    {"id": "fast", "label": "Fast", "icon": "⚡", "modelRef": "gemini-3.5-flash-lite", "temperature": 1, "maxOutputTokens": 8192, "thinkingBudget": 0, "default": false},
+    {"id": "standard", "label": "Standard", "icon": "💡", "modelRef": "gemini-3.8-flash", "temperature": 1, "maxOutputTokens": 16384, "thinkingBudget": -1, "default": true},
     {"id": "deep", "label": "Deep", "icon": "🧪", "modelRef": "gemini-2.5-pro", "temperature": 1, "maxOutputTokens": 32768, "thinkingBudget": -1, "default": false}
   ]
 }`

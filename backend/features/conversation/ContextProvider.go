@@ -57,6 +57,11 @@ type ContextItem struct {
 	Segment *retrieval.Scored
 }
 
+// DebugID is the chat.contextProvider (and chat.contextSettings) whose
+// "enabled" setting is the conversation's Debug checkbox: it adds no
+// context, and turns on features.Meta.Debug for the round's AI calls.
+const DebugID = "debug"
+
 // DefaultsSection is the configuration section of a provider's defaults.
 func DefaultsSection(id string) string {
 	return "chat.context.defaults." + id

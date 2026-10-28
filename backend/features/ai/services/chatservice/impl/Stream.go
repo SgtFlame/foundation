@@ -15,10 +15,12 @@ func (s *service) Stream(args chatservice.StreamArgs) *chatservice.StreamRequest
 
 	ctx, in, failed := s.input(&args)
 	if failed != nil {
+		debugFailed(args, failed)
 		close(deltas)
 		req.Response <- &chatservice.CompleteResponse{Common: *failed}
 		return req
 	}
+	debugInput(args, in, true)
 	go func() {
 		out, err := s.provider.Stream(ctx, in, func(d chatservice.Delta) error {
 			select {
@@ -30,7 +32,9 @@ func (s *service) Stream(args chatservice.StreamArgs) *chatservice.StreamRequest
 		})
 		close(deltas)
 		if err != nil {
-			req.Response <- &chatservice.CompleteResponse{Common: *args.Fail(providers.Code(err), providers.Wrap(err))}
+			failed := args.Fail(providers.Code(err), providers.Wrap(err))
+			debugFailed(args, failed)
+			req.Response <- &chatservice.CompleteResponse{Common: *failed}
 			return
 		}
 		resp := response(args, in, out)

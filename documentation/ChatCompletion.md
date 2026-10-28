@@ -10,7 +10,7 @@ Terminology: memory entries are **Chronicles**, and knowledge base collections a
 What is built, slice by slice: slice 4 built Chat, thin (conversations and rounds, the levels, context providers and the composer); slice 5 added RAG Search, inline citations, the Sources row, the Context inspector and feedback; slice 6 added Chronicle memory (the window, stage 1, Chronicle chips and the memory update); slice 8 made the reply the tool loop. What remains, including the Markdown Editor's Chat tab, is in [plans/ChatCompletion.md](plans/ChatCompletion.md).
 
 ## Decisions
-- **Default models per level**: Fast = `gemini-2.5-flash-lite`, Standard = `gemini-2.5-flash` (the default level) and Deep = `gemini-2.5-pro`, with Chronicle's internal calls on Fast. These are the `ai.chat.levels` defaults seeded in slice 2.
+- **Default models per level**: Fast = `gemini-3.5-flash-lite`, Standard = `gemini-3.8-flash` (the default level) and Deep = `gemini-2.5-pro`, with Chronicle's internal calls on Fast. These are the `ai.chat.levels` defaults seeded in slice 2.
 - **Tool calling**: built in slice 8, with the first tools and per-call confirmation decided before building; see [Built in slice 8](#built-in-slice-8) and [Tools.md](Tools.md).
 
 ## Built in slice 4
@@ -128,3 +128,10 @@ Tool calling is in [Tools.md › Built in slice 8](Tools.md#built-in-slice-8). W
 - **The transcript**: a card per tool call, above the reply. A write waits on its card for *Approve*, *Always allow here* or *Deny*, and *Ask you to choose* waits for an answer. A tool's passages join the Sources row with the next citation numbers.
 - **The SSE stream** gains `tool` events and may send `sources` again. `POST /conversation/answer` answers a waiting call, and `rounds` returns each round's `toolCalls`.
 - **History**: past rounds are still sent as their message and reply text only, without their tool calls.
+
+## Debugging a round's AI calls
+- **The ⚙ popover's Debug checkbox** (`debug`, last, off by default) is a per-conversation setting like the Tools switch: `conversationsettings` registers a `debug` `chat.contextProvider` with no `Gather`, so its default is `chat.context.defaults.debug` (Settings › AI › Chat › Context › Debug), and the browser's control is `editors/chat/DebugControl.tsx`. Unlike the other providers' `enabled`, it is off unless set to `true`. While it is on, `Send` sets `features.Meta.Debug` on every call the round makes: the context providers' (Chronicle's match), the reply's tool loop, the title and the round followers' (the memory update).
+- **What it logs**, at `info` and `warn` so the default `--log-level` shows it, under the `ai` domain:
+  - `chatservice` (tag `chat`): each call's feature, level, model, temperature, max tokens, thinking budget, message roles, tools and JSON schema size; and a failure at `warn`, which `Fail` otherwise logs at `debug` for a 4xx.
+  - the Gemini provider (tag `gemini`): the request config as JSON (without the system instruction's text, only its size) and each content's shape (`user[text:120]`, `model[call:kb_search+signature]`); a refusal's HTTP status, gRPC status and `details`; and a reply's finish reason, tokens, size and tool calls.
+- Prompts and replies are never logged, as in [Usage.md](Usage.md); `usage.capture` is the way to see them.
