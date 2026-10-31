@@ -63,7 +63,7 @@ Editing is **multi-user and autosaved** with the common standard for shared text
 - **Wiring** in `backend/cli/cmd/serve.go`: `collabimpl.CreateService(collabimpl.WithRoot(...))` with the `--kb-root` flag, and `collabhandlers.CollabHandler{}.Register(api, svc)`.
 - **Dependency:** `go get github.com/coder/websocket`.
 
-## Frontend: shared pieces (`frontend/axiom`)
+## Frontend: shared pieces (`frontend/common`)
 - **Dependencies** (`yarn add`): `yjs`, `y-protocols`, `lib0`.
 - **Vite:** in `vite.config.ts`, change the proxy entry to `'/api/v1/kb': { target: 'http://localhost:8080', ws: true }`.
 - `src/services/Collab.ts`: the client for `collabservice`. It has DTOs that mirror `collabdto` (`fileId: string`) and `Collab.openFile(request)` through `http`. It also has `Collab.socketUrl(fileId)`, which builds a `ws(s)://` URL from `API_BASE` and `location`.
@@ -92,7 +92,7 @@ Editing is **multi-user and autosaved** with the common standard for shared text
 
 ## Common verification
 - `cd backend && go vet ./... && go test ./features/kb/...`, which runs the protocol and room tests.
-- `cd frontend/axiom && yarn build && yarn lint`.
+- `cd frontend/example && yarn build && yarn lint`.
 - Manual test:
   - Run `serve` and `yarn dev`, create a volume and a file, and double-click it. The Markdown tab should open with the status "ready".
   - Open the same file in a second browser window. Both should show two peers.

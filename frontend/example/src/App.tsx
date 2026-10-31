@@ -1,10 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { createTheme, ThemeProvider } from '@mui/material'
-import Home from './pages/Home.tsx'
-import Login from './pages/Login.tsx'
-import Workbench from './pages/workbench/Workbench.tsx'
-import SealedGate from './session/SealedGate.tsx'
-import RequireSession from './session/RequireSession.tsx'
+import Home from '@foundation/common/pages/Home.tsx'
+import Login from '@foundation/common/pages/Login.tsx'
+import Workbench from '@foundation/common/pages/workbench/Workbench.tsx'
+import SealedGate from '@foundation/common/session/SealedGate.tsx'
+import RequireSession from '@foundation/common/session/RequireSession.tsx'
 
 // Follows the OS light/dark preference, as index.css does
 const theme = createTheme({ colorSchemes: { light: true, dark: true } })

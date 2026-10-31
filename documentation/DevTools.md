@@ -1,7 +1,7 @@
 # DevTools tab: axios capture, structured logging, Network + Log viewers
 
 ## Context
-The frontend (`frontend/axiom`) talks to the backend through hand-rolled `fetch` in `src/services/KnowledgeBase.ts`, and has no logging beyond (future) `console.log`. We want:
+The frontend (`frontend/common`) talks to the backend through hand-rolled `fetch` in `src/services/KnowledgeBase.ts`, and has no logging beyond (future) `console.log`. We want:
 - every request/response between frontend and backend captured into a local, in-memory log;
 - a structured logging system modelled on Go's `samber/oops` (fluent builder: `In`/`Tags`/`Code`/`With`/`Trace`/`Hint`/`Public`/`User` …) replacing `console.*`;
 - a `DevToolsTab` collapsed by default in the workbench's right flexlayout border, itself a nested flexlayout with a **Network** tab (Chrome-DevTools-like request list + Headers/Payload/Preview/Response/Timing, JSON pretty/raw) and a **Log** tab.
@@ -54,7 +54,7 @@ Delete the private `fetch`-based `post`. `openVault` becomes `http.post<OpenVaul
 - CLAUDE.md: update the "Frontend client" section (shared `http` axios instance, capture on by default, `capture: false` opt-out), add `src/tabs/` and `src/logging/` to the frontend layout, and add the rule "use `log` from `src/logging`, never `console.*`".
 
 ## Verification
-1. `cd frontend/axiom && yarn build` (tsc + vite) and `yarn lint` pass.
+1. `cd frontend/example && yarn build` (tsc + vite) and `yarn lint` pass.
 2. Run backend (`serve`) + `yarn dev`. Open `/workbench`: the DevTools tab sits collapsed in the right border. Click it to expand.
 3. Trigger `KnowledgeBase.openVault` (temporarily from the Volumes editor or the browser console via a dev-only hook). The Network tab shows the POST with status, timing, headers, and payload/response in Pretty and Raw. A 4xx/5xx shows red and a `warn`/`error` record appears in Log.
 4. Stop the backend and retry. The entry shows as `failed` and an error log appears.

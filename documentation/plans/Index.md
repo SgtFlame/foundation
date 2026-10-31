@@ -19,4 +19,5 @@ What is still to build. Each plan holds the design for its remaining work and a 
 | [Contributors.md](Contributors.md) | `chat.composerAction`, `workbench.subjectDescriber`, `cognition.nodeView`; the command palette; runtime plugins (open question) |
 | [AIChatEmbed.md](AIChatEmbed.md) | More providers; a released lancedb-go; a vector index; deleting files; per-tenant indexes; index titles |
 | [MarkdownEditor.md](MarkdownEditor.md) | Detecting external file changes; remote cursors in WYSIWYG |
+| [Forge plans](../../../forge/documentation/plans/Index.md) | Designed in Forge, built here: the server-driven `ui` library (MUI, flexlayout and React Flow renderers, app editor kinds), the `records` store on embedded NATS JetStream, the Blueprint graph kinds on Cognition, and the `apps` runtime |
 | [Backlog.md](Backlog.md) | Candidate surfaces no plan owns yet (conversation history, audit viewer, index administration, notifications, …) and app-wide issues such as the dark-preference contrast |

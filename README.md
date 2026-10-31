@@ -36,8 +36,9 @@ The **first build takes 20-40 minutes** and several GB of disk, because it compi
 In a second terminal (or a tmux pane):
 
 ```bash
-cd frontend/axiom
+cd frontend
 yarn
+cd example
 yarn dev
 ```
 

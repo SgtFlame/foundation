@@ -151,7 +151,7 @@ The **Nexus** is the Cognition component where agents collaborate: a shared, str
 - **Other services**: `promptservice` (the prompt library) and `nexusservice` (Nexuses, streams, revisions).
 - **REST and client**: under `/api/v1/cognition`, with `src/services/Cognition.ts`, `Prompts.ts` and `Nexus.ts`.
 
-## Part 2: the Cognition Editor (`frontend/axiom/src/editors/cognition/`)
+## Part 2: the Cognition Editor (`frontend/common/src/editors/cognition/`)
 
 ### Layout
 - **Opening**:
@@ -200,7 +200,7 @@ The **Nexus** is the Cognition component where agents collaborate: a shared, str
 ## TODO
 ### Open questions
 1. **Nexus storage**: the proposal is streams as markdown files in a Volume (see [Nexus](#nexus)). Or should they be database rows only? This must be answered **before** the Nexus slice (slice 9, skipped for now: its plan is not fleshed out yet). *Decision*:
-3. **Background runs**: can graphs run without a chat (schedules, Nexus triggers), and should they be durable across server restarts? A durable job queue would revive the NATS question. *Decision*:
+3. **Background runs**: can graphs run without a chat (schedules, Nexus triggers), and should they be durable across server restarts? A durable job queue would revive the NATS question. Forge's plans propose JetStream durable consumers on an embedded NATS server for this ([Forge 10-Zapier.md](../../../forge/documentation/plans/10-Zapier.md), [03-DataModel.md](../../../forge/documentation/plans/03-DataModel.md)). *Decision*:
 
 (Questions 2, 4 and 5 are decided; see [Cognition.md › Decisions](../Cognition.md#decisions).)
 

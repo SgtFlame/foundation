@@ -16,7 +16,7 @@ The same graphs define:
 - **Multi-agent collaboration** through a shared **Nexus**. Agents read and write named streams in the Nexus and reconcile them over iterations; for example, product owner, database designer and UI/UX designer agents converging on one design.
 - **Chronicle's custom-type summarizing modes**, which [Chronicle.md](Chronicle.md) called "blueprint execution graphs".
 
-The Cognition Engine (backend, `backend/features/cognition`) runs graphs; the Cognition Editor (frontend, React Flow, `frontend/axiom/src/editors/cognition/`) shows them. Slice 7 built the **skeleton**: the engine with linear exec flow and pure nodes, Chronicle's steps as nodes, *Personal* as a built-in graph that chat runs, and the read-only Cognition Editor with the Log Viewer and the details panel over real traces. Slice 8 added the `Agent` node. The full design (drafts and publishing, the node library, prompt templates, the Nexus, loops, debugging, Replay, chat modes, editing) and what remains are in [plans/Cognition.md](plans/Cognition.md).
+The Cognition Engine (backend, `backend/features/cognition`) runs graphs; the Cognition Editor (frontend, React Flow, `frontend/common/src/editors/cognition/`) shows them. Slice 7 built the **skeleton**: the engine with linear exec flow and pure nodes, Chronicle's steps as nodes, *Personal* as a built-in graph that chat runs, and the read-only Cognition Editor with the Log Viewer and the details panel over real traces. Slice 8 added the `Agent` node. The full design (drafts and publishing, the node library, prompt templates, the Nexus, loops, debugging, Replay, chat modes, editing) and what remains are in [plans/Cognition.md](plans/Cognition.md).
 
 ## Decisions
 - **Collaborative graph editing** (Cognition 2): drafts will be **shared Yjs documents**, like markdown: a draft is a collab room that several people edit at once, relayed by the collab server, and publishing snapshots the room into an immutable version. Decided before slice 7; the room arrives with the editing pass.
@@ -65,7 +65,7 @@ The Cognition Engine (backend, `backend/features/cognition`) runs graphs; the Co
 - **How chat uses it.** `conversationservice.Send` is unchanged. The `chronicle` context provider runs Personal's On user message event, and the `chronicle` round follower runs its On reply event. Each round is therefore **two runs** of Personal, both recorded with the round. The window, the reply, the title and the other providers stay Go code in `Send`. The plan's "Send runs the conversation's mode graph" waits for `chat.modes` and the Stream reply node.
 - **Behaves identically**: `chronicle/nodes/Personal_test.go` runs Personal against the same fakes and checks that its items equal what calling the steps directly gives. It also checks that the On reply event updates memory only when the settings allow, and that stage 1's usage names the run and the `match` node. The step tests are unchanged.
 
-**The Cognition Editor** (`frontend/axiom/src/editors/cognition/`)
+**The Cognition Editor** (`frontend/common/src/editors/cognition/`)
 - **Opening it**: from the **Cognition** side view (the Explorer: graphs by kind) or **AgentOS › Cognition** in the Editors view, which opens Personal. `CognitionObject` has id `graph-<id>`.
 - **Layout**: a nested flexlayout with the **Logic Editor** and **Log Viewer** tabs and a **Details** tab on the right. They share state through `CognitionContext` (`cognitionState.ts`).
 - **Logic Editor** (`GraphCanvas.tsx`): React Flow, **read-only** (no dragging or connecting).

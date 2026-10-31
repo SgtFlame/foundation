@@ -1,5 +1,5 @@
 // The registry of extension points and their contributions. Features declare
-// points in their points.ts and contribute in their contributions.ts; main.tsx
+// points in their points.ts and contribute in their contributions.ts; register.ts
 // imports both before the first render. The API never assumes compile-time
 // loading, so bundles loaded at runtime can call contribute() the same way.
 

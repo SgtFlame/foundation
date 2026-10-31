@@ -12,7 +12,7 @@ import { createFactory } from './ComponentFactory.tsx'
 import { EditorRegistry } from './EditorRegistry.ts'
 import SideBar from './SideBar.tsx'
 
-// Built on first render, after main.tsx has loaded every contribution
+// Built on first render, after register.ts has loaded every contribution
 let workbench: { model: Model; registry: EditorRegistry; factory: ReturnType<typeof createFactory> } | undefined
 
 function getWorkbench() {
