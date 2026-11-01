@@ -466,6 +466,26 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Blockers**: none left. Its **Before** questions were answered before building: forge 03-DataModel 7 (one bucket per tenant), and 03b 1 (convert values) and 2 (hide a deleted type).
     - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it-1).
 
+18. **Indexes and the query planner** (Forge iteration 3, part 3d, [forge 03d-Indexes.md](../../forge/documentation/plans/03d-Indexes.md)). *Built.* ★ query speed with 100 000 records ([Records.md](Records.md#built-in-slice-18)).
+    - **Built**:
+      - order-preserving sort tokens in `features/records`, and index checks in `records.Check`;
+      - in `records/data`, the index entries kept by the record projector in the same fold, the in-memory trees, the indexer, and the query planner (`Find`), which `records.list` uses for its snapshot;
+      - `recordservice.Find` at `POST /records/records/find`, `records.query` over it, and `Records.find`;
+      - in the live core, `Projector.Keep` with `Projected.Kept`, folds that write with the revision they read, and `Rekeep`, `Side`, `Updates` and `Settle` on the projections.
+    - **Blockers**: none left. Its **Before** questions were answered before building: forge 03-DataModel 2 (the same fold) and 03d 1 (order kept in memory, over the KV entries).
+    - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it-2).
+    - **Pending, carried forward**: enforcing unique indexes. Live sorted pages are forge 3e.
+
+19. **Live queries** (Forge iteration 3, part 3e, [forge 03e-LiveQueries.md](../../forge/documentation/plans/03e-LiveQueries.md)). *Built.* ★ the changes a page sends, once a page binds to them in 3i ([Records.md](Records.md#built-in-slice-19)).
+    - **Built**:
+      - in `records/data`, the `records.find` query: a sorted page that follows the records with insert, update, move and remove, from an ordered window or every match in memory;
+      - `reached` changes, and snapshots at the projector's position, for `records.find` and `records.list`;
+      - in the live core, list changes on `live.Delta`, `live.Apply` (used by UI sessions) and `Projections.Folded`;
+      - in the browser, list changes in `applyDelta` and `useQuery`, and `RecordPage` in `Records.ts`.
+    - **Blockers**: none. 03e had no open questions.
+    - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it-3).
+    - **Pending, carried forward**: binding a query to a component prop, and the session's patches, are forge 3i.
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -490,4 +510,6 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 15. Blueprints (Forge 2) | forge 02-Blueprints 2, 3, 4, 6 and 8 (all answered) | 01-ServerUI 7 (concurrent edits to one property): a node's config is replaced whole, the later command winning; the decisions in [Blueprints.md](Blueprints.md#decisions-to-review-after-seeing-it), to review after seeing |
 | 16. Entity types (Forge 3a) | forge 03-DataModel 5 (drafts in KV, published versions in SQLite) and 8 (a slice per part), both answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it), to review after seeing |
 | 17. Records (Forge 3b, with 3c) | forge 03-DataModel 7 (one bucket per tenant), 03b 1 (convert values) and 2 (hide a deleted type), all answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-1) and [forge DataDesigner.md](../../forge/documentation/DataDesigner.md#decisions-to-review-after-seeing-it), to review after seeing |
+| 18. Indexes (Forge 3d) | forge 03-DataModel 2 (the same fold) and 03d 1 (order in memory), both answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-2), to review after seeing |
+| 19. Live queries (Forge 3e) | none | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-3), to review after seeing |
 

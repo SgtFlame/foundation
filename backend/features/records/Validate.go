@@ -54,16 +54,27 @@ func Check(e EntityType, known func(id string) bool) []live.Problem {
 	ids := map[string]bool{}
 	for i, x := range e.Indexes {
 		path := fmt.Sprintf("indexes.%d", i)
-		if !live.ValidToken(x.ID) || ids[x.ID] {
+		if !live.ValidToken(x.ID) || strings.HasPrefix(x.ID, "_") || ids[x.ID] {
 			add(path+".id", fmt.Sprintf("%q is not a new, valid index id", x.ID), "use letters, digits, '-' and '_'")
 		}
 		ids[x.ID] = true
 		if len(x.Fields) == 0 {
 			add(path+".fields", "an index needs at least one field", "")
 		}
+		lists := 0
 		for j, id := range x.Fields {
-			if _, ok := visible[id]; !ok {
+			f, ok := visible[id]
+			switch {
+			case !ok:
 				add(fmt.Sprintf("%s.fields.%d", path, j), fmt.Sprintf("index %s names %q, which is not a field", x.ID, id), "index one of "+fieldList(e)+", or remove the index with entity.removeIndex")
+			case !Indexable(f):
+				add(fmt.Sprintf("%s.fields.%d", path, j), fmt.Sprintf("index %s names %s, a %s field, whose values have no order", x.ID, id, f.Type), "index text, number, decimal, money, bool, date, dateTime, duration, enum, user or relation fields, or lists of them")
+			default:
+				if _, many := ItemOf(f); many {
+					if lists++; lists == 2 {
+						add(fmt.Sprintf("%s.fields.%d", path, j), fmt.Sprintf("index %s has more than one list-like field", x.ID), "index one list-like field at most; it is indexed once per item")
+					}
+				}
 			}
 		}
 	}

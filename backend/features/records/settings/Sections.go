@@ -14,7 +14,7 @@ const ID = "records"
 
 // Records is the records section.
 type Records struct {
-	ScanLimit         int `json:"scanLimit"`         // records a scanning records.list may read
+	ScanLimit         int `json:"scanLimit"`         // records a query reads without an index
 	ImportConcurrency int `json:"importConcurrency"` // record.create commands records.import sends at once
 }
 
@@ -24,7 +24,7 @@ var Defaults = Records{ScanLimit: 10000, ImportConcurrency: 8}
 const schema = `{
   "type": "object",
   "properties": {
-    "scanLimit": {"type": "integer", "title": "Scan limit", "description": "How many records of one entity type a list may read without an index. A list over more fails until indexes come.", "min": 100, "max": 1000000},
+    "scanLimit": {"type": "integer", "title": "Scan limit", "description": "How many records of one entity type a query reads without an index (or while walking one for its order). A scan stops there and says so; a live list over more fails. Declare an index for what is filtered or sorted by.", "min": 100, "max": 1000000},
     "importConcurrency": {"type": "integer", "title": "Import concurrency", "description": "How many records an import creates at once.", "min": 1, "max": 64}
   }
 }`

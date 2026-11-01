@@ -303,26 +303,11 @@ func (k *querySink) Snapshot(data any, pos live.Position) {
 func (k *querySink) Change(delta live.Delta, pos live.Position) {
 	k.s.mu.Lock()
 	defer k.s.mu.Unlock()
-	var value any
-	if delta.Value != nil {
-		_ = json.Unmarshal(delta.Value, &value)
-	}
-	switch delta.Op {
-	case "replace":
-		k.q.data = value
-	case "upsert", "insert", "update":
-		m, ok := k.q.data.(map[string]any)
-		if !ok {
-			m = map[string]any{}
-		}
-		m[delta.Key] = value
-		k.q.data = m
-	case "remove":
-		if m, ok := k.q.data.(map[string]any); ok {
-			delete(m, delta.Key)
-		}
-	}
 	k.q.pos = k.q.pos.Merge(pos)
+	if delta.Op == live.Reached.Op {
+		return
+	}
+	k.q.data = live.Apply(k.q.data, delta)
 	k.s.queryChanged(k.name)
 }
 

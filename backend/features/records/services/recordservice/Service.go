@@ -15,6 +15,9 @@ import (
 type Service interface {
 	Get(args GetArgs) GetResponse
 	List(args ListArgs) ListResponse
+	// Find reads a page of records once: filtered, sorted and paged by the
+	// query planner, from an index when one fits.
+	Find(args FindArgs) FindResponse
 	Import(args ImportArgs) ImportResponse
 	// Create, Update and Delete are only called from Go.
 	Create(args CreateArgs) CommandResponse
@@ -37,11 +40,22 @@ type ListArgs struct {
 	features.ServiceArgs
 	Entity string
 	Where  map[string]json.RawMessage // field id → value the records must have
+	Filter *data.Filter
 }
 
 type ListResponse struct {
 	Common  features.ServiceResponse
 	Records []data.Record // oldest first
+}
+
+type FindArgs struct {
+	features.ServiceArgs
+	Query data.Query
+}
+
+type FindResponse struct {
+	Common features.ServiceResponse
+	data.Result
 }
 
 // ImportArgs are rows of field values, each made a record by its own

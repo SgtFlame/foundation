@@ -200,7 +200,23 @@ func (p *Projections) Follow(ctx context.Context, tenant uint64, area live.Area,
 			return
 		}
 		e.Stream, e.Seq = meta.Stream, meta.Sequence.Stream
-		if err := fn(e); err != nil {
+		// Long work (rebuilding an index) is not redelivered while it runs
+		done := make(chan struct{})
+		go func() {
+			t := time.NewTicker(10 * time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-done:
+					return
+				case <-t.C:
+					_ = msg.InProgress()
+				}
+			}
+		}()
+		err = fn(e)
+		close(done)
+		if err != nil {
 			log.With("subject", msg.Subject()).Error(p.ctx, err, "follower %s failed on event %d; retrying", name, e.Seq)
 			_ = msg.NakWithDelay(time.Second)
 			return
@@ -230,7 +246,7 @@ func (p *Projections) fold(pr live.Projector, kv jetstream.KeyValue, msg jetstre
 	}
 	e.Stream, e.Seq = meta.Stream, meta.Sequence.Stream
 	key := e.Target.Key()
-	old, _, err := get(ctx, kv, key)
+	old, rev, err := getRev(ctx, kv, key)
 	if err != nil {
 		log.Error(ctx, err, "projector %s: cannot read %s", pr.ID, key)
 		_ = msg.NakWithDelay(time.Second)
@@ -246,9 +262,23 @@ func (p *Projections) fold(pr live.Projector, kv jetstream.KeyValue, msg jetstre
 		_ = msg.Term()
 		return
 	}
-	// A deleted key keeps its sequence, so a redelivered event is not folded again
-	raw, _ := json.Marshal(live.Projected{Stream: e.Stream, Seq: e.Seq, Value: value})
-	if _, err := kv.Put(ctx, key, raw); err != nil {
+	var kept []string
+	if pr.Keep != nil {
+		if kept, err = pr.Keep(live.Keep{Ctx: ctx, Tenant: e.TenantID, Key: key, Value: value, Kept: old.Kept}); err != nil {
+			log.With("subject", msg.Subject()).Error(ctx, err, "projector %s cannot keep the keys of %s; retrying", pr.ID, key)
+			_ = msg.NakWithDelay(time.Second)
+			return
+		}
+	}
+	// A deleted key keeps its sequence, so a redelivered event is not folded
+	// again. The write expects the revision read, so a value changed
+	// meanwhile (by Rekeep) is folded again from the new one.
+	raw, _ := json.Marshal(live.Projected{Stream: e.Stream, Seq: e.Seq, Value: value, Kept: kept})
+	if err := write(ctx, kv, key, raw, rev); err != nil {
+		if errors.Is(err, jetstream.ErrKeyExists) {
+			_ = msg.Nak()
+			return
+		}
 		log.Error(ctx, err, "projector %s: cannot write %s", pr.ID, key)
 		_ = msg.NakWithDelay(time.Second)
 		return
@@ -256,17 +286,154 @@ func (p *Projections) fold(pr live.Projector, kv jetstream.KeyValue, msg jetstre
 	_ = msg.Ack()
 }
 
+// write puts a value that was at revision rev (0: there was none).
+func write(ctx context.Context, kv jetstream.KeyValue, key string, raw []byte, rev uint64) error {
+	var err error
+	if rev == 0 {
+		_, err = kv.Create(ctx, key, raw)
+	} else {
+		_, err = kv.Update(ctx, key, raw, rev)
+	}
+	return err
+}
+
 func get(ctx context.Context, kv jetstream.KeyValue, key string) (live.Projected, bool, error) {
-	entry, err := kv.Get(ctx, key)
-	if errors.Is(err, jetstream.ErrKeyNotFound) {
-		return live.Projected{}, false, nil
-	}
-	if err != nil {
-		return live.Projected{}, false, err
-	}
-	v, err := decode(entry)
+	v, _, err := getRev(ctx, kv, key)
 	return v, err == nil && v.Value != nil, err
 }
+
+// getRev is a key's value and its revision, 0 when it has none.
+func getRev(ctx context.Context, kv jetstream.KeyValue, key string) (live.Projected, uint64, error) {
+	entry, err := kv.Get(ctx, key)
+	if errors.Is(err, jetstream.ErrKeyNotFound) {
+		return live.Projected{}, 0, nil
+	}
+	if err != nil {
+		return live.Projected{}, 0, err
+	}
+	v, err := decode(entry)
+	return v, entry.Revision(), err
+}
+
+// Rekeep runs fn as a projector's Keep again for one key, outside a fold,
+// when what a value keeps has changed (an index was added): fn gets the
+// value and the keys kept for it, and returns the keys to keep instead.
+// They are stored unless the value changed meanwhile, when fn runs again.
+// A key without a value is left alone.
+func (p *Projections) Rekeep(ctx context.Context, tenant uint64, projector, key string, fn func(value json.RawMessage, kept []string) ([]string, error)) error {
+	kv, err := p.Bucket(ctx, tenant, projector)
+	if err != nil {
+		return err
+	}
+	for {
+		v, rev, err := getRev(ctx, kv, key)
+		if err != nil {
+			return log.Wrap(err)
+		}
+		if v.Value == nil {
+			return nil
+		}
+		kept, err := fn(v.Value, v.Kept)
+		if err != nil {
+			return err
+		}
+		v.Kept = kept
+		raw, _ := json.Marshal(v)
+		err = write(ctx, kv, key, raw, rev)
+		if !errors.Is(err, jetstream.ErrKeyExists) {
+			return err
+		}
+	}
+}
+
+// Side is a bucket kept beside the projections, PRJ_<tenant>_<name> (dots
+// as '_'), made on first use: where a projector's Keep keeps its keys.
+func (p *Projections) Side(ctx context.Context, tenant uint64, name string) (jetstream.KeyValue, error) {
+	bucket := live.Bucket(tenant, name)
+	p.mu.Lock()
+	kv := p.buckets[bucket]
+	p.mu.Unlock()
+	if kv != nil {
+		return kv, nil
+	}
+	kv, err := p.js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{Bucket: bucket, History: 1, Storage: jetstream.FileStorage})
+	if err != nil {
+		return nil, log.Wrapf(err, "cannot make the bucket %s", bucket)
+	}
+	p.mu.Lock()
+	p.buckets[bucket] = kv
+	p.mu.Unlock()
+	return kv, nil
+}
+
+// Settle waits until the projector has folded every event its stream
+// held when Settle was called, or ctx ends.
+func (p *Projections) Settle(ctx context.Context, tenant uint64, projector string) error {
+	pr, ok := p.Projector(projector)
+	if !ok {
+		return log.Code("projection_unknown").Errorf("no projector %q", projector)
+	}
+	if _, err := p.Bucket(ctx, tenant, projector); err != nil {
+		return err
+	}
+	stream, err := p.Stream(ctx, tenant, pr.Area)
+	if err != nil {
+		return err
+	}
+	info, err := stream.Info(ctx)
+	if err != nil {
+		return log.Wrap(err)
+	}
+	last := info.State.LastSeq
+	cons, err := stream.Consumer(ctx, "prj_"+strings.ReplaceAll(pr.ID, ".", "_"))
+	if err != nil {
+		return log.Wrap(err)
+	}
+	for {
+		ci, err := cons.Info(ctx)
+		if err != nil {
+			return log.Wrap(err)
+		}
+		if ci.AckFloor.Stream >= last || (ci.NumPending == 0 && ci.NumAckPending == 0) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}
+
+// Folded is how far the projector has folded its stream: every event at
+// or below it is in the projection. A read that starts after it reflects
+// at least that position.
+func (p *Projections) Folded(ctx context.Context, tenant uint64, projector string) (live.Position, error) {
+	pr, ok := p.Projector(projector)
+	if !ok {
+		return nil, log.Code("projection_unknown").Errorf("no projector %q", projector)
+	}
+	if _, err := p.Bucket(ctx, tenant, projector); err != nil {
+		return nil, err
+	}
+	stream, err := p.Stream(ctx, tenant, pr.Area)
+	if err != nil {
+		return nil, err
+	}
+	cons, err := stream.Consumer(ctx, "prj_"+strings.ReplaceAll(pr.ID, ".", "_"))
+	if err != nil {
+		return nil, log.Wrap(err)
+	}
+	ci, err := cons.Info(ctx)
+	if err != nil {
+		return nil, log.Wrap(err)
+	}
+	return live.Position{live.StreamName(tenant, pr.Area): ci.AckFloor.Stream}, nil
+}
+
+// Context ends when the projections close: the lifetime of work that
+// follows them, such as an index held in memory.
+func (p *Projections) Context() context.Context { return p.ctx }
 
 func decode(entry jetstream.KeyValueEntry) (live.Projected, error) {
 	var v live.Projected
@@ -342,11 +509,26 @@ func (p *Projections) WaitFor(ctx context.Context, tenant uint64, projector, key
 // Watch sends the keys matching pattern as they are, nil once, then each
 // change, until ctx ends (live.Store).
 func (p *Projections) Watch(ctx context.Context, tenant uint64, projector, pattern string) (<-chan *live.Entry, error) {
+	return p.watch(ctx, tenant, projector, pattern, false)
+}
+
+// Updates sends each change to the keys matching pattern from now on, but
+// not the keys as they are, until ctx ends: for a query that reads its
+// snapshot another way, such as from an index.
+func (p *Projections) Updates(ctx context.Context, tenant uint64, projector, pattern string) (<-chan *live.Entry, error) {
+	return p.watch(ctx, tenant, projector, pattern, true)
+}
+
+func (p *Projections) watch(ctx context.Context, tenant uint64, projector, pattern string, updates bool) (<-chan *live.Entry, error) {
 	kv, err := p.Bucket(ctx, tenant, projector)
 	if err != nil {
 		return nil, err
 	}
-	w, err := kv.Watch(ctx, pattern)
+	var opts []jetstream.WatchOpt
+	if updates {
+		opts = append(opts, jetstream.UpdatesOnly())
+	}
+	w, err := kv.Watch(ctx, pattern, opts...)
 	if err != nil {
 		return nil, log.Wrap(err)
 	}
@@ -354,7 +536,7 @@ func (p *Projections) Watch(ctx context.Context, tenant uint64, projector, patte
 	go func() {
 		defer close(out)
 		defer func() { _ = w.Stop() }()
-		initial := true
+		initial := !updates
 		for {
 			select {
 			case <-ctx.Done():

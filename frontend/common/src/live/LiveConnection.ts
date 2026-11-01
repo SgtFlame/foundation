@@ -30,11 +30,19 @@ export interface Ack {
   duplicate?: boolean
 }
 
-// A change to a query's result
+// A change to a query's result: replace, upsert or remove a key, or reached
+// (nothing changed, but the subscription has reached the change's
+// position). With list, the change is to the ordered list at that key of
+// the result, and key names the item: insert (value at index), update
+// (value at from), move (the item at from taken out and value put at index)
+// or remove (the item at from)
 export interface Delta {
-  op: 'replace' | 'upsert' | 'remove'
+  op: 'replace' | 'upsert' | 'remove' | 'reached' | 'insert' | 'update' | 'move'
   key?: string
   value?: unknown
+  list?: string
+  index?: number
+  from?: number
 }
 
 export interface SubscriptionHandlers {

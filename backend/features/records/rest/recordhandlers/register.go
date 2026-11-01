@@ -16,5 +16,6 @@ func (rh *RecordHandler) Register(router gin.IRouter, service recordservice.Serv
 
 	group.POST("/get", rh.GetRecord)
 	group.POST("/list", rh.ListRecords)
+	group.POST("/find", rh.FindRecords)
 	group.POST("/import", rh.ImportRecords)
 }

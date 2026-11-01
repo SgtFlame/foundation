@@ -14,6 +14,28 @@ export interface QueryState<T> {
 
 // Applies one change to a query's result
 export function applyDelta<T>(data: T | undefined, delta: Delta): T {
+  if (delta.list) {
+    const obj = data as Record<string, unknown>
+    const list = [...((obj?.[delta.list] as unknown[]) ?? [])]
+    const from = delta.from ?? -1
+    const index = delta.index ?? -1
+    switch (delta.op) {
+      case 'insert':
+        list.splice(index, 0, delta.value)
+        break
+      case 'update':
+        list[from] = delta.value
+        break
+      case 'move':
+        list.splice(from, 1)
+        list.splice(index, 0, delta.value)
+        break
+      case 'remove':
+        list.splice(from, 1)
+        break
+    }
+    return { ...obj, [delta.list]: list } as T
+  }
   switch (delta.op) {
     case 'replace':
       return delta.value as T
@@ -41,7 +63,11 @@ export function useQuery<T>(query: string | undefined, params: unknown = {}): Qu
     return live.subscribe(query, params, {
       onSnapshot: (data, pos) => setState({ key, data: data as T, pos: { ...pos }, loading: false }),
       onChange: (delta, pos) =>
-        setState((s) => (s.key === key ? { ...s, data: applyDelta(s.data, delta), pos: { ...s.pos, ...max(s.pos, pos) }, loading: false } : s)),
+        setState((s) =>
+          s.key === key
+            ? { ...s, data: delta.op === 'reached' ? s.data : applyDelta(s.data, delta), pos: { ...s.pos, ...max(s.pos, pos) }, loading: false }
+            : s,
+        ),
       onError: (error) => setState({ key, pos: {}, loading: false, error }),
     })
   }, [query, key])

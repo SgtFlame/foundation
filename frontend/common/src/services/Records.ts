@@ -1,7 +1,7 @@
 // Client for the backend record REST handlers
-// (backend/features/records/rest/recordhandlers): reading records once and
-// importing rows. Records are changed by the record.* commands and read
-// live by the records.get and records.list queries on the live
+// (backend/features/records/rest/recordhandlers): reading records once
+// (find: filtered, sorted pages from the query planner) and importing rows. Records are changed by the record.* commands and read
+// live by the records.get, records.list and records.find queries on the live
 // connection; use those in editors.
 
 import { http, type ResponseStatus } from './http/client.ts'
@@ -34,13 +34,64 @@ export interface GetRecordResponse extends ResponseStatus {
   record: RecordData | null
 }
 
+// A condition on a field, or an and/or of filters. op is eq when left
+// out; field may also be _id, _createdAt or _updatedAt.
+export interface RecordFilter {
+  and?: RecordFilter[]
+  or?: RecordFilter[]
+  field?: string
+  op?: 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte' | 'in' | 'prefix' | 'contains'
+  value?: unknown
+}
+
+// Ties are broken by record id, in the last sort field's direction
+export interface RecordSort {
+  field: string
+  desc?: boolean
+}
+
 export interface ListRecordsRequest {
   entity: string
   where?: Record<string, unknown> // field id → value the records must have
+  filter?: RecordFilter
 }
 
 export interface ListRecordsResponse extends ResponseStatus {
   records: RecordData[] // oldest first
+}
+
+export interface FindRecordsRequest {
+  entity: string
+  where?: Record<string, unknown>
+  filter?: RecordFilter
+  sort?: RecordSort[]
+  limit?: number // every record when left out
+  cursor?: string // a previous response's next
+  fields?: string[] // every field when left out
+}
+
+// How a query was answered
+export interface QueryPlan {
+  index?: string // the index used ('+' joins several, for an or)
+  ordered?: boolean // the index gave the order, so only the page was read
+  scan?: boolean // every record of the type was read
+  read: number
+  complete: boolean // false when a scan stopped at the scan limit
+}
+
+export interface FindRecordsResponse extends ResponseStatus {
+  records: RecordData[]
+  next?: string
+  plan: QueryPlan
+}
+
+// The live records.find query's result, a FindRecordsRequest's page kept
+// current: useQuery<RecordPage>('records.find', request). Changes insert,
+// update, move and remove rows of records, and next follows the last row
+export interface RecordPage {
+  records: RecordData[]
+  next?: string
+  plan: QueryPlan
 }
 
 export interface ImportRecordsRequest {
@@ -81,6 +132,11 @@ export const Records = {
 
   async list(request: ListRecordsRequest): Promise<ListRecordsResponse> {
     const response = await http.post<ListRecordsResponse>('/records/records/list', request)
+    return response.data
+  },
+
+  async find(request: FindRecordsRequest): Promise<FindRecordsResponse> {
+    const response = await http.post<FindRecordsResponse>('/records/records/find', request)
     return response.data
   },
 

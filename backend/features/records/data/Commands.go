@@ -14,13 +14,21 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/records"
 	"github.com/SgtFlame/foundation/backend/features/records/entities"
 	recordssettings "github.com/SgtFlame/foundation/backend/features/records/settings"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
-// Projections are what the records read: the projections, and following
-// the def stream for the converter (live/project.Projections).
+// Projections are what the records read: the projections, following the
+// def stream for the converter and indexer, and the side bucket the
+// indexes are kept in (live/project.Projections).
 type Projections interface {
 	live.Store
 	Follow(ctx context.Context, tenant uint64, area live.Area, name string, subjects []string, fn func(live.Event) error) error
+	Updates(ctx context.Context, tenant uint64, projector, pattern string) (<-chan *live.Entry, error)
+	Side(ctx context.Context, tenant uint64, name string) (jetstream.KeyValue, error)
+	Rekeep(ctx context.Context, tenant uint64, projector, key string, fn func(value json.RawMessage, kept []string) ([]string, error)) error
+	Settle(ctx context.Context, tenant uint64, projector string) error
+	Folded(ctx context.Context, tenant uint64, projector string) (live.Position, error)
+	Context() context.Context
 }
 
 // Deps are what the commands, queries and converter need, made after the
@@ -136,6 +144,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Descriptor: extensions.Descriptor{ID: Projector, Source: "records"}, Title: "Records",
 		Description: "Every record of every entity type, keyed <entityId>.<recordId>: its values by field id, and _id, _entity, _seq, _createdAt, _updatedAt, _createdBy, _updatedBy and _problems",
 		Area:        live.AreaRecords, Fold: fold,
+		Keep: func(k live.Keep) ([]string, error) { return keep(deps(), k) },
 	})
 	for _, s := range commandSpecs() {
 		s := s

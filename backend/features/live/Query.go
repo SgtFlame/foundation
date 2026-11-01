@@ -41,12 +41,26 @@ type Feed interface {
 }
 
 // Delta is one change to a query's result. Op is "replace" (Value is the
-// whole result), "upsert" (Value at Key) or "remove" (Key).
+// whole result), "upsert" (Value at Key) or "remove" (Key), or "reached"
+// (nothing changed, but the subscription has reached the change's
+// position, so a client waiting for its own write knows it is applied).
+//
+// With List, the change is to the ordered list at that key of the result,
+// an object, and Key names the item: "insert" (Value at Index), "update"
+// (Value at From), "move" (the item at From taken out, and Value put at
+// Index) or "remove" (the item at From). The indexes are the list's as the
+// changes before it left it.
 type Delta struct {
 	Op    string          `json:"op"`
 	Key   string          `json:"key,omitempty"`
 	Value json.RawMessage `json:"value,omitempty"`
+	List  string          `json:"list,omitempty"`
+	Index *int            `json:"index,omitempty"`
+	From  *int            `json:"from,omitempty"`
 }
+
+// Reached is the change that changes nothing (Delta's "reached").
+var Reached = Delta{Op: "reached"}
 
 // ValueOf is a query's Run over one projected key: the value, or Empty
 // while there is none, then its replacements.
@@ -117,4 +131,67 @@ func ListOf(projector string, pattern func(f Feed) (string, error)) func(Feed) e
 		}
 		return nil
 	}
+}
+
+// Apply applies one change to a query's result held as decoded JSON (maps,
+// slices and values), as a subscriber that keeps the result does, and
+// returns the new result.
+func Apply(data any, d Delta) any {
+	var value any
+	if d.Value != nil {
+		_ = json.Unmarshal(d.Value, &value)
+	}
+	if d.List != "" {
+		m, _ := data.(map[string]any)
+		if m == nil {
+			return data
+		}
+		list, _ := m[d.List].([]any)
+		at := func(p *int) int {
+			if p == nil {
+				return -1
+			}
+			return *p
+		}
+		from, to := at(d.From), at(d.Index)
+		switch d.Op {
+		case "insert":
+			if to >= 0 && to <= len(list) {
+				list = append(list[:to], append([]any{value}, list[to:]...)...)
+			}
+		case "update":
+			if from >= 0 && from < len(list) {
+				list[from] = value
+			}
+		case "move":
+			if from >= 0 && from < len(list) {
+				list = append(list[:from], list[from+1:]...)
+				if to >= 0 && to <= len(list) {
+					list = append(list[:to], append([]any{value}, list[to:]...)...)
+				}
+			}
+		case "remove":
+			if from >= 0 && from < len(list) {
+				list = append(list[:from], list[from+1:]...)
+			}
+		}
+		m[d.List] = list
+		return m
+	}
+	switch d.Op {
+	case "replace":
+		return value
+	case "upsert", "insert", "update":
+		m, ok := data.(map[string]any)
+		if !ok {
+			m = map[string]any{}
+		}
+		m[d.Key] = value
+		return m
+	case "remove":
+		if m, ok := data.(map[string]any); ok {
+			delete(m, d.Key)
+		}
+	}
+	return data
 }

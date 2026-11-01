@@ -3,8 +3,10 @@ package recordstools
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	"github.com/SgtFlame/foundation/backend/features/records/data"
 	"github.com/SgtFlame/foundation/backend/features/records/services/recordservice"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 )
@@ -15,28 +17,33 @@ import (
 func ContributeRecords(reg *extensions.Registry, svc func() recordservice.Service) {
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "records.query", Source: "records"}, Title: "Read records", Effect: tools.EffectRead,
-		Description: "Reads an entity type's records once, oldest first: each record's values by field id, and _id, _seq (for record.update's expect) and the rest of its own data under '_'. where keeps those whose fields equal the values given. Change records with the record.* tools.",
-		Input:       json.RawMessage(`{"type":"object","properties":{"entity":{"type":"string","description":"The entity type's id"},"where":{"type":"object","description":"Field id → value the records must have"},"limit":{"type":"integer","description":"At most this many (50 when left out)"}},"required":["entity"]}`),
+		Description: "Reads a page of an entity type's records once: each record's values by field id, and _id, _seq (for record.update's expect) and the rest of its own data under '_'. where keeps those whose fields equal the values given; filter is {field, op, value} (op " + strings.Join(data.Ops, ", ") + ") or {and: [...]} / {or: [...]} of them; sort is [{field, desc}] (record id order without one). next is the cursor of the following page. plan says whether an index answered it or every record was read (scan), and complete is false when a scan stopped at the scan limit. Change records with the record.* tools.",
+		Input:       json.RawMessage(`{"type":"object","properties":{"entity":{"type":"string","description":"The entity type's id"},"where":{"type":"object","description":"Field id → value the records must have"},"filter":{"type":"object","description":"{field, op, value}, or {and: [filters]} or {or: [filters]}"},"sort":{"type":"array","items":{"type":"object","properties":{"field":{"type":"string"},"desc":{"type":"boolean"}},"required":["field"]}},"limit":{"type":"integer","description":"At most this many (50 when left out)"},"cursor":{"type":"string","description":"A previous result's next, for the following page"},"fields":{"type":"array","items":{"type":"string"},"description":"The field ids to return; all when left out"}},"required":["entity"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
-			a, err := tools.Decode[struct {
-				Entity string
-				Where  map[string]json.RawMessage
-				Limit  int
-			}](call)
+			q, err := tools.Decode[data.Query](call)
 			if err != nil {
 				return tools.Result{}, err
 			}
-			resp := svc().List(recordservice.ListArgs{ServiceArgs: call.ServiceArgs, Entity: a.Entity, Where: a.Where})
+			if q.Limit <= 0 {
+				q.Limit = 50
+			}
+			resp := svc().Find(recordservice.FindArgs{ServiceArgs: call.ServiceArgs, Query: q})
 			if resp.Common.Code >= 300 {
 				return tools.Result{}, fmt.Errorf("%s", resp.Common.Message)
 			}
-			limit := a.Limit
-			if limit <= 0 {
-				limit = 50
+			how := "by a scan"
+			if resp.Plan.Index != "" {
+				how = "from index " + resp.Plan.Index
 			}
-			shown := resp.Records[:min(limit, len(resp.Records))]
-			return tools.Result{Content: map[string]any{"records": shown, "total": len(resp.Records)},
-				Summary: fmt.Sprintf("%d of %d %s records", len(shown), len(resp.Records), a.Entity)}, nil
+			more := ""
+			if resp.Next != "" {
+				more = "; more follow"
+			}
+			if !resp.Plan.Complete {
+				more += "; the scan stopped at its limit, so some records were not read"
+			}
+			return tools.Result{Content: map[string]any{"records": resp.Records, "next": resp.Next, "plan": resp.Plan},
+				Summary: fmt.Sprintf("%d %s records, %s%s", len(resp.Records), q.Entity, how, more)}, nil
 		},
 	})
 

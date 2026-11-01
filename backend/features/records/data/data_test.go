@@ -26,7 +26,7 @@ import (
 )
 
 type fixture struct {
-	t    *testing.T
+	t    testing.TB
 	reg  *extensions.Registry
 	js   jetstream.JetStream
 	p    *project.Projections
@@ -36,7 +36,7 @@ type fixture struct {
 	n    atomic.Int64
 }
 
-func setup(t *testing.T) *fixture {
+func setup(t testing.TB) *fixture {
 	reg := extensions.NewRegistry()
 	var entityDeps entities.Deps
 	var deps data.Deps
@@ -321,7 +321,8 @@ func TestRenameAndTypeChange(t *testing.T) {
 		for _, r := range f.svc.List(recordservice.ListArgs{ServiceArgs: args(), Entity: "task"}).Records {
 			got = append(got, fmt.Sprintf("%s:%s", orEmpty(r["points"]), orEmpty(r[data.MetaProblems])))
 		}
-		if len(got) == 3 && strings.Contains(got[1], "could not") {
+		// The converter takes the records one at a time
+		if len(got) == 3 && got[0] == "3:" && got[2] == "8:" && strings.Contains(got[1], "could not") {
 			break
 		}
 	}
@@ -442,6 +443,9 @@ func (s *listSink) Snapshot(d any, _ live.Position) {
 	s.mu.Unlock()
 }
 func (s *listSink) Change(d live.Delta, _ live.Position) {
+	if d.Op == live.Reached.Op {
+		return
+	}
 	s.mu.Lock()
 	if d.Op == "remove" {
 		delete(s.rows, d.Key)

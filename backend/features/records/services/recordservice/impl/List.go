@@ -12,7 +12,7 @@ import (
 
 // List reads an entity type's records, oldest first.
 func (s *service) List(args recordservice.ListArgs) recordservice.ListResponse {
-	raw, fail := s.once(args.ServiceArgs, "records.list", data.ListParams{Entity: args.Entity, Where: args.Where})
+	raw, fail := s.once(args.ServiceArgs, "records.list", data.ListParams{Entity: args.Entity, Where: args.Where, Filter: args.Filter})
 	if fail != nil {
 		return recordservice.ListResponse{Common: *fail}
 	}

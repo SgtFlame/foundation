@@ -126,3 +126,24 @@ For records ([Records.md](Records.md#built-in-slice-17)):
 - `live.Command.NewTarget()` makes the target's id when a command is sent without one. The result's `Target` and the ack frame's `target` carry it. A browser makes its own ids, so a resend stays a duplicate.
 - `live.Command.Internal` marks a command only the server sends (`record.convert`): it gets no tool.
 - `live.Problem.Code`, when set on the first problem, is the rejection's error code in place of `command_rejected` (`record_changed`).
+
+## Changed in slice 18
+For record indexes ([Records.md](Records.md#built-in-slice-18)):
+- `live.Projector.Keep(live.Keep)` keeps keys outside the projection in step with each value, in the same fold: it runs after `Fold` and before the value is written, given the keys it kept for the old value, and returns those it keeps for the new one. `live.Projected.Kept` stores them with the value. An error retries the event. The records' index entries are kept this way.
+- **A fold writes with the revision it read** (`Create` for a new key, `Update` otherwise). A value changed meanwhile (by `Rekeep`) fails the write, and the event is folded again from the new value.
+- `project.Projections`:
+  - `Rekeep(ctx, tenant, projector, key, fn)` runs a Keep again for one key outside a fold, when what values keep has changed (an index added). Its write expects the revision too, and `fn` runs again on a conflict.
+  - `Side(ctx, tenant, name)` is a bucket beside the projections (`PRJ_<tenant>_<name>`), made on first use, for a Keep's keys.
+  - `Updates(ctx, tenant, projector, pattern)` watches changes from now on, without the keys as they are, for a query that reads its snapshot another way.
+  - `Settle(ctx, tenant, projector)` waits until the projector has folded every event its stream held when called.
+  - `Context()` ends when the projections close.
+- A follower's function reports work in progress every 10 seconds while it runs, so long work (rebuilding an index) is not redelivered.
+
+## Changed in slice 19
+For live record queries ([Records.md](Records.md#built-in-slice-19)):
+- **Ordered lists.** `live.Delta` has `List`, `Index` and `From`. With `List`, a change applies to the ordered list at that key of the result: `insert` (the value at `Index`), `update` (the value at `From`), `move` (the item at `From` taken out, and the value put at `Index`) or `remove` (the item at `From`). Each index counts the list as the changes before it left it.
+- **`reached`** (`live.Reached`) changes nothing: the subscription has reached the change's position. A query sends it when an event it followed showed nothing, so a client sees its own write applied.
+- `live.Apply(data, delta)` applies a change to a result held as decoded JSON. UI sessions keep their queries with it.
+- `project.Projections.Folded(ctx, tenant, projector)` is the position the projector has folded, its consumer's ack floor. A snapshot read after it reflects at least that position.
+- In the browser, `Delta` has the same ops and fields, `applyDelta` applies list changes, and `useQuery` moves its `pos` on `reached` without changing its data.
+

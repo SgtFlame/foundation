@@ -112,7 +112,7 @@ func TestTheChatDefinesTask(t *testing.T) {
 	}
 	for deadline := time.Now().Add(2 * time.Second); ; time.Sleep(20 * time.Millisecond) {
 		res := run("records.query", map[string]any{"entity": "task", "where": map[string]any{"done": true}})
-		if res.Content["total"] == 1 {
+		if rs, _ := res.Content["records"].([]data.Record); len(rs) == 1 {
 			break
 		} else if time.Now().After(deadline) {
 			t.Fatalf("query = %v", res.Content)

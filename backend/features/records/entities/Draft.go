@@ -72,6 +72,10 @@ type Publication struct {
 	// TypeChanges are the fields whose type differs from the previous
 	// version's: the records' converter converts their values.
 	TypeChanges []TypeChange `json:"typeChanges,omitempty"`
+	// IndexChanges are the indexes added, removed or changed since the
+	// previous version (their fields, or how those fields' values sort):
+	// the records' indexer rebuilds them.
+	IndexChanges []string `json:"indexChanges,omitempty"`
 }
 
 // TypeChange is one field's type change between published versions.

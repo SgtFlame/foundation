@@ -20,6 +20,21 @@ type Projector struct {
 	// Fold is the key's next value after the event, from its current one
 	// (nil when there is none). A nil result deletes the key.
 	Fold func(f Fold) (json.RawMessage, error)
+	// Keep, when set, keeps keys outside the projection in step with each
+	// value, in the same fold: it runs after Fold and before the value is
+	// written, given the keys it kept for the old value, and returns the
+	// keys it keeps for the new one, which are stored with the value. An
+	// error retries the event. Records keep their index entries this way.
+	Keep func(k Keep) ([]string, error)
+}
+
+// Keep is one folded value whose kept keys are brought up to date.
+type Keep struct {
+	Ctx    context.Context
+	Tenant uint64
+	Key    string
+	Value  json.RawMessage // the new value; nil when the key is deleted
+	Kept   []string        // the keys kept for the old value
 }
 
 // Fold is one event to fold into one key.
@@ -40,6 +55,7 @@ type Projected struct {
 	Stream string          `json:"stream"`
 	Seq    uint64          `json:"seq"`
 	Value  json.RawMessage `json:"value"`
+	Kept   []string        `json:"kept,omitempty"` // the keys the projector's Keep keeps for it
 }
 
 // Position is the projected value's position.

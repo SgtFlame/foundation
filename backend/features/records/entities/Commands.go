@@ -463,7 +463,8 @@ func commandSpecs() []spec {
 				}
 				e := *c.entity()
 				e.Version = c.draft.Published + 1
-				return ev(EventPublished, Publication{Version: e.Version, Entity: e, TypeChanges: c.typeChanges(e)}), nil
+				prev := c.lastPublished()
+				return ev(EventPublished, Publication{Version: e.Version, Entity: e, TypeChanges: typeChanges(prev, e), IndexChanges: indexChanges(prev, e)}), nil
 			},
 		},
 		{
@@ -493,9 +494,9 @@ func commandSpecs() []spec {
 	}
 }
 
-// typeChanges are the fields of e whose type differs from the last
-// published version's.
-func (c *decision) typeChanges(e records.EntityType) []TypeChange {
+// lastPublished is the target's last published version; nil before the
+// first.
+func (c *decision) lastPublished() *records.EntityType {
 	v, ok, err := c.deps.Projections.Get(c.Context(), c.Principal.TenantID, PublishedProjector, c.Target.Key())
 	if err != nil || !ok {
 		return nil
@@ -504,12 +505,56 @@ func (c *decision) typeChanges(e records.EntityType) []TypeChange {
 	if json.Unmarshal(v.Value, &prev) != nil {
 		return nil
 	}
+	return &prev
+}
+
+// typeChanges are the fields of e whose type differs from prev's.
+func typeChanges(prev *records.EntityType, e records.EntityType) []TypeChange {
+	if prev == nil {
+		return nil
+	}
 	var out []TypeChange
 	for _, f := range e.Fields {
 		if old, _, ok := prev.FieldByID(f.ID); ok && old.Type != f.Type {
 			out = append(out, TypeChange{Field: f.ID, From: old, To: f})
 		}
 	}
+	return out
+}
+
+// indexChanges are the indexes of e or prev that differ between them: in
+// their fields, or in how those fields sort (type, options, scale,
+// currency, relation).
+func indexChanges(prev *records.EntityType, e records.EntityType) []string {
+	sig := func(e *records.EntityType) map[string]string {
+		out := map[string]string{}
+		if e == nil {
+			return out
+		}
+		for _, x := range e.Indexes {
+			s := fmt.Sprint(x.Fields, x.Unique)
+			for _, id := range x.Fields {
+				f, _, _ := e.FieldByID(id)
+				raw, _ := json.Marshal([]any{f.Type, f.Options, f.Scale, f.Currency, f.Relation, f.Items})
+				s += string(raw)
+			}
+			out[x.ID] = s
+		}
+		return out
+	}
+	before, after := sig(prev), sig(&e)
+	var out []string
+	for id, s := range after {
+		if before[id] != s {
+			out = append(out, id)
+		}
+	}
+	for id := range before {
+		if _, ok := after[id]; !ok {
+			out = append(out, id)
+		}
+	}
+	slices.Sort(out)
 	return out
 }
 

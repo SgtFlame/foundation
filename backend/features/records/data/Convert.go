@@ -17,13 +17,17 @@ import (
 const Converter = "records.converter"
 
 // Follow makes sure the principal's tenant converts its records when a
-// field's type changes. It runs as a follower of the def stream's
+// field's type changes, and rebuilds its indexes when a version changes
+// them (the indexer). Each runs as a follower of the def stream's
 // published events: entity.publish starts it before its event commits
 // (entities.Deps.OnPublish), and the record commands and records.list start
-// it after a restart, catching up on what was published meanwhile.
+// them after a restart, catching up on what was published meanwhile.
 func Follow(args features.ServiceArgs, deps Deps) error {
 	if deps.Bus == nil || deps.Projections == nil {
 		return nil
+	}
+	if err := followIndexes(args, deps); err != nil {
+		return err
 	}
 	tenant := args.Principal.TenantID
 	subject := live.Target{Area: live.AreaDefinitions, Type: entities.TargetType, ID: "*"}.Subject(tenant, entities.EventPublished)
