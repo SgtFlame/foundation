@@ -7,7 +7,7 @@ import (
 )
 
 // FindRecordsRequest is a query: entity, where, filter, sort, limit,
-// cursor and fields (data.Query).
+// cursor, fields and expand (data.Query).
 type FindRecordsRequest struct {
 	data.Query
 }

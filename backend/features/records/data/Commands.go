@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
@@ -38,6 +40,16 @@ type Deps struct {
 	Bus         *bus.Bus // the converter's record.convert commands
 	// Settings reads the records section as the principal sees it.
 	Settings func(args features.ServiceArgs) recordssettings.Records
+	// Users reads the tenant's users an expansion of a relation to user
+	// names, by id; those not found, or not in the tenant, are left out.
+	// Without it, such a relation expands to nothing.
+	Users func(tenant uint64, ids []uint64) map[uint64]User
+}
+
+// User is a tenant user as an expansion gives them.
+type User struct {
+	Username    string
+	DisplayName string
 }
 
 func (d Deps) settings(args features.ServiceArgs) recordssettings.Records {
@@ -119,6 +131,44 @@ func (c *decision) expect(a struct{ Expect uint64 }) []live.Problem {
 	return nil
 }
 
+// rules checks the row rule of the command's action (record.create,
+// update or delete): create's on the new record, update's on the record
+// before and after the change, and delete's on the record before.
+func (c *decision) rules(action string, events []live.NewEvent) []live.Problem {
+	verb := strings.TrimPrefix(action, "record.")
+	rule := c.entity.Rule(verb)
+	if rule == nil || c.Principal.Kind == features.PrincipalService {
+		return nil
+	}
+	refused := func(which string) []live.Problem {
+		return []live.Problem{{Code: "row_rule", Path: "target", Message: fmt.Sprintf("%s's %s rule (%s) refuses this %s", c.entity.Name, verb, ruleSource(c.entity.Access, verb), which),
+			Fix: "only records the rule allows can be changed this way; describe the entity type for its rules"}}
+	}
+	if c.record != nil && !records.Allows(rule, c.record, c.Principal) {
+		return refused("record")
+	}
+	if verb == "delete" {
+		return nil
+	}
+	after := maps.Clone(c.record)
+	for _, ev := range events {
+		data, _ := json.Marshal(ev.Data)
+		next, err := Apply(after, live.Event{Type: ev.Type, Target: c.Target, Data: data, UserID: c.Principal.UserID, TenantID: c.Principal.TenantID, Time: time.Now()})
+		if err != nil {
+			return problem("", err.Error(), "")
+		}
+		after = next
+	}
+	if after != nil && !records.Allows(rule, after, c.Principal) {
+		return refused("change")
+	}
+	return nil
+}
+
+func ruleSource(a records.Access, verb string) string {
+	return map[string]string{"read": a.Read, "create": a.Create, "update": a.Update, "delete": a.Delete}[verb]
+}
+
 func decode[T any](raw json.RawMessage) (T, []live.Problem) {
 	var v T
 	if err := json.Unmarshal(raw, &v); err != nil {
@@ -174,14 +224,23 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				if c.record == nil && !s.create {
 					return nil, problem("target", fmt.Sprintf("there is no %s record %q", d.Target.Type, d.Target.ID), "list them with records.query")
 				}
-				if !s.internal {
-					e, problems := Entity(d.ServiceArgs, c.deps.Projections, d.Target.Type)
-					if problems != nil {
-						return nil, problems
-					}
-					c.entity = e
+				if s.internal {
+					return s.decide(c)
 				}
-				return s.decide(c)
+				e, problems := Entity(d.ServiceArgs, c.deps.Projections, d.Target.Type)
+				if problems != nil {
+					return nil, problems
+				}
+				c.entity = e
+				// A record the read rule hides is not there for the principal
+				if c.record != nil && !records.Allows(e.Rule("read"), c.record, d.Principal) {
+					return nil, problem("target", fmt.Sprintf("there is no %s record %q", d.Target.Type, d.Target.ID), "list them with records.query")
+				}
+				events, problems := s.decide(c)
+				if problems != nil || len(events) == 0 {
+					return events, problems
+				}
+				return events, c.rules(s.action, events)
 			},
 		}
 		if s.create {

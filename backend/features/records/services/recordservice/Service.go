@@ -18,6 +18,8 @@ type Service interface {
 	// Find reads a page of records once: filtered, sorted and paged by the
 	// query planner, from an index when one fits.
 	Find(args FindArgs) FindResponse
+	// Aggregate computes aggregates over the records a query keeps, once.
+	Aggregate(args AggregateArgs) AggregateResponse
 	Import(args ImportArgs) ImportResponse
 	// Create, Update and Delete are only called from Go.
 	Create(args CreateArgs) CommandResponse
@@ -56,6 +58,16 @@ type FindArgs struct {
 type FindResponse struct {
 	Common features.ServiceResponse
 	data.Result
+}
+
+type AggregateArgs struct {
+	features.ServiceArgs
+	Aggregation data.Aggregation
+}
+
+type AggregateResponse struct {
+	Common features.ServiceResponse
+	data.Summary
 }
 
 // ImportArgs are rows of field values, each made a record by its own

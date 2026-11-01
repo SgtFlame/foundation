@@ -11,6 +11,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/records"
+	"github.com/expr-lang/expr/vm"
 )
 
 // Query is a read of an entity type's records: records.list's snapshot,
@@ -26,6 +27,10 @@ type Query struct {
 	Limit  int                        `json:"limit,omitempty"`  // 0 for every record
 	Cursor string                     `json:"cursor,omitempty"` // a result's next, for the following page
 	Fields []string                   `json:"fields,omitempty"` // the fields to return; every field when empty
+	// Expand follows these relation fields one level: each record gets the
+	// records they point to under _expanded.<field> (Records.md › Built in
+	// slice 20)
+	Expand []string `json:"expand,omitempty"`
 }
 
 // Filter is a condition on a field, or an and or or of filters.
@@ -370,6 +375,16 @@ type planned struct {
 	sort   sorter
 	after  *cursor
 	q      Query
+	// rule is the entity type's read rule, which hides records from who
+	// as a filter does (Records.md › Built in slice 21)
+	rule   *vm.Program
+	who    features.Principal
+	expand []expansion
+}
+
+// match reports whether a record is one the query gives its principal.
+func (p *planned) match(r Record) bool {
+	return p.filter.match(r) && records.Allows(p.rule, r, p.who)
 }
 
 func prepare(args features.ServiceArgs, d Deps, q Query) (*planned, error) {
@@ -380,7 +395,7 @@ func prepare(args features.ServiceArgs, d Deps, q Query) (*planned, error) {
 	if problems != nil {
 		return nil, log.Code("entity_not_found").Errorf("%s", problems[0].Message)
 	}
-	p := &planned{e: e, q: q}
+	p := &planned{e: e, q: q, rule: e.Rule("read"), who: args.Principal}
 	var and []Filter
 	ids := make([]string, 0, len(q.Where))
 	for id := range q.Where {
@@ -411,6 +426,9 @@ func prepare(args features.ServiceArgs, d Deps, q Query) (*planned, error) {
 		p.sort.desc = append(p.sort.desc, s.Desc)
 	}
 	if p.after, err = parseCursor(q.Cursor, len(p.sort.fields)); err != nil {
+		return nil, err
+	}
+	if p.expand, err = expansions(args, d, e, q.Expand); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -564,7 +582,11 @@ func (p *planned) run(args features.ServiceArgs, d Deps) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	return p.page(res, rows), nil
+	res = p.page(res, rows)
+	if err := p.expandAll(args, d, res.Records, rows); err != nil {
+		return Result{}, err
+	}
+	return res, nil
 }
 
 // read gives the rows after the cursor, in order: for an ordered walk, the
@@ -659,7 +681,7 @@ func (p *planned) walk(args features.ServiceArgs, d Deps, pt *path, limit int) (
 			return false
 		}
 		res.Plan.Read++
-		if r == nil || !slices.Contains(EntryTokens(p.e, pt.index, r), toks) || !p.filter.match(r) {
+		if r == nil || !slices.Contains(EntryTokens(p.e, pt.index, r), toks) || !p.match(r) {
 			return true
 		}
 		res.Pos = res.Pos.Merge(pos)
@@ -705,7 +727,7 @@ func (p *planned) lookup(args features.ServiceArgs, d Deps, paths []*path) (Resu
 			return Result{}, nil, log.Wrap(err)
 		}
 		res.Plan.Read++
-		if r != nil && p.filter.match(r) {
+		if r != nil && p.match(r) {
 			res.Pos = res.Pos.Merge(pos)
 			rows = append(rows, p.sort.row(r))
 		}
@@ -736,7 +758,7 @@ func (p *planned) scan(args features.ServiceArgs, d Deps, limit int) (Result, []
 		}
 		res.Plan.Read++
 		var r Record
-		if json.Unmarshal(e.Value.Value, &r) == nil && p.filter.match(r) {
+		if json.Unmarshal(e.Value.Value, &r) == nil && p.match(r) {
 			res.Pos = res.Pos.Merge(e.Value.Position())
 			rows = append(rows, p.sort.row(r))
 		}

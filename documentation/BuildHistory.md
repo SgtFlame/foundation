@@ -486,6 +486,25 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it-3).
     - **Pending, carried forward**: binding a query to a component prop, and the session's patches, are forge 3i.
 
+20. **Expansions and aggregates** (Forge iteration 3, part 3f, [forge 03f-ExpansionsAggregates.md](../../forge/documentation/plans/03f-ExpansionsAggregates.md)). *Built.* ★ the decisions, once a page shows them ([Records.md](Records.md#built-in-slice-20)).
+    - **Built**:
+      - in `records/data`, `Query.Expand` (related records under `_expanded.<field>`, users read from identity), aggregations (`Summarize`) and the `records.aggregate` query;
+      - queries with expansions and aggregates run again, debounced (the `records` section's `debounceMs`), and send the differences as list changes;
+      - `recordservice.Aggregate` at `POST /records/records/aggregate`, the `records.aggregate` tool, `expand` on `records.query`, and `Records.aggregate` with `RecordGroups` in the browser;
+      - `Deps.Users`, wired in `serve.go` (Foundation's and Forge's) over identity's users and memberships.
+    - **Blockers**: none. 03f had no open questions; three gaps found while reading were asked before building (users in expansions, the query's shape, with 3g's rules).
+    - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it-4).
+    - **Pending, carried forward**: a change to a user does not run an expansion of them again; rollup fields are 3j's computed fields.
+
+21. **Access and row rules** (Forge iteration 3, part 3g, [forge 03g-Access.md](../../forge/documentation/plans/03g-Access.md)). *Built.* ★ the decisions, once apps have roles ([Records.md](Records.md#built-in-slice-21)).
+    - **Built**:
+      - in `features/records`, row rules on `expr-lang/expr` (`CompileRule`, `Allows`, `EntityType.Rule`), checked by `records.Check`;
+      - in `records/data`, the read rule in every query (`records.get`, `records.list`, `records.find`, `records.aggregate`, `Find`, expansions), and the create, update and delete rules in the record commands;
+      - record queries that run afresh when a type they read is published again or deleted.
+    - **Blockers**: none. 03g had no open questions; the rules' language and who they apply to were asked with 3f's gaps.
+    - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it-5).
+    - **Pending, carried forward**: moving the `record` resource type under the owning app, and roles granting its actions, wait for apps (forge 05).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -512,4 +531,6 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 17. Records (Forge 3b, with 3c) | forge 03-DataModel 7 (one bucket per tenant), 03b 1 (convert values) and 2 (hide a deleted type), all answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-1) and [forge DataDesigner.md](../../forge/documentation/DataDesigner.md#decisions-to-review-after-seeing-it), to review after seeing |
 | 18. Indexes (Forge 3d) | forge 03-DataModel 2 (the same fold) and 03d 1 (order in memory), both answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-2), to review after seeing |
 | 19. Live queries (Forge 3e) | none | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-3), to review after seeing |
+| 20. Expansions and aggregates (Forge 3f) | none in the plan; gaps 03f 1 (users read from identity) and 2 (`expand` and `records.aggregate`), answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-4), to review after seeing |
+| 21. Access and row rules (Forge 3g) | none in the plan; gap 03g 1 (expr rules for every user, service principals skip them), answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-5), to review after seeing |
 

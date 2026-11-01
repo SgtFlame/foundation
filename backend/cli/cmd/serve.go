@@ -648,6 +648,16 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 				return recordssettings.Defaults
 			}
 			return settings
+		}, Users: func(tenant uint64, ids []uint64) map[uint64]recordsdata.User {
+			var users []identity.User
+			appDB.Select("users.id", "users.username", "users.display_name").
+				Joins("JOIN memberships ON memberships.user_id = users.id AND memberships.tenant_id = ?", tenant).
+				Where("users.id IN ?", ids).Find(&users)
+			out := map[uint64]recordsdata.User{}
+			for _, u := range users {
+				out[u.ID] = recordsdata.User{Username: u.Username, DisplayName: u.DisplayName}
+			}
+			return out
 		}}
 		entityDeps = entities.Deps{Projections: projections, DB: gdb, OnPublish: func(args features.ServiceArgs) error { return recordsdata.Follow(args, recordDeps) }}
 		recordService = recordimpl.CreateService(recordimpl.WithRecords(liveBus, subscriptions, recordDeps))

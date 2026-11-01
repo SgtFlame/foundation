@@ -34,6 +34,7 @@ type fixture struct {
 	subs *subscribe.Subscriptions
 	svc  recordservice.Service
 	n    atomic.Int64
+	deps *data.Deps // what the commands and queries get; set Users or Settings before using them
 }
 
 func setup(t testing.TB) *fixture {
@@ -47,6 +48,7 @@ func setup(t testing.TB) *fixture {
 	t.Cleanup(p.Close)
 	f := &fixture{t: t, reg: reg, js: srv.JS(), p: p, bus: bus.New(p), subs: subscribe.New(p, reg)}
 	deps = data.Deps{Projections: p, Bus: f.bus}
+	f.deps = &deps
 	entityDeps = entities.Deps{Projections: p, OnPublish: func(args features.ServiceArgs) error { return data.Follow(args, deps) }}
 	f.svc = recordimpl.New(recordimpl.WithRecords(f.bus, f.subs, deps))
 	return f

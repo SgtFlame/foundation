@@ -58,6 +58,9 @@ func runFind(deps func() Deps) func(live.Feed) error {
 		if err != nil {
 			return err
 		}
+		if len(p.expand) > 0 {
+			return rerunFind(f, d, p)
+		}
 		// Changes are followed from before the page is read, so none is
 		// missed; one the page already has is skipped by its _seq
 		updates, err := d.Projections.Updates(f.Context(), args.Principal.TenantID, Projector, q.Entity+".*")
@@ -184,7 +187,7 @@ func (v *view) apply(e *live.Entry) error {
 		delete(v.byID, id)
 	}
 	v.beyond = slices.DeleteFunc(v.beyond, func(b row) bool { return b.id == id })
-	if !e.Deleted && v.p.filter.match(r) {
+	if !e.Deleted && v.p.match(r) {
 		nr := v.p.sort.row(r)
 		if v.p.after == nil || v.p.sort.compare(nr, v.p.at()) > 0 {
 			j, _ := slices.BinarySearchFunc(v.rows, nr, v.p.sort.compare)

@@ -40,6 +40,9 @@ func Check(e EntityType, known func(id string) bool) []live.Problem {
 		add("name", "an entity type needs a name", "")
 	}
 	exists := func(id string) bool { return id == e.ID || id == UserEntity || (known != nil && known(id)) }
+	for path, message := range checkAccess(e.Access) {
+		add(path, message, `use record.<field id>, record._createdBy and principal.user, e.g. "record.assignee == principal.user"`)
+	}
 	problems = append(problems, checkFields(e.Fields, "fields", exists, &e)...)
 
 	visible := map[string]Field{}

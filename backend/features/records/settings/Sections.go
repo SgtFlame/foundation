@@ -16,16 +16,20 @@ const ID = "records"
 type Records struct {
 	ScanLimit         int `json:"scanLimit"`         // records a query reads without an index
 	ImportConcurrency int `json:"importConcurrency"` // record.create commands records.import sends at once
+	// DebounceMs is how long a query that runs again (expansions,
+	// aggregates) waits after a change for more before it does
+	DebounceMs int `json:"debounceMs"`
 }
 
 // Defaults are the section's defaults, also used when it cannot be read.
-var Defaults = Records{ScanLimit: 10000, ImportConcurrency: 8}
+var Defaults = Records{ScanLimit: 10000, ImportConcurrency: 8, DebounceMs: 100}
 
 const schema = `{
   "type": "object",
   "properties": {
     "scanLimit": {"type": "integer", "title": "Scan limit", "description": "How many records of one entity type a query reads without an index (or while walking one for its order). A scan stops there and says so; a live list over more fails. Declare an index for what is filtered or sorted by.", "min": 100, "max": 1000000},
-    "importConcurrency": {"type": "integer", "title": "Import concurrency", "description": "How many records an import creates at once.", "min": 1, "max": 64}
+    "importConcurrency": {"type": "integer", "title": "Import concurrency", "description": "How many records an import creates at once.", "min": 1, "max": 64},
+    "debounceMs": {"type": "integer", "title": "Re-run delay (ms)", "description": "How long a live query that runs again on every change (one with expansions, or an aggregate) waits after a change for others, so a burst of changes runs it once.", "min": 10, "max": 10000}
   }
 }`
 

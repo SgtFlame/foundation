@@ -1,8 +1,8 @@
 # Records: entity types and their records
 
-Applications get their own data. An **entity type** is a schema for records, such as *Task* or *Customer*: its fields, title field, indexes and row rules. Entity types are definitions on the live core ([Live.md](Live.md)). They change only by `entity.*` commands, so several people can edit one at once and each sees the others' changes as they commit, and they are read by queries that are subscriptions. **Records** of those types are aggregates on the live core too: the generic `record.*` commands change them, one projector keeps them in KV with their **index entries**, and the `records.get`, `records.list` and `records.find` queries read them, through a query planner that uses an index when one fits. `records.find` is a sorted page that stays current without running again.
+Applications get their own data. An **entity type** is a schema for records, such as *Task* or *Customer*: its fields, title field, indexes and row rules. Entity types are definitions on the live core ([Live.md](Live.md)). They change only by `entity.*` commands, so several people can edit one at once and each sees the others' changes as they commit, and they are read by queries that are subscriptions. **Records** of those types are aggregates on the live core too: the generic `record.*` commands change them, one projector keeps them in KV with their **index entries**, and the `records.get`, `records.list` and `records.find` queries read them, through a query planner that uses an index when one fits. `records.find` is a sorted page that stays current without running again. A query can expand relations, and `records.aggregate` keeps counts and sums current; both run again, debounced, when what they read changes. An entity type's row rules hide records from every query and check every command.
 
-It was designed in [forge 03-DataModel.md](../../forge/documentation/plans/03-DataModel.md) and is built as Forge's iteration 3, in parts. Part 3a, entity types, is slice 16. Part 3b, records, is slice 17; Forge's Data Designer (part 3c, [forge DataDesigner.md](../../forge/documentation/DataDesigner.md)) was built with it. Part 3d, indexes and the query planner, is slice 18. Part 3e, live queries, is slice 19.
+It was designed in [forge 03-DataModel.md](../../forge/documentation/plans/03-DataModel.md) and is built as Forge's iteration 3, in parts. Part 3a, entity types, is slice 16. Part 3b, records, is slice 17; Forge's Data Designer (part 3c, [forge DataDesigner.md](../../forge/documentation/DataDesigner.md)) was built with it. Part 3d, indexes and the query planner, is slice 18. Part 3e, live queries, is slice 19. Part 3f, expansions and aggregates, is slice 20. Part 3g, access and row rules, is slice 21.
 
 ## Built in slice 16
 
@@ -308,3 +308,114 @@ Forge's [03e-LiveQueries.md](../../forge/documentation/plans/03e-LiveQueries.md)
 - An ordered window remembers at most 256 matches past it.
 - A first page takes records entering at its top.
 
+## Built in slice 20
+
+### Decisions
+Forge's [03f-ExpansionsAggregates.md](../../forge/documentation/plans/03f-ExpansionsAggregates.md) had no open questions. Two gaps found while reading it were asked before building (03f questions 1 and 2):
+- **A relation to `user` expands from identity.** Users are rows in the application database and commit no events, so an expansion reads `{_id, username, displayName}` each time the query runs, and only for members of the principal's tenant. A change to a user does not run the query again.
+- **Expansions are `expand` on a query, and aggregates are their own query.** `records.find`, `records.query` and `Find` take `expand: [fieldId]`. `records.aggregate` is a new live query, with `recordservice.Aggregate` and a tool beside it.
+
+Decided while building:
+- **Where expansions go.** Each record gets `_expanded.<field>`: the related record, or `null` when there is none or it is gone. A to-many relation gives a list in the field's order, leaving out records that are gone. The records are copies; the projection never holds `_expanded`. Expanded records are whole, whatever `fields` the query keeps, and the relation is read from the whole record even when `fields` leaves it out.
+- **Expansions are checked when the query is prepared**: a visible relation field, named once, whose target is published (or `user`). Anything else is `bad_expand`.
+- **What runs again.** A `records.find` with `expand` and every `records.aggregate` follow the records of each type they read (its own, and the types its expansions point to). After a change they wait the `records` section's `debounceMs` (100) for more, run once, and send the differences: list changes on `records` or `groups` (`remove` for rows that left, then each row moved, updated or inserted in turn), and `next` as a key. A run that changes nothing sends `reached`. A run's position is the projector's (`Folded`), as a snapshot's is. A `records.find` without `expand` still applies changes without running again (slice 19).
+- **Aggregations.** `{entity, where, filter, groupBy?, aggregates: [{op, field?, as?}]}` gives `{groups: [{key, values}], plan}`.
+  - `count` counts records, or with a field the records that have a value. `sum` and `avg` take a number, decimal, or money field with a currency. `min` and `max` take a field with an order, and not a list.
+  - A value is named by `as`, else `op_field` (`count` without a field). Two with one name are refused.
+  - A decimal's sum is exact, at the field's scale. Its average is rounded to two more digits, halves away from zero. A number's sum and average are numbers. A sum over no values is 0, and an average, min or max over none is `null`.
+  - Groups are ordered by the key's sort token, so no value comes first and enums keep their order. A list-like `groupBy` puts a record in a group per item, and in the `null` group when it has none. Without `groupBy` there is one group, key `null`, even with no records.
+  - Changes to groups are keyed by the key's JSON (`true`, `"red"`, `null`). An aggregation reads every record it keeps, from an index or a scan, and fails with `scan_limit` past the scan limit.
+- **Rollup fields are not built here.** They are computed fields, which Forge's 3j builds; aggregates are a query.
+
+### Backend
+- **`records/data`**:
+  - `Expand.go`: `Query.Expand`, `MetaExpanded`, and the expansion of a page's records;
+  - `Aggregate.go`: `Aggregation`, `Aggregate`, `Summary`, `Group`, `GroupKey`, `AggregateOps` and `Summarize(args, deps, aggregation)`;
+  - `Rerun.go`: the debounced re-run that sends differences, used by `records.find` with `expand` and by `records.aggregate`;
+  - `Deps.Users(tenant, ids)` reads users for expansions (`data.User {Username, DisplayName}`). Without it, a relation to `user` expands to `null`.
+- **`records/settings`**: `debounceMs` (Re-run delay, 100 ms by default).
+- **`services/recordservice`**: `Aggregate(AggregateArgs{Aggregation})` returns `AggregateResponse{Summary}` (`record.read`), served at `POST /records/records/aggregate` (`AggregateRecordsRequest`, `AggregateRecordsResponse`). `bad_expand` and `bad_aggregate` are 400.
+- **`records/tools`**: `records.aggregate`, and `expand` on `records.query`.
+- **Wiring**: `serve.go`, in Foundation and in Forge, sets `Deps.Users` to read users joined with their membership of the tenant.
+
+### Browser
+- `Records.ts` has `FindRecordsRequest.expand`, `aggregate(request)`, `AggregateRecordsRequest`, `RecordGroup`, `AggregateRecordsResponse`, and `RecordGroups`, the result of `useQuery<RecordGroups>('records.aggregate', request)`.
+
+### Verification of slice 20
+- `go test ./features/records/... ./features/live/... ./features/ui/... ./features/cognition/drafts/... ./features/authz/...` passes. `records/data` passed four runs in a row before the expansion fix below, and two after it. Its new tests pass under the race detector, before and after that fix.
+  - **Expansions** (`TestExpansionsFollowChanges`), with `person` and `job` (an owner, helpers and an assignee):
+    - a job expands its owner, its helpers in the field's order (none is an empty list) and its assignee, read from a stand-in for identity, where an unknown user is `null`;
+    - the projection holds no `_expanded`;
+    - with `fields: [title]` the owner still expands;
+    - a live page received a person's rename; after a person was deleted and a job created, it equals a fresh `Find`, with the deleted person gone from a helpers list and an owner;
+    - expanding a text field or an unknown one is refused.
+  - **Aggregates** (`TestAggregatesEqualAScans`):
+    - `item`, with slice 18's eight indexes, and `plain`, with none, hold the same 150 random records.
+    - Six aggregations are checked on both: `count` by `done`; `sum`, `avg` and `count` of a decimal; `sum` and `avg` of a number with no group; `count`, `min` and `max` of a date by `tags`; and two filtered.
+    - Each equals the same aggregates computed by the test from a scan's records, with exact rationals, before and after 80 random updates (some clearing the decimal) and deletes.
+    - A live subscription to each ends equal to a fresh one. Seven bad aggregations are refused.
+  - **Debounce** (`TestABurstRunsAnAggregateOncePerWindow`): four connections sent 60 creates in 17 ms with a 400 ms window. The aggregate ran once, and ended equal to a fresh one.
+- Forge's `serve` (`backend/scripts/build.sh`) was checked with a WebSocket client and `fetch`:
+  - *Person* and *Task* (a decimal `n`, an `owner` relation) were defined and published, and six tasks created.
+  - A `records.aggregate` by `done` (count, sum and avg of `n`) and a `records.find` page expanding `owner` with `fields: [title]` sent their snapshots.
+  - Marking a task done and renaming the owner in the same window sent one run: the page's two rows updated with the new name, and the two groups updated.
+  - `POST /records/records/aggregate` gave the same counts.
+  - The first run showed `owner: null` with `fields`, the bug fixed above. The run after the fix showed the owner.
+- `cd frontend/common && yarn build` passes, and so do Forge's `frontend/axiom` `yarn build` and `yarn lint`.
+
+### Decisions to review after seeing it
+- A relation to `user` expands from identity, and a change to a user does not run the query again.
+- Expanded records are whole; `fields` applies only to the records of the query's own type.
+- A query with `expand` runs again, debounced, rather than applying changes; 100 ms by default.
+- A decimal's average has two digits more than the field.
+- A list-like `groupBy` counts a record once per item.
+
+## Built in slice 21
+
+### Decisions
+Forge's [03g-Access.md](../../forge/documentation/plans/03g-Access.md) had no open questions. One gap was asked before building (03g question 1):
+- **Row rules are `expr-lang/expr` expressions, and they apply to every user**, administrators included. Only service principals (the converter, background work) skip them. Create checks the new record, update checks the record before and after the change, and delete checks it before. An expanded record follows its own type's read rule.
+
+Decided while building:
+- **What a rule sees.** `record` is the record's values by field id and its own data (`_id`, `_createdBy`, `_updatedBy` and the rest). `principal` is `{user, tenant, kind}`. A user is named by their id as text, as a relation to `user` holds it, so `principal.user` and `_createdBy` are text and `record.assignee == principal.user` works. A rule must give a bool. `records.Check` refuses one that does not parse, names something other than `record` and `principal`, or is not a bool. A rule over untyped values (`record.n + 1`) cannot be refused there, and when it runs and does not give `true`, it allows nothing.
+- **Rules follow the published version**, as fields and indexes do. `entity.setAccess` changes the draft, and `entity.publish` makes it take effect.
+- **The read rule is a filter on every read.** The planner checks it with the filter on every record it reads (`planned.match`), so walks, lookups and scans all apply it, and a page fills past hidden records. `records.get` gives `null` for a hidden record, and changes to `null` when it becomes hidden. `records.list` and `records.find` remove a record that stops matching, as they do for a filter. An aggregation counts only what its principal can read, and an expansion leaves hidden records out (`null`, or missing from a list). An index cannot answer a rule, so a rule that hides most records still reads them.
+- **Commands.** A record the read rule hides is not there for a command: update, delete, add to and remove from are refused with the same problem as a missing record, so a rule does not tell a principal that a record exists. A create, update or delete rule that refuses is rejected with code `row_rule` at `target`, naming the rule. The after-change check folds the command's events into a copy of the record with the projector's own `Apply`.
+- **Open queries run afresh on a new version.** Every record query (`records.get`, `records.list`, `records.find`, `records.aggregate`) watches the published versions of the types it reads (its own and those it expands to). When one is published again or deleted, the query stops and starts again from a new snapshot, so a new rule takes effect on open pages at once. Fields and indexes do too.
+- **Access stays `record` on `tenant:<id>/records/entity:<entityId>`.** The plan's `tenant:<id>/app:<appId>/entity:<entityId>` waits for apps: there is no `app` resource type yet. The built-in roles grant `record.*` by class, and an app's roles come with forge 05.
+
+### Backend
+- **`features/records`**:
+  - `Rules.go`: `CompileRule(src)` (compiled once per source), `RuleEnv`, `Allows(rule, record, principal)` and `EntityType.Rule(action)`;
+  - `records.Check` checks the rules, at `access.<action>`.
+- **`records/data`**:
+  - `planned.match` applies the read rule with the filter. `records.get` has its own feed (`runGet`), applying the read rule.
+  - The record commands check the read rule on the target, then the action's rule (`decision.rules`).
+  - `republished` restarts a record query when a type it reads gets a new published version.
+
+### Verification of slice 21
+- The tests above pass (the same runs as slice 20's).
+  - **Acceptance** (`TestNoSubscriberReceivesAHiddenRecord`):
+    - `doc` has the rules: see your own and shared docs, create only your own, change only what you created, delete only what you own. It starts with 40 docs by three users.
+    - Each user holds six `records.find` pages (three sorts, page sizes of none, 3 and 7) and a `records.list`.
+    - The three users then send 180 random commands at once, each on its own bus: creating docs owned by anyone, changing owners, sharing, and deleting. 43 were accepted and 137 refused.
+    - No snapshot or change any page or list received shows a doc its user may not see. Every page ends equal to a fresh `Find` as its user, and every list holds what a fresh read gives.
+    - Each user's `count` equals what they see, and is less than everyone's.
+  - **Each rule on its own** (`TestRowRulesInCommandsAndQueries`):
+    - creating another's doc is refused by the create rule;
+    - updating or deleting a doc the user cannot see is refused as a missing record;
+    - a shared doc can be seen, but its update and delete are refused by their rules, with code `row_rule`;
+    - a service principal changes it anyway;
+    - a doc reassigned away is removed from its old owner's open `records.find`, and their `records.get` turns `null`;
+    - a note expanding the doc shows it to its new owner and `null` to the old one;
+    - publishing the type without its read rule ran two open pages afresh, and both then showed both docs;
+    - a rule that does not parse, gives a number, or names an unknown variable is refused.
+  - **Grants** (`TestActionsNeedTheirGrant`, with a policy installed): a *Viewer* cannot create, an *Editor* can create their own doc but not delete it, and a user without a grant cannot open `records.find`.
+- Forge's `serve`, with the same client: a read rule `record.assignee == principal.user` was set and published. The open aggregate and page ran afresh, showing only the three tasks assigned to user 1. A rule that does not parse was rejected at `entity.access.read` with its position.
+
+### Decisions to review after seeing it
+- Rules apply to administrators too; only service principals skip them.
+- A command on a hidden record is refused as a missing record, not as denied.
+- Users in rules are text ids, `_createdBy` included.
+- A new published version restarts every open record query on its type, from a new snapshot.
+- Access stays on `tenant:<id>/records/entity:<id>` until apps exist.

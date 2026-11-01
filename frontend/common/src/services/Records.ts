@@ -1,8 +1,9 @@
 // Client for the backend record REST handlers
 // (backend/features/records/rest/recordhandlers): reading records once
-// (find: filtered, sorted pages from the query planner) and importing rows. Records are changed by the record.* commands and read
-// live by the records.get, records.list and records.find queries on the live
-// connection; use those in editors.
+// (find: filtered, sorted pages from the query planner; aggregate: counts
+// and sums) and importing rows. Records are changed by the record.* commands
+// and read live by the records.get, records.list, records.find and
+// records.aggregate queries on the live connection; use those in editors.
 
 import { http, type ResponseStatus } from './http/client.ts'
 import type { Problem } from '../live/LiveConnection.ts'
@@ -68,6 +69,9 @@ export interface FindRecordsRequest {
   limit?: number // every record when left out
   cursor?: string // a previous response's next
   fields?: string[] // every field when left out
+  // Relation fields to follow one level: each record gets the related
+  // records (for user, {_id, username, displayName}) under _expanded.<field>
+  expand?: string[]
 }
 
 // How a query was answered
@@ -91,6 +95,39 @@ export interface FindRecordsResponse extends ResponseStatus {
 export interface RecordPage {
   records: RecordData[]
   next?: string
+  plan: QueryPlan
+}
+
+// An aggregation over the records where and filter keep, grouped by a
+// field (one group, key null, when left out). count counts records (with a
+// field, those with a value); sum and avg take a number, decimal or money
+// field with a currency; min and max a field with an order.
+export interface AggregateRecordsRequest {
+  entity: string
+  where?: Record<string, unknown>
+  filter?: RecordFilter
+  groupBy?: string
+  aggregates: { op: 'count' | 'sum' | 'avg' | 'min' | 'max'; field?: string; as?: string }[]
+}
+
+// One group: its key (the field's value, null for none) and each
+// aggregate by its as (op_field, or count when left out)
+export interface RecordGroup {
+  key: unknown
+  values: Record<string, unknown>
+}
+
+export interface AggregateRecordsResponse extends ResponseStatus {
+  groups: RecordGroup[] // ordered by key
+  plan: QueryPlan
+}
+
+// The live records.aggregate query's result:
+// useQuery<RecordGroups>('records.aggregate', request). It runs again,
+// debounced, when the records change; groups change by insert, update,
+// move and remove, keyed by the key's JSON
+export interface RecordGroups {
+  groups: RecordGroup[]
   plan: QueryPlan
 }
 
@@ -137,6 +174,11 @@ export const Records = {
 
   async find(request: FindRecordsRequest): Promise<FindRecordsResponse> {
     const response = await http.post<FindRecordsResponse>('/records/records/find', request)
+    return response.data
+  },
+
+  async aggregate(request: AggregateRecordsRequest): Promise<AggregateRecordsResponse> {
+    const response = await http.post<AggregateRecordsResponse>('/records/records/aggregate', request)
     return response.data
   },
 

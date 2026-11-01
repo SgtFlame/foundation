@@ -92,9 +92,15 @@ func (s *findSink) view() (ids []string, next string, bad string) {
 
 func (f *fixture) find(q data.Query) *findSink {
 	f.t.Helper()
+	return f.findAs(args(), q)
+}
+
+// findAs opens records.find as a principal.
+func (f *fixture) findAs(a features.ServiceArgs, q data.Query) *findSink {
+	f.t.Helper()
 	s := &findSink{shownAt: map[string]live.Position{}}
 	raw, _ := json.Marshal(q)
-	if fail := f.subs.Open(subscribe.OpenArgs{ServiceArgs: args(), Query: "records.find", Params: raw, Sink: s}); fail != nil {
+	if fail := f.subs.Open(subscribe.OpenArgs{ServiceArgs: a, Query: "records.find", Params: raw, Sink: s}); fail != nil {
 		f.t.Fatalf("records.find %s: %s", raw, fail.Message)
 	}
 	return s
@@ -105,8 +111,14 @@ func (f *fixture) find(q data.Query) *findSink {
 // same next.
 func (f *fixture) matches(t *testing.T, s *findSink, q data.Query) {
 	t.Helper()
+	f.matchesAs(t, args(), s, q)
+}
+
+// matchesAs is matches for a subscription opened as a principal.
+func (f *fixture) matchesAs(t *testing.T, a features.ServiceArgs, s *findSink, q data.Query) {
+	t.Helper()
 	eventually(t, func() string {
-		res, err := data.Find(args(), data.Deps{Projections: f.p}, q)
+		res, err := data.Find(a, *f.deps, q)
 		if err != nil {
 			t.Fatal(err)
 		}
