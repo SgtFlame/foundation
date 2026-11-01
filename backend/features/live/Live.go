@@ -149,6 +149,10 @@ type Command struct {
 	// Decide returns the events to commit, or problems. It may run again
 	// when another command committed on the target in between.
 	Decide func(d Decision) ([]NewEvent, []Problem)
+	// Report, when set, is what the command's tool returns after a commit
+	// at seq, beside the sequence: a graph draft's problems, for example,
+	// so a model sees what its change left to fix.
+	Report func(args features.ServiceArgs, target Target, seq uint64) any
 }
 
 // Position is how far a subscription has seen, as a sequence per stream.

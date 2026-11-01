@@ -63,7 +63,7 @@ func (s *service) Open(args uiservice.OpenArgs) uiservice.OpenResponse {
 		}
 	}
 	sess, f := ui.Open(args.ServiceArgs, args.Session, *page, args.Params, rec, ui.Options{
-		Catalog: ui.Catalog(s.reg), Commander: commander{s.bus}, Subs: s.subs, Store: s.store, Send: args.Send,
+		Catalog: ui.Catalog(s.reg), Commander: commander{s.bus}, Graphs: s.graphs, Subs: s.subs, Store: s.store, Send: args.Send,
 	})
 	if f != nil {
 		return fail(f)
@@ -73,8 +73,6 @@ func (s *service) Open(args uiservice.OpenArgs) uiservice.OpenResponse {
 	s.mu.Unlock()
 	return uiservice.OpenResponse{Common: features.OK(), Session: sess}
 }
-
-
 
 // commander decides a handler's commands on the bus.
 type commander struct{ b *bus.Bus }

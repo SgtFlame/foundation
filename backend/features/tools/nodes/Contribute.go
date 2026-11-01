@@ -42,6 +42,8 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Title:       "Agent",
 		Category:    "LLM",
 		Description: "Asks the model, letting it call tools until it answers. Tools that change data are left out, and denied when listed: a run cannot ask for approval.",
+		Example:     "Agent with the prompt \"Summarize the open tasks\" and the kb.search tool",
+		Effects:     true,
 		Config:      json.RawMessage(agentSchema),
 		Pins: cognition.Pins{
 			In: []cognition.Pin{

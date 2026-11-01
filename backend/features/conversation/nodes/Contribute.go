@@ -51,6 +51,7 @@ func Contribute(reg *extensions.Registry) {
 		Title:       "On user message",
 		Category:    "Events",
 		Description: "A chat message was sent: gather the context its reply needs",
+		Example:     "On user message feeding Candidate entries, whose chosen entries a Return gives as items",
 		Event:       true,
 		Pins: cognition.Pins{Out: []cognition.Pin{
 			cognition.ExecPin(cognition.Then, ""),
@@ -64,6 +65,7 @@ func Contribute(reg *extensions.Registry) {
 		Title:       "On reply",
 		Category:    "Events",
 		Description: "A chat round was replied to successfully: learn from it",
+		Example:     "On reply, then Branch on whether memory updates are on, then Update memory",
 		Event:       true,
 		Pins: cognition.Pins{Out: []cognition.Pin{
 			cognition.ExecPin(cognition.Then, ""),

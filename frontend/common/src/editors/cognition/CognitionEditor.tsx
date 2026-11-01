@@ -1,71 +1,69 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Layout, Model, type IJsonModel, type TabNode } from 'flexlayout-react'
-import { Alert, Box, CircularProgress, Stack } from '@mui/material'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Layout, Model, type IJsonModel, type IJsonTabNode, type TabNode } from 'flexlayout-react'
+import { Alert, Box, CircularProgress, Snackbar, Stack } from '@mui/material'
+import { usePresence } from '../../live/index.ts'
 import { log } from '../../logging/index.ts'
-import {
-  Cognition,
-  type DataType,
-  type GetGraphResponse,
-  type GetTraceResponse,
-  type NodeType,
-  type Run,
-} from '../../services/Cognition.ts'
+import { Cognition, type GetTraceResponse, type Run } from '../../services/Cognition.ts'
+import { useCatalog } from './catalog.ts'
+import { useCan } from '../../session/permissions.ts'
 import { useWorkbenchSubject } from '../../workbench/context/WorkbenchContext.ts'
 import type { EditorProps } from '../../workbench/points.ts'
 import { CognitionContext, reachedBy, statsOf, type CognitionState, type Selection } from './cognitionState.ts'
 import { CognitionObject } from './CognitionObject.ts'
 import DetailsPanel from './DetailsPanel.tsx'
+import { useDraft } from './editing.ts'
 import GraphCanvas from './GraphCanvas.tsx'
 import LogViewer from './LogViewer.tsx'
+import PalettePanel from './PalettePanel.tsx'
+import VariablesPanel from './VariablesPanel.tsx'
 
 const cognitionLog = log.In('cognition')
 
-const json: IJsonModel = {
-  global: { tabEnableClose: false, tabSetEnableMaximize: true },
-  borders: [],
-  layout: {
-    type: 'row',
-    weight: 100,
-    children: [
-      {
-        type: 'tabset',
-        weight: 75,
-        children: [
-          { type: 'tab', id: 'logic', name: 'Logic Editor', component: 'logic' },
-          { type: 'tab', id: 'log', name: 'Log Viewer', component: 'log' },
-        ],
-      },
-      {
-        type: 'tabset',
-        weight: 25,
-        children: [{ type: 'tab', id: 'details', name: 'Details', component: 'details' }],
-      },
-    ],
-  },
+// A tab another editor adds to the Graph Editor's layout, e.g. Forge's
+// Test panel; it reads the graph with useCognition()
+export interface GraphEditorTab {
+  id: string
+  name: string
+  where?: 'left' | 'center' | 'right' // right by default
+  render: () => ReactNode
 }
 
-function factory(node: TabNode) {
-  switch (node.getComponent()) {
-    case 'logic':
-      return <GraphCanvas />
-    case 'log':
-      return <LogViewer />
-    case 'details':
-      return <DetailsPanel />
-    default:
-      return null
+function layoutJson(extra: GraphEditorTab[]): IJsonModel {
+  const tab = (t: GraphEditorTab): IJsonTabNode => ({ type: 'tab', id: t.id, name: t.name, component: t.id })
+  const at = (where: GraphEditorTab['where']) => extra.filter((t) => (t.where ?? 'right') === where).map(tab)
+  return {
+    global: { tabEnableClose: false, tabSetEnableMaximize: true },
+    borders: [],
+    layout: {
+      type: 'row',
+      weight: 100,
+      children: [
+        {
+          type: 'tabset',
+          weight: 17,
+          children: [
+            { type: 'tab', id: 'palette', name: 'Palette', component: 'palette' },
+            { type: 'tab', id: 'variables', name: 'Variables', component: 'variables' },
+            ...at('left'),
+          ],
+        },
+        {
+          type: 'tabset',
+          weight: 60,
+          children: [
+            { type: 'tab', id: 'logic', name: 'Logic Editor', component: 'logic' },
+            { type: 'tab', id: 'log', name: 'Log Viewer', component: 'log' },
+            ...at('center'),
+          ],
+        },
+        {
+          type: 'tabset',
+          weight: 23,
+          children: [{ type: 'tab', id: 'details', name: 'Details', component: 'details' }, ...at('right')],
+        },
+      ],
+    },
   }
-}
-
-// The node and data types, loaded once
-let typesLoad: Promise<{ nodeTypes: Map<string, NodeType>; types: Map<string, DataType> }> | undefined
-function loadTypes() {
-  typesLoad ??= Cognition.nodeTypes().then((r) => ({
-    nodeTypes: new Map(r.nodeTypes.map((t) => [t.id, t])),
-    types: new Map(r.types.map((t) => [t.id, t])),
-  }))
-  typesLoad.catch(() => (typesLoad = undefined))
-  return typesLoad
 }
 
 function message(err: unknown): string {
@@ -73,7 +71,7 @@ function message(err: unknown): string {
 }
 
 // The graph's runs, newest first, paged
-function useRuns(graphId: string) {
+function useRuns(graphId: string, published: number | undefined) {
   const [runs, setRuns] = useState<Run[]>([])
   const [more, setMore] = useState(false)
   const [error, setError] = useState<string>()
@@ -92,41 +90,45 @@ function useRuns(graphId: string) {
     },
     [graphId],
   )
-  useEffect(() => load(), [load])
+  // A new version brings new runs
+  useEffect(() => load(), [load, published])
   return useMemo(() => ({ runs, more, error, refresh: () => load(), loadMore: () => load(runs.at(-1)?.id) }), [runs, more, error, load])
 }
 
-// The Cognition Editor: a graph on a read-only canvas, its runs in the Log
-// Viewer, and the details of what is selected (Cognition.md › Part 2).
-// Editing, the Prompt Editor and debugging come in later passes.
-function CognitionEditor({ object, tabId }: EditorProps<CognitionObject>) {
-  const model = useMemo(() => Model.fromJson(json), [])
-  const [graph, setGraph] = useState<GetGraphResponse>()
-  const [types, setTypes] = useState<Awaited<ReturnType<typeof loadTypes>>>()
-  const [error, setError] = useState<string>()
+export interface GraphEditorProps {
+  graphId: string
+  tabId: string
+  name?: string
+  helpText?: string
+  extraTabs?: GraphEditorTab[]
+  openGraph?: (graphId: string, name: string) => void
+}
+
+// The Graph Editor: a graph's draft on an editable canvas, edited by
+// several people at once over bp.* commands, its runs in the Log Viewer,
+// the Palette and Variables, and the details of what is selected
+// (Cognition.md › Built in slice 14). Forge's Blueprint Editor is this
+// editor with its own tabs.
+export function GraphEditor({ graphId, tabId, name, helpText, extraTabs = [], openGraph }: GraphEditorProps) {
+  const extraKey = extraTabs.map((t) => t.id).join(',')
+  // The layout is made once per set of extra tabs
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const model = useMemo(() => Model.fromJson(layoutJson(extraTabs)), [extraKey])
+  const { catalog, error: catalogError } = useCatalog()
+  const editing = useDraft(graphId, catalog?.nodeTypes)
+  const view = editing.view
+  const can = useCan()
   const [selection, setSelection] = useState<Selection>({})
+  const [selectedNodes, setSelectedNodes] = useState<string[]>([])
   const [chosenRun, setRunId] = useState<string>()
-  // A trace, or why it could not be loaded, for the run it belongs to
   const [loaded, setLoaded] = useState<{ runId: string; trace?: GetTraceResponse; error?: string }>()
-  const runs = useRuns(object.graphId)
-  // The newest run is shown until another is chosen
+  const runs = useRuns(graphId, view?.published)
+  const presence = usePresence(`graph.${graphId}`, { selected: selectedNodes })
   const runId = chosenRun ?? runs.runs[0]?.id
   const trace = loaded?.runId === runId ? loaded?.trace : undefined
   const traceError = loaded?.runId === runId ? loaded?.error : undefined
 
-  useWorkbenchSubject(tabId, { type: 'cognition-graph', id: object.graphId, label: object.name, summary: object.helpText })
-
-  useEffect(() => {
-    Promise.all([Cognition.getGraph(object.graphId), loadTypes()])
-      .then(([g, t]) => {
-        setGraph(g)
-        setTypes(t)
-      })
-      .catch((err: unknown) => {
-        cognitionLog.fromError(err).warn('cannot open graph %s', object.graphId)
-        setError(message(err))
-      })
-  }, [object.graphId])
+  useWorkbenchSubject(tabId, { type: 'cognition-graph', id: graphId, label: view?.graph.name ?? name ?? graphId, summary: helpText })
 
   useEffect(() => {
     if (!runId) return
@@ -142,25 +144,37 @@ function CognitionEditor({ object, tabId }: EditorProps<CognitionObject>) {
   const select = useCallback(
     (s: Selection) => {
       setSelection(s)
-      const g = graph?.graph
+      const g = view?.graph
       if (!s.nodeId || !g || s.seq !== undefined) return
-      const reaches = (run: { event: string }) => reachedBy(g, graph.pins ?? {}, run.event).has(s.nodeId!)
+      const reaches = (run: { event: string }) => reachedBy(g, view.pins ?? {}, run.event).has(s.nodeId!)
       const shown = runs.runs.find((r) => r.id === runId)
       if (shown && reaches(shown)) return
       const other = runs.runs.find(reaches)
       if (other) setRunId(other.id)
     },
-    [graph, runs.runs, runId],
+    [view, runs.runs, runId],
   )
   const state = useMemo<CognitionState | undefined>(() => {
-    if (!graph?.graph || !graph.info || !types) return undefined
+    if (!view || !catalog) return undefined
+    const g = view.graph
     return {
-      info: graph.info,
-      graph: graph.graph,
-      pins: graph.pins ?? {},
-      problems: graph.problems ?? [],
-      nodeTypes: types.nodeTypes,
-      types: types.types,
+      graphId,
+      info: { id: graphId, name: g.name, description: g.description, kind: g.kind, version: view.published, builtIn: view.builtIn },
+      view,
+      editing,
+      readOnly: view.readOnly || !can('cognition.write'),
+      kinds: catalog.kinds,
+      kind: catalog.kinds.get(g.kind),
+      conversions: catalog.conversions,
+      selectedNodes,
+      setSelectedNodes,
+      others: presence.others,
+      openGraph,
+      graph: g,
+      pins: view.pins ?? {},
+      problems: view.problems ?? [],
+      nodeTypes: catalog.nodeTypes,
+      types: catalog.types,
       runs: runs.runs,
       moreRuns: runs.more,
       runsError: runs.error,
@@ -174,8 +188,29 @@ function CognitionEditor({ object, tabId }: EditorProps<CognitionObject>) {
       selection,
       select,
     }
-  }, [graph, types, runs, runId, trace, traceError, selection, select])
+  }, [graphId, view, editing, can, catalog, selectedNodes, presence.others, openGraph, runs, runId, trace, traceError, selection, select])
 
+  const factory = useCallback(
+    (node: TabNode) => {
+      switch (node.getComponent()) {
+        case 'logic':
+          return <GraphCanvas />
+        case 'log':
+          return <LogViewer />
+        case 'details':
+          return <DetailsPanel />
+        case 'palette':
+          return <PalettePanel />
+        case 'variables':
+          return <VariablesPanel />
+        default:
+          return extraTabs.find((t) => t.id === node.getComponent())?.render() ?? null
+      }
+    },
+    [extraTabs],
+  )
+
+  const error = catalogError ?? editing.error?.message
   if (error) {
     return (
       <Box sx={{ p: 2 }}>
@@ -195,8 +230,19 @@ function CognitionEditor({ object, tabId }: EditorProps<CognitionObject>) {
       <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
         <Layout model={model} factory={factory} />
       </Box>
+      <Snackbar open={!!editing.rejection} autoHideDuration={6000} onClose={editing.clearRejection}>
+        <Alert severity="warning" variant="filled" onClose={editing.clearRejection}>
+          {editing.rejection}
+        </Alert>
+      </Snackbar>
     </CognitionContext.Provider>
   )
+}
+
+// The Cognition Editor: the Graph Editor on a CognitionObject
+function CognitionEditor({ object, tabId, registry }: EditorProps<CognitionObject>) {
+  const openGraph = useCallback((id: string, name: string) => registry.edit(new CognitionObject({ id, name })), [registry])
+  return <GraphEditor graphId={object.graphId} tabId={tabId} name={object.name} helpText={object.helpText} openGraph={openGraph} />
 }
 
 export default CognitionEditor

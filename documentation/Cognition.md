@@ -16,10 +16,12 @@ The same graphs define:
 - **Multi-agent collaboration** through a shared **Nexus**. Agents read and write named streams in the Nexus and reconcile them over iterations; for example, product owner, database designer and UI/UX designer agents converging on one design.
 - **Chronicle's custom-type summarizing modes**, which [Chronicle.md](Chronicle.md) called "blueprint execution graphs".
 
-The Cognition Engine (backend, `backend/features/cognition`) runs graphs; the Cognition Editor (frontend, React Flow, `frontend/common/src/editors/cognition/`) shows them. Slice 7 built the **skeleton**: the engine with linear exec flow and pure nodes, Chronicle's steps as nodes, *Personal* as a built-in graph that chat runs, and the read-only Cognition Editor with the Log Viewer and the details panel over real traces. Slice 8 added the `Agent` node. The full design (drafts and publishing, the node library, prompt templates, the Nexus, loops, debugging, Replay, chat modes, editing) and what remains are in [plans/Cognition.md](plans/Cognition.md).
+The Cognition Engine (backend, `backend/features/cognition`) runs graphs; the Cognition Editor (frontend, React Flow, `frontend/common/src/editors/cognition/`) edits them. Slice 7 built the **skeleton**: the engine with linear exec flow and pure nodes, Chronicle's steps as nodes, *Personal* as a built-in graph that chat runs, and the read-only Cognition Editor with the Log Viewer and the details panel over real traces. Slice 8 added the `Agent` node. Slice 14 built the **editing pass**: graph kinds, drafts that several people edit at once by commands, publishing, the Palette, variables, loops, `Call graph`, implicit conversions, undo and copy and paste. Slice 15 built the blueprint kinds on it ([Blueprints.md](Blueprints.md)). The rest of the design (prompt templates, the Nexus, debugging, Replay, chat modes) and what remains are in [plans/Cognition.md](plans/Cognition.md).
 
 ## Decisions
-- **Collaborative graph editing** (Cognition 2): drafts will be **shared Yjs documents**, like markdown: a draft is a collab room that several people edit at once, relayed by the collab server, and publishing snapshots the room into an immutable version. Decided before slice 7; the room arrives with the editing pass.
+- **Collaborative graph editing** (Cognition 2): drafts are **changed by commands** (`bp.*`) on the live core, like every structured object, and several people edit one at once through its live query. Decided before slice 7 as shared Yjs documents, and **revised before slice 14** (forge 02-Blueprints question 5, 2026-11-01), so that every graph, blueprint or chat mode, is edited one way; nothing had been built on Yjs drafts.
+- **Graph kinds** (forge 02-Blueprints question 1): a `cognition.kind` point in Cognition proper, with `mode`, `agent`, `function` and `summarizer` registered on it like the blueprint kinds, so the Explorer groups by kind for both. Decided before slice 14.
+- **Published versions** (forge 02-Blueprints question 7): **events and KV**, not the `CognitionGraph` and `CognitionGraphVersion` tables the plan drew. `bp.publish` commits a `published` event carrying the graph, and a projector keeps each graph's last published version. Decided before slice 14.
 - **Template helpers** (Cognition 4): **global**. The safe helpers (`join`, `indent`, `json`, `truncate`, `default`) form one global set, and domain helpers such as `GetFeature` wait until a graph needs one.
 - **Trace retention** (Cognition 5): **both**: a trace is kept while it is among the last N runs of its graph *or* younger than N days, both configurable in the `cognition` section.
 
@@ -108,3 +110,82 @@ The Cognition Engine (backend, `backend/features/cognition`) runs graphs; the Co
   - It runs unattended, so it has no client tools and cannot ask. With no tools listed it offers every tool that does not ask; a write listed by name is offered and denied, so the trace says why.
   - Its model calls and tool calls carry the run's `RunID` and `NodeID`; `ToolCall` records do too.
   - No built-in graph uses it yet, and it cannot be placed until editing arrives.
+
+## Built in slice 14
+Cognition's editing pass, built for forge 02-Blueprints ([BuildHistory.md](BuildHistory.md)). Its blueprint kinds came in slice 15 ([Blueprints.md](Blueprints.md)).
+
+**The model** (`features/cognition`)
+- **Graph kinds**: the `cognition.kind` point (`cognition.Kinds`). A `Kind` has a title, a description, what it returns, the event node types that may start it, `Pure` (it refuses nodes with `Effects`), a `Spec` schema, `IDFor` (the graph id its spec requires) and `Host` (what a test run acts on). `cognitionnodes` registers `mode` (events *On user message* and *On reply*), `agent` and `function` (*On call*) and `summarizer`.
+- **What a node type carries now**: `Example`, `Kinds` (the kinds it may be used in; Chronicle's nodes allow `mode` and `summarizer`), `Effects`, `Volatile` (a pure node evaluated at every pull, such as Get variable) and `Normalize` (completes a config as a draft takes it: Call graph copies the called graph's signature).
+- **Metadata is required**: `cognition.MetaProblems` lists what a type lacks (a description, an example, a description per fixed data pin), and validation refuses a node of such a type. Chat's, Chronicle's and the Agent's types were completed.
+- **A graph** now also has `owner` (e.g. `app:hello`), `spec` (what its kind needs) and `variables` (`{id, name, type, default, description}`).
+- **`cognition.Catalog`** (node types, kinds and conversions, from `CatalogOf(registry)`) resolves a graph: as before, plus the kind's rules, metadata, and the conversion each edge makes (`Resolved.Conversions`). `cognition.Resolve(g, types)` is kept for callers with node types only. `SignatureOf` is a graph's inputs (its On call's outputs) and outputs (its Returns' inputs).
+- **Implicit conversions**: the `cognition.conversion` point. The core ones are number, bool and json to string, and string, number and bool to json. The editor labels a converting edge.
+- **Built-in graphs** may be `Editable`. The first command on one in a tenant starts the tenant's draft from it, and the tenant's published version then takes its place. Others, such as Personal, are read-only, and are changed by duplicating them.
+
+**The engine** (`cognition/engine`)
+- **Execution contexts**: a flow node runs the chains leaving it through `Exec.Flow(pin, frame)`, and a loop's iteration is a frame, such as `forEach:n5[2]`. Pure nodes are memoized per context, and a step records its context.
+- **Exec**: `Exec.Set` publishes outputs before a node returns (a loop's item), and `Exec.Pull` evaluates an input again in a frame (a loop's condition). `Exec.Call` runs another graph, and `Exec.Host` and `Exec.Vars` are the run's host and variables.
+- **New nodes** (`cognitionnodes`):
+  - Flow: *Sequence* (`then1…thenN`), *For each* (body, completed, item, index), *Loop* (a *While* input pulled before each iteration, a max), *On call* (declared inputs) and *Call graph* (Effects; its pins are the callee's signature as it was when set);
+  - Data: *Get variable*, *Set variable* and *Reroute*;
+  - Notes: *Comment*, a frame with a title, colour and size that never runs.
+- **Graphs to run** come from a `GraphSource` (`SetSource`): the tenant's published version, else the built-in. A run may also be given a `Graph` (a draft under test).
+- **Limits**: `maxLoopIterations` (1000) and `maxCallDepth` (16) join the `cognition` section, and `RunArgs.Limits` narrows a kind's runs further.
+- **Tracing**: `RunArgs.Trace` is `TraceAll` or `TraceFailures`. The latter stores a run only when it fails, and otherwise counts it (`Engine.Untraced`, since the server started).
+
+**Drafts** (`cognition/drafts`): a graph's draft is an aggregate on the `def` stream (target type `graph`).
+- **Projectors**: `cognition.graph` folds the draft (`{graph, rev, published, publishedRev, updatedBy, updatedAt}`). `cognition.published` keeps the last published graph, which the engine runs (`drafts.Source`).
+- **Commands**, with action `cognition.write` (`bp.publish` needs `cognition.publish`; both new, class write). Each checks against the catalog and refuses with problems a model can act on (a `fix`):
+  - `bp.create {kind, name, description?, owner?, spec?, from?}` (a kind with one event starts with that event node; `from` duplicates);
+  - `bp.import {graph}`;
+  - `bp.addNode {type, id?, title?, config?, position?}` (placed right of the others when no position is given);
+  - `bp.setConfig {node, config?, title?}`;
+  - `bp.moveNodes {moves}`;
+  - `bp.connect {from, to}` (it replaces the edge into a data input, or out of an exec output, already there);
+  - `bp.disconnect`;
+  - `bp.remove {nodes?, edges?}`;
+  - `bp.paste {nodes, edges}`;
+  - `bp.addVariable`, `bp.removeVariable` and `bp.setInfo {name?, description?, owner?, spec?}`;
+  - `bp.publish {rev}`, refused when the draft has moved past the rev its sender saw, or has errors;
+  - `bp.delete`.
+- **Command reports**: `live.Command.Report` (new) lets a command's tool return more than its sequence. A `bp.*` tool returns the draft's rev and problems once its commit is projected.
+- **Queries**: `cognition.graph {id}` is the draft resolved (`graph`, `pins`, `problems`, `conversions`, `rev`, `published`, `builtIn`, `readOnly`, `untraced`); a built-in no one changed is served as built in. `cognition.graphs {kind?}` is every graph by key, built-ins included.
+- **Testing**: the `bp.test` call and tool runs a draft once with sample inputs, traced, with its kind's test host. The catalog tools are `bp.listKinds`, `bp.listNodeTypes {kind?, search?}` and `bp.describeNodeType`.
+- `GET /cognition/node-types` also returns the kinds and conversions.
+
+**The Cognition Editor** (`src/editors/cognition/`) edits drafts. `GraphEditor` (in `CognitionEditor.tsx`) is the editor without its workbench object, which Forge's Blueprint Editor reuses with tabs of its own (`extraTabs`).
+- **Editing** (`editing.ts`, `useDraft`): the draft is the `cognition.graph` query. Each gesture is one or more `bp.*` commands, applied over the query's data at once until it reflects them (`applyOp`, which mirrors the server's fold).
+- **Undo and redo** are this user's own stack of inverse commands (`inverse`, computed from the draft before the gesture), so each person undoes only their changes. A refused command shows in a toast.
+- **The canvas** (`GraphCanvas.tsx`):
+  - drag (sent on drop), connect (incompatible pins refuse the drop; a converting edge shows `from→to`), multi-select, Delete, Ctrl+C/V (the clipboard and an in-page copy; pasted nodes get new ids), Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, and dropping from the Palette or Variables;
+  - comment frames are resizable boxes behind the nodes, and reroutes are dots;
+  - other people's selections are rings in their colours, from presence in `graph.<id>` (`{selected}`).
+- **Toolbar** (`Toolbar.tsx`): Undo, Redo, Delete, Validate (the problems, each selecting its node), Publish (the rev seen), the version (`v2 · changed`), *Duplicate* (`bp.create` from, then opens the copy), *Export* (JSON) and the others' avatars. A read-only built-in says so.
+- **New tabs**: **Palette** (`PalettePanel.tsx`: the node types the kind allows, by category, with search; drag, or double-click to add) and **Variables** (`VariablesPanel.tsx`: add and remove, with Get and Set chips to drag).
+- **Details** edits a node's title and config (JSON, Apply), and a graph's name, description and spec. It also shows the node type's example and the untraced runs.
+- **The Explorer** follows `cognition.graphs` live, with *New graph* (kind and name) and *Import* (a JSON file).
+- `loadCatalog`/`useCatalog` (`catalog.ts`) load the node types, kinds and conversions once.
+
+### Verification of slice 14
+- **Go tests**:
+  - `cognition/engine`: For each running its body per item in its own context with variables, a number converted to text on an edge, Call graph, and trace-on-failure, besides the earlier tests;
+  - `cognition/drafts` (on an embedded NATS): commands building a graph, a refused exec-to-data connection with its fix, a stale publish refused, the published version run by the engine, remove and paste, an editable built-in becoming the tenant's draft and then its published version, Call graph's signature, a copy, the graph list, and `bp.test`;
+  - `cognitionnodes`: expression identifiers.
+
+  The whole suite passes through `scripts/build.sh --test`.
+- **In headless Chromium** (Axiom against Forge's `serve`, two accounts):
+  - Ada and Bob had one draft open. Each saw the other's avatar, the nodes the other added, and Ada's selected node ringed in her colour.
+  - Bob's Undo removed only his own node, and Delete removed nodes.
+  - A drag joined two pins, and a config was applied from Details.
+  - *Publish* stayed disabled while the draft had errors.
+  - Personal opened read-only, with *Duplicate*.
+
+### Decisions to review after seeing it
+1. The Palette and Variables are tabs of the editor, not side views, so they follow the open graph's kind.
+2. Undo is client-side, a stack of inverse commands per editor. An inverse that no longer applies (another author removed the node) is refused, and the entry is dropped.
+3. Positions stay in the browser while a node is dragged and are sent once, on drop.
+4. A node's config is edited as JSON with *Apply*, not through the schema form.
+5. Only the last published version is kept in KV; older versions are in the event stream. There is no version picker or diff yet.
+6. Call graph refuses pure kinds (it has `Effects`), even when the callee is pure.
+7. A failed run of a draft under test is traced like any other, in the graph's Log Viewer.

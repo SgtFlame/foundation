@@ -12,6 +12,8 @@ func ContributeAccess(reg *extensions.Registry) {
 		Descriptor: extensions.Descriptor{ID: "cognition", Source: "cognition", Order: 80}, Title: "Cognition", Parent: "tenant",
 		Actions: []authz.Action{
 			{Name: "read", Title: "See graphs and their runs", Class: authz.ClassRead},
+			{Name: "write", Title: "Edit graph drafts", Class: authz.ClassWrite},
+			{Name: "publish", Title: "Publish graphs, so their new version runs", Class: authz.ClassWrite},
 			{Name: "execute", Title: "Run graphs", Class: authz.ClassExecute},
 		},
 	})

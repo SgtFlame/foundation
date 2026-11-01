@@ -108,7 +108,7 @@ func (f *fixture) args() features.ServiceArgs {
 
 func TestPersonalIsValid(t *testing.T) {
 	f := newFixture(t)
-	g, ok := f.engine.Graph(PersonalID)
+	g, ok := f.engine.Graph(f.args(), PersonalID)
 	if !ok {
 		t.Fatal("Personal is not registered")
 	}

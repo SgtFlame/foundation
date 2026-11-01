@@ -97,3 +97,9 @@ See [Live.md › Verification of slice 13](Live.md#verification-of-slice-13). Fo
 - How responsive a round trip per click feels; local state covers typing.
 - How other users' avatars and selection outlines look.
 - Restorable tabs live in this browser's storage, not in the user's settings.
+
+## Changed in slice 15
+For blueprints ([Blueprints.md](Blueprints.md)):
+- A handler a page has no Go handler for runs as the published `ui.handler` graph with that id (`ui.HandlerRunner`, `ui.Options.Graphs`, `uiimpl.WithGraphs`); `Handle.Value(path)` reads the payload and `Handle.Page()` the page.
+- **Tree overlays**: `ui.insertNode` and `ui.removeNode` add nodes to a page's tree by command (action `ui.design`); every session holds its page's `ui.overlay` query.
+- The Hello app's handlers, its counter's command and query are graphs.

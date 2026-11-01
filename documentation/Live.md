@@ -108,3 +108,14 @@ Decided while building:
 - One stream per area. An app's aggregates go to its own `app_<appId>` stream, while its records will go to `rec`.
 - Commands on one target are serialized in-process, and the bus waits for the projection before deciding.
 - Presence is a query, and selections travel in presence `state` (`{selected: [...]}`).
+
+## Changed in slice 15
+For blueprints ([Blueprints.md](Blueprints.md)):
+- `bus.Bus.Resolve` and `subscribe.Subscriptions.Resolve` find commands and queries no feature registered: a tenant's published command and query graphs (`livenodes.CommandFor`, `QueryFor`). `Bus.CommandFor(args, type)` looks in both.
+- `live.Command.Report`: what a command's tool returns after a commit, besides the sequence (a graph draft's problems).
+- The tool `live.command {command, target, args}` sends any command, including graph-defined ones.
+- `presence.Presence.Here(object)`: whether anyone is in an object, e.g. a graph open in an editor.
+
+## Changed in slice 16
+For entity types ([Records.md](Records.md)):
+- `project.Projections.Follow(ctx, tenant, area, name, subjects, fn)` runs a side effect on each matching event of a tenant's area, in order, as the durable consumer `fol_<name>`: work outside the projections, such as copying a published entity type into SQLite. `fn` must be idempotent, and an error retries the event a second later. Like a projector, a follower starts the first time it is asked for in a tenant and catches up from where it stopped.

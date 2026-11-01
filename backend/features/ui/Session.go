@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"slices"
 	"sync"
@@ -101,10 +102,20 @@ type Session struct {
 	o         Options
 }
 
+// HandlerRunner runs handlers that are graphs (forge 02-Blueprints): a
+// handler id a page has no Go handler for names a published ui.handler
+// graph, run at each event in its latest version.
+type HandlerRunner interface {
+	// RunHandler runs graph id for the event in h; found is false when
+	// there is no such handler graph.
+	RunHandler(h *Handle, id string) (found bool, err error)
+}
+
 // Options are what a session runs with.
 type Options struct {
 	Catalog   map[string]Component
 	Commander Commander
+	Graphs    HandlerRunner // nil runs Go handlers only
 	Subs      *subscribe.Subscriptions
 	Store     SessionStore
 	Send      func(frame any) // to the session's live connection
@@ -124,15 +135,21 @@ func Open(args features.ServiceArgs, id string, page Page, params json.RawMessag
 			s.state = map[string]any{}
 		}
 	}
+	refs := map[string]QueryRef{}
 	if page.Queries != nil {
-		for name, ref := range page.Queries(params) {
-			q := &heldQuery{ref: ref, ready: make(chan struct{})}
-			s.queries[name] = q
-			raw, _ := json.Marshal(ref.Params)
-			if fail := o.Subs.Open(subscribe.OpenArgs{ServiceArgs: args, Query: ref.Query, Params: raw, Sink: &querySink{s: s, name: name, q: q}}); fail != nil {
-				cancel()
-				return nil, fail
-			}
+		refs = page.Queries(params)
+	}
+	// Every page holds its overlay: the nodes commands added to it
+	if o.Subs != nil {
+		refs[overlayQuery] = QueryRef{Query: "ui.overlay", Params: map[string]string{"page": page.ID}}
+	}
+	for name, ref := range refs {
+		q := &heldQuery{ref: ref, ready: make(chan struct{})}
+		s.queries[name] = q
+		raw, _ := json.Marshal(ref.Params)
+		if fail := o.Subs.Open(subscribe.OpenArgs{ServiceArgs: args, Query: ref.Query, Params: raw, Sink: &querySink{s: s, name: name, q: q}}); fail != nil {
+			cancel()
+			return nil, fail
 		}
 	}
 	if rec == nil && page.OnOpen != nil {
@@ -223,13 +240,25 @@ func (s *Session) Event(args features.ServiceArgs, handler string, path []string
 		return
 	}
 	fn := s.page.Handlers[handler]
+	args.Ctx = s.ctx
+	h := &Handle{ServiceArgs: args, Payload: payload, Params: s.params, s: s, request: newID()}
+	if fn == nil && s.o.Graphs != nil {
+		fn = func(h *Handle) error {
+			found, err := s.o.Graphs.RunHandler(h, handler)
+			if !found && err == nil {
+				err = errNoHandler
+			}
+			return err
+		}
+	}
 	if fn == nil {
 		s.o.Send(ErrorFrame{Type: "ui.error", Session: s.id, Handler: handler, Code: http.StatusNotFound, Message: "this page has no handler " + handler, ErrorCode: "unknown_handler"})
 		return
 	}
-	args.Ctx = s.ctx
-	h := &Handle{ServiceArgs: args, Payload: payload, Params: s.params, s: s, request: newID()}
-	if err := fn(h); err != nil {
+	if err := fn(h); errors.Is(err, errNoHandler) {
+		s.o.Send(ErrorFrame{Type: "ui.error", Session: s.id, Handler: handler, Code: http.StatusNotFound, Message: "this page has no handler " + handler, ErrorCode: "unknown_handler"})
+		return
+	} else if err != nil {
 		f := args.Fail(http.StatusInternalServerError, Log.Wrapf(err, "%s: handler %s failed", s.page.ID, handler))
 		s.o.Send(ErrorFrame{Type: "ui.error", Session: s.id, Handler: handler, Code: f.Code, Message: f.Message, ErrorCode: f.ErrorCode})
 	}
@@ -310,13 +339,19 @@ func (s *Session) queryChanged(name string) {
 	}
 }
 
-// renderRoot renders the whole page.
+// errNoHandler is a handler that is neither Go nor a graph.
+var errNoHandler = errors.New("no such handler")
+
+// renderRoot renders the whole page, with the nodes its overlay adds.
 func (s *Session) renderRoot() *Node {
 	s.pending = map[*Node]*region{}
 	r := &Render{s: s, deps: map[string]bool{}}
 	root := s.page.Render(r)
 	if root == nil {
 		root = N("mui.box", "root")
+	}
+	if o := r.Query(overlayQuery); o != nil {
+		applyOverlay(root, o)
 	}
 	s.rootDeps = r.deps
 	s.regions = s.pending

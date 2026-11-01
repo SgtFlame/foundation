@@ -7,15 +7,29 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 )
 
+// described fills in the metadata every node type needs.
+func described(list []NodeType) []NodeType {
+	for i := range list {
+		t := &list[i]
+		t.Description, t.Example = "test node "+t.ID, "a test"
+		for _, pins := range [][]Pin{t.Pins.In, t.Pins.Out} {
+			for j := range pins {
+				pins[j].Description = "a pin"
+			}
+		}
+	}
+	return list
+}
+
 func types() []NodeType {
-	return []NodeType{
+	return described([]NodeType{
 		{Descriptor: extensions.Descriptor{ID: "start"}, Title: "Start", Event: true,
 			Pins: Pins{Out: []Pin{ExecPin(Then, ""), DataPin("s", "S", "string", "")}}},
 		{Descriptor: extensions.Descriptor{ID: "step"}, Title: "Step",
 			Pins: Pins{In: []Pin{ExecPin(Then, ""), DataPin("s", "S", "string", "")}, Out: []Pin{ExecPin(Then, ""), DataPin("n", "N", "number", "")}}},
 		{Descriptor: extensions.Descriptor{ID: "pure"}, Title: "Pure",
 			Pins: Pins{In: []Pin{DataPin("x", "X", Any, "")}, Out: []Pin{DataPin("y", "Y", "string", "")}}},
-	}
+	})
 }
 
 func e(from, fromPin, to, toPin string) Edge {

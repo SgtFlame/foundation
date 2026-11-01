@@ -1,16 +1,21 @@
-// Package hello is the Hello app, written in Go to prove the live core and
-// the server-driven UI (forge 01-ServerUI): a shared counter and a shared
-// graph, each one aggregate with its commands, events, projector and
-// query, and two pages, the app's own tab and an item opened as its own
-// top-level tab. From 02-Blueprints on, apps declare these as blueprints.
+// Package hello is the Hello app, which proves the live core, the
+// server-driven UI (forge 01-ServerUI) and blueprints (forge 02-Blueprints):
+// a shared counter and a shared graph, each one aggregate with its
+// projector, and two pages, the app's own tab and an item opened as its
+// own top-level tab. Its handlers, the counter's command and its query are
+// graphs (graphs/*.json), built in and editable: a tenant's published
+// versions replace them. The shared graph's commands and query, and the
+// render functions, stay Go until records (03) and prefabs (04).
 package hello
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"slices"
 
 	"github.com/SgtFlame/foundation/backend/features/authz"
+	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/ui"
@@ -151,31 +156,9 @@ func Contribute(reg *extensions.Registry) {
 			return json.Marshal(c)
 		},
 	})
-	live.Commands.Register(reg, live.Command{
-		Descriptor: extensions.Descriptor{ID: "hello.increment", Source: "hello"}, Title: "Increment the counter",
-		Description: "Adds one (or args.by) to a Hello counter; everyone viewing it sees the new value.",
-		Args:        json.RawMessage(`{"type":"object","properties":{"by":{"type":"integer","minimum":1,"maximum":100,"description":"How much to add; 1 when left out"}}}`),
-		Examples:    []json.RawMessage{json.RawMessage(`{"by":1}`)},
-		Events:      []string{"incremented"}, Area: area, TargetType: "counter", Projection: "hello.counter", Action: "hello.write",
-		Decide: func(d live.Decision) ([]live.NewEvent, []live.Problem) {
-			var args struct{ By int }
-			_ = json.Unmarshal(d.Args, &args)
-			if args.By == 0 {
-				args.By = 1
-			}
-			return []live.NewEvent{{Type: "incremented", Data: map[string]int{"by": args.By}}}, nil
-		},
-	})
-	live.Queries.Register(reg, live.Query{
-		Descriptor: extensions.Descriptor{ID: "hello.counter", Source: "hello"}, Title: "A Hello counter",
-		Description: "A Hello counter's value: {value}.", Params: idSchema, Examples: []json.RawMessage{json.RawMessage(`{"id":"main"}`)}, Action: "hello.read",
-		Run: func(f live.Feed) error {
-			return live.ValueOf("hello.counter", func(f live.Feed) (string, error) {
-				id, err := idParam(f.Params())
-				return "counter." + id, err
-			}, json.RawMessage(`{"value":0}`))(f)
-		},
-	})
+	// The counter's command (hello.increment) and query (hello.counter)
+	// are graphs, as are the pages' handlers (graphs/*.json)
+	contributeGraphs(reg)
 
 	// The graph
 	live.Projectors.Register(reg, live.Projector{
@@ -266,4 +249,26 @@ func Contribute(reg *extensions.Registry) {
 	})
 
 	contributePages(reg)
+}
+
+//go:embed graphs/*.json
+var graphFiles embed.FS
+
+// contributeGraphs registers the app's graphs as editable built-ins.
+func contributeGraphs(reg *extensions.Registry) {
+	entries, err := graphFiles.ReadDir("graphs")
+	if err != nil {
+		panic(err)
+	}
+	for i, e := range entries {
+		raw, err := graphFiles.ReadFile("graphs/" + e.Name())
+		if err != nil {
+			panic(err)
+		}
+		var g cognition.Graph
+		if err := json.Unmarshal(raw, &g); err != nil {
+			panic(fmt.Sprintf("hello graph %s: %v", e.Name(), err))
+		}
+		cognition.Graphs.Register(reg, cognition.BuiltIn{Descriptor: extensions.Descriptor{ID: g.ID, Order: 500 + i, Source: "hello"}, Graph: g, Editable: true})
+	}
 }

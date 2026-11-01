@@ -26,11 +26,27 @@ type toy struct {
 
 func (t *toy) contribute(reg *extensions.Registry) {
 	cognitionnodes.Contribute(reg)
-	cognition.Nodes.Register(reg, cognition.NodeType{
+	t.register(reg)
+	t.registerData(reg)
+}
+
+// described registers a node type with the metadata every one needs.
+func described(reg *extensions.Registry, n cognition.NodeType) {
+	n.Description, n.Example = "test node "+n.ID, "a test"
+	for _, pins := range [][]cognition.Pin{n.Pins.In, n.Pins.Out} {
+		for j := range pins {
+			pins[j].Description = "a pin"
+		}
+	}
+	cognition.Nodes.Register(reg, n)
+}
+
+func (t *toy) register(reg *extensions.Registry) {
+	described(reg, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "test.start"}, Title: "Start", Event: true,
 		Pins: cognition.Pins{Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("n", "N", "number", ""), cognition.DataPin("s", "S", "string", "")}},
 	})
-	cognition.Nodes.Register(reg, cognition.NodeType{
+	described(reg, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "test.append"}, Title: "Append",
 		Pins: cognition.Pins{
 			In:  []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("s", "S", "string", ""), {ID: "n", Name: "N", Type: "number", Optional: true}},
@@ -42,7 +58,7 @@ func (t *toy) contribute(reg *extensions.Registry) {
 			return cognition.Values{"s": s + strings.Repeat("!", n) + "@" + x.Meta.NodeID}, cognition.Then, nil
 		},
 	})
-	cognition.Nodes.Register(reg, cognition.NodeType{
+	described(reg, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "test.double"}, Title: "Double",
 		Pins: cognition.Pins{In: []cognition.Pin{cognition.DataPin("n", "N", "number", "")}, Out: []cognition.Pin{cognition.DataPin("n", "N", "number", "")}},
 		Run: func(_ *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
@@ -51,7 +67,7 @@ func (t *toy) contribute(reg *extensions.Registry) {
 			return cognition.Values{"n": 2 * n, "big": uint64(1) << 60}, "", err
 		},
 	})
-	cognition.Nodes.Register(reg, cognition.NodeType{
+	described(reg, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "test.flag"}, Title: "Flag",
 		Pins: cognition.Pins{In: []cognition.Pin{cognition.DataPin("s", "S", "string", "")}, Out: []cognition.Pin{cognition.DataPin("b", "B", "bool", "")}},
 		Run: func(_ *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
@@ -59,11 +75,33 @@ func (t *toy) contribute(reg *extensions.Registry) {
 			return cognition.Values{"b": s == "go"}, "", nil
 		},
 	})
-	cognition.Nodes.Register(reg, cognition.NodeType{
+	described(reg, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "test.fail"}, Title: "Fail",
 		Pins: cognition.Pins{In: []cognition.Pin{cognition.ExecPin(cognition.Then, "")}, Out: []cognition.Pin{cognition.ExecPin(cognition.Then, "")}},
 		Run: func(*cognition.Exec, cognition.Values) (cognition.Values, string, error) {
 			return nil, "", errors.New("boom")
+		},
+	})
+}
+
+func (t *toy) registerData(reg *extensions.Registry) {
+	described(reg, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: "test.list"}, Title: "List",
+		Pins: cognition.Pins{Out: []cognition.Pin{cognition.DataPin("out", "Out", cognition.Any, "")}},
+		Run: func(*cognition.Exec, cognition.Values) (cognition.Values, string, error) {
+			return cognition.Values{"out": []any{"a", "b", "c"}}, "", nil
+		},
+	})
+	described(reg, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: "test.concat"}, Title: "Concat",
+		Pins: cognition.Pins{
+			In:  []cognition.Pin{{ID: "a", Name: "A", Type: "string", Optional: true}, cognition.DataPin("b", "B", "string", "")},
+			Out: []cognition.Pin{cognition.DataPin("out", "Out", "string", "")},
+		},
+		Run: func(_ *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
+			a, _ := cognition.Get[string](in, "a")
+			b, err := cognition.Get[string](in, "b")
+			return cognition.Values{"out": a + b}, "", err
 		},
 	})
 }
@@ -78,7 +116,7 @@ func returns(typ string) json.RawMessage {
 
 // linear: start → a → b → return, with a pure double node feeding both a and b.
 func linear() cognition.Graph {
-	return cognition.Graph{Name: "Linear", Kind: cognition.KindFunction, Version: 3,
+	return cognition.Graph{Name: "Linear", Kind: "test", Version: 3,
 		Nodes: []cognition.Node{
 			{ID: "start", Type: "test.start"}, {ID: "double", Type: "test.double"},
 			{ID: "a", Type: "test.append"}, {ID: "b", Type: "test.append"},
@@ -107,7 +145,9 @@ func newEngine(t *testing.T, graphs map[string]cognition.Graph) (*Engine, *toy, 
 	for id, g := range graphs {
 		cognition.Graphs.Register(reg, cognition.BuiltIn{Descriptor: extensions.Descriptor{ID: id}, Graph: g})
 	}
-	return New(gdb, reg, nil), tt, gdb
+	e := New(gdb, reg, nil)
+	t.Cleanup(e.purges.Wait)
+	return e, tt, gdb
 }
 
 func args() features.ServiceArgs {
@@ -246,4 +286,90 @@ type sections struct{ cognition string }
 
 func (s sections) Resolved(features.ServiceArgs, string) (json.RawMessage, error) {
 	return json.RawMessage(s.cognition), nil
+}
+
+func varConfig(id string) json.RawMessage {
+	return json.RawMessage(`{"variable": "` + id + `", "type": "string"}`)
+}
+
+func TestForEachRunsItsBodyPerItemWithVariables(t *testing.T) {
+	g := cognition.Graph{
+		Variables: []cognition.Variable{{ID: "acc", Name: "Acc", Type: "string", Default: ">"}},
+		Nodes: []cognition.Node{
+			{ID: "start", Type: "test.start"}, {ID: "list", Type: "test.list"}, {ID: "fe", Type: "flow.forEach"},
+			{ID: "get", Type: "data.getVariable", Config: varConfig("acc")}, {ID: "cat", Type: "test.concat"},
+			{ID: "set", Type: "data.setVariable", Config: varConfig("acc")},
+			{ID: "get2", Type: "data.getVariable", Config: varConfig("acc")}, {ID: "ret", Type: "flow.return", Config: returns("string")},
+		},
+		Edges: []cognition.Edge{
+			edge("start", "then", "fe", "then"), edge("list", "out", "fe", "list"),
+			edge("fe", "body", "set", "then"), edge("get", "value", "cat", "a"), edge("fe", "item", "cat", "b"), edge("cat", "out", "set", "value"),
+			edge("fe", "completed", "ret", "then"), edge("get2", "value", "ret", "out"),
+		},
+	}
+	e, _, gdb := newEngine(t, map[string]cognition.Graph{"g": g})
+	res, err := e.Run(RunArgs{ServiceArgs: args(), GraphID: "g", Event: "test.start"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := res.Outputs["out"]; got != ">abc" {
+		t.Errorf("out = %v, want >abc", got)
+	}
+	var contexts []string
+	gdb.Model(&cognition.Step{}).Where("run_id = ? AND node_id = ?", res.RunID, "cat").Order("seq").Pluck("context", &contexts)
+	if strings.Join(contexts, " ") != "forEach:fe[0] forEach:fe[1] forEach:fe[2]" {
+		t.Errorf("the body's pure node ran in contexts %v, want one per iteration", contexts)
+	}
+}
+
+func TestEdgesConvertNumbersToText(t *testing.T) {
+	g := cognition.Graph{
+		Nodes: []cognition.Node{{ID: "start", Type: "test.start"}, {ID: "cat", Type: "test.concat"}, {ID: "ret", Type: "flow.return", Config: returns("string")}},
+		Edges: []cognition.Edge{edge("start", "then", "ret", "then"), edge("start", "s", "cat", "a"), edge("start", "n", "cat", "b"), edge("cat", "out", "ret", "out")},
+	}
+	e, _, _ := newEngine(t, map[string]cognition.Graph{"g": g})
+	if res := e.Resolve(g); len(res.Conversions) != 1 || res.Errors() {
+		t.Fatalf("conversions %v, problems %v", res.Conversions, res.Problems)
+	}
+	res, err := e.Run(RunArgs{ServiceArgs: args(), GraphID: "g", Event: "test.start", Inputs: cognition.Values{"s": "go", "n": 2.0}})
+	if err != nil || res.Outputs["out"] != "go2" {
+		t.Errorf("out = %v, %v", res.Outputs["out"], err)
+	}
+}
+
+func TestCallGraphRunsTheCalleeAndTracesOnlyFailures(t *testing.T) {
+	callee := cognition.Graph{Kind: cognition.KindFunction,
+		Nodes: []cognition.Node{
+			{ID: "on", Type: "event.call", Config: json.RawMessage(`{"outputs": [{"id": "name", "type": "string", "description": "who"}]}`)},
+			{ID: "cat", Type: "test.concat"}, {ID: "ret", Type: "flow.return", Config: returns("string")},
+		},
+		Edges: []cognition.Edge{edge("on", "then", "ret", "then"), edge("on", "name", "cat", "a"), edge("on", "name", "cat", "b"), edge("cat", "out", "ret", "out")},
+	}
+	e, _, gdb := newEngine(t, map[string]cognition.Graph{"callee": callee})
+	in, out := cognition.SignatureOf(callee, e.NodeTypes())
+	cfg, _ := json.Marshal(map[string]any{"graph": "callee", "inputs": in, "outputs": out})
+	caller := cognition.Graph{ID: "caller",
+		Nodes: []cognition.Node{{ID: "start", Type: "test.start"}, {ID: "call", Type: "flow.callGraph", Config: cfg}, {ID: "ret", Type: "flow.return", Config: returns("string")}},
+		Edges: []cognition.Edge{edge("start", "then", "call", "then"), edge("start", "s", "call", "name"), edge("call", "then", "ret", "then"), edge("call", "out", "ret", "out")},
+	}
+	res, err := e.Run(RunArgs{ServiceArgs: args(), Graph: &caller, Event: "test.start", Inputs: cognition.Values{"s": "ab"}, Trace: TraceFailures})
+	if err != nil || res.Outputs["out"] != "abab" {
+		t.Fatalf("out = %v, %v", res.Outputs["out"], err)
+	}
+	var runs int64
+	gdb.Model(&cognition.Run{}).Count(&runs)
+	if res.Traced || runs != 0 || e.Untraced(args(), "caller") != 1 || e.Untraced(args(), "callee") != 1 {
+		t.Errorf("traced %v, %d runs stored, untraced %d/%d; want none stored and both counted", res.Traced, runs, e.Untraced(args(), "caller"), e.Untraced(args(), "callee"))
+	}
+
+	failing := cognition.Graph{ID: "failing", Nodes: []cognition.Node{{ID: "start", Type: "test.start"}, {ID: "a", Type: "test.fail"}},
+		Edges: []cognition.Edge{edge("start", "then", "a", "then")}}
+	res, err = e.Run(RunArgs{ServiceArgs: args(), Graph: &failing, Event: "test.start", Trace: TraceFailures})
+	if err == nil || !res.Traced {
+		t.Fatalf("a failing run is traced: %v, %v", res.Traced, err)
+	}
+	var run cognition.Run
+	if gdb.First(&run, res.RunID).Error != nil || run.FailedNode != "a" {
+		t.Errorf("failed run = %+v", run)
+	}
 }

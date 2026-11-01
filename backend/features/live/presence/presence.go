@@ -114,6 +114,24 @@ func (p *Presence) Clear(ctx context.Context, tenant uint64, object, conn string
 	}
 }
 
+// Here reports whether anyone is present in object, e.g. a graph open in
+// an editor.
+func (p *Presence) Here(ctx context.Context, tenant uint64, object string) bool {
+	kv, err := p.bucket(ctx, tenant)
+	if err != nil {
+		return false
+	}
+	keys, err := kv.ListKeysFiltered(ctx, object+".*")
+	if err != nil {
+		return false
+	}
+	defer keys.Stop()
+	for range keys.Keys() {
+		return true
+	}
+	return false
+}
+
 // Contribute registers the live.presence query, given the store once made.
 func Contribute(reg *extensions.Registry, presence func() *Presence) {
 	live.Queries.Register(reg, live.Query{

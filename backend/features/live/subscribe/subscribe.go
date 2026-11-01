@@ -29,6 +29,9 @@ type Sink interface {
 type Subscriptions struct {
 	store live.Store
 	reg   *extensions.Registry
+	// Resolve finds a query no feature registered, such as one a tenant's
+	// published query graph defines (live/nodes).
+	Resolve func(args features.ServiceArgs, typ string) (live.Query, bool)
 }
 
 func New(store live.Store, reg *extensions.Registry) *Subscriptions {
@@ -59,6 +62,9 @@ type OpenArgs struct {
 // args.Ctx ends.
 func (s *Subscriptions) Open(args OpenArgs) *features.ServiceResponse {
 	q, ok := s.Query(args.Query)
+	if !ok && s.Resolve != nil {
+		q, ok = s.Resolve(args.ServiceArgs, args.Query)
+	}
 	if !ok {
 		return args.Fail(http.StatusNotFound, log.Code("unknown_query").Errorf("there is no query %q", args.Query))
 	}

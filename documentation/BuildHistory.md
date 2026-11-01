@@ -384,6 +384,77 @@ Each slice ends with something to look at, and the ★ marks where a decision is
       - one `incompatible-library` lint warning on `mui.table`.
     - **Building**: as in slices 11 and 12, link with `GOGC=25 GOFLAGS=-ldflags=-s` while other large processes run.
 
+14. **Cognition's editing pass** (for Forge iteration 2, [forge 02-Blueprints.md](../../forge/documentation/plans/02-Blueprints.md)). *Built.* ★ two people editing one graph ([Cognition.md](Cognition.md#built-in-slice-14)).
+    - **The model and engine**. *Built*:
+      - graph kinds (`cognition.kind`);
+      - node metadata required (an example, pin descriptions);
+      - implicit conversions (`cognition.conversion`) and `cognition.Catalog`;
+      - execution contexts with Sequence, For each and Loop;
+      - On call and Call graph;
+      - variables, reroutes and comment frames;
+      - published graphs from a `GraphSource`, editable built-ins, loop and call-depth limits, and trace-on-failure.
+    - **Drafts**. *Built* (`cognition/drafts`):
+      - a graph's draft as an aggregate on the `def` stream, changed by thirteen `bp.*` commands;
+      - publishing as an event, with the `cognition.graph` and `cognition.published` projections;
+      - the `cognition.graph` and `cognition.graphs` queries;
+      - `bp.test`, and the catalog tools;
+      - `live.Command.Report`, so a `bp.*` tool returns the draft's problems.
+    - **The Cognition Editor**. *Built*:
+      - editable, over the live query, with optimistic commands and per-user undo;
+      - drag, connect, delete, copy and paste;
+      - the Palette and Variables tabs, and a toolbar with Validate, Publish, Duplicate and Export;
+      - other authors' avatars and selections;
+      - a live Explorer with New and Import;
+      - `GraphEditor`, for Forge's Blueprint Editor.
+    - **Blockers**: none left. Its **Before** questions were answered before building:
+      - forge 02-Blueprints 5: drafts by commands, revising Cognition 2;
+      - 1: kinds in Cognition proper;
+      - 7: versions as events and KV;
+      - 9: two slices.
+    - **★ review pending**: editing with someone else, undo, the Palette, and publishing were seen in headless Chromium with two accounts, but not by a person. To review: run Forge's `serve` and Axiom's `yarn dev`, set up two accounts, and open Forge › Blueprints (or the Cognition side view) in two browsers.
+    - **Decisions to review after seeing it**: in [Cognition.md](Cognition.md#decisions-to-review-after-seeing-it-1).
+    - **Pending, carried forward**: the Prompt Editor, debugging, `Parallel`, Replay, the version picker and diff, collapse to sub-graph, and node-config schema forms ([plans/Cognition.md](plans/Cognition.md#todo)).
+15. **Blueprints** (Forge iteration 2). *Built.* ★ the Blueprint Editor with two users, and the Hello app run by graphs ([Blueprints.md](Blueprints.md)).
+    - **Kinds and nodes**. *Built*:
+      - `ui.handler` and `prefab.logic` (`ui/nodes`); `command`, `data.query`, `server.action` and `app.trigger` (`live/nodes`);
+      - the UI, command and data node families, and the Expression node on `expr-lang/expr`;
+      - `prefab.logic` and `app.trigger` as kinds and events only.
+    - **Running them**. *Built*:
+      - published command and query graphs resolved by the bus and the subscriptions;
+      - handler ids in trees naming graphs, run in the session;
+      - tree overlays (`ui.insertNode`, `ui.removeNode`);
+      - the `live.command` tool.
+    - **The Hello app** is made of graphs: nine handlers, `cmd-hello-increment` and `qry-hello-counter`, as editable built-ins.
+    - **In Forge**: the Blueprint Editor (kind `blueprint`, Test and Owner tabs), Forge › Blueprints, and `serve.go` wired as Foundation's (forge `documentation/BlueprintEditor.md`).
+    - **Blockers**: none left. Its **Before** questions were answered before building: 02-Blueprints 2 (`expr`), 3 (switch at the next event), 4 (trace while open or failing), 6 (generic record commands, with command graphs where needed) and 8 (`app.trigger` deferred).
+    - **★ review pending**:
+      - The acceptance ran through commands in `ui/hello`'s test, not through a model: a Reset button, its command graph and its handler were built and published, and worked in an open tab; republishing took effect at the next click.
+      - In headless Chromium, Ada's published change to *On increment* reached Bob's open Hello tab.
+      - To review: handler latency, how another author's edits read on the canvas, and the Blueprint Editor beside the Cognition Editor.
+    - **Decisions to review after seeing it**: in [Blueprints.md](Blueprints.md#decisions-to-review-after-seeing-it).
+    - **Pending, carried forward** ([forge 02-Blueprints.md](../../forge/documentation/plans/02-Blueprints.md#todo)):
+      - the layout and graph nodes;
+      - Navigate and Focus;
+      - Subscribe;
+      - the presence nodes;
+      - Get props;
+      - actions as tools;
+      - Send command's sequence;
+      - runs of `prefab.logic` (04) and `app.trigger` (07).
+    - **Light scheme**: the editor's controls are hard to read in a light colour scheme, the app-wide dark-preference issue ([plans/Backlog.md](plans/Backlog.md)).
+
+16. **Entity types** (Forge iteration 3, part 3a, [forge 03a-EntityTypes.md](../../forge/documentation/plans/03a-EntityTypes.md)). *Built.* No ★ of its own: the rename demo is seen in the Data Designer (3c) ([Records.md](Records.md)).
+    - **Built**:
+      - `features/records`: entity types, field types and `records.Check`;
+      - `records/entities`: the `entity.*` commands on the `def` stream, the `records.entity` and `records.entityPublished` projections, the `entity.describe` and `entity.list` queries, and the follower that copies published versions into `records_entity_versions`;
+      - `records/tools`, and `entityservice` under `/records/entities`;
+      - `project.Projections.Follow`;
+      - the `Entities.ts` client;
+      - the wiring, in Foundation's `serve.go` and Forge's.
+    - **Blockers**: none left. Its **Before** questions were answered before building: forge 03-DataModel 5 (drafts in KV, published versions in SQLite) and 8 (a slice per Foundation part).
+    - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it).
+    - **Pending, carried forward**: `entity.delete` and changing a field's type, both decided with the records (forge 03b).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -404,4 +475,7 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 11. RBAC | none (RBAC 1 answered: as proposed; 2: allow-only; 5: no content; 7, found while reading: the `Admin` flag becomes *Super Administrator*) | RBAC 3 (groups, not built), 4 and 6 (built on their proposals); the decisions in [RBAC.md](RBAC.md#decisions-to-review-after-seeing-it), to review after seeing |
 | 12. Secrets from Vault | none (Secrets 1 answered: a wrapped, single-use SecretID; 7, found while reading: keys at every scope; 5 was answered with RBAC 7 before slice 11) | Secrets 3, 4 and 6 (built on their proposals) and 2 (not built); the decisions in [Secrets.md](Secrets.md#decisions-to-review-after-seeing-it), to review after seeing |
 | 13. Live core and server UI (Forge 1) | forge 01-ServerUI 1, 2, 3, 4, 5, 6, 8 and 9 (all answered) | 01-ServerUI 7 (concurrent edits to one property), not reached by the Hello app; the decisions in [Live.md](Live.md#decisions-to-review-after-seeing-it) and [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it), to review after seeing |
+| 14. Cognition's editing pass (Forge 2) | forge 02-Blueprints 5 (drafts by commands, revising Cognition 2), 1, 7 and 9 (all answered) | the decisions in [Cognition.md](Cognition.md#decisions-to-review-after-seeing-it-1), to review after seeing |
+| 15. Blueprints (Forge 2) | forge 02-Blueprints 2, 3, 4, 6 and 8 (all answered) | 01-ServerUI 7 (concurrent edits to one property): a node's config is replaced whole, the later command winning; the decisions in [Blueprints.md](Blueprints.md#decisions-to-review-after-seeing-it), to review after seeing |
+| 16. Entity types (Forge 3a) | forge 03-DataModel 5 (drafts in KV, published versions in SQLite) and 8 (a slice per part), both answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it), to review after seeing |
 

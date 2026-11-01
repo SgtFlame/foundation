@@ -13,9 +13,7 @@ Cognition makes chat logic data: a graph designed visually, like Unreal Engine B
   - **variables**: per-run state;
   - **nodes**: `{ id, type, position, config }`;
   - **edges**: `{ from: node.pin, to: node.pin }`.
-- **Storage**:
-  - `CognitionGraph`: name, kind (`mode` | `agent` | `function` | `summarizer`), owner and scope (see [MultiTenant.md](MultiTenant.md)).
-  - `CognitionGraphVersion`: an immutable JSON snapshot with a version number. A **draft** is edited in place. **Publishing** freezes a version, and modes and callers always reference a published version, so editing never breaks a running chat.
+- **Storage, drafts and publishing** are built: drafts changed by `bp.*` commands, published versions in KV, kinds on `cognition.kind` ([Cognition.md › Built in slice 14](../Cognition.md#built-in-slice-14)). Still to come: scopes and shares on graphs ([MultiTenant.md](MultiTenant.md)), and a version picker.
 - **Built-in graphs**:
   - *Personal* (the Chronicle pipeline) and *Document chat* are seeded as read-only built-ins.
   - "Duplicate" makes an editable copy.
@@ -187,7 +185,7 @@ The **Nexus** is the Cognition component where agents collaborate: a shared, str
 - **Toolbar**: Run, Debug, Step, Continue, Stop, Validate, Publish, and a version picker with a diff against the published version.
 - **Editing**:
   - **Undo/redo**, copy and paste (also between graphs), multi-select, minimap and zoom.
-  - **Saving**: drafts autosave with a revision, so there is no explicit save. Old run traces expire under the retention policy or are deleted per run.
+  - **Saving**: every change is a command (built in slice 14). Old run traces expire under the retention policy or are deleted per run.
 - **Node views**: node bodies are rendered from `Meta()` and `Pins()`. A frontend contribution `cognition.nodeView` can supply a custom body, such as Reconcile's +/- controls or a Prompt node's template selector.
 
 ## Relation to other plans
@@ -202,23 +200,19 @@ The **Nexus** is the Cognition component where agents collaborate: a shared, str
 1. **Nexus storage**: the proposal is streams as markdown files in a Volume (see [Nexus](#nexus)). Or should they be database rows only? This must be answered **before** the Nexus slice (slice 9, skipped for now: its plan is not fleshed out yet). *Decision*:
 3. **Background runs**: can graphs run without a chat (schedules, Nexus triggers), and should they be durable across server restarts? A durable job queue would revive the NATS question. Forge's plans propose JetStream durable consumers on an embedded NATS server for this ([Forge 07-Email.md](../../../forge/documentation/plans/07-Email.md), [11-Zapier.md](../../../forge/documentation/plans/11-Zapier.md), [03-DataModel.md](../../../forge/documentation/plans/03-DataModel.md)). *Decision*:
 
-(Questions 2, 4 and 5 are decided; see [Cognition.md › Decisions](../Cognition.md#decisions).)
+(Questions 2, 4 and 5 are decided; see [Cognition.md › Decisions](../Cognition.md#decisions). Question 2 was revised before slice 14: drafts are changed by commands.)
 
 ### Review after seeing it ★
 - **The editor's look and feel** (slice 7), with a real model and with use. Runs were made against a stub of the Gemini API, so traces show canned stage 1 choices and memory updates. It was seen in a headless browser, light and dark, but not yet judged by a person, and not tried on a graph larger than Personal. Chat for a while with a key set, then open AgentOS › Cognition (or the Cognition side view) and review.
-- **The decisions made while building**, in [Cognition.md › Decisions to review after seeing it](../Cognition.md#decisions-to-review-after-seeing-it).
+- **The editing pass** (slice 14): editing a graph with someone else, undo, the Palette and Variables tabs, and publishing. Seen in headless Chromium with two accounts, not yet by a person.
+- **The decisions made while building**, in [Cognition.md › Decisions to review after seeing it](../Cognition.md#decisions-to-review-after-seeing-it) (slice 7) and [after slice 14](../Cognition.md#decisions-to-review-after-seeing-it-1).
 
 ### Not built yet
 - **The Nexus slice** (slice 9): streams, the `Reconcile` node, the Nexus tab and `nexusservice`, with the `nexus.read`/`nexus.write` tools ([Tools.md](Tools.md)). ★ how streams and reconciliation feel. Needs question 1 first.
-- **Editing passes**:
-  - editing as shared Yjs drafts (question 2's decision), publishing, and a graph table (`CognitionGraph`, `CognitionGraphVersion`); duplicate, export and import;
-  - the Prompt Editor and the prompt library (`PromptTemplate`, `promptservice`), with the global helpers of question 4;
-  - Debug and Single-step, breakpoints, and editing captured values while paused;
-  - loops (`For each`, `Loop`, `Parallel`) and the iteration picker;
-  - Replay with pinned LLM outputs.
+- **Editing passes**: the Prompt Editor and the prompt library (`PromptTemplate`, `promptservice`), with the global helpers of question 4; Debug and Single-step, breakpoints, and editing captured values while paused; `Parallel` and the iteration picker; Replay with pinned LLM outputs. Drafts by commands, publishing, kinds, the Palette, variables, loops, Call graph, conversions, undo, copy and paste, reroutes and comment frames are built ([Cognition.md › Built in slice 14](../Cognition.md#built-in-slice-14)).
 - **`Send` as a mode graph**: `chat.modes`, the `Stream reply` and `Emit …` nodes ([ChatCompletion.md](ChatCompletion.md)).
-- **Engine**: the run token and cost limits (through usage records); implicit conversions; blob files for large values; live traces while running (`step`, `paused`, `done` over SSE); running from the editor (`Run`, async); `Call graph`, `Wait for user` (on the tool confirmation mechanism), the rest of the node library, and every tool as a node.
-- **Editor**: the Palette side view, `cognition.nodeView` custom node bodies, the toolbar (Run, Debug, Step, Continue, Stop, Validate, Publish, the version picker), editing tools (reroute, comment frames, collapse to sub-graph, undo/redo, copy and paste), tool calls in the Log Viewer, and a link from a chat round to its runs.
+- **Engine**: the run token and cost limits (through usage records); blob files for large values; live traces while running (`step`, `paused`, `done` over SSE); running from the editor (`Run`, async; `bp.test` runs a draft once); `Wait for user` (on the tool confirmation mechanism), the rest of the node library, and every tool as a node.
+- **Editor**: `cognition.nodeView` custom node bodies, the toolbar's Run, Debug, Step, Continue and Stop, the version picker with a diff (older versions are only in the event stream), collapse to sub-graph, align and distribute, a schema form for node configs, dragging a comment frame with what it holds, tool calls in the Log Viewer, and a link from a chat round to its runs.
 - **Logging**: each `RunStep` logging a summary record with `trace` = the run ID, so runs show in the Log Explorer ([Logging.md](Logging.md)).
-- **Access**: `graph.execute` and `graph.publish`, shares on graphs and Nexuses, and narrowing a run to the resources a graph lists ([RBAC.md](RBAC.md)).
+- **Access**: shares on graphs and Nexuses (`cognition.write` and `cognition.publish` exist, on the tenant), and narrowing a run to the resources a graph lists ([RBAC.md](RBAC.md)).
 - Refusing client tools in graphs that run in the background ([WorkbenchContext.md](WorkbenchContext.md)).

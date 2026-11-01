@@ -122,6 +122,12 @@ func (h *Handle) Set(path string, v any) {
 	h.s.changed = append(h.s.changed, "state."+path)
 }
 
+// Value reads the event's payload at a dotted path.
+func (h *Handle) Value(path string) any { return getPath(h.Payload, path) }
+
+// Page is the page the handler runs on.
+func (h *Handle) Page() Page { return h.s.page }
+
 // String reads a payload value as a string.
 func (h *Handle) String(name string) string {
 	s, _ := h.Payload[name].(string)

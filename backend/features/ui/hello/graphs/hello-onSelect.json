@@ -1,0 +1,60 @@
+{
+  "id": "hello-onSelect",
+  "name": "On select",
+  "description": "Keeps the nodes the user selected in view state.",
+  "kind": "ui.handler",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "ui.onEvent",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "nodes",
+            "type": "any",
+            "description": "The selected nodes' ids"
+          }
+        ]
+      }
+    },
+    {
+      "id": "set",
+      "type": "ui.setState",
+      "position": {
+        "x": 300,
+        "y": 0
+      },
+      "config": {
+        "path": "selected"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "set",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "nodes"
+      },
+      "to": {
+        "node": "set",
+        "pin": "value"
+      }
+    }
+  ]
+}

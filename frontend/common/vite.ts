@@ -21,6 +21,7 @@ const routes = [
   'bootstrap',
   'live',
   'ui',
+  'records',
 ]
 
 // The Vite configuration every app built on common needs

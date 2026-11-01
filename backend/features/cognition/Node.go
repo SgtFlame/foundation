@@ -33,6 +33,11 @@ var Types = extensions.NewPoint[DataType](
 type BuiltIn struct {
 	extensions.Descriptor
 	Graph Graph
+	// Editable built-ins are defaults: the first command on one in a
+	// tenant starts the tenant's draft from it, and its published version
+	// takes the built-in's place there. Others are read-only, and are
+	// changed by duplicating them.
+	Editable bool
 }
 
 // DataType is a type a data pin carries; its Descriptor's ID is the type's
@@ -56,6 +61,22 @@ type NodeType struct {
 	Color       string          // the header's CSS colour; empty takes the category's
 	Event       bool            // starts runs: its outputs are the run's inputs
 	Config      json.RawMessage // the config's schema, in the config schema language; empty when it has none
+	// Example is how the node is used, for a model and the Palette, e.g.
+	// "Branch on Is admin? to show the admin tools only to admins".
+	Example string
+	// Kinds are the graph kinds it may be used in; empty allows every kind
+	// (cognition.Kind.Allows).
+	Kinds []string
+	// Effects is set on nodes with side effects (model calls, commands,
+	// writes), which pure kinds such as data.query refuse.
+	Effects bool
+	// Volatile pure nodes are evaluated every time they are pulled, not
+	// once per execution context, e.g. Get variable.
+	Volatile bool
+	// Normalize, when set, completes a node's config as it is added or
+	// changed in a draft, e.g. Call graph copies the called graph's
+	// signature into its config, so its pins follow from it.
+	Normalize func(n Normalizing) (json.RawMessage, error)
 	// Pins are the node's pins. PinsFor, when set, gives them from the
 	// node's config instead, e.g. a Return node's outputs.
 	Pins    Pins
@@ -156,20 +177,98 @@ func Get[T any](v Values, id string) (T, error) {
 	return out, nil
 }
 
+// Normalizing is what Normalize gets: the node's config and a way to read
+// the tenant's other graphs.
+type Normalizing struct {
+	features.ServiceArgs
+	Config json.RawMessage
+	Graph  func(id string) (Graph, bool)
+	// Signature is a graph's inputs and outputs (SignatureOf).
+	Signature func(g Graph) (in, out []Pin)
+}
+
 // Exec is what a node sees of the run while it runs.
 type Exec struct {
 	// ServiceArgs are the run's, with Meta naming the run and the node, so
 	// the usage a node causes is attributed to it.
 	features.ServiceArgs
-	RunID  uint64
-	Node   Node
-	result Values
+	RunID uint64
+	Node  Node
+	// Host is what the run acts on, given by whoever started it: a UI
+	// session's handle for a ui.handler, a command's decision for a
+	// command graph; nil for a chat mode.
+	Host any
+	Vars Values // the run's variables, by ID
+	// MaxIterations is how many times a loop may run its body (the
+	// cognition section's maxLoopIterations).
+	MaxIterations int
+	result        Values
+	Hooks         ExecHooks
+}
+
+// ExecHooks are the engine's, for flow nodes.
+type ExecHooks struct {
+	// Flow runs the exec chain leaving the node by pin to its end, in a new
+	// execution context named frame when it is not empty (a loop's
+	// iteration), and returns when the chain ends.
+	Flow func(pin, frame string) error
+	// Set publishes the node's outputs before it returns, so a loop's body
+	// reads the current item.
+	Set func(out Values)
+	// Pull evaluates a data input again, in the execution context named
+	// frame when it is not empty, so a loop's condition sees the iteration.
+	Pull func(pin, frame string) (any, error)
+	// Call runs another graph from its On call event and returns its
+	// outputs.
+	Call func(graphID string, inputs Values) (Values, error)
 }
 
 // NewExec is the Exec of a node in run runID; the engine makes them.
 func NewExec(args features.ServiceArgs, runID uint64, node Node, result Values) *Exec {
 	args.Meta.RunID, args.Meta.NodeID = runID, node.ID
-	return &Exec{ServiceArgs: args, RunID: runID, Node: node, result: result}
+	return &Exec{ServiceArgs: args, RunID: runID, Node: node, result: result, Vars: Values{}}
+}
+
+// Flow runs the chain leaving by pin (see ExecHooks.Flow).
+func (x *Exec) Flow(pin, frame string) error {
+	if x.Hooks.Flow == nil {
+		return fmt.Errorf("%s needs the engine to run its %s chain", x.Node.ID, pin)
+	}
+	return x.Hooks.Flow(pin, frame)
+}
+
+// Set publishes outputs before the node returns (see ExecHooks.Set).
+func (x *Exec) Set(out Values) {
+	if x.Hooks.Set != nil {
+		x.Hooks.Set(out)
+	}
+}
+
+// Pull evaluates an input again (see ExecHooks.Pull).
+func (x *Exec) Pull(pin, frame string) (any, error) {
+	if x.Hooks.Pull == nil {
+		return nil, fmt.Errorf("%s needs the engine to pull %s", x.Node.ID, pin)
+	}
+	return x.Hooks.Pull(pin, frame)
+}
+
+// Call runs another graph (see ExecHooks.Call).
+func (x *Exec) Call(graphID string, inputs Values) (Values, error) {
+	if x.Hooks.Call == nil {
+		return nil, fmt.Errorf("%s needs the engine to call graph %s", x.Node.ID, graphID)
+	}
+	return x.Hooks.Call(graphID, inputs)
+}
+
+// Config decodes the node's config into v; an empty config leaves v as it is.
+func (x *Exec) Config(v any) error {
+	if len(x.Node.Config) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(x.Node.Config, v); err != nil {
+		return fmt.Errorf("the node's config is not valid: %w", err)
+	}
+	return nil
 }
 
 // Return sets the run's outputs, as a Return node does.

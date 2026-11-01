@@ -5,6 +5,7 @@ go 1.27.1
 require (
 	github.com/apache/arrow/go/v17 v17.0.0
 	github.com/coder/websocket v1.8.15
+	github.com/expr-lang/expr v1.17.8
 	github.com/gin-gonic/gin v1.12.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/golang-jwt/jwt/v5 v5.2.2

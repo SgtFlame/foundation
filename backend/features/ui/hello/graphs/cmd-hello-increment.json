@@ -1,0 +1,106 @@
+{
+  "id": "cmd-hello-increment",
+  "name": "hello.increment",
+  "description": "Decides an increment of a Hello counter: one, or args.by.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "by",
+            "type": "any",
+            "description": "How much to add; 1 when left out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "by",
+      "type": "data.expression",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "config": {
+        "expr": "{by: by ?? 1}",
+        "type": "json"
+      },
+      "title": "Add 1"
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "position": {
+        "x": 600,
+        "y": 0
+      },
+      "config": {
+        "event": "incremented"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "by"
+      },
+      "to": {
+        "node": "by",
+        "pin": "by"
+      }
+    },
+    {
+      "from": {
+        "node": "by",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    }
+  ],
+  "spec": {
+    "command": "hello.increment",
+    "title": "Increment the counter",
+    "description": "Adds one (or args.by) to a Hello counter; everyone viewing it sees the new value.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "by": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "How much to add; 1 when left out"
+        }
+      }
+    },
+    "area": "app_hello",
+    "targetType": "counter",
+    "projection": "hello.counter",
+    "action": "hello.write",
+    "events": [
+      "incremented"
+    ]
+  }
+}

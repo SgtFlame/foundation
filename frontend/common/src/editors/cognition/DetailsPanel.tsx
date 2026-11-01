@@ -1,4 +1,5 @@
-import { Alert, Box, Chip, Divider, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { useState } from 'react'
+import { Alert, Box, Button, Chip, Divider, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import JsonView from '../../components/json/JsonView.tsx'
 import type { Pin, Truncated } from '../../services/Cognition.ts'
 import { formatDuration } from '../../tabs/devtools/network/format.ts'
@@ -60,24 +61,103 @@ function PinChip({ pin }: { pin: Pin }) {
   )
 }
 
+// A JSON value edited as text: Apply sends it; another author's change to
+// the value resets the text (the editor is keyed by the value)
+function JsonEditor({ label, value, disabled, onApply }: { label: string; value: unknown; disabled: boolean; onApply: (v: unknown) => void }) {
+  const [text, setText] = useState(() => JSON.stringify(value ?? {}, null, 2))
+  const [error, setError] = useState<string>()
+  const apply = () => {
+    try {
+      onApply(JSON.parse(text || '{}'))
+      setError(undefined)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+  return (
+    <Box sx={{ mt: 1 }}>
+      <TextField
+        label={label}
+        multiline
+        minRows={2}
+        maxRows={14}
+        fullWidth
+        size="small"
+        value={text}
+        disabled={disabled}
+        onChange={(e) => setText(e.target.value)}
+        error={!!error}
+        helperText={error}
+        slotProps={{ htmlInput: { style: { fontFamily: 'monospace', fontSize: 12 } } }}
+      />
+      {!disabled && text !== JSON.stringify(value ?? {}, null, 2) && (
+        <Button size="small" onClick={apply} sx={{ mt: 0.5 }}>
+          Apply
+        </Button>
+      )}
+    </Box>
+  )
+}
+
+// A text field that sends its value when it loses focus
+function TextSetting({ label, value, disabled, multiline, onCommit }: { label: string; value: string; disabled: boolean; multiline?: boolean; onCommit: (v: string) => void }) {
+  const [text, setText] = useState(value)
+  return (
+    <TextField
+      label={label}
+      size="small"
+      fullWidth
+      multiline={multiline}
+      value={text}
+      disabled={disabled}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => text !== value && onCommit(text)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !multiline) (e.target as HTMLElement).blur()
+      }}
+      sx={{ mt: 1 }}
+    />
+  )
+}
+
 // The right details panel: the selected node, the selected pin, and the
 // pin's captured value in a chosen run (Handle Data)
 function DetailsPanel() {
   const state = useCognition()
-  const { graph, pins, problems, nodeTypes, selection, trace, runs, runId, setRunId } = state
+  const { graph, pins, problems, nodeTypes, selection, trace, runs, runId, setRunId, readOnly, editing, kind } = state
   const node = graph.nodes.find((n) => n.id === selection.nodeId)
   if (!node) {
     return (
       <Box sx={{ overflow: 'auto', height: '100%' }}>
         <Section title="Graph">
-          <Typography variant="subtitle2">{state.info.name}</Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
-            {state.info.description}
-          </Typography>
-          <Field label="Kind">{state.info.kind}</Field>
+          <TextSetting key={`n${graph.name}`} label="Name" value={graph.name} disabled={readOnly} onCommit={(name) => editing.apply([{ command: 'bp.setInfo', args: { name } }])} />
+          <TextSetting
+            key={`d${graph.description}`}
+            label="Description"
+            multiline
+            value={graph.description}
+            disabled={readOnly}
+            onCommit={(description) => editing.apply([{ command: 'bp.setInfo', args: { description } }])}
+          />
+          <Box sx={{ mt: 1 }} />
+          <Field label="ID">{graph.id}</Field>
+          <Field label="Kind">{kind?.title ?? state.info.kind}</Field>
+          {kind && <Field label="Returns">{kind.returns}</Field>}
+          {graph.owner && <Field label="Owner">{graph.owner}</Field>}
+          <Field label="Draft">rev {state.view.rev}</Field>
+          {state.view.untraced > 0 && <Field label="Untraced">{state.view.untraced} runs since the server started</Field>}
           <Field label="Version">{state.info.version}</Field>
           <Field label="Nodes">{graph.nodes.length}</Field>
-          {state.info.builtIn && <Field label="Built in">read-only</Field>}
+          {state.info.builtIn && <Field label="Built in">{state.view.readOnly ? 'read-only' : 'yes; your changes replace it here'}</Field>}
+          {!!kind?.spec && (
+            <JsonEditor
+              key={JSON.stringify(graph.spec ?? {})}
+              label="Spec"
+              value={graph.spec}
+              disabled={readOnly}
+              onApply={(spec) => editing.apply([{ command: 'bp.setInfo', args: { spec } }])}
+            />
+          )}
           {problems.map((p, i) => (
             <Alert key={i} severity={p.severity} sx={{ mt: 1 }}>
               {p.nodeId ? `${titleOf(state, p.nodeId)}: ` : ''}
@@ -105,17 +185,30 @@ function DetailsPanel() {
         <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
           {type?.description}
         </Typography>
+        {type?.example && (
+          <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontStyle: 'italic', mb: 1 }}>
+            {type.example}
+          </Typography>
+        )}
         <Field label="ID">{node.id}</Field>
         <Field label="Type">{node.type}</Field>
         <Field label="Category">{type?.category}</Field>
         <Field label="From">{type?.source}</Field>
-        {node.config !== undefined && (
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="caption" sx={{ fontWeight: 600 }}>
-              Config
-            </Typography>
-            <JsonView value={node.config} />
-          </Box>
+        <TextSetting
+          key={`${node.id}/${node.title ?? ''}`}
+          label="Title"
+          value={node.title ?? ''}
+          disabled={readOnly}
+          onCommit={(title) => editing.apply([{ command: 'bp.setConfig', args: { node: node.id, title } }])}
+        />
+        {(type?.config !== undefined || node.config !== undefined) && (
+          <JsonEditor
+            key={`${node.id}/${JSON.stringify(node.config ?? {})}`}
+            label="Config"
+            value={node.config}
+            disabled={readOnly}
+            onApply={(config) => editing.apply([{ command: 'bp.setConfig', args: { node: node.id, config } }])}
+          />
         )}
         {problems
           .filter((p) => p.nodeId === node.id)

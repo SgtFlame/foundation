@@ -1,0 +1,249 @@
+{
+  "id": "hello-onConnect",
+  "name": "On connect",
+  "description": "Joins two ports of the shared graph, unless the user joined a node to itself.",
+  "kind": "ui.handler",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "ui.onEvent",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "source",
+            "type": "string",
+            "description": "The node the edge starts at"
+          },
+          {
+            "id": "sourceHandle",
+            "type": "string",
+            "description": "Its port"
+          },
+          {
+            "id": "target",
+            "type": "string",
+            "description": "The node the edge ends at"
+          },
+          {
+            "id": "targetHandle",
+            "type": "string",
+            "description": "Its port"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "position": {
+        "x": 300,
+        "y": 220
+      },
+      "config": {
+        "expr": "source != target",
+        "type": "bool"
+      },
+      "title": "Can connect?"
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 600,
+        "y": 0
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.makeObject",
+      "position": {
+        "x": 600,
+        "y": 220
+      },
+      "config": {
+        "fields": [
+          "source",
+          "sourceHandle",
+          "target",
+          "targetHandle"
+        ]
+      },
+      "title": "Edge"
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 900,
+        "y": -60
+      },
+      "config": {
+        "command": "hello.connect",
+        "target": "main"
+      }
+    },
+    {
+      "id": "bad",
+      "type": "ui.toast",
+      "position": {
+        "x": 900,
+        "y": 200
+      },
+      "config": {
+        "severity": "warning",
+        "message": "A node cannot be joined to itself."
+      },
+      "title": "Incompatible"
+    },
+    {
+      "id": "toast",
+      "type": "ui.toast",
+      "position": {
+        "x": 1200,
+        "y": 0
+      },
+      "config": {
+        "severity": "error"
+      },
+      "title": "Toast the refusal"
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "source"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "source"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "bad",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "source"
+      },
+      "to": {
+        "node": "args",
+        "pin": "source"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "sourceHandle"
+      },
+      "to": {
+        "node": "args",
+        "pin": "sourceHandle"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "args",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "targetHandle"
+      },
+      "to": {
+        "node": "args",
+        "pin": "targetHandle"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "object"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "toast",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "toast",
+        "pin": "message"
+      }
+    }
+  ]
+}

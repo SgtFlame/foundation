@@ -56,6 +56,9 @@ type Bus struct {
 	locks map[string]*target
 	// Committed hears every commit, for tracing and tests.
 	Committed func(r Request, res Result)
+	// Resolve finds a command no feature registered, such as one a
+	// tenant's published command graph defines (live/nodes).
+	Resolve func(args features.ServiceArgs, typ string) (live.Command, bool)
 }
 
 type target struct {
@@ -78,12 +81,24 @@ func (b *Bus) lock(key string) *target {
 	return t
 }
 
-// Command finds a command type.
+// Command finds a registered command type.
 func (b *Bus) Command(typ string) (live.Command, bool) {
 	for _, c := range live.Commands.All(b.p.Registry()) {
 		if c.ID == typ {
 			return c, true
 		}
+	}
+	return live.Command{}, false
+}
+
+// CommandFor finds a command type as the principal's tenant has it: a
+// registered one, else one Resolve finds.
+func (b *Bus) CommandFor(args features.ServiceArgs, typ string) (live.Command, bool) {
+	if c, ok := b.Command(typ); ok {
+		return c, true
+	}
+	if b.Resolve != nil {
+		return b.Resolve(args, typ)
 	}
 	return live.Command{}, false
 }
@@ -94,7 +109,7 @@ func rejected(problems ...live.Problem) Result {
 
 // Execute decides and commits one command.
 func (b *Bus) Execute(r Request) Result {
-	cmd, ok := b.Command(r.Type)
+	cmd, ok := b.CommandFor(r.ServiceArgs, r.Type)
 	if !ok {
 		return Result{Common: *r.Fail(http.StatusNotFound, log.Code("unknown_command").Errorf("there is no command %q", r.Type))}
 	}

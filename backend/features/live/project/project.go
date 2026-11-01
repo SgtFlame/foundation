@@ -158,6 +158,62 @@ func (p *Projections) run(ctx context.Context, tenant uint64, pr live.Projector,
 	return nil
 }
 
+// Follow runs fn on each event of the tenant's area whose subject matches
+// one of subjects, in order, as the durable consumer fol_<name>: work an
+// event causes outside the projections, such as copying it into SQLite.
+// fn must be idempotent; an error retries the event a second later. Like
+// a projector, a follower starts the first time it is asked for in a
+// tenant, and catches up from where it stopped.
+func (p *Projections) Follow(ctx context.Context, tenant uint64, area live.Area, name string, subjects []string, fn func(live.Event) error) error {
+	key := fmt.Sprintf("%d/follow/%s", tenant, name)
+	p.mu.Lock()
+	started := p.running[key] != nil
+	p.mu.Unlock()
+	if started {
+		return nil
+	}
+	stream, err := p.Stream(ctx, tenant, area)
+	if err != nil {
+		return err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.running[key] != nil || p.stopping {
+		return nil
+	}
+	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+		Durable: "fol_" + strings.ReplaceAll(name, ".", "_"), FilterSubjects: subjects,
+		AckPolicy: jetstream.AckExplicitPolicy, DeliverPolicy: jetstream.DeliverAllPolicy, MaxAckPending: 1, AckWait: 30 * time.Second,
+	})
+	if err != nil {
+		return log.Wrapf(err, "cannot make the consumer of follower %s", name)
+	}
+	cc, err := cons.Consume(func(msg jetstream.Msg) {
+		meta, err := msg.Metadata()
+		var e live.Event
+		if err == nil {
+			err = json.Unmarshal(msg.Data(), &e)
+		}
+		if err != nil {
+			log.Error(p.ctx, err, "follower %s cannot read an event; skipped", name)
+			_ = msg.Term()
+			return
+		}
+		e.Stream, e.Seq = meta.Stream, meta.Sequence.Stream
+		if err := fn(e); err != nil {
+			log.With("subject", msg.Subject()).Error(p.ctx, err, "follower %s failed on event %d; retrying", name, e.Seq)
+			_ = msg.NakWithDelay(time.Second)
+			return
+		}
+		_ = msg.Ack()
+	})
+	if err != nil {
+		return log.Wrapf(err, "cannot start follower %s", name)
+	}
+	p.running[key] = cc
+	return nil
+}
+
 func (p *Projections) fold(pr live.Projector, kv jetstream.KeyValue, msg jetstream.Msg) {
 	ctx := p.ctx
 	meta, err := msg.Metadata()

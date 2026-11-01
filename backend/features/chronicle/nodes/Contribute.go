@@ -60,11 +60,13 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 	}
 
 	node := func(order int, t cognition.NodeType) {
-		t.Order, t.Source, t.Category = order, source, "Chronicle"
+		// They need a chat round's context: only chat modes and summarizers run them
+		t.Order, t.Source, t.Category, t.Kinds = order, source, "Chronicle", []string{cognition.KindMode, cognition.KindSummarizer}
 		cognition.Nodes.Register(reg, t)
 	}
 	node(300, cognition.NodeType{
 		Descriptor:  extensions.Descriptor{ID: "chronicle.settings"},
+		Example:     "Chronicle settings from On user message's Settings, feeding Candidate entries' Checked and Retrieve",
 		Title:       "Chronicle settings",
 		Description: "Reads the conversation's Chronicles settings, with their defaults",
 		Pins: cognition.Pins{
@@ -97,6 +99,7 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 	})
 	node(310, cognition.NodeType{
 		Descriptor:  extensions.Descriptor{ID: "chronicle.candidates"},
+		Example:     "Candidate entries from the message, window and checked entries, before Match context",
 		Title:       "Candidate entries",
 		Description: "Gathers the entries a round may use: the checked ones and their parents, the ones retrieval ranks highest, the ones used last round, and their links",
 		Pins: cognition.Pins{
@@ -104,10 +107,10 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 				cognition.ExecPin(cognition.Then, ""),
 				cognition.DataPin("text", "Text", "string", "The user's message"),
 				cognition.DataPin("window", "Window", conversationnodes.TypeRounds, "The rounds sent as history"),
-				cognition.DataPin("checked", "Checked", TypeEntryRefs, ""),
+				cognition.DataPin("checked", "Checked", TypeEntryRefs, "The entries checked in the Chronicles view, always kept"),
 				cognition.DataPin("retrieve", "Retrieve", "number", "How many entries retrieval adds at most; 0 adds none"),
 			},
-			Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("candidates", "Candidates", TypeCandidates, "")},
+			Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("candidates", "Candidates", TypeCandidates, "The checked entries and the others stage 1 may choose from")},
 		},
 		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
 			args := chroniclesteps.CandidatesIn{ServiceArgs: x.ServiceArgs}
@@ -123,18 +126,20 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 	})
 	node(320, cognition.NodeType{
 		Descriptor:  extensions.Descriptor{ID: "chronicle.match"},
+		Example:     "Match context choosing up to Entries candidates for the reply",
 		Title:       "Match context",
+		Effects:     true,
 		Description: "Stage 1: a fast model call chooses the candidates the reply needs; the checked entries are always kept",
 		Pins: cognition.Pins{
 			In: []cognition.Pin{
 				cognition.ExecPin(cognition.Then, ""),
 				cognition.DataPin("text", "Text", "string", "The user's message"),
 				cognition.DataPin("window", "Window", conversationnodes.TypeRounds, "The rounds sent as history"),
-				cognition.DataPin("candidates", "Candidates", TypeCandidates, ""),
+				cognition.DataPin("candidates", "Candidates", TypeCandidates, "The entries to choose from"),
 				cognition.DataPin("topK", "Entries", "number", "Entries chosen at most, besides the checked ones"),
 				cognition.DataPin("match", "Match", "bool", "False keeps the candidates' order without asking the model"),
 			},
-			Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("selection", "Selection", TypeSelection, "")},
+			Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("selection", "Selection", TypeSelection, "The entries chosen, ranked")},
 		},
 		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
 			args := chroniclesteps.MatchIn{ServiceArgs: x.ServiceArgs}
@@ -148,11 +153,12 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 	})
 	node(330, cognition.NodeType{
 		Descriptor:  extensions.Descriptor{ID: "chronicle.contextItems"},
+		Example:     "Entries as context from Match context's Selection, returned as the mode's items",
 		Title:       "Entries as context",
 		Description: "Turns the chosen entries into pinned, citable context items, each with why it is in the round",
 		Pins: cognition.Pins{
-			In:  []cognition.Pin{cognition.DataPin("selection", "Selection", TypeSelection, "")},
-			Out: []cognition.Pin{cognition.DataPin("items", "Items", conversationnodes.TypeContextItems, "")},
+			In:  []cognition.Pin{cognition.DataPin("selection", "Selection", TypeSelection, "The entries stage 1 chose")},
+			Out: []cognition.Pin{cognition.DataPin("items", "Items", conversationnodes.TypeContextItems, "The entries as pinned context items")},
 		},
 		Run: func(_ *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
 			sel, err := cognition.Get[chroniclesteps.Selection](in, "selection")
@@ -164,11 +170,12 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 	})
 	node(340, cognition.NodeType{
 		Descriptor:  extensions.Descriptor{ID: "chronicle.usedEntries"},
+		Example:     "Used entries from On reply's Segments, feeding Update memory",
 		Title:       "Used entries",
 		Description: "The Chronicle entries among the segments a round injected",
 		Pins: cognition.Pins{
-			In:  []cognition.Pin{cognition.DataPin("segments", "Segments", conversationnodes.TypeSegments, "")},
-			Out: []cognition.Pin{cognition.DataPin("used", "Used", TypeEntryRefs, "")},
+			In:  []cognition.Pin{cognition.DataPin("segments", "Segments", conversationnodes.TypeSegments, "What the round injected")},
+			Out: []cognition.Pin{cognition.DataPin("used", "Used", TypeEntryRefs, "The Chronicle entries among them")},
 		},
 		Run: func(_ *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
 			segments, err := cognition.Get[[]retrieval.RoundSegment](in, "segments")
@@ -188,7 +195,9 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 	})
 	node(350, cognition.NodeType{
 		Descriptor:  extensions.Descriptor{ID: "chronicle.update"},
+		Example:     "Update memory after On reply when Chronicle settings' Update is on",
 		Title:       "Update memory",
+		Effects:     true,
 		Description: "The memory update: rewrites the summaries of the used entries the round adds facts to, and proposes new entries",
 		Config:      json.RawMessage(`{"type": "object", "properties": {"maxProposals": {"type": "integer", "title": "Proposals", "min": 0, "max": 10, "description": "New entries proposed at most"}}}`),
 		Pins: cognition.Pins{
@@ -197,7 +206,7 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 				cognition.DataPin("round", "Round", conversationnodes.TypeRound, "The round to learn from"),
 				cognition.DataPin("used", "Used", TypeEntryRefs, "The entries the round injected: the only ones it may update"),
 			},
-			Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("changes", "Changes", TypeChanges, "")},
+			Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("changes", "Changes", TypeChanges, "The entries changed and proposed")},
 		},
 		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
 			config := struct {

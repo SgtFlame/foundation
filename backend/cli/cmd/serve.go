@@ -37,6 +37,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/chronicle/store/entrystore"
 	chronicletools "github.com/SgtFlame/foundation/backend/features/chronicle/tools"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
+	"github.com/SgtFlame/foundation/backend/features/cognition/drafts"
 	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
 	cognitionnodes "github.com/SgtFlame/foundation/backend/features/cognition/nodes"
 	"github.com/SgtFlame/foundation/backend/features/cognition/rest/cognitionhandlers"
@@ -80,6 +81,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	"github.com/SgtFlame/foundation/backend/features/live/natsd"
+	livenodes "github.com/SgtFlame/foundation/backend/features/live/nodes"
 	"github.com/SgtFlame/foundation/backend/features/live/presence"
 	"github.com/SgtFlame/foundation/backend/features/live/project"
 	"github.com/SgtFlame/foundation/backend/features/live/rest/livehandlers"
@@ -87,6 +89,11 @@ import (
 	livesettings "github.com/SgtFlame/foundation/backend/features/live/settings"
 	"github.com/SgtFlame/foundation/backend/features/live/subscribe"
 	livetools "github.com/SgtFlame/foundation/backend/features/live/tools"
+	"github.com/SgtFlame/foundation/backend/features/records"
+	"github.com/SgtFlame/foundation/backend/features/records/entities"
+	"github.com/SgtFlame/foundation/backend/features/records/rest/entityhandlers"
+	entityimpl "github.com/SgtFlame/foundation/backend/features/records/services/entityservice/impl"
+	recordstools "github.com/SgtFlame/foundation/backend/features/records/tools"
 	"github.com/SgtFlame/foundation/backend/features/logging"
 	"github.com/SgtFlame/foundation/backend/features/logs"
 	"github.com/SgtFlame/foundation/backend/features/logs/rest/logshandlers"
@@ -113,6 +120,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ui"
 	uicomponents "github.com/SgtFlame/foundation/backend/features/ui/components"
 	"github.com/SgtFlame/foundation/backend/features/ui/hello"
+	uinodes "github.com/SgtFlame/foundation/backend/features/ui/nodes"
 	"github.com/SgtFlame/foundation/backend/features/ui/rest/uihandlers"
 	"github.com/SgtFlame/foundation/backend/features/ui/services/uiservice"
 	uiimpl "github.com/SgtFlame/foundation/backend/features/ui/services/uiservice/impl"
@@ -288,7 +296,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		if err != nil {
 			return err
 		}
-		if err := db.Migrate(gdb, slices.Concat(config.Models(), usage.Models(), conversation.Models(), retrieval.Models(), chronicle.Models(), cognition.Models(), tools.Models())...); err != nil { // features add their models here
+		if err := db.Migrate(gdb, slices.Concat(config.Models(), usage.Models(), conversation.Models(), retrieval.Models(), chronicle.Models(), cognition.Models(), tools.Models(), records.Models())...); err != nil { // features add their models here
 			return err
 		}
 
@@ -340,6 +348,11 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var chronicleToolDeps chronicletools.Deps
 		var agentDeps toolsnodes.Deps
 		var liveToolDeps livetools.Deps
+		var draftDeps drafts.Deps
+		var entityDeps entities.Deps
+		var liveSubscriptions *subscribe.Subscriptions
+		var liveNodeDeps livenodes.Deps
+		var uiNodeDeps uinodes.Deps
 		var livePresence *presence.Presence
 		var uiService uiservice.Service
 		var configLive configservice.Service
@@ -347,7 +360,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var conversationLive conversationservice.Service
 		var collabLive collabservice.Service
 		registry := extensions.NewRegistry()
-		registry.Declare(config.Sections, conversation.ContextProviders, conversation.RoundFollowers, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, tools.Tools, authz.ResourceTypes,
+		registry.Declare(config.Sections, conversation.ContextProviders, conversation.RoundFollowers, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, authz.ResourceTypes,
 			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds)
 		// Each feature declares its resource types and their actions
 		authz.Contribute(registry)
@@ -362,6 +375,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		kbservice.ContributeAccess(registry)
 		ui.ContributeAccess(registry)
 		hello.ContributeAccess(registry)
+		records.ContributeAccess(registry)
 		aisettings.Contribute(registry)
 		logssettings.Contribute(registry)
 		usagesettings.Contribute(registry)
@@ -388,7 +402,16 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		if err := uicomponents.Contribute(registry); err != nil {
 			return err
 		}
+		// Blueprints: the graph kinds and nodes of the live core and the UI
+		drafts.Contribute(registry, func() drafts.Deps { return draftDeps })
+		livenodes.Contribute(registry, func() livenodes.Deps { return liveNodeDeps })
+		uinodes.Contribute(registry)
+		ui.ContributeOverlays(registry)
 		hello.Contribute(registry)
+		// Entity types: edited by entity.* commands, published into the
+		// tenant database
+		entities.Contribute(registry, func() entities.Deps { return entityDeps })
+		recordstools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		presence.Contribute(registry, func() *presence.Presence { return livePresence })
 		uitools.Contribute(registry)
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
@@ -595,8 +618,22 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		liveBus := bus.New(projections)
 		subscriptions := subscribe.New(projections, registry)
 		livePresence = presence.New(nats.JS(), userName)
+		// Graph drafts are edited by bp.* commands; the engine runs their
+		// published versions
+		cognitionEngine.SetSource(drafts.Source{Store: projections})
+		draftDeps = drafts.Deps{Engine: cognitionEngine, Projections: projections}
+		// Published command and query graphs are commands and queries like
+		// any other; handlers that are graphs run in the UI sessions
+		liveNodeDeps = livenodes.Deps{Engine: cognitionEngine, Bus: liveBus, Subscriptions: subscriptions, Store: projections, Presence: livePresence}
+		uiNodeDeps = uinodes.Deps{Engine: cognitionEngine, Presence: livePresence}
+		liveBus.Resolve = livenodes.CommandFor(func() livenodes.Deps { return liveNodeDeps })
+		subscriptions.Resolve = livenodes.QueryFor(func() livenodes.Deps { return liveNodeDeps })
 		liveToolDeps = livetools.Deps{Bus: liveBus, Subscriptions: subscriptions}
-		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())))
+		liveSubscriptions = subscriptions
+		entityDeps = entities.Deps{Projections: projections, DB: gdb}
+		entityService := entityimpl.CreateService(entityimpl.WithEntities(entityDeps))
+		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())),
+			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))
 		liveService := liveimpl.CreateService(liveimpl.WithBus(liveBus), liveimpl.WithSubscriptions(subscriptions), liveimpl.WithPresence(livePresence), liveimpl.WithRegistry(registry),
 			liveimpl.WithMaxSubscriptions(func() int {
 				settings, err := config.Read[livesettings.Live](configService, features.BackgroundArgs(ctx), livesettings.ID)
@@ -676,6 +713,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 
 		liveHandler := &livehandlers.LiveHandler{}
 		liveHandler.Register(api, liveService)
+
+		entityHandler := &entityhandlers.EntityHandler{}
+		entityHandler.Register(api, entityService)
 
 		uiHandler := &uihandlers.UiHandler{}
 		uiHandler.Register(api, uiService)

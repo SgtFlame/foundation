@@ -14,7 +14,7 @@ What is built. Each document describes a feature as it works now, with what was 
 | [ChatCompletion.md](ChatCompletion.md) | AgentOS › Chat: conversations and rounds, levels, context providers, citations, feedback, Chronicle memory and the tool loop |
 | [ContextRetrieval.md](ContextRetrieval.md) | The retrieval engine: vector and keyword search over Volumes and Chronicles, fused by RRF and weighted by two dials and by feedback, behind RAG Search |
 | [Chronicle.md](Chronicle.md) | Chronicle memory: entries, stage 1 context matching and the memory update, the Chronicles side view, the entry editor, and sharing |
-| [Cognition.md](Cognition.md) | The Cognition Engine's skeleton (graphs, nodes, traced runs, the built-in *Personal* graph, the `Agent` node) and the read-only Cognition Editor |
+| [Cognition.md](Cognition.md) | The Cognition Engine (graphs, kinds, nodes, loops, traced runs, the built-in *Personal* graph, the `Agent` node), drafts edited by several people at once through `bp.*` commands and published, and the Cognition Editor |
 | [Tools.md](Tools.md) | Function calling: the tool loop, the first server tools, confirmation cards, and client tools that run in the browser |
 | [WorkbenchContext.md](WorkbenchContext.md) | The browser's record of open editors and their subjects, sent to chat as a snapshot, and the client tools that read and act on it |
 | [MultiTenant.md](MultiTenant.md) | Tenants, local accounts and sessions, the application and tenant databases, the global tenant and Chronicle sharing |
@@ -22,4 +22,6 @@ What is built. Each document describes a feature as it works now, with what was 
 | [Secrets.md](Secrets.md) | The sealed start from HashiCorp Vault, `SecretStore`, the operator's scripts, and the write-only Secrets editor |
 | [Live.md](Live.md) | The live core: commands committing events to NATS JetStream, projections in KV, queries as subscriptions, presence, and the one WebSocket per window that carries them, UI sessions, collaboration rooms and chat's calls |
 | [ServerUI.md](ServerUI.md) | Server-driven UI: component trees rendered by the server with binding tracking, sessions kept in NATS KV, the MUI, flexlayout and React Flow renderers, app editor kinds as top-level tabs, and the Hello app |
+| [Blueprints.md](Blueprints.md) | Applications' handlers, commands, queries and actions as Cognition graph kinds, their node families (UI, commands, data, Expression), handlers and command and query graphs run from their published versions, tree overlays, and the Hello app's graphs |
+| [Records.md](Records.md) | Entity types edited by several people at once through `entity.*` commands and read by `entity.describe` and `entity.list` queries, with fields by id, published versions kept in the tenant database, and their chat tools |
 | [BuildHistory.md](BuildHistory.md) | The plans' dependencies, the seams that broke their cycles, and each tracer-bullet slice with what it decided |

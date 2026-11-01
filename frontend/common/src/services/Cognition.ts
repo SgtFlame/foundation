@@ -9,7 +9,9 @@ export { ServiceError } from './http/client.ts'
 // travels as its own JSON document (cognition.Graph). uint64 IDs are
 // strings, since a JavaScript number cannot hold every uint64.
 
-export type GraphKind = 'mode' | 'agent' | 'function' | 'summarizer'
+// A cognition.kind id: 'mode', 'agent', 'function', 'summarizer', and the
+// blueprint kinds such as 'ui.handler' and 'command'
+export type GraphKind = string
 
 export interface GraphInfo {
   id: string
@@ -33,14 +35,30 @@ export interface GraphNode {
   config?: unknown
 }
 
+export interface Edge {
+  from: PinRef
+  to: PinRef
+}
+
+export interface Variable {
+  id: string
+  name: string
+  type: string
+  default?: unknown
+  description?: string
+}
+
 export interface Graph {
   id: string
   name: string
   description: string
   kind: GraphKind
   version: number
+  owner?: string // what it belongs to, e.g. app:hello
+  spec?: Record<string, unknown> // what its kind needs, e.g. a command graph's command
+  variables?: Variable[]
   nodes: GraphNode[]
-  edges: { from: PinRef; to: PinRef }[]
+  edges: Edge[]
 }
 
 export interface Pin {
@@ -75,6 +93,71 @@ export interface NodeType {
   config?: unknown // the config's schema
   pins: Pins
   pinsFromConfig?: boolean // its pins follow each node's config: GetGraph has them
+  example: string
+  kinds?: string[] // the graph kinds it may be used in; absent is every kind
+  effects?: boolean // side effects, which pure kinds refuse
+}
+
+export interface Kind {
+  id: string
+  title: string
+  description: string
+  returns: string
+  events?: string[] // the events that may start it; absent is any
+  pure?: boolean
+  spec?: unknown // the spec's JSON Schema
+}
+
+export interface Conversion {
+  from: string
+  to: string
+}
+
+// Whether a graph of kind k may hold a node of type t (cognition.Kind.Allows)
+export function allows(k: Kind | undefined, t: NodeType): boolean {
+  if (!k) return true
+  if (t.kinds?.length && !t.kinds.includes(k.id)) return false
+  if (t.event && k.events?.length && !k.events.includes(t.id)) return false
+  return !(k.pure && t.effects)
+}
+
+// The cognition.graph query's result: a draft, resolved
+export interface GraphView {
+  graph: Graph
+  pins: Record<string, Pins>
+  problems: Problem[]
+  conversions: { node: string; pin: string; from: string; to: string }[]
+  rev: number // 0 for a built-in nobody changed here
+  published: number
+  publishedRev: number
+  builtIn: boolean
+  readOnly: boolean
+  updatedBy?: string
+  updatedAt?: string
+  untraced: number
+}
+
+// One graph in the cognition.graphs query, keyed "graph.<id>"
+export interface GraphSummary {
+  id: string
+  name: string
+  description: string
+  kind: GraphKind
+  owner?: string
+  published: number
+  rev: number
+  changed: boolean
+  builtIn: boolean
+  readOnly: boolean
+}
+
+// What bp.test returns
+export interface TestResult {
+  runId: string
+  outputs: Record<string, unknown>
+  report?: unknown
+  error?: string
+  nodeId?: string
 }
 
 export interface DataType {
@@ -145,6 +228,8 @@ export interface GetGraphResponse extends ResponseStatus {
 export interface NodeTypesResponse extends ResponseStatus {
   nodeTypes: NodeType[]
   types: DataType[]
+  kinds: Kind[]
+  conversions: Conversion[]
 }
 
 export interface ListRunsRequest {

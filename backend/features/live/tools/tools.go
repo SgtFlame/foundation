@@ -68,6 +68,27 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	for _, c := range live.Commands.All(reg) {
 		tools.Tools.Register(reg, commandTool(c, deps))
 	}
+	// Commands a tenant defines, such as its command graphs, have no tool
+	// of their own
+	tools.Tools.Register(reg, tools.Tool{
+		Descriptor: extensions.Descriptor{ID: "live.command", Source: "live"}, Title: "Send a command", Effect: tools.EffectWrite,
+		Description: "Sends any command by its type, including those a tenant's published command graphs define (list them with live.query cognition.graphs {kind: \"command\"}). Registered commands also have a tool of their own.",
+		Input:       json.RawMessage(`{"type":"object","properties":{"command":{"type":"string"},"target":{"type":"string","description":"The id of the object to change"},"args":{"type":"object"}},"required":["command","target"]}`),
+		Run: func(call tools.Call) (tools.Result, error) {
+			args, err := tools.Decode[struct {
+				Command, Target string
+				Args            json.RawMessage
+			}](call)
+			if err != nil {
+				return tools.Result{}, err
+			}
+			res := deps().Bus.Execute(bus.Request{ServiceArgs: call.ServiceArgs, ID: commandID(call), Type: args.Command, Target: args.Target, RequestID: call.ID, Args: args.Args})
+			if res.Common.Code >= 300 {
+				return tools.Result{Content: map[string]any{"problems": res.Problems}}, fmt.Errorf("%s", res.Common.Message)
+			}
+			return tools.Result{Content: map[string]any{"stream": res.Stream, "seq": res.Seq}, Summary: "Sent " + args.Command}, nil
+		},
+	})
 }
 
 func commandTool(c live.Command, deps func() Deps) tools.Tool {
@@ -87,7 +108,11 @@ func commandTool(c live.Command, deps func() Deps) tools.Tool {
 			if res.Common.Code >= 300 {
 				return tools.Result{Content: map[string]any{"problems": res.Problems}}, fmt.Errorf("%s", res.Common.Message)
 			}
-			return tools.Result{Content: map[string]any{"stream": res.Stream, "seq": res.Seq}, Summary: c.Title}, nil
+			content := map[string]any{"stream": res.Stream, "seq": res.Seq}
+			if c.Report != nil {
+				content["report"] = c.Report(call.ServiceArgs, live.Target{Area: c.Area, Type: c.TargetType, ID: args.Target}, res.Seq)
+			}
+			return tools.Result{Content: content, Summary: c.Title}, nil
 		},
 	}
 }

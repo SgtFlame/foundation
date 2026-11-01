@@ -1,5 +1,7 @@
 import { createContext, useContext } from 'react'
-import type { DataType, GetTraceResponse, Graph, GraphInfo, NodeType, Pins, Problem, Run } from '../../services/Cognition.ts'
+import type { PresentUser } from '../../live/index.ts'
+import type { Conversion, DataType, GetTraceResponse, Graph, GraphInfo, GraphView, Kind, NodeType, Pins, Problem, Run } from '../../services/Cognition.ts'
+import type { DraftEditing } from './editing.ts'
 
 // What is selected in the editor: a node, and optionally one of its pins.
 // The canvas, the Log Viewer and the details panel share it.
@@ -21,7 +23,20 @@ export interface NodeStats {
 }
 
 export interface CognitionState {
+  graphId: string
   info: GraphInfo
+  view: GraphView
+  editing: DraftEditing
+  readOnly: boolean // a built-in that is not editable, or no cognition.write
+  kinds: Map<string, Kind>
+  kind?: Kind // the graph's
+  conversions: Conversion[]
+  // The nodes selected on the canvas, which presence shares; selection.nodeId
+  // is the one the details panel shows
+  selectedNodes: string[]
+  setSelectedNodes: (ids: string[]) => void
+  others: PresentUser[] // the other windows in the graph, with their selections
+  openGraph?: (graphId: string, name: string) => void // opens another graph, e.g. a copy
   graph: Graph
   pins: Record<string, Pins>
   problems: Problem[]
@@ -63,6 +78,10 @@ const categoryColors: Record<string, string> = {
   LLM: '#1565c0',
   Retrieval: '#00695c',
   Nexus: '#0d47a1',
+  Data: '#2e7d32',
+  Notes: '#795548',
+  UI: '#ad1457',
+  Commands: '#e65100',
 }
 
 // The header colour of a node type
@@ -112,4 +131,11 @@ export function reachedBy(graph: Graph, pins: Record<string, Pins>, event: strin
   }
   visit(event)
   return reached
+}
+
+// Whether an output of type from may feed an input of type to, as it is or
+// converted (cognition.Catalog.Connects)
+export function connects(conversions: Conversion[], from: string | undefined, to: string | undefined): boolean {
+  if (from === to || from === 'any' || to === 'any') return true
+  return conversions.some((c) => c.from === from && c.to === to)
 }
