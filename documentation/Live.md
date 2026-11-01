@@ -17,7 +17,7 @@ Decided while building:
 - **Sequences are per stream.** A position is a map from stream to sequence (`live.Position`), and an ack names its stream. A subscription resumed with `after` gets a fresh snapshot, not a replay of changes.
 - **Commands on one target are decided one at a time in each process.** Before deciding, the bus waits up to 2 seconds for the projection to reflect the target's last commit, so a command reads its predecessor's state. Committing still uses JetStream's *expected last subject sequence* over the target's subjects (`evt.<t>.<area>.<type>.<id>.*`). On a conflict (another instance, or a projection behind after a restart) it waits for the projection to catch up and decides again, three times at most, then fails with `409 conflict`.
 - **Duplicates are dropped by command id** (`Nats-Msg-Id`, a 10-minute window). A resent command that was already committed is acknowledged with its original sequence and `duplicate: true`. A resent command whose Decide finds nothing to change commits nothing and is acknowledged with the current sequence.
-- **A command's several events are chained, not atomic.** Each expects the previous one's sequence. Atomic batches wait for [forge 03-DataModel question 4](../../forge/documentation/plans/03-DataModel.md).
+- **A command's several events are chained, not atomic.** Each expects the previous one's sequence. *Replaced in slice 22* by atomic batches ([Built in slice 22](#built-in-slice-22)).
 - **Projections are idempotent.** Each value is stored as `{stream, seq, value}`, and an event whose sequence is not above the stored one is skipped. A deleted value keeps its sequence. Projectors run as durable consumers with `MaxAckPending: 1`, so events fold strictly in order. A projector starts the first time its bucket is used in a tenant.
 - **Who is present comes from a query**, `live.presence`, not from a dedicated `presence {object, users}` frame as the plan drew it, so it resumes like every other subscription. Expired keys send no update, so the query also prunes entries older than the time to live.
 - **Calls** are the one transport for request-and-stream work: `call {id, call, args}` → `event {id, event, data}`… → `end {id, code}`, and `cancel {id}`. Chat's `ai.chat.stream` and `conversation.send` are calls.
@@ -147,3 +147,37 @@ For live record queries ([Records.md](Records.md#built-in-slice-19)):
 - `project.Projections.Folded(ctx, tenant, projector)` is the position the projector has folded, its consumer's ack floor. A snapshot read after it reflects at least that position.
 - In the browser, `Delta` has the same ops and fields, `applyDelta` applies list changes, and `useQuery` moves its `pos` on `reached` without changing its data.
 
+## Built in slice 22
+Forge's part 3h ([forge 03h-Transactions.md](../../forge/documentation/plans/03h-Transactions.md)): a command's several events commit as one **atomic batch**, on its own target and on other targets it read, so a command can change several records together or not at all.
+
+### Decisions
+The plan had no open questions before building (its question 4, whether a batch is enough for a ledger, waits for forge's QuickBooks iteration). Decided while building:
+- **One event is published alone, several as a batch.** A commit of one event is atomic already, and keeps the plain publish with its duplicate ack. Two or more use JetStream's atomic batch publish (NATS 2.12 and later; the embedded server is 2.15.2): all are stored, one after another, or none is.
+- **nats.go has no batch API yet**, so `project.PublishBatch(ctx, conn, msgs)` sends the `Nats-Batch-Id`, `Nats-Batch-Sequence` and `Nats-Batch-Commit` headers itself, one request per message, and returns a refusal as a `*jetstream.APIError`. A batch holds at most 1000 messages (`project.MaxBatch`, the server's limit); a command deciding more is rejected with a problem.
+- **Events may name other targets in the command's area** (`live.NewEvent.Target`); a batch is one stream, so another area is refused. `live.Decision.Read(projection, target)` reads another target's state, waiting like the command's own target for this process's last commit on it.
+- **Every event carries its target's expected sequence**: the sequence its state was read at, or for a target the decision did not read, the target's last event in the stream when committing. If any check fails, nothing is stored and the command is decided again, after each target's projection has caught up with its actual last event.
+- **A retry after a conflict holds every target the batch changes.** The first decision locks only the command's own target, as before. After a conflict the bus locks all its targets, in key order (all again when one more is needed), so commands crossing each other (a transfer from A to B against one from B to A) are decided one at a time in this process instead of failing with `409 conflict` after three tries. A command holding one lock never waits for another, so this cannot deadlock.
+- **A resent batch is a duplicate.** Every event keeps its message id (`<command id>`, then `#1`, `#2`…), and JetStream refuses a batch that holds a stored id (error 10201) without saying where it was stored. The ack is then `duplicate: true` with the last sequence of the batch's targets, which a client waiting for its write reaches no earlier than the original.
+- **Each event of a batch says so**: `live.Event.Batch {index, count}`. The events are stored in one run, so `Batch.Range(seq)` is the batch's first and last sequence.
+- **Projectors write a batch at once.** When a projector folds a batch's first event it reads the rest of the batch it folds from the stream (`stream.GetMsg`, skipping types it does not fold), folds them in order, runs `Keep` for each key, and writes every changed key in one atomic batch on the bucket's stream, each expecting the revision it read. A read never sees half a batch, and a crash cannot leave one half written; the batch's later events are then skipped as already folded. Each value keeps the sequence of its own last event, so a command's expected sequence still matches the stream. A batch that spans two projectors is written atomically by each, not across them.
+- **Streams and buckets allow atomic batches**: `Stream` makes event streams with `AllowAtomicPublish`, and `Bucket` turns it on for a projection's `KV_` stream, upgrading those made before.
+
+### Backend
+- `live`: `NewEvent.Target`, `Decision.Read`, `Event.Batch` and `Batch.Range`.
+- `live/project`: `PublishBatch`, `BatchAck`, `MaxBatch`, `IsConflict` (wrong last sequence, also the constant form), the error codes `ErrCodeBatchDuplicate` and `ErrCodeAtomicDisabled`; the batch fold.
+- `live/bus`: `commit` builds the messages with their headers and publishes one alone or all as a batch; `hold`/`release` lock targets in key order; conflicts read each target's last event with `GetLastMsgForSubject`.
+
+### Verification of slice 22
+- `backend/scripts/build.sh --test ./features/...` passes, so every existing live core, blueprint (drafts commit several events when editing a built-in) and records test passes over batch commits. Forge's `backend/scripts/build.sh` builds.
+- `live/bus/batch_test.go`, over a bank of accounts whose `bank.transfer` debits its target and credits another it reads:
+  - a transfer commits two events marked `batch {1, 2}` and `{2, 2}`, the ack names the second, both balances move, and a resent transfer is a duplicate that stores nothing;
+  - **acceptance**: while a transfer is decided, another command deposits into the account it credits; the batch fails its sequence check and nothing of it is stored, then it is decided again and committed whole (the stream holds the deposit, then both events of the transfer);
+  - a batch whose second message expects a stale sequence stores neither message;
+  - a subscriber watching both accounts during 60 concurrent transfers in both directions sees each transfer's two changes together, and when the first arrives the other account already shows it. With the projector writing a batch's values one by one instead, this fails in 5 runs of 5;
+  - a stream and bucket made without atomic batches are upgraded on first use.
+
+### Decisions to review after seeing it
+- A subscription's changes for a batch's records go out as separate `change` frames, one after another with nothing between. A browser could render between two of them; grouping a batch's changes into one frame waits until a page shows it matters (the task list, forge 3i).
+- A resent batch's ack names its targets' last sequence rather than its own.
+- A retry locks all of a command's targets; the first decision still locks only its own.
+- A batch spanning two projectors is atomic within each, not across them.

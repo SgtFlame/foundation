@@ -103,15 +103,36 @@ type Event struct {
 	UserID    uint64          `json:"userId,string,omitempty"`
 	TenantID  uint64          `json:"tenantId,string"`
 	Time      time.Time       `json:"time"`
+	// Batch is set on each event of a commit of several: they were
+	// committed together, as one atomic batch.
+	Batch *Batch `json:"batch,omitempty"`
 	// Set when read back from the stream.
 	Stream string `json:"-"`
 	Seq    uint64 `json:"-"`
+}
+
+// Batch is an event's place in the atomic batch it was committed in: the
+// batch's events are stored one after another, so the first is at the
+// event's sequence less Index-1.
+type Batch struct {
+	Index int `json:"index"` // from 1
+	Count int `json:"count"`
+}
+
+// Range is the stream sequences of the batch an event at seq is in.
+func (b Batch) Range(seq uint64) (first, last uint64) {
+	first = seq - uint64(b.Index-1)
+	return first, first + uint64(b.Count) - 1
 }
 
 // NewEvent is what a command's Decide returns.
 type NewEvent struct {
 	Type string
 	Data any
+	// Target, when set, is the event's target in place of the command's: a
+	// command may change several targets in its own area, and their events
+	// commit together or not at all.
+	Target *Target
 }
 
 // Problem is why a command was rejected, in a form a model can act on.
@@ -131,6 +152,10 @@ type Decision struct {
 	Target Target
 	State  json.RawMessage
 	Args   json.RawMessage
+	// Read is another target's state in a projection (nil when it has
+	// none), for a command whose events change it: the commit then expects
+	// it unchanged since, as it does the command's own target.
+	Read func(projection string, t Target) (json.RawMessage, error)
 }
 
 // Command is one command type. Its Descriptor's ID is the type, e.g.
@@ -160,7 +185,8 @@ type Command struct {
 	Action   string
 	Resource func(p features.Principal, target Target) string
 	// Decide returns the events to commit, or problems. It may run again
-	// when another command committed on the target in between.
+	// when another command committed on the target (or a target it read)
+	// in between. Several events commit as one atomic batch.
 	Decide func(d Decision) ([]NewEvent, []Problem)
 	// Report, when set, is what the command's tool returns after a commit
 	// at seq, beside the sequence: a graph draft's problems, for example,

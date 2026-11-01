@@ -2,14 +2,21 @@
 // Commands): it authorizes a command, reads its target's projected state,
 // runs Decide and publishes the events with JetStream's expected last
 // subject sequence, deciding again when someone else committed in between.
+// A command's several events, on its target and on others it read, are
+// published as one atomic batch.
 package bus
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
@@ -17,6 +24,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/project"
 	"github.com/SgtFlame/foundation/backend/features/tools"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -50,7 +58,8 @@ type Result struct {
 }
 
 // Bus decides commands. Commands on one target are decided one at a time
-// in this process, so a busy target rarely conflicts.
+// in this process, so a busy target rarely conflicts; a command decided
+// again after a conflict also holds every other target it changes.
 type Bus struct {
 	p     *project.Projections
 	mu    sync.Mutex
@@ -64,7 +73,7 @@ type Bus struct {
 
 type target struct {
 	mu   sync.Mutex
-	last uint64 // the last sequence this process committed on the target
+	last atomic.Uint64 // the last sequence this process committed on the target
 }
 
 func New(p *project.Projections) *Bus {
@@ -149,32 +158,62 @@ func (b *Bus) Execute(r Request) Result {
 		return Result{Common: *r.Fail(http.StatusInternalServerError, err)}
 	}
 	streamName := stream.CachedInfo().Config.Name
-	lock := b.lock(fmt.Sprintf("%d/%s/%s", tenant, cmd.Area, tg.Key()))
-	lock.mu.Lock()
-	defer lock.mu.Unlock()
+	// The command's target is locked, and after a conflict every target its
+	// events change, so the next decision is the only one in this process
+	held := b.hold(nil, []string{b.lockKey(tenant, tg)})
+	defer func() { b.release(held) }()
 
-	wait := lock.last
+	// wait is the sequence each target's projection must reflect before
+	// it is read: this process's last commit on it, or what a conflict
+	// showed was committed since
+	wait := map[string]uint64{}
+	waitFor := func(t live.Target) uint64 {
+		return max(wait[t.Key()], b.lock(b.lockKey(tenant, t)).last.Load())
+	}
 	for try := 0; try < Tries; try++ {
-		state, err := b.p.WaitFor(ctx, tenant, cmd.Projection, tg.Key(), wait, catchUp)
+		state, err := b.p.WaitFor(ctx, tenant, cmd.Projection, tg.Key(), waitFor(tg), catchUp)
 		if err != nil {
 			return Result{Common: *r.Fail(http.StatusInternalServerError, err)}
 		}
-		events, problems := cmd.Decide(live.Decision{ServiceArgs: r.ServiceArgs, Target: tg, State: state.Value, Args: r.Args})
+		read := map[string]uint64{tg.Key(): state.Seq} // the sequence each target was read at
+		d := live.Decision{ServiceArgs: r.ServiceArgs, Target: tg, State: state.Value, Args: r.Args}
+		d.Read = func(projection string, t live.Target) (json.RawMessage, error) {
+			if t.Area != cmd.Area {
+				return nil, log.Code("other_area").Errorf("%s changes targets in the %s area only, not %s", r.Type, cmd.Area, t.Area)
+			}
+			v, err := b.p.WaitFor(ctx, tenant, projection, t.Key(), waitFor(t), catchUp)
+			if err != nil {
+				return nil, err
+			}
+			if seq, ok := read[t.Key()]; !ok || v.Seq < seq {
+				read[t.Key()] = v.Seq
+			}
+			return v.Value, nil
+		}
+		events, problems := cmd.Decide(d)
 		if len(problems) > 0 {
 			return rejected(problems...)
 		}
 		if len(events) == 0 {
 			return Result{Common: features.OK(), Stream: streamName, Target: tg.ID, Seq: state.Seq}
 		}
-		res, conflict, err := b.commit(r, tg, streamName, state.Seq, events)
+		res, conflict, err := b.commit(r, cmd, tg, stream, read, events)
 		if conflict {
-			wait = max(state.Seq+1, conflictSeq(err)) // someone committed since: decide again once projected
+			// Someone committed since: decide again once projected
+			var keys []string
+			for _, t := range targets(tg, events) {
+				wait[t.Key()] = max(wait[t.Key()], read[t.Key()]+1, b.lastSeq(ctx, stream, tenant, t))
+				keys = append(keys, b.lockKey(tenant, t))
+			}
+			held = b.hold(held, keys)
 			continue
 		}
 		if err != nil {
+			if p, ok := problemOf(err); ok {
+				return rejected(p)
+			}
 			return Result{Common: *r.Fail(http.StatusInternalServerError, log.Wrapf(err, "cannot commit %s", r.Type))}
 		}
-		lock.last = res.Seq
 		if b.Committed != nil {
 			b.Committed(r, res)
 		}
@@ -183,55 +222,161 @@ func (b *Bus) Execute(r Request) Result {
 	return Result{Common: *r.Fail(http.StatusConflict, log.Code("conflict").Errorf("%s on %s kept conflicting with other changes; try again", r.Type, tg.Key()))}
 }
 
-// commit publishes the events, the first expecting the target's last
-// sequence to be the one the state was read at, and each later one the
-// previous one's. A command's several events are not yet one atomic batch
-// (03-DataModel question 4).
-func (b *Bus) commit(r Request, tg live.Target, stream string, seq uint64, events []live.NewEvent) (Result, bool, error) {
+// hold locks keys, keeping those held already. Locks are taken in key
+// order, all again when one more is needed, so two commands waiting on each
+// other's targets cannot deadlock; a command holding one lock never waits
+// for another.
+func (b *Bus) hold(held map[string]*target, keys []string) map[string]*target {
+	missing := false
+	for _, k := range keys {
+		if held[k] == nil {
+			missing = true
+		}
+	}
+	if !missing {
+		return held
+	}
+	all := slices.Collect(maps.Keys(held))
+	for _, k := range keys {
+		if held[k] == nil {
+			all = append(all, k)
+		}
+	}
+	slices.Sort(all)
+	b.release(held)
+	out := map[string]*target{}
+	for _, k := range all {
+		t := b.lock(k)
+		t.mu.Lock()
+		out[k] = t
+	}
+	return out
+}
+
+func (b *Bus) release(held map[string]*target) {
+	for _, t := range held {
+		t.mu.Unlock()
+	}
+}
+
+func (b *Bus) lockKey(tenant uint64, t live.Target) string {
+	return fmt.Sprintf("%d/%s/%s", tenant, t.Area, t.Key())
+}
+
+// targets is every target the events change, the command's own first.
+func targets(tg live.Target, events []live.NewEvent) []live.Target {
+	out := []live.Target{tg}
+	for _, ne := range events {
+		if ne.Target != nil && !slices.Contains(out, *ne.Target) {
+			out = append(out, *ne.Target)
+		}
+	}
+	return out
+}
+
+// lastSeq is the sequence of the target's last event in the stream, 0
+// when it has none.
+func (b *Bus) lastSeq(ctx context.Context, stream jetstream.Stream, tenant uint64, t live.Target) uint64 {
+	m, err := stream.GetLastMsgForSubject(ctx, t.Subjects(tenant))
+	if err != nil {
+		return 0
+	}
+	return m.Sequence
+}
+
+// badTarget is an event's target the command may not change.
+type badTarget struct{ problem live.Problem }
+
+func (e badTarget) Error() string { return e.problem.Message }
+
+func problemOf(err error) (live.Problem, bool) {
+	var bt badTarget
+	if errors.As(err, &bt) {
+		return bt.problem, true
+	}
+	return live.Problem{}, false
+}
+
+// commit publishes the events, each expecting its target's last sequence
+// to be the one it was read at; a target the decision did not read is
+// expected as the stream has it now. One event is published alone, and
+// several as one atomic batch: every check passes and all are stored, or
+// none is.
+func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstream.Stream, read map[string]uint64, events []live.NewEvent) (Result, bool, error) {
 	ctx := r.Context()
 	tenant := r.Principal.TenantID
-	res := Result{Common: features.OK(), Stream: stream, Target: tg.ID}
+	streamName := stream.CachedInfo().Config.Name
+	res := Result{Common: features.OK(), Stream: streamName, Target: tg.ID}
+	if len(events) > project.MaxBatch {
+		return res, false, badTarget{live.Problem{Message: fmt.Sprintf("a command commits at most %d events, not %d", project.MaxBatch, len(events)), Fix: "split the change into several commands"}}
+	}
+	now := time.Now().UTC()
+	msgs := make([]*nats.Msg, len(events))
+	evTargets := make([]live.Target, len(events))
 	for i, ne := range events {
+		t := tg
+		if ne.Target != nil {
+			t = *ne.Target
+			if t.Area != cmd.Area || !live.ValidToken(t.Type) || !live.ValidToken(t.ID) {
+				return res, false, badTarget{live.Problem{Path: "target", Message: fmt.Sprintf("%s cannot change %s.%s in area %s", r.Type, t.Type, t.ID, t.Area), Fix: "a command changes targets in its own area, with valid ids"}}
+			}
+		}
+		evTargets[i] = t
 		data, err := json.Marshal(ne.Data)
 		if err != nil {
 			return res, false, err
 		}
-		e := live.Event{Type: ne.Type, Target: tg, Data: data, CommandID: r.ID, RequestID: r.RequestID, UserID: r.Principal.UserID, TenantID: tenant, Time: time.Now().UTC()}
+		e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: r.ID, RequestID: r.RequestID, UserID: r.Principal.UserID, TenantID: tenant, Time: now}
+		if len(events) > 1 {
+			e.Batch = &live.Batch{Index: i + 1, Count: len(events)}
+		}
 		raw, _ := json.Marshal(e)
+		seq, ok := read[t.Key()]
+		if !ok {
+			seq = b.lastSeq(ctx, stream, tenant, t)
+			read[t.Key()] = seq
+		}
+		m := nats.NewMsg(t.Subject(tenant, ne.Type))
+		m.Data = raw
 		msgID := r.ID
 		if i > 0 {
 			msgID = fmt.Sprintf("%s#%d", r.ID, i)
 		}
-		ack, err := b.p.JetStream().Publish(ctx, tg.Subject(tenant, ne.Type), raw,
-			jetstream.WithMsgID(msgID), jetstream.WithExpectStream(stream),
-			jetstream.WithExpectLastSequenceForSubject(seq, tg.Subjects(tenant)))
+		m.Header.Set(jetstream.MsgIDHeader, msgID)
+		m.Header.Set(jetstream.ExpectedStreamHeader, streamName)
+		m.Header.Set(jetstream.ExpectedLastSubjSeqHeader, strconv.FormatUint(seq, 10))
+		m.Header.Set(jetstream.ExpectedLastSubjSeqSubjHeader, t.Subjects(tenant))
+		msgs[i] = m
+	}
+	if len(msgs) == 1 {
+		ack, err := b.p.JetStream().PublishMsg(ctx, msgs[0])
 		if err != nil {
-			var apiErr *jetstream.APIError
-			if errors.As(err, &apiErr) && apiErr.ErrorCode == jetstream.JSErrCodeStreamWrongLastSequence {
-				if i == 0 {
-					return res, true, err
-				}
-			}
-			return res, false, err
+			return res, project.IsConflict(err), err
 		}
-		if ack.Duplicate {
-			res.Duplicate = true
-		}
-		seq = ack.Sequence
-		res.Seq = ack.Sequence
+		res.Seq, res.Duplicate = ack.Sequence, ack.Duplicate
+		b.lock(b.lockKey(tenant, evTargets[0])).last.Store(ack.Sequence)
+		return res, false, nil
 	}
-	return res, false, nil
-}
-
-// conflictSeq reads the target's actual last sequence from a wrong last
-// sequence error ("wrong last sequence: 42"), or 0.
-func conflictSeq(err error) uint64 {
-	var n uint64
+	ack, err := project.PublishBatch(ctx, b.p.JetStream().Conn(), msgs)
+	var apiErr *jetstream.APIError
+	if errors.As(err, &apiErr) && apiErr.ErrorCode == project.ErrCodeBatchDuplicate {
+		// Committed before under the same id. The batch's own sequence is
+		// not reported, so the ack names its targets' last since, which a
+		// client waiting for its write reaches no earlier
+		res.Duplicate = true
+		for _, t := range targets(tg, events) {
+			res.Seq = max(res.Seq, b.lastSeq(ctx, stream, tenant, t))
+		}
+		return res, false, nil
+	}
 	if err != nil {
-		var apiErr *jetstream.APIError
-		if errors.As(err, &apiErr) {
-			_, _ = fmt.Sscanf(apiErr.Description, "wrong last sequence: %d", &n)
-		}
+		return res, project.IsConflict(err), err
 	}
-	return n
+	// The batch is stored in one run, ending at the ack's sequence
+	first := ack.Seq - uint64(len(msgs)) + 1
+	for i, t := range evTargets {
+		b.lock(b.lockKey(tenant, t)).last.Store(first + uint64(i))
+	}
+	res.Seq = ack.Seq
+	return res, false, nil
 }

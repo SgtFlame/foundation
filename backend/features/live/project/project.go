@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -62,7 +63,8 @@ func (p *Projections) Close() {
 }
 
 // Stream makes sure the tenant's area stream exists. Events are kept
-// forever (01-ServerUI question 6).
+// forever (01-ServerUI question 6), and a command's several events are
+// published as one atomic batch (forge 03h).
 func (p *Projections) Stream(ctx context.Context, tenant uint64, area live.Area) (jetstream.Stream, error) {
 	name := live.StreamName(tenant, area)
 	p.mu.Lock()
@@ -76,7 +78,7 @@ func (p *Projections) Stream(ctx context.Context, tenant uint64, area live.Area)
 	}
 	s, err := p.js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name: name, Subjects: []string{live.StreamSubjects(tenant, area)}, Storage: jetstream.FileStorage,
-		Retention: jetstream.LimitsPolicy, Duplicates: Duplicates, AllowDirect: true,
+		Retention: jetstream.LimitsPolicy, Duplicates: Duplicates, AllowDirect: true, AllowAtomicPublish: true,
 	})
 	if err != nil {
 		return nil, log.Wrapf(err, "cannot make the event stream %s", name)
@@ -118,6 +120,9 @@ func (p *Projections) Bucket(ctx context.Context, tenant uint64, projector strin
 	if err != nil {
 		return nil, log.Wrapf(err, "cannot make the projection %s", name)
 	}
+	if err := p.allowAtomic(ctx, "KV_"+name); err != nil {
+		return nil, err
+	}
 	if err := p.run(ctx, tenant, pr, stream, kv); err != nil {
 		return nil, err
 	}
@@ -125,6 +130,24 @@ func (p *Projections) Bucket(ctx context.Context, tenant uint64, projector strin
 	p.buckets[name] = kv
 	p.mu.Unlock()
 	return kv, nil
+}
+
+// allowAtomic lets a bucket's stream take atomic batches, so a batch of
+// events is written to a projection all at once.
+func (p *Projections) allowAtomic(ctx context.Context, stream string) error {
+	s, err := p.js.Stream(ctx, stream)
+	if err != nil {
+		return log.Wrapf(err, "cannot read the stream %s", stream)
+	}
+	cfg := s.CachedInfo().Config
+	if cfg.AllowAtomicPublish {
+		return nil
+	}
+	cfg.AllowAtomicPublish = true
+	if _, err := p.js.UpdateStream(ctx, cfg); err != nil {
+		return log.Wrapf(err, "cannot allow atomic batches on %s", stream)
+	}
+	return nil
 }
 
 // run starts the projector's durable consumer on the stream. MaxAckPending
@@ -245,45 +268,113 @@ func (p *Projections) fold(pr live.Projector, kv jetstream.KeyValue, msg jetstre
 		return
 	}
 	e.Stream, e.Seq = meta.Stream, meta.Sequence.Stream
-	key := e.Target.Key()
-	old, rev, err := getRev(ctx, kv, key)
-	if err != nil {
-		log.Error(ctx, err, "projector %s: cannot read %s", pr.ID, key)
-		_ = msg.NakWithDelay(time.Second)
-		return
-	}
-	if old.Seq >= e.Seq { // already folded: projectors are idempotent
-		_ = msg.Ack()
-		return
-	}
-	value, err := pr.Fold(live.Fold{Key: key, State: old.Value, Event: e})
-	if err != nil {
-		log.With("subject", msg.Subject()).Error(ctx, err, "projector %s cannot fold event %d; skipped", pr.ID, e.Seq)
-		_ = msg.Term()
-		return
-	}
-	var kept []string
-	if pr.Keep != nil {
-		if kept, err = pr.Keep(live.Keep{Ctx: ctx, Tenant: e.TenantID, Key: key, Value: value, Kept: old.Kept}); err != nil {
-			log.With("subject", msg.Subject()).Error(ctx, err, "projector %s cannot keep the keys of %s; retrying", pr.ID, key)
+	events := []live.Event{e}
+	if e.Batch != nil && e.Batch.Index < e.Batch.Count {
+		// The rest of the batch is folded now and written with this event,
+		// so no read of the projection sees half a batch. Its later events
+		// are then skipped as already folded.
+		if events, err = p.batchFrom(ctx, pr, e); err != nil {
+			log.Error(ctx, err, "projector %s: cannot read the batch of event %d", pr.ID, e.Seq)
 			_ = msg.NakWithDelay(time.Second)
 			return
 		}
 	}
-	// A deleted key keeps its sequence, so a redelivered event is not folded
-	// again. The write expects the revision read, so a value changed
-	// meanwhile (by Rekeep) is folded again from the new one.
-	raw, _ := json.Marshal(live.Projected{Stream: e.Stream, Seq: e.Seq, Value: value, Kept: kept})
-	if err := write(ctx, kv, key, raw, rev); err != nil {
+	// Each key's old value and revision, and its new value, in the order
+	// the events first touched them
+	type change struct {
+		key      string
+		old, new live.Projected
+		rev      uint64
+	}
+	var changes []*change
+	byKey := map[string]*change{}
+	for _, e := range events {
+		key := e.Target.Key()
+		c := byKey[key]
+		if c == nil {
+			old, rev, err := getRev(ctx, kv, key)
+			if err != nil {
+				log.Error(ctx, err, "projector %s: cannot read %s", pr.ID, key)
+				_ = msg.NakWithDelay(time.Second)
+				return
+			}
+			if old.Seq >= e.Seq { // already folded: projectors are idempotent
+				continue
+			}
+			c = &change{key: key, old: old, new: old, rev: rev}
+			byKey[key] = c
+			changes = append(changes, c)
+		}
+		value, err := pr.Fold(live.Fold{Key: key, State: c.new.Value, Event: e})
+		if err != nil {
+			log.With("subject", msg.Subject()).Error(ctx, err, "projector %s cannot fold event %d; skipped", pr.ID, e.Seq)
+			_ = msg.Term()
+			return
+		}
+		// A deleted key keeps its sequence, so a redelivered event is not
+		// folded again
+		c.new = live.Projected{Stream: e.Stream, Seq: e.Seq, Value: value}
+	}
+	writes := make([]kvWrite, len(changes))
+	for i, c := range changes {
+		if pr.Keep != nil {
+			kept, err := pr.Keep(live.Keep{Ctx: ctx, Tenant: e.TenantID, Key: c.key, Value: c.new.Value, Kept: c.old.Kept})
+			if err != nil {
+				log.With("subject", msg.Subject()).Error(ctx, err, "projector %s cannot keep the keys of %s; retrying", pr.ID, c.key)
+				_ = msg.NakWithDelay(time.Second)
+				return
+			}
+			c.new.Kept = kept
+		}
+		raw, _ := json.Marshal(c.new)
+		writes[i] = kvWrite{key: c.key, raw: raw, rev: c.rev}
+	}
+	// The writes expect the revisions read, so a value changed meanwhile
+	// (by Rekeep) is folded again from the new one.
+	switch {
+	case len(writes) == 1:
+		err = write(ctx, kv, writes[0].key, writes[0].raw, writes[0].rev)
+	case len(writes) > 1:
+		err = writeBatch(ctx, p.js.Conn(), kv.Bucket(), writes)
+	}
+	if err != nil {
 		if errors.Is(err, jetstream.ErrKeyExists) {
 			_ = msg.Nak()
 			return
 		}
-		log.Error(ctx, err, "projector %s: cannot write %s", pr.ID, key)
+		log.Error(ctx, err, "projector %s: cannot write %d values", pr.ID, len(writes))
 		_ = msg.NakWithDelay(time.Second)
 		return
 	}
 	_ = msg.Ack()
+}
+
+// batchFrom is e and the events after it in its batch that the projector
+// folds, read from the stream: a batch is stored in one run.
+func (p *Projections) batchFrom(ctx context.Context, pr live.Projector, e live.Event) ([]live.Event, error) {
+	stream, err := p.Stream(ctx, e.TenantID, pr.Area)
+	if err != nil {
+		return nil, err
+	}
+	_, last := e.Batch.Range(e.Seq)
+	events := []live.Event{e}
+	for seq := e.Seq + 1; seq <= last; seq++ {
+		m, err := stream.GetMsg(ctx, seq)
+		if err != nil {
+			return nil, log.Wrap(err)
+		}
+		_, t, _, ok := live.TargetOf(m.Subject)
+		if !ok || (len(pr.Types) > 0 && !slices.Contains(pr.Types, t.Type)) {
+			continue
+		}
+		var next live.Event
+		if err := json.Unmarshal(m.Data, &next); err != nil {
+			return nil, log.Wrapf(err, "cannot read event %d", seq)
+		}
+		next.Stream, next.Seq = e.Stream, seq
+		events = append(events, next)
+	}
+	return events, nil
 }
 
 // write puts a value that was at revision rev (0: there was none).
