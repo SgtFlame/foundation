@@ -60,6 +60,7 @@ export interface EntityType {
   indexes: EntityIndex[]
   access: EntityAccess
   version: number
+  hidden?: boolean // deleted: its records are kept, entity.restore brings it back
 }
 
 export interface VersionInfo {

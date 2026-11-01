@@ -16,6 +16,7 @@ const logger = log.In('live')
 export type Position = Record<string, number>
 
 export interface Problem {
+  code?: string // the rejection's error code when not command_rejected, e.g. record_changed
   path?: string
   message: string
   fix?: string
@@ -24,6 +25,7 @@ export interface Problem {
 export interface Ack {
   id: string
   stream: string
+  target?: string // the target's id, when the command made it (sent without one)
   seq: number
   duplicate?: boolean
 }

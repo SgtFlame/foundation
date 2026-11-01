@@ -453,7 +453,18 @@ Each slice ends with something to look at, and the ★ marks where a decision is
       - the wiring, in Foundation's `serve.go` and Forge's.
     - **Blockers**: none left. Its **Before** questions were answered before building: forge 03-DataModel 5 (drafts in KV, published versions in SQLite) and 8 (a slice per Foundation part).
     - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it).
-    - **Pending, carried forward**: `entity.delete` and changing a field's type, both decided with the records (forge 03b).
+    - **Pending, carried forward**: `entity.delete` and changing a field's type, both decided with the records (forge 03b). *Built in slice 17.*
+
+17. **Records** (Forge iteration 3, part 3b, [forge 03b-Records.md](../../forge/documentation/plans/03b-Records.md)), with Forge's Data Designer (part 3c). *Built.* ★ in the Data Designer ([Records.md](Records.md#built-in-slice-17), [forge DataDesigner.md](../../forge/documentation/DataDesigner.md)).
+    - **Built**:
+      - `records/data`: the `records.record` projector, the `record.*` commands, the `records.get` and `records.list` queries, and the converter;
+      - value checks and conversion in `features/records`; `entity.delete`, `entity.restore` and type changes in `records/entities`;
+      - `recordservice` under `/records/records`, the `records` section, and the `records.query` and `records.import` tools;
+      - in the live core, `Command.TypeOf`, `NewTarget` and `Internal`, and `Problem.Code`;
+      - the `Records.ts` client;
+      - the wiring, in Foundation's `serve.go` and Forge's.
+    - **Blockers**: none left. Its **Before** questions were answered before building: forge 03-DataModel 7 (one bucket per tenant), and 03b 1 (convert values) and 2 (hide a deleted type).
+    - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it-1).
 
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
@@ -478,4 +489,5 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 14. Cognition's editing pass (Forge 2) | forge 02-Blueprints 5 (drafts by commands, revising Cognition 2), 1, 7 and 9 (all answered) | the decisions in [Cognition.md](Cognition.md#decisions-to-review-after-seeing-it-1), to review after seeing |
 | 15. Blueprints (Forge 2) | forge 02-Blueprints 2, 3, 4, 6 and 8 (all answered) | 01-ServerUI 7 (concurrent edits to one property): a node's config is replaced whole, the later command winning; the decisions in [Blueprints.md](Blueprints.md#decisions-to-review-after-seeing-it), to review after seeing |
 | 16. Entity types (Forge 3a) | forge 03-DataModel 5 (drafts in KV, published versions in SQLite) and 8 (a slice per part), both answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it), to review after seeing |
+| 17. Records (Forge 3b, with 3c) | forge 03-DataModel 7 (one bucket per tenant), 03b 1 (convert values) and 2 (hide a deleted type), all answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-1) and [forge DataDesigner.md](../../forge/documentation/DataDesigner.md#decisions-to-review-after-seeing-it), to review after seeing |
 

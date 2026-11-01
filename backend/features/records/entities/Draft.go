@@ -52,6 +52,8 @@ const (
 	EventIndexRemoved  = "indexRemoved"  // {index: id}
 	EventAccessSet     = "accessSet"     // {access}
 	EventPublished     = "published"     // Publication
+	EventDeleted       = "deleted"       // {}: the entity type is hidden, its records kept
+	EventRestored      = "restored"      // {}
 )
 
 // Info changes an entity type's name, description, owner and title field;
@@ -67,6 +69,16 @@ type Info struct {
 type Publication struct {
 	Version int                `json:"version"`
 	Entity  records.EntityType `json:"entity"`
+	// TypeChanges are the fields whose type differs from the previous
+	// version's: the records' converter converts their values.
+	TypeChanges []TypeChange `json:"typeChanges,omitempty"`
+}
+
+// TypeChange is one field's type change between published versions.
+type TypeChange struct {
+	Field string        `json:"field"`
+	From  records.Field `json:"from"`
+	To    records.Field `json:"to"`
 }
 
 func decode[T any](raw json.RawMessage) (T, error) {
@@ -149,6 +161,8 @@ func Apply(d *Draft, e live.Event) error {
 			return err
 		}
 		d.Published, d.PublishedRev, x.Version = p.Version, d.Rev+1, p.Version
+	case EventDeleted, EventRestored:
+		x.Hidden = e.Type == EventDeleted
 	default:
 		return fmt.Errorf("unknown event %s", e.Type)
 	}
@@ -181,6 +195,15 @@ func fold(f live.Fold) (json.RawMessage, error) {
 // foldPublished is the records.entityPublished projector's fold: the last
 // published version.
 func foldPublished(f live.Fold) (json.RawMessage, error) {
+	if (f.Event.Type == EventDeleted || f.Event.Type == EventRestored) && f.State != nil {
+		// Deleting takes effect at once, without publishing
+		var e records.EntityType
+		if err := json.Unmarshal(f.State, &e); err != nil {
+			return nil, err
+		}
+		e.Hidden = f.Event.Type == EventDeleted
+		return json.Marshal(e)
+	}
 	if f.Event.Type != EventPublished {
 		return f.State, nil
 	}

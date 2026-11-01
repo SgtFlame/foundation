@@ -116,6 +116,9 @@ type NewEvent struct {
 
 // Problem is why a command was rejected, in a form a model can act on.
 type Problem struct {
+	// Code, when set, is the rejection's error code in place of
+	// command_rejected, such as record_changed.
+	Code    string `json:"code,omitempty"`
 	Path    string `json:"path,omitempty"`
 	Message string `json:"message"`
 	Fix     string `json:"fix,omitempty"`
@@ -141,7 +144,17 @@ type Command struct {
 	Events      []string          // the events it can commit
 	Area        Area              // the target's area
 	TargetType  string            // the target's type
-	Projection  string            // the projector whose value is the target's state
+	// TypeOf, when set, reads the target's type from the arguments, for a
+	// command that serves many types: record.* take it from their entity.
+	TypeOf func(args json.RawMessage) (string, *Problem)
+	// NewTarget, when set, makes the target's id for a command sent
+	// without one (a record made from Go or a tool). A browser that may
+	// resend the command makes the id itself, so a resend is a duplicate.
+	NewTarget  func() string
+	Projection string // the projector whose value is the target's state
+	// Internal commands are sent only by the server, such as converting a
+	// record when its field's type changes: they get no tool.
+	Internal bool
 	// Action is the authz action it needs, checked on Resource (the
 	// principal's tenant when nil).
 	Action   string
@@ -153,6 +166,22 @@ type Command struct {
 	// at seq, beside the sequence: a graph draft's problems, for example,
 	// so a model sees what its change left to fix.
 	Report func(args features.ServiceArgs, target Target, seq uint64) any
+}
+
+// TargetFor is the target of the command sent to id with args.
+func (c Command) TargetFor(id string, args json.RawMessage) (Target, *Problem) {
+	t := Target{Area: c.Area, Type: c.TargetType, ID: id}
+	if c.TypeOf != nil {
+		typ, p := c.TypeOf(args)
+		if p != nil {
+			return t, p
+		}
+		if !ValidToken(typ) {
+			return t, &Problem{Path: "args", Message: fmt.Sprintf("%q is not a valid target type", typ)}
+		}
+		t.Type = typ
+	}
+	return t, nil
 }
 
 // Position is how far a subscription has seen, as a sequence per stream.

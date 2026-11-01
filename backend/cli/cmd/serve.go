@@ -89,16 +89,21 @@ import (
 	livesettings "github.com/SgtFlame/foundation/backend/features/live/settings"
 	"github.com/SgtFlame/foundation/backend/features/live/subscribe"
 	livetools "github.com/SgtFlame/foundation/backend/features/live/tools"
-	"github.com/SgtFlame/foundation/backend/features/records"
-	"github.com/SgtFlame/foundation/backend/features/records/entities"
-	"github.com/SgtFlame/foundation/backend/features/records/rest/entityhandlers"
-	entityimpl "github.com/SgtFlame/foundation/backend/features/records/services/entityservice/impl"
-	recordstools "github.com/SgtFlame/foundation/backend/features/records/tools"
 	"github.com/SgtFlame/foundation/backend/features/logging"
 	"github.com/SgtFlame/foundation/backend/features/logs"
 	"github.com/SgtFlame/foundation/backend/features/logs/rest/logshandlers"
 	logsimpl "github.com/SgtFlame/foundation/backend/features/logs/services/logsservice/impl"
 	logssettings "github.com/SgtFlame/foundation/backend/features/logs/settings"
+	"github.com/SgtFlame/foundation/backend/features/records"
+	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
+	"github.com/SgtFlame/foundation/backend/features/records/entities"
+	"github.com/SgtFlame/foundation/backend/features/records/rest/entityhandlers"
+	"github.com/SgtFlame/foundation/backend/features/records/rest/recordhandlers"
+	entityimpl "github.com/SgtFlame/foundation/backend/features/records/services/entityservice/impl"
+	"github.com/SgtFlame/foundation/backend/features/records/services/recordservice"
+	recordimpl "github.com/SgtFlame/foundation/backend/features/records/services/recordservice/impl"
+	recordssettings "github.com/SgtFlame/foundation/backend/features/records/settings"
+	recordstools "github.com/SgtFlame/foundation/backend/features/records/tools"
 	"github.com/SgtFlame/foundation/backend/features/rest"
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	retrievalcontext "github.com/SgtFlame/foundation/backend/features/retrieval/context"
@@ -350,6 +355,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var liveToolDeps livetools.Deps
 		var draftDeps drafts.Deps
 		var entityDeps entities.Deps
+		var recordDeps recordsdata.Deps
+		var recordService recordservice.Service
 		var liveSubscriptions *subscribe.Subscriptions
 		var liveNodeDeps livenodes.Deps
 		var uiNodeDeps uinodes.Deps
@@ -398,6 +405,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// The live core, server-driven UI and the Hello app; a command is
 		// also a tool, so livetools runs after every feature's commands
 		livesettings.Contribute(registry)
+		recordssettings.Contribute(registry)
 		uisettings.Contribute(registry)
 		if err := uicomponents.Contribute(registry); err != nil {
 			return err
@@ -412,6 +420,10 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// tenant database
 		entities.Contribute(registry, func() entities.Deps { return entityDeps })
 		recordstools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
+		// Records: changed by record.* commands, converted when a field's
+		// type changes
+		recordsdata.Contribute(registry, func() recordsdata.Deps { return recordDeps })
+		recordstools.ContributeRecords(registry, func() recordservice.Service { return recordService })
 		presence.Contribute(registry, func() *presence.Presence { return livePresence })
 		uitools.Contribute(registry)
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
@@ -630,7 +642,15 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		subscriptions.Resolve = livenodes.QueryFor(func() livenodes.Deps { return liveNodeDeps })
 		liveToolDeps = livetools.Deps{Bus: liveBus, Subscriptions: subscriptions}
 		liveSubscriptions = subscriptions
-		entityDeps = entities.Deps{Projections: projections, DB: gdb}
+		recordDeps = recordsdata.Deps{Projections: projections, Bus: liveBus, Settings: func(args features.ServiceArgs) recordssettings.Records {
+			settings, err := config.Read[recordssettings.Records](configService, args, recordssettings.ID)
+			if err != nil {
+				return recordssettings.Defaults
+			}
+			return settings
+		}}
+		entityDeps = entities.Deps{Projections: projections, DB: gdb, OnPublish: func(args features.ServiceArgs) error { return recordsdata.Follow(args, recordDeps) }}
+		recordService = recordimpl.CreateService(recordimpl.WithRecords(liveBus, subscriptions, recordDeps))
 		entityService := entityimpl.CreateService(entityimpl.WithEntities(entityDeps))
 		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())),
 			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))
@@ -716,6 +736,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 
 		entityHandler := &entityhandlers.EntityHandler{}
 		entityHandler.Register(api, entityService)
+
+		recordHandler := &recordhandlers.RecordHandler{}
+		recordHandler.Register(api, recordService)
 
 		uiHandler := &uihandlers.UiHandler{}
 		uiHandler.Register(api, uiService)

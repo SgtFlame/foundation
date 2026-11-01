@@ -272,7 +272,15 @@ func (c *conn) execute(ctx context.Context, f liveservice.CommandFrame) any {
 	if res.Common.Code >= 300 {
 		return liveservice.RejectedFrame{Type: "rejected", ID: f.ID, Code: res.Common.Code, Message: res.Common.Message, ErrorCode: res.Common.ErrorCode, Problems: res.Problems}
 	}
-	return liveservice.AckFrame{Type: "ack", ID: f.ID, Stream: res.Stream, Seq: res.Seq, Duplicate: res.Duplicate}
+	return liveservice.AckFrame{Type: "ack", ID: f.ID, Stream: res.Stream, Target: targetIfMade(f.Target, res.Target), Seq: res.Seq, Duplicate: res.Duplicate}
+}
+
+// targetIfMade is the target's id when the command made it.
+func targetIfMade(sent, target string) string {
+	if sent == "" {
+		return target
+	}
+	return ""
 }
 
 type subSink struct {

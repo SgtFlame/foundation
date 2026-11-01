@@ -66,7 +66,9 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		},
 	})
 	for _, c := range live.Commands.All(reg) {
-		tools.Tools.Register(reg, commandTool(c, deps))
+		if !c.Internal {
+			tools.Tools.Register(reg, commandTool(c, deps))
+		}
 	}
 	// Commands a tenant defines, such as its command graphs, have no tool
 	// of their own
@@ -93,6 +95,9 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 
 func commandTool(c live.Command, deps func() Deps) tools.Tool {
 	input := fmt.Sprintf(`{"type":"object","properties":{"target":{"type":"string","description":"The id of the %s to change"},"args":%s},"required":["target"]}`, c.TargetType, orObject(c.Args))
+	if c.NewTarget != nil {
+		input = fmt.Sprintf(`{"type":"object","properties":{"target":{"type":"string","description":"Leave it out: a new id is made and returned"},"args":%s}}`, orObject(c.Args))
+	}
 	return tools.Tool{
 		Descriptor: extensions.Descriptor{ID: c.ID, Source: c.Source}, Title: c.Title, Effect: tools.EffectWrite,
 		Description: c.Description, Input: json.RawMessage(input),
@@ -108,9 +113,10 @@ func commandTool(c live.Command, deps func() Deps) tools.Tool {
 			if res.Common.Code >= 300 {
 				return tools.Result{Content: map[string]any{"problems": res.Problems}}, fmt.Errorf("%s", res.Common.Message)
 			}
-			content := map[string]any{"stream": res.Stream, "seq": res.Seq}
+			content := map[string]any{"stream": res.Stream, "seq": res.Seq, "target": res.Target}
 			if c.Report != nil {
-				content["report"] = c.Report(call.ServiceArgs, live.Target{Area: c.Area, Type: c.TargetType, ID: args.Target}, res.Seq)
+				tg, _ := c.TargetFor(res.Target, args.Args)
+				content["report"] = c.Report(call.ServiceArgs, tg, res.Seq)
 			}
 			return tools.Result{Content: content, Summary: c.Title}, nil
 		},

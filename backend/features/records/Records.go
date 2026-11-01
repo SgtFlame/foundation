@@ -28,6 +28,9 @@ type EntityType struct {
 	Indexes    []Index `json:"indexes"` // declared here, built from Forge's part 3d
 	Access     Access  `json:"access"`  // declared here, enforced from Forge's part 3g
 	Version    int     `json:"version"` // the published version it is; 0 before the first
+	// Hidden is a deleted entity type: its records are kept, and
+	// entity.restore brings it back with them.
+	Hidden bool `json:"hidden,omitempty"`
 }
 
 // Field is one field of an entity type. Which of the type-specific parts

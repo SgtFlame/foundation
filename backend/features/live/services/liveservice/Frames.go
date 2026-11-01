@@ -31,6 +31,7 @@ type AckFrame struct {
 	Type      string `json:"type"` // ack
 	ID        string `json:"id"`
 	Stream    string `json:"stream"`
+	Target    string `json:"target,omitempty"` // the target's id, when the command made it
 	Seq       uint64 `json:"seq"`
 	Duplicate bool   `json:"duplicate,omitempty"`
 }

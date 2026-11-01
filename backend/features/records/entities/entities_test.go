@@ -242,7 +242,9 @@ func TestInvalidDefinitionsAreRejected(t *testing.T) {
 	f.rejected("entity.setInfo", "task", map[string]any{"titleField": "nope"}, `no field "nope"`)
 	f.rejected("entity.addField", "task", map[string]any{"name": "colour", "type": "enum"}, "needs options")
 	f.rejected("entity.addField", "task", map[string]any{"name": "x", "type": "nope"}, `no field type "nope"`)
-	f.rejected("entity.updateField", "task", map[string]any{"field": "title", "type": "longText"}, "cannot change")
+	f.rejected("entity.updateField", "task", map[string]any{"field": "title", "type": "createdAt"}, "cannot change")
+	f.rejected("entity.addField", "task", map[string]any{"name": "points", "type": "number", "default": "many"}, "the default")
+	f.rejected("entity.addField", "task", map[string]any{"id": "_seq", "name": "seq", "type": "number"}, "not starting with '_'")
 	f.rejected("entity.removeField", "task", map[string]any{"field": "title"}, "title field")
 	f.rejected("entity.addField", "nothing", map[string]any{"name": "x", "type": "text"}, `no entity type "nothing"`)
 
@@ -272,5 +274,20 @@ func TestInvalidDefinitionsAreRejected(t *testing.T) {
 	_ = json.Unmarshal(raw, &list)
 	if len(list) != 2 || list["entity.task"].Fields != 2 || list["entity.project"].Name != "Project" {
 		t.Errorf("list = %+v", list)
+	}
+
+	// A type change drops what the old type needed; deleting hides the type
+	f.ok("entity.addField", "task", map[string]any{"name": "size", "type": "enum", "options": []any{map[string]any{"id": "s", "name": "Small"}}})
+	f.ok("entity.updateField", "task", map[string]any{"field": "size", "type": "text"})
+	if fld, _, _ := f.describe("task").Entity.FieldByID("size"); fld.Type != "text" || fld.Options != nil {
+		t.Errorf("size = %+v", fld)
+	}
+	f.ok("entity.delete", "project", map[string]any{})
+	if v := f.describe("project"); !v.Entity.Hidden {
+		t.Errorf("project not hidden")
+	}
+	f.ok("entity.restore", "project", map[string]any{})
+	if v := f.describe("project"); v.Entity.Hidden {
+		t.Errorf("project still hidden")
 	}
 }

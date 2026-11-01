@@ -32,6 +32,7 @@ type Summary struct {
 	Rev         int    `json:"rev"`
 	Published   int    `json:"published"`
 	Changed     bool   `json:"changed"`
+	Hidden      bool   `json:"hidden,omitempty"` // deleted, restorable
 }
 
 func viewOf(d Draft) View {
@@ -42,7 +43,7 @@ func viewOf(d Draft) View {
 func summaryOf(d Draft) Summary {
 	e := d.Entity
 	return Summary{ID: e.ID, Name: e.Name, Description: e.Description, Owner: e.Owner, Fields: len(e.Visible()),
-		Rev: d.Rev, Published: d.Published, Changed: d.Rev != d.PublishedRev}
+		Rev: d.Rev, Published: d.Published, Changed: d.Rev != d.PublishedRev, Hidden: e.Hidden}
 }
 
 type describeParams struct {
@@ -131,7 +132,7 @@ func contributeQueries(reg *extensions.Registry, deps func() Deps) {
 
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "entity.list", Source: "records"}, Title: "Entity types",
-		Description: "Every entity type of the tenant, by key \"entity.<id>\": {id, name, description, owner, fields (how many), rev, published, changed}. owner narrows it to one app's (app:<appId>) or the shared ones (tenant).",
+		Description: "Every entity type of the tenant, by key \"entity.<id>\": {id, name, description, owner, fields (how many), rev, published, changed, hidden (deleted)}. owner narrows it to one app's (app:<appId>) or the shared ones (tenant).",
 		Params:      json.RawMessage(`{"type":"object","properties":{"owner":{"type":"string","description":"Only entity types with this owner"}}}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"owner":"app:hello"}`)},
 		Action:      "records.read",

@@ -32,6 +32,10 @@ type Projections interface {
 type Deps struct {
 	Projections Projections
 	DB          *gorm.DB // the tenant database, which holds the published versions
+	// OnPublish, when set, starts the other followers of published
+	// versions before one commits: the records' converter, which converts
+	// values when a field's type changes.
+	OnPublish func(args features.ServiceArgs) error
 }
 
 // decision is one command's view of its entity type.
@@ -300,7 +304,7 @@ func commandSpecs() []spec {
 		},
 		{
 			id: "entity.updateField", title: "Change a field", events: []string{EventFieldUpdated},
-			description: "Changes a field by its id: its name (a rename keeps the records' values, which are kept by id), description, required, default, options and the rest of what its type needs. A property left out stays; null clears it. Its type cannot change: add a new field instead.",
+			description: "Changes a field by its id: its name (a rename keeps the records' values, which are kept by id), type, description, required, default, options and the rest of what its type needs. A property left out stays; null clears it. A new type drops what the old one needed, and when the change is published the records' values are converted; values that cannot be converted are cleared and listed as problems on their records. A computed field's type cannot change.",
 			args:        `{"type":"object","properties":{"field":{"type":"string","description":"The field's id"},` + fieldProps + `},"required":["field"]}`,
 			example:     `{"field":"title","name":"summary"}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
@@ -317,6 +321,13 @@ func commandSpecs() []spec {
 				raw, _ := json.Marshal(old)
 				var merged map[string]json.RawMessage
 				_ = json.Unmarshal(raw, &merged)
+				var newType string
+				if _ = json.Unmarshal(patch["type"], &newType); newType != "" && newType != old.Type {
+					// What the old type needed goes, unless the patch gives it again
+					for _, k := range []string{"options", "relation", "scale", "currency", "items", "fields", "schema", "formula", "rollup", "default"} {
+						delete(merged, k)
+					}
+				}
 				for k, v := range patch {
 					switch {
 					case k == "field" || k == "id" || k == "hidden":
@@ -331,8 +342,8 @@ func commandSpecs() []spec {
 				if err != nil {
 					return nil, problem("args", err.Error(), "")
 				}
-				if f.Type != old.Type {
-					return nil, problem("args.type", fmt.Sprintf("field %s is a %s and its type cannot change", id, old.Type), "add a new field of type "+f.Type+" and remove this one")
+				if f.Type != old.Type && (computed(f.Type) || computed(old.Type)) {
+					return nil, problem("args.type", fmt.Sprintf("field %s cannot change from %s to %s: computed fields keep no values to convert", id, old.Type, f.Type), "add a new field of type "+f.Type+" and remove this one")
 				}
 				records.Normalize(&f)
 				if raw, _ := json.Marshal(f); string(raw) == string(must(json.Marshal(old))) {
@@ -445,12 +456,66 @@ func commandSpecs() []spec {
 				if err := Follow(c.ServiceArgs, c.deps); err != nil {
 					return nil, problem("", "the published versions cannot be kept: "+err.Error(), "")
 				}
+				if c.deps.OnPublish != nil {
+					if err := c.deps.OnPublish(c.ServiceArgs); err != nil {
+						return nil, problem("", "the records cannot follow the new version: "+err.Error(), "")
+					}
+				}
 				e := *c.entity()
 				e.Version = c.draft.Published + 1
-				return ev(EventPublished, Publication{Version: e.Version, Entity: e}), nil
+				return ev(EventPublished, Publication{Version: e.Version, Entity: e, TypeChanges: c.typeChanges(e)}), nil
+			},
+		},
+		{
+			id: "entity.delete", title: "Delete an entity type", events: []string{EventDeleted},
+			description: "Deletes an entity type at once, without publishing. It is hidden, not erased: its records are kept, record commands on it are refused, and entity.restore brings it back with them.",
+			args:        `{"type":"object","properties":{}}`,
+			example:     `{}`,
+			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+				if c.entity().Hidden {
+					return nil, nil
+				}
+				return ev(EventDeleted, map[string]any{}), nil
+			},
+		},
+		{
+			id: "entity.restore", title: "Restore an entity type", events: []string{EventRestored},
+			description: "Brings back a deleted entity type with its records.",
+			args:        `{"type":"object","properties":{}}`,
+			example:     `{}`,
+			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+				if !c.entity().Hidden {
+					return nil, nil
+				}
+				return ev(EventRestored, map[string]any{}), nil
 			},
 		},
 	}
+}
+
+// typeChanges are the fields of e whose type differs from the last
+// published version's.
+func (c *decision) typeChanges(e records.EntityType) []TypeChange {
+	v, ok, err := c.deps.Projections.Get(c.Context(), c.Principal.TenantID, PublishedProjector, c.Target.Key())
+	if err != nil || !ok {
+		return nil
+	}
+	var prev records.EntityType
+	if json.Unmarshal(v.Value, &prev) != nil {
+		return nil
+	}
+	var out []TypeChange
+	for _, f := range e.Fields {
+		if old, _, ok := prev.FieldByID(f.ID); ok && old.Type != f.Type {
+			out = append(out, TypeChange{Field: f.ID, From: old, To: f})
+		}
+	}
+	return out
+}
+
+func computed(typ string) bool {
+	t, _ := records.FieldTypeOf(typ)
+	return t.Computed
 }
 
 func must(raw []byte, _ error) []byte { return raw }

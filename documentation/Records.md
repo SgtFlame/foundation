@@ -1,8 +1,8 @@
 # Records: entity types and their records
 
-Applications get their own data. An **entity type** is a schema for records, such as *Task* or *Customer*: its fields, title field, indexes and row rules. Entity types are definitions on the live core ([Live.md](Live.md)). They change only by `entity.*` commands, so several people can edit one at once and each sees the others' changes as they commit, and they are read by queries that are subscriptions. Records of those types come in Forge's part 3b.
+Applications get their own data. An **entity type** is a schema for records, such as *Task* or *Customer*: its fields, title field, indexes and row rules. Entity types are definitions on the live core ([Live.md](Live.md)). They change only by `entity.*` commands, so several people can edit one at once and each sees the others' changes as they commit, and they are read by queries that are subscriptions. **Records** of those types are aggregates on the live core too: the generic `record.*` commands change them, one projector keeps them in KV, and the `records.get` and `records.list` queries read them.
 
-It was designed in [forge 03-DataModel.md](../../forge/documentation/plans/03-DataModel.md) and is built as Forge's iteration 3, in parts. Part 3a, entity types, is slice 16.
+It was designed in [forge 03-DataModel.md](../../forge/documentation/plans/03-DataModel.md) and is built as Forge's iteration 3, in parts. Part 3a, entity types, is slice 16. Part 3b, records, is slice 17; Forge's Data Designer (part 3c, [forge DataDesigner.md](../../forge/documentation/DataDesigner.md)) was built with it.
 
 ## Built in slice 16
 
@@ -78,3 +78,77 @@ Decided while building:
 - Removing a field hides it, and a hidden field's name can be reused.
 - A field's type is fixed once it is made.
 - Published versions are copied by a follower, which catches up when the versions are first read after a restart.
+
+## Built in slice 17
+
+### Decisions
+Answered before building:
+- **One bucket per tenant** ([forge 03-DataModel](../../forge/documentation/plans/03-DataModel.md#open-questions) question 7). The `records.record` projector folds the whole `rec` area into `PRJ_<tenant>_records_record`, keyed `<entityId>.<recordId>`, so a type's records are the keys `<entityId>.*`. It fits the live core as built: no projector per entity type.
+- **A field's type can change** ([forge 03b-Records](../../forge/documentation/plans/03b-Records.md#todo) question 1). When the change is published, the records' values are converted. A value that cannot be converted is cleared, with a problem on its record.
+- **Deleting an entity type hides it** (03b question 2). `entity.delete` and `entity.restore` take effect at once, without publishing. The records are kept, and record commands on a deleted type are refused.
+
+Decided while building:
+- **The record package is `records/data`**, holding the projector, commands, queries and converter, as `records/entities` does for entity types. The plan had `records/store`, `records/commands` and `records/queries`.
+- **Records follow the published version.** Record commands check values against the last published version, so a type must be published before it has records, and fields added to the draft take effect when it is published. A rename touches no record: values are kept by field id.
+- **A command's target type can come from its args** (`live.Command.TypeOf`). The record commands serve every entity type, and their subject is `evt.<tenant>.rec.<entityId>.<recordId>.<event>`, so the bus reads the type from `args.entity`. See [Live.md › Changed in slice 17](Live.md#changed-in-slice-17).
+- **New record ids.** A record's id is a TSID. Go code and tools leave the target out and the bus makes one (`live.Command.NewTarget`), returning it in the ack's `target`. The browser makes its own (`newRecordId()` in `Records.ts`), so a command resent after a reconnect is a duplicate rather than a second record.
+- **Only changed fields are recorded.** `record.update` commits `updated` with the fields whose value changes and the values they replaced, so two people changing different fields both keep their change. A value equal to the stored one commits nothing.
+- **Lists change by item.** `record.addTo` and `record.removeFrom` commit `added` and `removed` with the items that changed, for `multiEnum`, `tags`, `list` and to-many relations.
+- **`expect` is the record's `_seq`.** A stale one is rejected with error code `record_changed` (`live.Problem.Code`, see Live.md).
+- **Values are stored normalized.** A decimal is a string with the field's scale, money with a currency a decimal string and without one `{amount, currency}`, a `dateTime` in UTC, a duration in Go's form (`1h30m`), and an enum its option's id (a name is accepted when sent). `richText`, `file` and `volumeFile` are kept as sent until Forge's 3j. Computed fields cannot be set. A field's default is checked against its type when the field is defined.
+- **Field ids cannot start with `_`.** A record keeps its own data under `_id`, `_entity`, `_seq`, `_createdAt`, `_updatedAt`, `_createdBy`, `_updatedBy` and `_problems`.
+- **The converter is a follower** (`records.converter`) of published events, started like the versions follower: by `entity.publish` before its event commits (`entities.Deps.OnPublish`), and by record commands and `records.list` after a restart. A published version names the fields whose type changed since the last (`Publication.TypeChanges`). For each record holding a value of one, the converter sends the internal `record.convert` command as a service principal. Its id names the event, record and field, and a value that already fits is left alone, so redelivery changes nothing. A computed field's type cannot change, and a new type drops what the old one needed (options, relation, scale, default and the rest) unless the change gives them again.
+- **Access**: the `record` resource type, with `read`, `create`, `update` and `delete` (classes read, create, write and delete), on the entity type's path (`tenant:<id>/records/entity:<entityId>`). Forge's 3g adds row rules and moves it under the owning app. It is named `record`, not the plan's `entity`, so that `entity.create` keeps meaning the command that makes an entity type. The built-in *Editor* role has no delete class, so editors cannot delete records.
+- **`records.list` scans** up to the `records` section's `scanLimit` (10 000), and fails with `scan_limit` beyond it until indexes come (3d). It takes `where` (field id → value, equality) and keeps a filtered list current: a record that stops matching is removed. Sorting is the client's for now.
+- **`records.import` sends one `record.create` per row**, `importConcurrency` (8) at a time. Command ids name the import and the row. A rejected row is reported with its problems (the first 20) and the rest are imported. The plan's "one command per batch" waits for atomic batches (3h).
+- **REST** serves only reading and import (`/records/records/get|list|import`). Records change by commands on the live connection; `recordservice.Create`, `Update` and `Delete` are for Go only.
+- **No per-entity event retention.** Events are kept forever on every stream (Live.md, 01-ServerUI question 6), so the setting the plan listed was not made.
+
+### Backend
+- **`features/records`**:
+  - `records.CheckValue(field, value)` checks and normalizes a value, and `records.Convert(from, to, value)` converts one to a new type: kept if it fits, else read as text, a number or a list and checked again. `records.ItemOf` gives the field each item of a list-like field is.
+  - `records.Check` also checks a field's default, and refuses field ids starting with `_`.
+  - `EntityType.Hidden` marks a deleted entity type.
+  - `records.ContributeRecordAccess` declares the `record` resource type, and `records.ContributeAccess` calls it.
+- **`records/entities`**:
+  - `entity.updateField` can change a field's type, except to or from a computed type.
+  - `entity.delete` and `entity.restore` commit `deleted` and `restored`, which both projections fold at once. `entity.list` summaries carry `hidden`.
+  - `entity.publish` records `typeChanges` and calls `Deps.OnPublish` first.
+- **`records/data`** (`recordsdata.Contribute`):
+  - The `records.record` projector over the `rec` area. Events are `created {values}`, `updated {values, old}`, `deleted {old}`, `added`/`removed {field, items}` and `converted {values, old, problems}`, each with the command, request and principal on the event.
+  - The commands `record.create {entity, values}` (no target makes one), `record.update {entity, set, expect?}`, `record.delete {entity, expect?}`, `record.addTo` and `record.removeFrom {entity, field, items, expect?}`, and the internal `record.convert`. Problems are at `args.values.<field>`, `args.set.<field>` and so on.
+  - The queries `records.get {entity, id}` and `records.list {entity, where?}`, both needing `record.read`.
+  - `Follow(args, deps)` starts the converter, and `Entity(args, store, id)` reads the published version records follow.
+- **`records/settings`** (`recordssettings.Contribute`): the `records` section (System › Records), with `scanLimit` and `importConcurrency`.
+- **`services/recordservice`**, **`rest/recordhandlers`** and **`rest/recorddto`**:
+  - `Get`, `List` (oldest first) and `Import`, served at `POST /records/records/get|list|import`;
+  - `Create`, `Update` and `Delete`, for Go only.
+- **`records/tools`**: `recordstools.ContributeRecords` adds `records.query` (a one-time read, 50 records by default) and `records.import`. The `record.*` commands are tools from `livetools`, and `record.create`'s tool takes no target and returns the one it made.
+- **Wiring**: `serve.go`, in Foundation and in Forge, registers `recordssettings` and `recordsdata.Contribute` and `recordstools.ContributeRecords` after the entity types. It sets `entities.Deps.OnPublish` to start the converter, and registers `recordhandlers` on `api`.
+
+### Browser
+- `src/services/Records.ts` is the REST client (`get`, `list`, `import`), with the `RecordData` type, `newRecordId()` (a TSID made in the browser) and `compareRecordIds`.
+- `EntityType` in `Entities.ts` has `hidden`. In `live/`, `Ack` has `target` and `Problem` has `code`.
+- Editors read records with `useQuery('records.list', {entity, where?})` and change them with `record.*` commands. Forge's Data Designer is the first ([forge DataDesigner.md](../../forge/documentation/DataDesigner.md)).
+
+### Verification of slice 17
+- `go test ./features/records/... ./features/live/... ./features/ui/... ./features/cognition/drafts/... ./features/authz/...` passes, and `records/data` passed five runs in a row.
+  - `records/data`, with *Task*:
+    - Create, update, add to, remove from and delete each commit the event described above, with the replaced values.
+    - Two connections, each with its own bus, toggle `done` at once: both commit, in turn, and the projection ends with the later one at its sequence.
+    - Two connections change different fields at once, and both are kept.
+    - Rejections, each with its problem: a stale `expect` (`record_changed`); a wrong type; a missing or cleared required field; an unknown field; an unpublished entity type; a deleted one (and accepted again after `entity.restore`).
+    - Renaming a field writes no record event, and the records read the same.
+    - `points` changes from text to number: `3` and `8` become numbers, and `five` is cleared with a problem.
+    - **Acceptance**: the projection's bucket and consumer were deleted and rebuilt from the stream, and the 999 records equal the ones before.
+    - Importing 1 000 rows (one invalid) creates 999 and reports row 7. A second subscriber to `records.list {where: {done: false}}` sees the 500 open ones arrive, and loses one when it is toggled done.
+  - `records/entities`: a type change drops the enum's options, `entity.delete` and `restore`, a bad default, and a `_` field id.
+  - `records/tools`: `record.create` without a target makes an id, `records.import` creates 2, and `records.query` with `where` finds 1.
+- `serve` builds and runs (Forge's, `backend/scripts/build.sh`), and so does Foundation's. `cd frontend/common && yarn build` passes. Forge's Data Designer was seen with two users in headless Chromium ([forge DataDesigner.md](../../forge/documentation/DataDesigner.md#verification-of-part-3c)).
+
+### Decisions to review after seeing it
+- Records follow the published version, so a type must be published before it has records.
+- A value that cannot be converted is cleared, with a problem on its record, and kept only in the record's history.
+- Deleting an entity type takes effect at once, without publishing.
+- The `record` resource type, and *Editors* not deleting records.
+- Values stored normalized: a decimal as a string, an enum as its option's id.

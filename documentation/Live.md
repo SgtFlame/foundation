@@ -119,3 +119,10 @@ For blueprints ([Blueprints.md](Blueprints.md)):
 ## Changed in slice 16
 For entity types ([Records.md](Records.md)):
 - `project.Projections.Follow(ctx, tenant, area, name, subjects, fn)` runs a side effect on each matching event of a tenant's area, in order, as the durable consumer `fol_<name>`: work outside the projections, such as copying a published entity type into SQLite. `fn` must be idempotent, and an error retries the event a second later. Like a projector, a follower starts the first time it is asked for in a tenant and catches up from where it stopped.
+
+## Changed in slice 17
+For records ([Records.md](Records.md#built-in-slice-17)):
+- `live.Command.TypeOf(args)` reads the target's type from the arguments, for a command that serves many types: the `record.*` commands take it from `entity`. `Command.TargetFor(id, args)` gives the target either way.
+- `live.Command.NewTarget()` makes the target's id when a command is sent without one. The result's `Target` and the ack frame's `target` carry it. A browser makes its own ids, so a resend stays a duplicate.
+- `live.Command.Internal` marks a command only the server sends (`record.convert`): it gets no tool.
+- `live.Problem.Code`, when set on the first problem, is the rejection's error code in place of `command_rejected` (`record_changed`).

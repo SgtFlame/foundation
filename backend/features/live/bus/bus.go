@@ -43,6 +43,7 @@ type Request struct {
 type Result struct {
 	Common    features.ServiceResponse
 	Stream    string
+	Target    string // the target's id, made by the command when the request had none
 	Seq       uint64 // the last event's sequence; the state's when nothing was committed
 	Duplicate bool   // the command was committed before, under the same id
 	Problems  []live.Problem
@@ -104,7 +105,11 @@ func (b *Bus) CommandFor(args features.ServiceArgs, typ string) (live.Command, b
 }
 
 func rejected(problems ...live.Problem) Result {
-	return Result{Common: features.ServiceResponse{Code: http.StatusUnprocessableEntity, Message: problems[0].Message, ErrorCode: "command_rejected"}, Problems: problems}
+	code := "command_rejected"
+	if problems[0].Code != "" {
+		code = problems[0].Code
+	}
+	return Result{Common: features.ServiceResponse{Code: http.StatusUnprocessableEntity, Message: problems[0].Message, ErrorCode: code}, Problems: problems}
 }
 
 // Execute decides and commits one command.
@@ -116,10 +121,16 @@ func (b *Bus) Execute(r Request) Result {
 	if r.ID == "" {
 		return rejected(live.Problem{Path: "id", Message: "a command needs an id", Fix: "send a new unique id with every command"})
 	}
+	if r.Target == "" && cmd.NewTarget != nil {
+		r.Target = cmd.NewTarget()
+	}
 	if !live.ValidToken(r.Target) {
 		return rejected(live.Problem{Path: "target", Message: fmt.Sprintf("%q is not a valid target id", r.Target), Fix: "use letters, digits, '-' and '_' only"})
 	}
-	tg := live.Target{Area: cmd.Area, Type: cmd.TargetType, ID: r.Target}
+	tg, problem := cmd.TargetFor(r.Target, r.Args)
+	if problem != nil {
+		return rejected(*problem)
+	}
 	resource := authz.Tenant(r.Principal)
 	if cmd.Resource != nil {
 		resource = cmd.Resource(r.Principal, tg)
@@ -153,7 +164,7 @@ func (b *Bus) Execute(r Request) Result {
 			return rejected(problems...)
 		}
 		if len(events) == 0 {
-			return Result{Common: features.OK(), Stream: streamName, Seq: state.Seq}
+			return Result{Common: features.OK(), Stream: streamName, Target: tg.ID, Seq: state.Seq}
 		}
 		res, conflict, err := b.commit(r, tg, streamName, state.Seq, events)
 		if conflict {
@@ -179,7 +190,7 @@ func (b *Bus) Execute(r Request) Result {
 func (b *Bus) commit(r Request, tg live.Target, stream string, seq uint64, events []live.NewEvent) (Result, bool, error) {
 	ctx := r.Context()
 	tenant := r.Principal.TenantID
-	res := Result{Common: features.OK(), Stream: stream}
+	res := Result{Common: features.OK(), Stream: stream, Target: tg.ID}
 	for i, ne := range events {
 		data, err := json.Marshal(ne.Data)
 		if err != nil {

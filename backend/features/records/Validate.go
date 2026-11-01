@@ -80,8 +80,8 @@ func checkFields(fields []Field, path string, exists func(string) bool, e *Entit
 	ids, names := map[string]bool{}, map[string]string{}
 	for _, f := range fields {
 		p := path + "." + f.ID
-		if !live.ValidToken(f.ID) || ids[f.ID] {
-			add(p+".id", fmt.Sprintf("%q is not a new, valid field id", f.ID), "use letters, digits, '-' and '_'")
+		if !live.ValidToken(f.ID) || ids[f.ID] || strings.HasPrefix(f.ID, "_") {
+			add(p+".id", fmt.Sprintf("%q is not a new, valid field id", f.ID), "use letters, digits, '-' and '_', not starting with '_' (records keep their own data there)")
 		}
 		ids[f.ID] = true
 		name := strings.ToLower(strings.TrimSpace(f.Name))
@@ -94,7 +94,13 @@ func checkFields(fields []Field, path string, exists func(string) bool, e *Entit
 		default:
 			names[name] = f.ID
 		}
-		problems = append(problems, checkType(f, p, exists, e)...)
+		typeProblems := checkType(f, p, exists, e)
+		problems = append(problems, typeProblems...)
+		if len(typeProblems) == 0 && !IsNull(f.Default) {
+			if _, err := CheckValue(f, f.Default); err != nil {
+				add(p+".default", "the default "+err.Error(), "give a default of the field's type, or null for none")
+			}
+		}
 	}
 	return problems
 }
