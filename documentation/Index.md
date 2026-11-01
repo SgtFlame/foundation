@@ -20,4 +20,6 @@ What is built. Each document describes a feature as it works now, with what was 
 | [MultiTenant.md](MultiTenant.md) | Tenants, local accounts and sessions, the application and tenant databases, the global tenant and Chronicle sharing |
 | [RBAC.md](RBAC.md) | Resource-based access control: `authz.Check` over role grants, built-in and custom roles, the Role Editor and the Share dialog |
 | [Secrets.md](Secrets.md) | The sealed start from HashiCorp Vault, `SecretStore`, the operator's scripts, and the write-only Secrets editor |
+| [Live.md](Live.md) | The live core: commands committing events to NATS JetStream, projections in KV, queries as subscriptions, presence, and the one WebSocket per window that carries them, UI sessions, collaboration rooms and chat's calls |
+| [ServerUI.md](ServerUI.md) | Server-driven UI: component trees rendered by the server with binding tracking, sessions kept in NATS KV, the MUI, flexlayout and React Flow renderers, app editor kinds as top-level tabs, and the Hello app |
 | [BuildHistory.md](BuildHistory.md) | The plans' dependencies, the seams that broke their cycles, and each tracer-bullet slice with what it decided |

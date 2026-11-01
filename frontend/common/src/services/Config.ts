@@ -1,7 +1,8 @@
 // Client for the backend Config REST handlers (backend/features/config/rest)
 
 import { log } from '../logging/index.ts'
-import { API_BASE, http, type ResponseStatus, ServiceError } from './http/client.ts'
+import { live } from '../live/LiveConnection.ts'
+import { http, type ResponseStatus, ServiceError } from './http/client.ts'
 
 export { ServiceError } from './http/client.ts'
 
@@ -116,11 +117,19 @@ export const Config = {
   },
 
   // Calls onChange for every stored change until the returned function is
-  // called. EventSource reconnects by itself; it is logged, not captured.
-  events(onChange: (event: ChangedEvent) => void): () => void {
-    const source = new EventSource(`${API_BASE}/config/events`)
-    source.addEventListener('changed', (e) => onChange(JSON.parse((e as MessageEvent<string>).data) as ChangedEvent))
-    source.addEventListener('error', () => configLog.debug('the settings event stream dropped; reconnecting'))
-    return () => source.close()
+  // called, from the config.changes query on the live connection. After a
+  // reconnect changes may have been missed, so onResync is called: read
+  // everything again.
+  events(onChange: (event: ChangedEvent) => void, onResync?: () => void): () => void {
+    let snapshots = 0
+    return live.subscribe('config.changes', {}, {
+      onSnapshot: () => {
+        if (snapshots++ > 0) onResync?.()
+      },
+      onChange: (delta) => {
+        if (delta.op === 'upsert') onChange(delta.value as ChangedEvent)
+      },
+      onError: (err) => configLog.fromError(err).warn('cannot follow settings changes'),
+    })
   },
 }

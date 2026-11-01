@@ -19,6 +19,8 @@ const routes = [
   'authz',
   'secrets',
   'bootstrap',
+  'live',
+  'ui',
 ]
 
 // The Vite configuration every app built on common needs
@@ -42,7 +44,7 @@ export function foundation(backend = 'http://localhost:8080'): Plugin {
       },
       server: {
         proxy: Object.fromEntries(
-          routes.map((route) => [`/api/v1/${route}`, { target: backend, ws: route === 'kb' }]),
+          routes.map((route) => [`/api/v1/${route}`, { target: backend, ws: route === 'live' }]),
         ),
       },
     }),

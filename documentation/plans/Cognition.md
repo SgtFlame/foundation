@@ -200,7 +200,7 @@ The **Nexus** is the Cognition component where agents collaborate: a shared, str
 ## TODO
 ### Open questions
 1. **Nexus storage**: the proposal is streams as markdown files in a Volume (see [Nexus](#nexus)). Or should they be database rows only? This must be answered **before** the Nexus slice (slice 9, skipped for now: its plan is not fleshed out yet). *Decision*:
-3. **Background runs**: can graphs run without a chat (schedules, Nexus triggers), and should they be durable across server restarts? A durable job queue would revive the NATS question. Forge's plans propose JetStream durable consumers on an embedded NATS server for this ([Forge 10-Zapier.md](../../../forge/documentation/plans/10-Zapier.md), [03-DataModel.md](../../../forge/documentation/plans/03-DataModel.md)). *Decision*:
+3. **Background runs**: can graphs run without a chat (schedules, Nexus triggers), and should they be durable across server restarts? A durable job queue would revive the NATS question. Forge's plans propose JetStream durable consumers on an embedded NATS server for this ([Forge 07-Email.md](../../../forge/documentation/plans/07-Email.md), [11-Zapier.md](../../../forge/documentation/plans/11-Zapier.md), [03-DataModel.md](../../../forge/documentation/plans/03-DataModel.md)). *Decision*:
 
 (Questions 2, 4 and 5 are decided; see [Cognition.md › Decisions](../Cognition.md#decisions).)
 

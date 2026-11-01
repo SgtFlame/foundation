@@ -1,6 +1,7 @@
-// Client for the backend Collab REST handlers (backend/features/kb/rest/collabhandlers)
+// Client for the backend Collab REST handlers (backend/features/kb/rest/collabhandlers);
+// the rooms themselves are channels on the live connection (collab/CollabProvider.ts)
 
-import { API_BASE, http, type ResponseStatus } from './http/client.ts'
+import { http, type ResponseStatus } from './http/client.ts'
 import type { VolumePath } from './KnowledgeBase.ts'
 
 export { ServiceError } from './http/client.ts'
@@ -22,12 +23,5 @@ export const Collab = {
   async openFile(request: OpenFileRequest): Promise<OpenFileResponse> {
     const response = await http.post<OpenFileResponse>('/kb/collab/files/open', request)
     return response.data
-  },
-
-  // The WebSocket URL of a file's room, speaking the y-websocket protocol
-  socketUrl(fileId: string): string {
-    const url = new URL(`${API_BASE}/kb/collab/files/${fileId}`, window.location.href)
-    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-    return url.toString()
   },
 }

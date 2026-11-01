@@ -16,7 +16,6 @@ func (ch *ConversationHandler) Register(router gin.IRouter, service conversation
 
 	group.POST("/list", ch.List)
 	group.POST("/rounds", ch.Rounds)
-	group.POST("/send", ch.Send) // Server-Sent Events
 	group.POST("/feedback", ch.Feedback)
 	group.POST("/answer", ch.Answer) // a waiting tool call's approval or client result
 	group.GET("/context-providers", ch.ContextProviders)

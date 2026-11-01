@@ -1,5 +1,5 @@
-// Server-Sent Events over fetch, for the clients that stream (Chat.stream,
-// Logs.tail): EventSource cannot POST a body.
+// Server-Sent Events over fetch, for the client that streams over HTTP
+// (Logs.tail): EventSource cannot POST a body.
 
 // Parses a text/event-stream body into its events
 export async function* serverSentEvents(body: ReadableStream<Uint8Array>) {

@@ -41,6 +41,9 @@ export interface EditorContribution extends Contribution {
   // Usually lazy(() => import(...)). Typed for any object; the host passes
   // the tab's object, of the contribution's kind.
   component: ComponentType<EditorProps<never>>
+  // Its tabs reopen after a reload, from the object saved in the tab; set it
+  // only when the object is plain data (app tabs are)
+  restorable?: boolean
 }
 
 export const editors = defineExtensionPoint<EditorContribution>(

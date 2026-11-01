@@ -135,3 +135,6 @@ Tool calling is in [Tools.md › Built in slice 8](Tools.md#built-in-slice-8). W
   - `chatservice` (tag `chat`): each call's feature, level, model, temperature, max tokens, thinking budget, message roles, tools and JSON schema size; and a failure at `warn`, which `Fail` otherwise logs at `debug` for a 4xx.
   - the Gemini provider (tag `gemini`): the request config as JSON (without the system instruction's text, only its size) and each content's shape (`user[text:120]`, `model[call:kb_search+signature]`); a refusal's HTTP status, gRPC status and `details`; and a reply's finish reason, tokens, size and tool calls.
 - Prompts and replies are never logged, as in [Usage.md](Usage.md); `usage.capture` is the way to see them.
+
+## Since slice 13
+`conversation.send` is a call on the live connection ([Live.md](Live.md)) rather than `POST /conversation/send` with Server-Sent Events. Its events (`started`, `sources`, `delta`, `tool`, `done`, `title`, `followed`) and their data are the same, and a message refused before its round is stored ends the call with its status. `Conversation.send` keeps its signature, and aborting its signal cancels the call, which stops the reply. `POST /conversation/answer` stays REST.

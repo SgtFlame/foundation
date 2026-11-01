@@ -1,8 +1,8 @@
-// Client for the backend Chat REST handlers (backend/features/ai/rest/chathandlers)
+// Client for the backend Chat handlers (backend/features/ai/rest/chathandlers):
+// complete over REST, stream as a live call
 
-import { API_BASE, http, type ResponseStatus, ServiceError } from './http/client.ts'
-import { serverSentEvents } from './http/sse.ts'
-import { newTraceId, TRACE_HEADER } from './http/trace.ts'
+import { live } from '../live/LiveConnection.ts'
+import { http, type ResponseStatus, ServiceError } from './http/client.ts'
 
 export { ServiceError } from './http/client.ts'
 
@@ -48,46 +48,21 @@ export const Chat = {
     return response.data
   },
 
-  // Streams the reply as Server-Sent Events, calling onDelta with each piece,
-  // and resolves with the complete response. axios cannot stream in the
-  // browser, so this uses fetch and is not captured in DevTools' Network tab.
+  // Streams the reply over the live connection (the ai.chat.stream call),
+  // calling onDelta with each piece, and resolves with the complete
+  // response; a failure rejects with its ServiceError.
   async stream(request: StreamRequest, { onDelta, signal }: StreamOptions): Promise<CompleteResponse> {
-    const trace = newTraceId()
-    let response: Response
-    try {
-      response = await fetch(`${API_BASE}/ai/chat/stream`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'text/event-stream',
-          [TRACE_HEADER]: trace,
-        },
-        body: JSON.stringify(request),
-        signal,
-      })
-    } catch (error) {
-      if (signal?.aborted) throw error
-      throw new ServiceError(0, error instanceof Error ? error.message : String(error), undefined, trace)
-    }
-    if (!response.ok || !response.body) {
-      // A request that fails before generation starts gets a plain JSON error
-      const body = (await response.json().catch(() => undefined)) as CompleteResponse | undefined
-      throw new ServiceError(response.status, body?.message ?? response.statusText, body?.errorCode, trace)
-    }
-
-    for await (const { event, data } of serverSentEvents(response.body)) {
-      switch (event) {
-        case 'delta':
-          onDelta((JSON.parse(data) as { text: string }).text)
-          break
-        case 'done':
-          return JSON.parse(data) as CompleteResponse
-        case 'error': {
-          const failure = JSON.parse(data) as { code: number; message: string; errorCode?: string }
-          throw new ServiceError(failure.code, failure.message, failure.errorCode, trace)
-        }
-      }
-    }
-    throw new ServiceError(0, 'the chat stream ended early', undefined, trace)
+    let done: CompleteResponse | undefined
+    await live.call(
+      'ai.chat.stream',
+      request,
+      (event, data) => {
+        if (event === 'delta') onDelta((data as { text: string }).text)
+        else if (event === 'done') done = data as CompleteResponse
+      },
+      signal,
+    )
+    if (!done) throw new ServiceError(0, 'the chat stream ended early')
+    return done
   },
 }

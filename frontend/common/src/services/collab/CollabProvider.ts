@@ -1,13 +1,16 @@
 // A y-websocket compatible provider for the backend's collab rooms, with our
 // own control messages (role, seeded, ready, save, saved, compact, edit,
-// edited) on top of
-// the standard sync and awareness messages.
+// edited) on top of the standard sync and awareness messages. A room is a
+// channel on the live connection (collab.join, then binary frames on the
+// channel; collab.closed when the room ends it), rejoined when the
+// connection comes back.
 
 import * as decoding from 'lib0/decoding'
 import * as encoding from 'lib0/encoding'
 import * as awarenessProtocol from 'y-protocols/awareness'
 import * as syncProtocol from 'y-protocols/sync'
 import type * as Y from 'yjs'
+import { live } from '../../live/LiveConnection.ts'
 import { log } from '../../logging/index.ts'
 
 const messageSync = 0
@@ -34,7 +37,8 @@ export interface CollabProviderEvents {
   onConnected(connected: boolean): void
   onSynced(): void
   onControl(control: Control): void
-  // The server closed the room for good (status 4000 + HTTP code)
+  // The server closed the room for good, with the HTTP status (404: open
+  // the file again)
   onClosed(code: number, reason: string): void
   // Rewrites each remote awareness state before it is applied
   mapAwarenessState?(state: Record<string, unknown> | null): Record<string, unknown> | null
@@ -43,28 +47,34 @@ export interface CollabProviderEvents {
 const logger = log.In('collab')
 
 export class CollabProvider {
-  private readonly url: string
+  private readonly fileId: string
   private readonly doc: Y.Doc
   private readonly awareness: awarenessProtocol.Awareness
   private readonly events: CollabProviderEvents
-  private socket?: WebSocket
+  private channel?: ReturnType<typeof live.openChannel>
+  private joined = false
   private attempts = 0
   private retryTimer?: ReturnType<typeof setTimeout>
   private destroyed = false
+  private readonly offs: (() => void)[] = []
 
-  constructor(
-    url: string,
-    doc: Y.Doc,
-    awareness: awarenessProtocol.Awareness,
-    events: CollabProviderEvents,
-  ) {
-    this.url = url
+  constructor(fileId: string, doc: Y.Doc, awareness: awarenessProtocol.Awareness, events: CollabProviderEvents) {
+    this.fileId = fileId
     this.doc = doc
     this.awareness = awareness
     this.events = events
     doc.on('update', this.onDocUpdate)
     awareness.on('update', this.onAwarenessUpdate)
-    this.connect()
+    this.offs.push(
+      live.on('collab.closed', (frame) => {
+        if (frame.channel === this.channel?.id) this.closed(Number(frame.code), String(frame.message ?? ''))
+      }),
+      live.onReopen(() => this.join()),
+      live.onStatus(() => {
+        if (live.getStatus() !== 'open' && this.joined) this.lost()
+      }),
+    )
+    this.join()
   }
 
   sendControl(control: Control) {
@@ -87,45 +97,56 @@ export class CollabProvider {
     awarenessProtocol.removeAwarenessStates(this.awareness, [this.doc.clientID], 'local')
     this.doc.off('update', this.onDocUpdate)
     this.awareness.off('update', this.onAwarenessUpdate)
-    this.socket?.close()
+    for (const off of this.offs) off()
+    if (this.channel) {
+      live.send({ type: 'collab.leave', channel: this.channel.id })
+      this.channel.close()
+    }
   }
 
-  private connect() {
-    const socket = new WebSocket(this.url)
-    socket.binaryType = 'arraybuffer'
-    this.socket = socket
-
-    socket.onopen = () => {
-      this.attempts = 0
-      logger.Tags('socket').debug('connected to %s', this.url)
-      this.events.onConnected(true)
-      this.send((encoder) => {
-        encoding.writeVarUint(encoder, messageSync)
-        syncProtocol.writeSyncStep1(encoder, this.doc)
-      })
-      if (this.awareness.getLocalState() !== null) {
-        this.sendAwareness([this.doc.clientID])
-      }
+  // Joins the room on a fresh channel, then syncs as a new socket would
+  private join() {
+    if (this.destroyed) return
+    this.channel?.close()
+    const channel = live.openChannel((payload) => this.receive(payload))
+    this.channel = channel
+    if (!live.send({ type: 'collab.join', channel: channel.id, fileId: this.fileId })) return // joined on reopen
+    this.joined = true
+    this.attempts = 0
+    logger.Tags('room').debug('joined room %s', this.fileId)
+    this.events.onConnected(true)
+    this.send((encoder) => {
+      encoding.writeVarUint(encoder, messageSync)
+      syncProtocol.writeSyncStep1(encoder, this.doc)
+    })
+    if (this.awareness.getLocalState() !== null) {
+      this.sendAwareness([this.doc.clientID])
     }
+  }
 
-    socket.onmessage = (event: MessageEvent<ArrayBuffer>) => this.receive(new Uint8Array(event.data))
+  // The connection dropped: others' cursors go until it is back
+  private lost() {
+    this.joined = false
+    const others = [...this.awareness.getStates().keys()].filter((id) => id !== this.doc.clientID)
+    awarenessProtocol.removeAwarenessStates(this.awareness, others, this)
+    this.events.onConnected(false)
+  }
 
-    socket.onclose = (event) => {
-      if (this.socket !== socket) return
-      this.socket = undefined
-      const others = [...this.awareness.getStates().keys()].filter((id) => id !== this.doc.clientID)
-      awarenessProtocol.removeAwarenessStates(this.awareness, others, this)
-      this.events.onConnected(false)
-      if (this.destroyed) return
-      if (event.code >= 4000) {
-        logger.Tags('socket').With('code', event.code).warn('room closed: %s', event.reason)
-        this.events.onClosed(event.code - 4000, event.reason)
-        return
-      }
-      const delay = Math.min(1000 * 2 ** this.attempts++, 10_000)
-      logger.Tags('socket').debug('disconnected, retrying in %dms', delay)
-      this.retryTimer = setTimeout(() => this.connect(), delay)
+  // The room ended our channel: for good (4000 + an HTTP status), or to be
+  // joined again
+  private closed(code: number, reason: string) {
+    this.lost()
+    this.channel?.close()
+    this.channel = undefined
+    if (this.destroyed) return
+    if (code >= 4000) {
+      logger.Tags('room').With('code', code).warn('room closed: %s', reason)
+      this.events.onClosed(code - 4000, reason)
+      return
     }
+    const delay = Math.min(1000 * 2 ** this.attempts++, 10_000)
+    logger.Tags('room').debug('left the room, joining again in %dms', delay)
+    this.retryTimer = setTimeout(() => this.join(), delay)
   }
 
   private receive(data: Uint8Array) {
@@ -135,7 +156,7 @@ export class CollabProvider {
       case messageSync: {
         encoding.writeVarUint(encoder, messageSync)
         const subtype = syncProtocol.readSyncMessage(decoder, encoder, this.doc, this)
-        if (encoding.length(encoder) > 1) this.socket?.send(encoding.toUint8Array(encoder))
+        if (encoding.length(encoder) > 1) this.channel?.send(encoding.toUint8Array(encoder))
         if (subtype === syncProtocol.messageYjsSyncStep2) this.events.onSynced()
         break
       }
@@ -152,10 +173,10 @@ export class CollabProvider {
   }
 
   private send(write: (encoder: encoding.Encoder) => void) {
-    if (this.socket?.readyState !== WebSocket.OPEN) return
+    if (!this.joined || !this.channel) return
     const encoder = encoding.createEncoder()
     write(encoder)
-    this.socket.send(encoding.toUint8Array(encoder))
+    this.channel.send(encoding.toUint8Array(encoder))
   }
 
   private sendAwareness(clients: number[]) {

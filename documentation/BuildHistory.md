@@ -339,6 +339,51 @@ Each slice ends with something to look at, and the ★ marks where a decision is
       - **Building**: as in slice 11, link with `GOGC=25 GOFLAGS=-ldflags=-s` while other large processes run.
       - **Carried from slice 11 and earlier**: unchanged; see slices 11, 10 and 8.
 
+13. **The live core and server-driven UI** (Forge iteration 1, [forge 01-ServerUI.md](../../forge/documentation/plans/01-ServerUI.md)). *Built.* ★ the Hello app with two users ([Live.md](Live.md), [ServerUI.md](ServerUI.md)).
+    - **The live core**. *Built* (`features/live`):
+      - embedded NATS JetStream;
+      - commands committing events to a stream per tenant and area, with expected last subject sequences and duplicates dropped by id;
+      - projectors folding events into KV;
+      - queries as subscriptions;
+      - presence in KV;
+      - calls and connection extensions;
+      - the one WebSocket per window, `/api/v1/live`;
+      - in the browser: `live`, `useQuery`, `useCommand`, `usePresence`, `PresenceAvatars` and DevTools › Live.
+    - **Server-driven UI**. *Built* (`features/ui`, `src/ui/`):
+      - component trees with binding tracking and regions;
+      - sessions in NATS KV;
+      - the primitive catalog with metadata, and its MUI, flexlayout and React Flow renderers;
+      - app editor kinds as restorable top-level tabs (`AppHost`);
+      - the Go-written Hello app.
+    - **Moved onto the live connection**: Yjs rooms (as channels), chat's two streams (as calls) and configuration's change events (as the `config.changes` query). Their SSE routes and the room's WebSocket route are gone.
+    - **In Forge**: Axiom's `register.ts`, the Editors view's **Forge** section (*Prefabs* and *Applications*, placeholders), and `serve.go` wired as Foundation's.
+    - What slice 13 decided is recorded in [Live.md](Live.md#built-in-slice-13) and [ServerUI.md](ServerUI.md#built-in-slice-13).
+    - **Blockers**: none left. Its **Before** questions were answered before building:
+      - 01-ServerUI 1: binding tracking;
+      - 2: sessions in NATS KV;
+      - 3: flexlayout arrangements per user and page in settings;
+      - 4: no plain route;
+      - 5: a stream per area;
+      - 6: events kept forever;
+      - 8: Yjs over the live connection now;
+      - 9: chat and configuration off SSE now.
+
+      Only 2 and 3 went the way the plan proposed.
+    - **★ review pending**: the Hello app needs review by a person, with two users at once.
+      - Seen in headless Chromium against `serve` and the Vite dev server: increments, avatars, selections, graph edits and moves, typing into local state, an item tab and both tabs back after a reload, collaborative markdown over channels, settings changes, a chat failure through a call, and `serve` restarting under two open windows with an offline click applied once. Latency: a median of 75 ms from one user's click to the other's screen.
+      - Not seen: the dark theme beyond the known app-wide issue, a user's own flexlayout arrangement saved by dragging, an external NATS server, and several servers sharing one NATS.
+      - To review: run `serve` and `frontend/example`'s `yarn dev`. Set up two accounts, open Apps › Hello in two browsers signed in as each, increment, select and connect nodes, and open an item. Reload, and stop and restart `serve`. Watch DevTools › Live.
+    - **Decisions to review after seeing it**: in [Live.md](Live.md#decisions-to-review-after-seeing-it) and [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it). Among them: fresh snapshots on resume, presence as a query, serialized commands per target, stale events judged by node, and restorable tabs kept in browser storage.
+    - **Pending, carried forward** (the rest of the plan's TODO, in [forge 01-ServerUI.md](../../forge/documentation/plans/01-ServerUI.md#todo)):
+      - re-checking open subscriptions when grants change, and closing a connection whose session is revoked;
+      - atomic multi-event commits;
+      - the `navigate` and `focus` actions;
+      - the graph's `chain` layout;
+      - ephemeral `eph.` subjects;
+      - the trace carried in events;
+      - one `incompatible-library` lint warning on `mui.table`.
+    - **Building**: as in slices 11 and 12, link with `GOGC=25 GOFLAGS=-ldflags=-s` while other large processes run.
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -358,4 +403,5 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 10. Identity | none (MultiTenant 2 answered: 15-minute JWT plus rotating refresh token; 3: opt-in auth with `/setup`; 4: OIDC deferred; 5: an `Admin` flag until RBAC) | the decisions in [MultiTenant.md](MultiTenant.md#decisions-to-review-after-seeing-it), to review after seeing |
 | 11. RBAC | none (RBAC 1 answered: as proposed; 2: allow-only; 5: no content; 7, found while reading: the `Admin` flag becomes *Super Administrator*) | RBAC 3 (groups, not built), 4 and 6 (built on their proposals); the decisions in [RBAC.md](RBAC.md#decisions-to-review-after-seeing-it), to review after seeing |
 | 12. Secrets from Vault | none (Secrets 1 answered: a wrapped, single-use SecretID; 7, found while reading: keys at every scope; 5 was answered with RBAC 7 before slice 11) | Secrets 3, 4 and 6 (built on their proposals) and 2 (not built); the decisions in [Secrets.md](Secrets.md#decisions-to-review-after-seeing-it), to review after seeing |
+| 13. Live core and server UI (Forge 1) | forge 01-ServerUI 1, 2, 3, 4, 5, 6, 8 and 9 (all answered) | 01-ServerUI 7 (concurrent edits to one property), not reached by the Hello app; the decisions in [Live.md](Live.md#decisions-to-review-after-seeing-it) and [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it), to review after seeing |
 

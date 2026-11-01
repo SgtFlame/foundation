@@ -158,3 +158,12 @@ Editing is **multi-user and autosaved** with the common standard for shared text
 - **Verification:**
   - Format text with the toolbar. The Source tab should show the right markdown, and untouched list markers and emphasis styles should stay unchanged.
   - Edit at the same time in two windows (one WYSIWYG, one Source). Both should converge, and the file on disk should match after autosave.
+
+## Since slice 13
+A room is no longer its own WebSocket. It is a channel on the live connection ([Live.md](Live.md)).
+- **Joining**: the browser sends `collab.join {channel, fileId}`, and the room's y-websocket messages then travel as binary frames prefixed with the channel. `collab.leave` leaves it.
+- **Ending**: the room ends a channel with `collab.closed {channel, code, message}`, where 4000 + an HTTP status means for good (4404: open the file again) and 1000 means join again.
+- **The route**: `GET /kb/collab/files/:fileId` is gone. `collabhandlers.ContributeLive` adapts a channel to `collabservice.Conn`, and the default-tenant check moved there from `kbhandlers.InTenant`.
+- **The provider**: `CollabProvider(fileId, doc, awareness, events)` rejoins on a new channel whenever the connection comes back. Its events are unchanged, so the editors did not change.
+
+Two users edited one file this way in headless Chromium.

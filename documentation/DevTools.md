@@ -53,6 +53,9 @@ Delete the private `fetch`-based `post`. `openVault` becomes `http.post<OpenVaul
 - `yarn add axios` (yarn only, per CLAUDE.md).
 - CLAUDE.md: update the "Frontend client" section (shared `http` axios instance, capture on by default, `capture: false` opt-out), add `src/tabs/` and `src/logging/` to the frontend layout, and add the rule "use `log` from `src/logging`, never `console.*`".
 
+## Live (since slice 13)
+The **Live** tab (`tabs/devtools/live/LiveViewer.tsx`) shows the live connection ([Live.md](Live.md)), since the Network tab shows a WebSocket only as one row. It lists the connection's status and its last 500 frames (`src/live/frames.ts`), newest first, with direction, type, id, size and time. A filter on type and content, pause and clear are above the list, and the selected frame shows as JSON. Pings and pongs are not recorded, and binary frames (collaboration rooms) show only their size.
+
 ## Verification
 1. `cd frontend/example && yarn build` (tsc + vite) and `yarn lint` pass.
 2. Run backend (`serve`) + `yarn dev`. Open `/workbench`: the DevTools tab sits collapsed in the right border. Click it to expand.

@@ -55,6 +55,11 @@ export class EditorRegistry {
     return true
   }
 
+  // Whether an editor tab is open
+  isOpen(tabId: string): boolean {
+    return !!this.model.getNodeById(tabId)
+  }
+
   // Renames an open editor tab, e.g. after its object is renamed
   rename(tabId: string, name: string) {
     if (this.model.getNodeById(tabId)) this.model.doAction(Actions.renameTab(tabId, name))

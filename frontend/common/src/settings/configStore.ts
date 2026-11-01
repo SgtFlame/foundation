@@ -62,15 +62,23 @@ class ConfigStore {
     for (const listener of this.listeners) listener()
   }
 
-  // One event stream for the page, opened by the first subscriber
+  // One subscription for the page, opened by the first subscriber
   private watch() {
     if (this.stopEvents) return
-    this.stopEvents = Config.events((e) => {
-      for (const k of this.entries.keys()) {
-        const [section, scope] = k.split('|') as [string, Scope]
-        if (section === e.section) void this.refresh(section, scope)
-      }
-    })
+    this.stopEvents = Config.events(
+      (e) => {
+        for (const k of this.entries.keys()) {
+          const [section, scope] = k.split('|') as [string, Scope]
+          if (section === e.section) void this.refresh(section, scope)
+        }
+      },
+      () => {
+        for (const k of this.entries.keys()) {
+          const [section, scope] = k.split('|') as [string, Scope]
+          void this.refresh(section, scope)
+        }
+      },
+    )
   }
 }
 

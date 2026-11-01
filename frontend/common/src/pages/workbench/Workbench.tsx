@@ -7,6 +7,8 @@ import { fromSearch } from '../../editors/logs/view.ts'
 import WorkbenchContextProvider from '../../workbench/context/WorkbenchContextProvider.tsx'
 import { workbenchContext } from '../../workbench/context/WorkbenchContextStore.ts'
 import { extensions } from '../../workbench/extensions/index.ts'
+import { editors } from '../../workbench/points.ts'
+import { session } from '../../session/session.ts'
 import { bordersJson, syncBorders } from './borders.ts'
 import { createFactory } from './ComponentFactory.tsx'
 import { EditorRegistry } from './EditorRegistry.ts'
@@ -14,6 +16,52 @@ import SideBar from './SideBar.tsx'
 
 // Built on first render, after register.ts has loaded every contribution
 let workbench: { model: Model; registry: EditorRegistry; factory: ReturnType<typeof createFactory> } | undefined
+
+// The tabs of restorable editors reopen after a reload, from this browser's
+// storage (per tenant and user). App tabs are restorable even before their
+// kinds have loaded.
+type SavedTab = { id: string; name: string; helpText?: string; component: string; config: unknown }
+
+function savedTabsKey(): string {
+  const account = session.get().account
+  return account ? `workbench.tabs.${account.tenantId}.${account.user.id}` : 'workbench.tabs.local'
+}
+
+function restorable(kind: string): boolean {
+  return kind.startsWith('app:') || !!extensions.get(editors).find((c) => c.id === kind)?.restorable
+}
+
+type SavedTabs = { tabs: SavedTab[]; selected?: string }
+
+function loadTabs(): SavedTabs {
+  try {
+    const raw = localStorage.getItem(savedTabsKey())
+    const saved = raw ? (JSON.parse(raw) as SavedTabs) : undefined
+    return Array.isArray(saved?.tabs) ? saved : { tabs: [] }
+  } catch {
+    return { tabs: [] }
+  }
+}
+
+function saveTabs(model: Model) {
+  const tabs: SavedTab[] = []
+  model.visitNodes((node) => {
+    if (node instanceof TabNode && node.getParent() instanceof TabSetNode && restorable(node.getComponent() ?? '')) {
+      tabs.push({ id: node.getId(), name: node.getName(), helpText: node.getHelpText(), component: node.getComponent() ?? '', config: node.getConfig() })
+    }
+  })
+  const selected = model.getActiveTabset()?.getSelectedNode()?.getId()
+  try {
+    localStorage.setItem(savedTabsKey(), JSON.stringify({ tabs, selected } satisfies SavedTabs))
+  } catch {
+    // storage unavailable: tabs are not restored
+  }
+}
+
+function restoredTabset() {
+  const { tabs, selected } = loadTabs()
+  return { children: tabs.map((t) => ({ type: 'tab' as const, ...t })), selected: Math.max(tabs.findIndex((t) => t.id === selected), 0) }
+}
 
 function getWorkbench() {
   if (!workbench) {
@@ -23,7 +71,7 @@ function getWorkbench() {
       layout: {
         type: 'row',
         weight: 100,
-        children: [{ type: 'tabset', weight: 100, children: [] }],
+        children: [{ type: 'tabset', weight: 100, ...restoredTabset() }],
       },
     }
     const model = Model.fromJson(json)
@@ -49,7 +97,12 @@ function Workbench() {
   const { model, registry, factory } = getWorkbench()
   useEffect(() => extensions.subscribe(() => syncBorders(model)), [model])
   useEffect(() => {
-    const listener = { onAfterAction: () => syncContext(model) }
+    const listener = {
+      onAfterAction: () => {
+        syncContext(model)
+        saveTabs(model)
+      },
+    }
     syncContext(model)
     model.addChangeListener(listener)
     return () => model.removeChangeListener(listener)

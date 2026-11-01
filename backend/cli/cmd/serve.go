@@ -19,6 +19,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ai/providers/gemini"
 	"github.com/SgtFlame/foundation/backend/features/ai/rest/chathandlers"
 	"github.com/SgtFlame/foundation/backend/features/ai/rest/embedhandlers"
+	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
 	chatimpl "github.com/SgtFlame/foundation/backend/features/ai/services/chatservice/impl"
 	embedimpl "github.com/SgtFlame/foundation/backend/features/ai/services/embedservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/ai/settings"
@@ -43,10 +44,12 @@ import (
 	cognitionsettings "github.com/SgtFlame/foundation/backend/features/cognition/settings"
 	"github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/config/rest/confighandlers"
+	"github.com/SgtFlame/foundation/backend/features/config/services/configservice"
 	configimpl "github.com/SgtFlame/foundation/backend/features/config/services/configservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
 	conversationnodes "github.com/SgtFlame/foundation/backend/features/conversation/nodes"
 	"github.com/SgtFlame/foundation/backend/features/conversation/rest/conversationhandlers"
+	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	conversationimpl "github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice/impl"
 	conversationsettings "github.com/SgtFlame/foundation/backend/features/conversation/settings"
 	"github.com/SgtFlame/foundation/backend/features/db"
@@ -67,12 +70,23 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/collabhandlers"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/kbhandlers"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/volumehandlers"
+	"github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
 	collabimpl "github.com/SgtFlame/foundation/backend/features/kb/services/collabservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/kbservice"
 	kbimpl "github.com/SgtFlame/foundation/backend/features/kb/services/kbservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 	volumeimpl "github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice/impl"
 	kbtools "github.com/SgtFlame/foundation/backend/features/kb/tools"
+	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/SgtFlame/foundation/backend/features/live/bus"
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
+	"github.com/SgtFlame/foundation/backend/features/live/presence"
+	"github.com/SgtFlame/foundation/backend/features/live/project"
+	"github.com/SgtFlame/foundation/backend/features/live/rest/livehandlers"
+	liveimpl "github.com/SgtFlame/foundation/backend/features/live/services/liveservice/impl"
+	livesettings "github.com/SgtFlame/foundation/backend/features/live/settings"
+	"github.com/SgtFlame/foundation/backend/features/live/subscribe"
+	livetools "github.com/SgtFlame/foundation/backend/features/live/tools"
 	"github.com/SgtFlame/foundation/backend/features/logging"
 	"github.com/SgtFlame/foundation/backend/features/logs"
 	"github.com/SgtFlame/foundation/backend/features/logs/rest/logshandlers"
@@ -96,6 +110,14 @@ import (
 	toolscontext "github.com/SgtFlame/foundation/backend/features/tools/context"
 	toolsnodes "github.com/SgtFlame/foundation/backend/features/tools/nodes"
 	toolssettings "github.com/SgtFlame/foundation/backend/features/tools/settings"
+	"github.com/SgtFlame/foundation/backend/features/ui"
+	uicomponents "github.com/SgtFlame/foundation/backend/features/ui/components"
+	"github.com/SgtFlame/foundation/backend/features/ui/hello"
+	"github.com/SgtFlame/foundation/backend/features/ui/rest/uihandlers"
+	"github.com/SgtFlame/foundation/backend/features/ui/services/uiservice"
+	uiimpl "github.com/SgtFlame/foundation/backend/features/ui/services/uiservice/impl"
+	uisettings "github.com/SgtFlame/foundation/backend/features/ui/settings"
+	uitools "github.com/SgtFlame/foundation/backend/features/ui/tools"
 	"github.com/SgtFlame/foundation/backend/features/usage"
 	"github.com/SgtFlame/foundation/backend/features/usage/rest/usagehandlers"
 	usageimpl "github.com/SgtFlame/foundation/backend/features/usage/services/usageservice/impl"
@@ -121,6 +143,7 @@ var (
 	serveVaultAddr  string
 	serveVaultMount string
 	serveVaultRole  string
+	serveNatsURL    string
 )
 
 // serveCmd represents the serve command
@@ -148,6 +171,11 @@ with no sign-in. Afterwards every request needs a session. Tenants, users
 and sessions live in the application database (--app-db); everything else
 lives in the tenant database (--db). Each tenant has its own LanceDB
 directory, <data-dir>/lancedb/<tenantId>.
+
+The live core (commands, their events, projections, presence and UI
+sessions) runs on NATS JetStream, embedded in <data-dir>/nats with no
+network listener; --nats-url uses an external server instead. Browsers
+hold one WebSocket each at /api/v1/live.
 
 Logs go to stderr, and to VictoriaLogs when Settings (System › Logging)
 turns it on; --vlogs-url or $FOUNDATION_VLOGS_URL wins over the setting.
@@ -264,6 +292,19 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			return err
 		}
 
+		// The live core's event streams, projections, presence and UI
+		// sessions live in NATS JetStream, embedded with no listener unless
+		// --nats-url names an external server (documentation/Live.md)
+		natsURL := serveNatsURL
+		if natsURL == "" {
+			natsURL = os.Getenv("FOUNDATION_NATS_URL")
+		}
+		nats, err := natsd.Start(ctx, natsd.Options{Dir: filepath.Join(dataDir, "nats"), URL: natsURL})
+		if err != nil {
+			return err
+		}
+		defer nats.Close() // drained after the HTTP server has shut down
+
 		// The index's and Chronicle's stores are opened first: retrieval's
 		// library and chronicle sources search them
 		kbRoot := serveKBRoot
@@ -298,8 +339,16 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var kbToolDeps kbtools.Deps
 		var chronicleToolDeps chronicletools.Deps
 		var agentDeps toolsnodes.Deps
+		var liveToolDeps livetools.Deps
+		var livePresence *presence.Presence
+		var uiService uiservice.Service
+		var configLive configservice.Service
+		var chatLive chatservice.Service
+		var conversationLive conversationservice.Service
+		var collabLive collabservice.Service
 		registry := extensions.NewRegistry()
-		registry.Declare(config.Sections, conversation.ContextProviders, conversation.RoundFollowers, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, tools.Tools, authz.ResourceTypes)
+		registry.Declare(config.Sections, conversation.ContextProviders, conversation.RoundFollowers, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, tools.Tools, authz.ResourceTypes,
+			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds)
 		// Each feature declares its resource types and their actions
 		authz.Contribute(registry)
 		identity.ContributeAccess(registry)
@@ -311,6 +360,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		retrieval.ContributeAccess(registry)
 		cognition.ContributeAccess(registry)
 		kbservice.ContributeAccess(registry)
+		ui.ContributeAccess(registry)
+		hello.ContributeAccess(registry)
 		aisettings.Contribute(registry)
 		logssettings.Contribute(registry)
 		usagesettings.Contribute(registry)
@@ -330,6 +381,22 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		chronicletools.Contribute(registry, func() chronicletools.Deps { return chronicleToolDeps })
 		toolscontext.Contribute(registry)
 		toolsnodes.Contribute(registry, func() toolsnodes.Deps { return agentDeps })
+		// The live core, server-driven UI and the Hello app; a command is
+		// also a tool, so livetools runs after every feature's commands
+		livesettings.Contribute(registry)
+		uisettings.Contribute(registry)
+		if err := uicomponents.Contribute(registry); err != nil {
+			return err
+		}
+		hello.Contribute(registry)
+		presence.Contribute(registry, func() *presence.Presence { return livePresence })
+		uitools.Contribute(registry)
+		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
+		uihandlers.ContributeLive(registry, func() uiservice.Service { return uiService })
+		confighandlers.ContributeLive(registry, func() configservice.Service { return configLive })
+		chathandlers.ContributeLive(registry, func() chatservice.Service { return chatLive })
+		conversationhandlers.ContributeLive(registry, func() conversationservice.Service { return conversationLive })
+		collabhandlers.ContributeLive(registry, func() collabservice.Service { return collabLive })
 		conversationsettings.Contribute(registry) // after every chat.contextProvider: it adds their defaults sections
 		extensionsService := extensionsimpl.CreateService(extensionsimpl.WithRegistry(registry))
 
@@ -520,6 +587,25 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 				go reindexEntries()
 			}
 		})
+		configLive, chatLive, conversationLive, collabLive = configService, chatService, conversationService, collabService
+
+		// Commands decide on the projections; queries are subscriptions
+		projections := project.New(nats.JS(), registry)
+		defer projections.Close()
+		liveBus := bus.New(projections)
+		subscriptions := subscribe.New(projections, registry)
+		livePresence = presence.New(nats.JS(), userName)
+		liveToolDeps = livetools.Deps{Bus: liveBus, Subscriptions: subscriptions}
+		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())))
+		liveService := liveimpl.CreateService(liveimpl.WithBus(liveBus), liveimpl.WithSubscriptions(subscriptions), liveimpl.WithPresence(livePresence), liveimpl.WithRegistry(registry),
+			liveimpl.WithMaxSubscriptions(func() int {
+				settings, err := config.Read[livesettings.Live](configService, features.BackgroundArgs(ctx), livesettings.ID)
+				if err != nil || settings.MaxSubscriptions <= 0 {
+					return livesettings.Defaults.MaxSubscriptions
+				}
+				return settings.MaxSubscriptions
+			}))
+
 		indexOpts = append(indexOpts, indeximpl.WithEmbedder(embedService), indeximpl.WithStore(store))
 		indexService := indeximpl.CreateService(indexOpts...)
 
@@ -588,6 +674,12 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		retrievalHandler := &retrievalhandlers.RetrievalHandler{}
 		retrievalHandler.Register(api, retrievalService)
 
+		liveHandler := &livehandlers.LiveHandler{}
+		liveHandler.Register(api, liveService)
+
+		uiHandler := &uihandlers.UiHandler{}
+		uiHandler.Register(api, uiService)
+
 		indexHandler := &indexhandlers.IndexHandler{}
 		indexHandler.Register(volumes, indexService)
 
@@ -636,6 +728,7 @@ func init() {
 	serveCmd.Flags().StringVar(&serveVaultAddr, "vault-addr", "", "HashiCorp Vault holding the server's secrets, e.g. http://127.0.0.1:8200 (default $FOUNDATION_VAULT_ADDR); serve then starts sealed")
 	serveCmd.Flags().StringVar(&serveVaultMount, "vault-mount", "foundation", "Vault KV v2 mount of the server's secrets")
 	serveCmd.Flags().StringVar(&serveVaultRole, "vault-role-id", "", "the only AppRole role ID an unseal may use (default $FOUNDATION_VAULT_ROLE_ID); without it unseal.sh sends it")
+	serveCmd.Flags().StringVar(&serveNatsURL, "nats-url", "", "an external NATS server with JetStream for the live core, e.g. nats://127.0.0.1:4222 (default $FOUNDATION_NATS_URL); without it NATS runs embedded in <data-dir>/nats")
 	serveCmd.Flags().StringVar(&serveVLogsURL, "vlogs-url", "", "VictoriaLogs to store logs in, e.g. http://localhost:9428 (default $FOUNDATION_VLOGS_URL); wins over Settings")
 }
 

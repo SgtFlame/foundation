@@ -1,9 +1,9 @@
-// Client for the backend Conversation REST handlers
-// (backend/features/conversation/rest/conversationhandlers)
+// Client for the backend Conversation handlers
+// (backend/features/conversation/rest/conversationhandlers): REST, and
+// send as a live call
 
-import { API_BASE, http, type ResponseStatus, ServiceError } from './http/client.ts'
-import { serverSentEvents } from './http/sse.ts'
-import { newTraceId, TRACE_HEADER } from './http/trace.ts'
+import { live } from '../live/LiveConnection.ts'
+import { http, type ResponseStatus, ServiceError } from './http/client.ts'
 
 export { ServiceError } from './http/client.ts'
 
@@ -226,64 +226,47 @@ export const Conversations = {
     return response.data
   },
 
-  // Sends a message and streams the round as Server-Sent Events, resolving
-  // with the completed round once the stream ends (after the title, when one
-  // is generated). A failed reply resolves too, with its status and error;
-  // only a refused message throws. Like Chat.stream this uses fetch, so it is
-  // logged rather than captured in DevTools' Network tab.
+  // Sends a message and streams its round over the live connection (the
+  // conversation.send call), resolving with the completed round once the
+  // call ends (after the title, when one is generated). A failed reply
+  // resolves too, with its status and error; only a refused message throws.
+  // Aborting the signal stops the reply.
   async send(request: SendRequest, { onStarted, onSources, onDelta, onTool, onDone, onTitle, onFollowed, signal }: SendOptions = {}): Promise<Round> {
-    const trace = newTraceId()
-    let response: Response
-    try {
-      response = await fetch(`${API_BASE}/conversation/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', [TRACE_HEADER]: trace },
-        body: JSON.stringify(request),
-        signal,
-      })
-    } catch (error) {
-      if (signal?.aborted) throw error
-      throw new ServiceError(0, error instanceof Error ? error.message : String(error), undefined, trace)
-    }
-    if (!response.ok || !response.body) {
-      const body = (await response.json().catch(() => undefined)) as ResponseStatus | undefined
-      throw new ServiceError(response.status, body?.message ?? response.statusText, body?.errorCode, trace)
-    }
-
     let done: Round | undefined
-    for await (const { event, data } of serverSentEvents(response.body)) {
-      switch (event) {
-        case 'started': {
-          const started = JSON.parse(data) as { conversation: Conversation; round: Round }
-          onStarted?.(started.conversation, started.round)
-          break
+    await live.call(
+      'conversation.send',
+      request,
+      (event, data) => {
+        switch (event) {
+          case 'started': {
+            const started = data as { conversation: Conversation; round: Round }
+            onStarted?.(started.conversation, started.round)
+            break
+          }
+          case 'sources':
+            onSources?.((data as { segments: RoundSegment[] }).segments)
+            break
+          case 'delta':
+            onDelta?.((data as { text: string }).text)
+            break
+          case 'tool':
+            onTool?.(data as ToolCall)
+            break
+          case 'done':
+            done = (data as { round: Round }).round
+            onDone?.(done)
+            break
+          case 'title':
+            onTitle?.((data as { conversation: Conversation }).conversation)
+            break
+          case 'followed':
+            onFollowed?.(data as Followed)
+            break
         }
-        case 'sources':
-          onSources?.((JSON.parse(data) as { segments: RoundSegment[] }).segments)
-          break
-        case 'delta':
-          onDelta?.((JSON.parse(data) as { text: string }).text)
-          break
-        case 'tool':
-          onTool?.(JSON.parse(data) as ToolCall)
-          break
-        case 'done':
-          done = (JSON.parse(data) as { round: Round }).round
-          onDone?.(done)
-          break
-        case 'title':
-          onTitle?.((JSON.parse(data) as { conversation: Conversation }).conversation)
-          break
-        case 'followed':
-          onFollowed?.(JSON.parse(data) as Followed)
-          break
-        case 'error': {
-          const failure = JSON.parse(data) as { code: number; message: string; errorCode?: string }
-          throw new ServiceError(failure.code, failure.message, failure.errorCode, trace)
-        }
-      }
-    }
-    if (!done) throw new ServiceError(0, 'the reply stream ended early', undefined, trace)
+      },
+      signal,
+    )
+    if (!done) throw new ServiceError(0, 'the reply ended early')
     return done
   },
 }

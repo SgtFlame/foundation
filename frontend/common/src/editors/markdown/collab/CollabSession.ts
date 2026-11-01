@@ -5,7 +5,6 @@
 import { Awareness } from 'y-protocols/awareness'
 import * as Y from 'yjs'
 import { log } from '../../../logging/index.ts'
-import { Collab } from '../../../services/Collab.ts'
 import { CollabProvider, type Control } from '../../../services/collab/CollabProvider.ts'
 import { bridgeCursor, trackCursorSource } from './cursorBridge.ts'
 import { placeEdits } from './edits.ts'
@@ -63,7 +62,7 @@ export class CollabSession {
     this.untrackCursor = trackCursorSource(this.awareness)
     this.doc.on('update', this.onDocUpdate)
     window.addEventListener('pagehide', this.flush)
-    this.provider = new CollabProvider(Collab.socketUrl(this.fileId), this.doc, this.awareness, {
+    this.provider = new CollabProvider(this.fileId, this.doc, this.awareness, {
       onConnected: (connected) => {
         this.synced = false
         this.ready = false
