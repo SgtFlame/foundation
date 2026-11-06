@@ -185,3 +185,9 @@ The plan had no open questions before building (its question 4, whether a batch 
 ## Changed in slice 23
 - **`live.Apply` copies** the list or map it changes and leaves the data it was given as it was. A UI session's rendered props share its held query's data, so a row updated in place left the bound prop equal to itself and no patch went out ([Records.md › Built in slice 23](Records.md#built-in-slice-23)).
 - **A command graph's host carries its `Decision`** (`livenodes.CommandHost.Decision`), so the record nodes read and write other records in the command's area, and **a `data.query` graph can watch a key pattern** (`livenodes.Read.Pattern`), run again, debounced, when any matching key changes.
+
+## Changed in slice 24
+For autoNumber fields ([Records.md](Records.md#built-in-slice-24)):
+- **`Command.Holds`** names other targets a command's events always change, such as a counter every create takes a number from. The bus locks them with the command's own target before the first decision, so this process's commands on them take turns instead of conflicting. Commands on several servers can still conflict, three tries at most.
+- **A batch refused as one too many in flight is sent again.** JetStream limits the atomic batches in flight on a stream (error 10210, `project.IsBusy`); nothing was stored, so the bus waits a few milliseconds and decides again, up to 50 times, before failing. These waits do not count among the three tries.
+

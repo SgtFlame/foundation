@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math/rand/v2"
 	"net/http"
 	"slices"
 	"strconv"
@@ -29,6 +30,10 @@ import (
 )
 
 var log = live.Log.Tags("bus")
+
+// busyTries is how often a batch the stream refused as one too many in
+// flight is sent again before the command fails.
+const busyTries = 50
 
 // Tries is how often a command is decided before it fails with conflict.
 const Tries = 3
@@ -160,7 +165,15 @@ func (b *Bus) Execute(r Request) Result {
 	streamName := stream.CachedInfo().Config.Name
 	// The command's target is locked, and after a conflict every target its
 	// events change, so the next decision is the only one in this process
-	held := b.hold(nil, []string{b.lockKey(tenant, tg)})
+	keys := []string{b.lockKey(tenant, tg)}
+	if cmd.Holds != nil {
+		for _, t := range cmd.Holds(live.Decision{ServiceArgs: r.ServiceArgs, Target: tg, Args: r.Args}) {
+			if t.Area == cmd.Area {
+				keys = append(keys, b.lockKey(tenant, t))
+			}
+		}
+	}
+	held := b.hold(nil, keys)
 	defer func() { b.release(held) }()
 
 	// wait is the sequence each target's projection must reflect before
@@ -170,6 +183,7 @@ func (b *Bus) Execute(r Request) Result {
 	waitFor := func(t live.Target) uint64 {
 		return max(wait[t.Key()], b.lock(b.lockKey(tenant, t)).last.Load())
 	}
+	busy := 0
 	for try := 0; try < Tries; try++ {
 		state, err := b.p.WaitFor(ctx, tenant, cmd.Projection, tg.Key(), waitFor(tg), catchUp)
 		if err != nil {
@@ -206,6 +220,13 @@ func (b *Bus) Execute(r Request) Result {
 				keys = append(keys, b.lockKey(tenant, t))
 			}
 			held = b.hold(held, keys)
+			continue
+		}
+		if project.IsBusy(err) && busy < busyTries {
+			// Nothing was stored: send it again once a batch has landed
+			busy++
+			try--
+			time.Sleep(time.Duration(busy*5+rand.IntN(20)) * time.Millisecond)
 			continue
 		}
 		if err != nil {

@@ -18,7 +18,8 @@ export interface Conversation {
   contextSettings?: Record<string, unknown> // by chat.contextSettings id
 }
 
-// Where a cited segment opens: a Chronicle entry, or a Volume file's lines.
+// Where a cited segment opens: a Chronicle entry, a Volume file's lines,
+// or a record (entity and recordId).
 // For a Volume chunk the offsets and lines are exact while the file is
 // unchanged since it was indexed.
 export interface SegmentLocation {
@@ -30,6 +31,8 @@ export interface SegmentLocation {
   startLine?: number
   endLine?: number
   heading?: string
+  entity?: string // a record: its entity type and id
+  recordId?: string
 }
 
 // One segment a round injected, cited as [number], with the numbers the

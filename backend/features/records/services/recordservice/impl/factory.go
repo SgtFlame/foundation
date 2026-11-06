@@ -6,6 +6,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	"github.com/SgtFlame/foundation/backend/features/live/subscribe"
 	"github.com/SgtFlame/foundation/backend/features/records/data"
+	"github.com/SgtFlame/foundation/backend/features/records/files"
 	"github.com/SgtFlame/foundation/backend/features/records/services/recordservice"
 )
 
@@ -18,6 +19,11 @@ func WithRecords(b *bus.Bus, subs *subscribe.Subscriptions, deps data.Deps) Opti
 	return func(s *service) {
 		s.bus, s.subs, s.deps = b, subs, deps
 	}
+}
+
+// WithFiles sets where file fields' content is kept.
+func WithFiles(f *files.Store) Option {
+	return func(s *service) { s.files = f }
 }
 
 var (

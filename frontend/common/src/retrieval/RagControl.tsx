@@ -112,16 +112,17 @@ function RagControl({ value, onChange }: ContextControlProps) {
       <Stack direction="row">
         {(
           [
-            ['library', 'Volumes'],
-            ['chronicle', 'Chronicles'],
+            ['library', 'Volumes', true],
+            ['chronicle', 'Chronicles', true],
+            ['records', 'Records', false],
           ] as const
-        ).map(([id, label]) => (
+        ).map(([id, label, byDefault]) => (
           <FormControlLabel
             key={id}
             control={
               <Switch
                 size="small"
-                checked={sources[id] !== false}
+                checked={sources[id] ?? byDefault}
                 disabled={!enabled}
                 onChange={(_, on) => onChange({ ...value, sources: { ...sources, [id]: on } })}
               />

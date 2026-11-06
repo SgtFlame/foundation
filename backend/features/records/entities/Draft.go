@@ -76,6 +76,12 @@ type Publication struct {
 	// previous version (their fields, or how those fields' values sort):
 	// the records' indexer rebuilds them.
 	IndexChanges []string `json:"indexChanges,omitempty"`
+	// ComputedChanges are the computed fields added or changed since the
+	// previous version: the records' recompute writes their values again.
+	ComputedChanges []string `json:"computedChanges,omitempty"`
+	// SearchChanged is set when the searchable fields or the title field
+	// changed: the search index is rebuilt for the type.
+	SearchChanged bool `json:"searchChanged,omitempty"`
 }
 
 // TypeChange is one field's type change between published versions.

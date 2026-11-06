@@ -526,6 +526,20 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it-6).
     - **Pending, carried forward**: *Subscribe to records* (with prefab logic, forge 04); a batch's changes in one frame; the `records/data` test flake and Deep's retired model ([plans/Backlog.md](plans/Backlog.md)).
 
+24. **Richer fields and search** (Forge iteration 3, part 3j, [forge 03j-RicherFields.md](../../forge/documentation/plans/03j-RicherFields.md)). *Built.* ★ the Data Designer's new settings, rollups and search on real data ([Records.md](Records.md#built-in-slice-24)).
+    - **Built**:
+      - rich text as ProseMirror JSON, checked, with `record.setRichText` and plain text for search;
+      - `file` fields over a JetStream object store per tenant (upload, served only to the record's readers), and checked `volumeFile` references;
+      - formulas type checked as they are defined, rollups kept current by a follower, autoNumber from a counter committed in the create's batch, and createdAt/updatedAt/createdBy, all written by events, with `record.recompute`;
+      - search: a LanceDB table per tenant kept by a follower, `records.search` (live), `recordservice.Search`, the *Search records* node, the `records.search` tool and the optional `records` retrieval source;
+      - the *Upload file* and *File URL* nodes;
+      - in `live`, `Command.Holds` and the busy-batch retry;
+      - the Data Designer's rollup and searchable settings, and its records browser's computed, rich text and file cells (Forge);
+      - the wiring, in Foundation's `serve.go` and Forge's.
+    - **Blockers**: none. Forge 03-DataModel question 3 was answered (LanceDB); 9 (computed values written by events), 10 (records as an optional retrieval source) and forge 09-Notion 1 (ProseMirror JSON) were asked before building.
+    - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it-7).
+    - **Pending, carried forward**: serving Volume files from records; opening a record cited in chat; numbering records made before an autoNumber field; purging uploads no record holds (forge 03-DataModel question 6).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -556,4 +570,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 21. Access and row rules (Forge 3g) | none in the plan; gap 03g 1 (expr rules for every user, service principals skip them), answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-5), to review after seeing |
 | 22. Atomic multi-record commits (Forge 3h) | none (forge 03-DataModel 4 waits for forge 14) | the decisions in [Live.md](Live.md#decisions-to-review-after-seeing-it-1), to review after seeing |
 | 23. Record nodes and the task list (Forge 3i) | none in the plan; gaps 03i 1 (Hello seeds *Task*), 2 (its own tab), 3 (rows bind `records.find`) and 4 (a real model for the chat), answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-6), to review after seeing |
-
+| 24. Richer fields and search (Forge 3j) | forge 03-DataModel 3 (LanceDB, answered before), 9 (computed values written by events) and 10 (an optional retrieval source), and 09-Notion 1 (ProseMirror JSON), answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-7), to review after seeing |

@@ -35,6 +35,7 @@ func Token(b []byte) string { return tokens.EncodeToString(b) }
 // Sortable reports whether a field's values have an order: whether it
 // can be indexed, filtered by range and sorted by.
 func Sortable(f Field) bool {
+	f = ValueField(f)
 	switch f.Type {
 	case "text", "longText", "number", "decimal", "money", "bool", "date", "dateTime", "duration", "enum", "relation", "user":
 		return f.Type != "relation" || f.Relation == nil || !f.Relation.Many
@@ -120,6 +121,7 @@ func sortBytes(f Field, raw json.RawMessage) ([]byte, error) {
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return nil, err
 	}
+	f = ValueField(f)
 	out := []byte{1}
 	switch f.Type {
 	case "text", "longText":

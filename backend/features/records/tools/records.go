@@ -12,7 +12,7 @@ import (
 )
 
 // ContributeRecords registers the record tools: a one-time read, a
-// one-time aggregate and an import. Every record.* command is already a tool of its own (live/tools);
+// one-time aggregate, a search and an import. Every record.* command is already a tool of its own (live/tools);
 // svc returns the record service once made.
 func ContributeRecords(reg *extensions.Registry, svc func() recordservice.Service) {
 	tools.Tools.Register(reg, tools.Tool{
@@ -62,6 +62,24 @@ func ContributeRecords(reg *extensions.Registry, svc func() recordservice.Servic
 			}
 			return tools.Result{Content: map[string]any{"groups": resp.Groups, "plan": resp.Plan},
 				Summary: fmt.Sprintf("%d groups of %s records", len(resp.Groups), q.Entity)}, nil
+		},
+	})
+
+	tools.Tools.Register(reg, tools.Tool{
+		Descriptor: extensions.Descriptor{ID: "records.search", Source: "records"}, Title: "Search records", Effect: tools.EffectRead,
+		Description: "Finds records by the text of their searchable fields (those marked searchable), best first, each with its _score: in one entity type, or every type you may read when entity is left out. lexicalSemantic leans to exact words (-5) or to meaning (5); at 0 or below only records containing the words are found. Read a record's other fields with records.query.",
+		Input:       json.RawMessage(`{"type":"object","properties":{"entity":{"type":"string","description":"The entity type's id; every type when left out"},"text":{"type":"string","description":"What to search for"},"limit":{"type":"integer","description":"At most this many (20 when left out)"},"lexicalSemantic":{"type":"integer","minimum":-5,"maximum":5}},"required":["text"]}`),
+		Run: func(call tools.Call) (tools.Result, error) {
+			q, err := tools.Decode[data.SearchQuery](call)
+			if err != nil {
+				return tools.Result{}, err
+			}
+			resp := svc().Search(recordservice.SearchArgs{ServiceArgs: call.ServiceArgs, Query: q})
+			if resp.Common.Code >= 300 {
+				return tools.Result{}, fmt.Errorf("%s", resp.Common.Message)
+			}
+			return tools.Result{Content: map[string]any{"records": resp.Records},
+				Summary: fmt.Sprintf("%d records match %q", len(resp.Records), q.Text)}, nil
 		},
 	})
 

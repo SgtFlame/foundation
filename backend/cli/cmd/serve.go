@@ -6,6 +6,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ai/rest/embedhandlers"
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
 	chatimpl "github.com/SgtFlame/foundation/backend/features/ai/services/chatservice/impl"
+	"github.com/SgtFlame/foundation/backend/features/ai/services/embedservice"
 	embedimpl "github.com/SgtFlame/foundation/backend/features/ai/services/embedservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/ai/settings"
 	"github.com/SgtFlame/foundation/backend/features/authz"
@@ -96,10 +98,12 @@ import (
 	logssettings "github.com/SgtFlame/foundation/backend/features/logs/settings"
 	"github.com/SgtFlame/foundation/backend/features/records"
 	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
-	recordsnodes "github.com/SgtFlame/foundation/backend/features/records/nodes"
 	"github.com/SgtFlame/foundation/backend/features/records/entities"
+	recordsfiles "github.com/SgtFlame/foundation/backend/features/records/files"
+	recordsnodes "github.com/SgtFlame/foundation/backend/features/records/nodes"
 	"github.com/SgtFlame/foundation/backend/features/records/rest/entityhandlers"
 	"github.com/SgtFlame/foundation/backend/features/records/rest/recordhandlers"
+	recordssearch "github.com/SgtFlame/foundation/backend/features/records/search"
 	entityimpl "github.com/SgtFlame/foundation/backend/features/records/services/entityservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/records/services/recordservice"
 	recordimpl "github.com/SgtFlame/foundation/backend/features/records/services/recordservice/impl"
@@ -343,6 +347,26 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		defer store.Close()
 		entries := entrystore.OpenTenants(lanceRoot, serveEmbedDims)
 		defer entries.Close()
+		// Searchable records are kept beside them, embedded once the embed
+		// service exists (and a key lets it)
+		var recordDeps recordsdata.Deps
+		var recordEmbedder embedservice.Service
+		recordSearch := recordssearch.New(lanceRoot, serveEmbedDims, func(args features.ServiceArgs, text, title string, query bool) ([]float32, error) {
+			if recordEmbedder == nil {
+				return nil, errors.New("embedding is not ready")
+			}
+			purpose := embedservice.PurposeDocument
+			if query {
+				purpose = embedservice.PurposeQuery
+			}
+			args.Meta = args.Meta.WithFeature("records-search")
+			resp := recordEmbedder.Embed(embedservice.EmbedArgs{ServiceArgs: args, Texts: []string{text}, Purpose: purpose, Title: title})
+			if resp.Common.Code != http.StatusOK || len(resp.Vectors) == 0 {
+				return nil, fmt.Errorf("embedding failed with %d: %s", resp.Common.Code, resp.Common.Message)
+			}
+			return resp.Vectors[0], nil
+		}, func() recordsdata.Deps { return recordDeps })
+		defer recordSearch.Close()
 
 		// Features contribute to each other's extension points here, in order.
 		// The RAG Search and Chronicle providers need services that need
@@ -356,7 +380,6 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var liveToolDeps livetools.Deps
 		var draftDeps drafts.Deps
 		var entityDeps entities.Deps
-		var recordDeps recordsdata.Deps
 		var recordService recordservice.Service
 		var liveSubscriptions *subscribe.Subscriptions
 		var liveNodeDeps livenodes.Deps
@@ -390,6 +413,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		retrievalsettings.Contribute(registry)
 		indexsource.Contribute(registry, store, kbRoot)
 		chroniclesource.Contribute(registry, entries)
+		recordssearch.Contribute(registry, func() *recordssearch.Index { return recordSearch })
 		chroniclecontext.Contribute(registry, func() chroniclecontext.Deps { return chronicleDeps })
 		retrievalcontext.Contribute(registry, func() retrievalservice.Service { return retrievalService })
 		workbenchcontext.Contribute(registry)
@@ -644,7 +668,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		subscriptions.Resolve = livenodes.QueryFor(func() livenodes.Deps { return liveNodeDeps })
 		liveToolDeps = livetools.Deps{Bus: liveBus, Subscriptions: subscriptions}
 		liveSubscriptions = subscriptions
-		recordDeps = recordsdata.Deps{Projections: projections, Bus: liveBus, Settings: func(args features.ServiceArgs) recordssettings.Records {
+		recordEmbedder = embedService
+		recordFiles := recordsfiles.New(nats.JS())
+		recordDeps = recordsdata.Deps{Projections: projections, Bus: liveBus, Files: recordFiles, Search: recordSearch, Settings: func(args features.ServiceArgs) recordssettings.Records {
 			settings, err := config.Read[recordssettings.Records](configService, args, recordssettings.ID)
 			if err != nil {
 				return recordssettings.Defaults
@@ -662,7 +688,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			return out
 		}}
 		entityDeps = entities.Deps{Projections: projections, DB: gdb, OnPublish: func(args features.ServiceArgs) error { return recordsdata.Follow(args, recordDeps) }}
-		recordService = recordimpl.CreateService(recordimpl.WithRecords(liveBus, subscriptions, recordDeps))
+		recordService = recordimpl.CreateService(recordimpl.WithRecords(liveBus, subscriptions, recordDeps), recordimpl.WithFiles(recordFiles))
 		entityService := entityimpl.CreateService(entityimpl.WithEntities(entityDeps))
 		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())),
 			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))

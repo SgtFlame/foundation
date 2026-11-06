@@ -241,6 +241,9 @@ func commandSpecs() []spec {
 				if c.Target.ID == records.UserEntity {
 					return nil, problem("target", `"user" is the built-in entity type of the tenant's users`, "choose another id")
 				}
+				if strings.HasPrefix(c.Target.ID, "_") {
+					return nil, problem("target", fmt.Sprintf("%q starts with '_', which the records keep for their own data (such as autoNumber counters)", c.Target.ID), "choose an id starting with a letter or digit")
+				}
 				a, problems := args[struct {
 					Name, Description, Owner, TitleField string
 					Fields                               []records.Field
@@ -463,8 +466,16 @@ func commandSpecs() []spec {
 				}
 				e := *c.entity()
 				e.Version = c.draft.Published + 1
+				e.Fields = slices.Clone(e.Fields)
+				if problems := records.Resolve(&e, c.published); problems != nil {
+					for i := range problems {
+						problems[i].Path = "entity." + problems[i].Path
+					}
+					return nil, problems
+				}
 				prev := c.lastPublished()
-				return ev(EventPublished, Publication{Version: e.Version, Entity: e, TypeChanges: typeChanges(prev, e), IndexChanges: indexChanges(prev, e)}), nil
+				return ev(EventPublished, Publication{Version: e.Version, Entity: e, TypeChanges: typeChanges(prev, e), IndexChanges: indexChanges(prev, e),
+					ComputedChanges: computedChanges(prev, e), SearchChanged: searchChanged(prev, e)}), nil
 			},
 		},
 		{
@@ -496,6 +507,57 @@ func commandSpecs() []spec {
 
 // lastPublished is the target's last published version; nil before the
 // first.
+// published is another entity type's published version, for the
+// rollups that read it.
+func (c *decision) published(id string) (records.EntityType, bool) {
+	var e records.EntityType
+	v, ok, err := c.deps.Projections.Get(c.Context(), c.Principal.TenantID, PublishedProjector, TargetType+"."+id)
+	if err != nil || !ok || json.Unmarshal(v.Value, &e) != nil {
+		return e, false
+	}
+	return e, true
+}
+
+// computedChanges are e's computed fields that are new or differ from
+// prev's: the records' recompute writes their values again.
+func computedChanges(prev *records.EntityType, e records.EntityType) []string {
+	var out []string
+	for _, f := range e.Visible() {
+		if !records.IsComputed(f) {
+			continue
+		}
+		if prev != nil {
+			if old, _, ok := prev.FieldByID(f.ID); ok && !old.Hidden {
+				a, _ := json.Marshal([]any{old.Type, old.Formula, old.Rollup, old.Returns, old.Scale})
+				b, _ := json.Marshal([]any{f.Type, f.Formula, f.Rollup, f.Returns, f.Scale})
+				if string(a) == string(b) {
+					continue
+				}
+			}
+		}
+		out = append(out, f.ID)
+	}
+	return out
+}
+
+// searchChanged reports whether the fields e's records are searched by
+// differ from prev's, so the search index is rebuilt for them.
+func searchChanged(prev *records.EntityType, e records.EntityType) bool {
+	sig := func(e *records.EntityType) string {
+		if e == nil {
+			return ""
+		}
+		var ids []string
+		for _, f := range e.Visible() {
+			if f.Searchable {
+				ids = append(ids, f.ID+":"+f.Type)
+			}
+		}
+		return strings.Join(ids, ",") + "|" + e.TitleField
+	}
+	return sig(prev) != sig(&e)
+}
+
 func (c *decision) lastPublished() *records.EntityType {
 	v, ok, err := c.deps.Projections.Get(c.Context(), c.Principal.TenantID, PublishedProjector, c.Target.Key())
 	if err != nil || !ok {
@@ -535,7 +597,7 @@ func indexChanges(prev *records.EntityType, e records.EntityType) []string {
 			s := fmt.Sprint(x.Fields, x.Unique)
 			for _, id := range x.Fields {
 				f, _, _ := e.FieldByID(id)
-				raw, _ := json.Marshal([]any{f.Type, f.Options, f.Scale, f.Currency, f.Relation, f.Items})
+				raw, _ := json.Marshal([]any{f.Type, f.Returns, f.Options, f.Scale, f.Currency, f.Relation, f.Items})
 				s += string(raw)
 			}
 			out[x.ID] = s

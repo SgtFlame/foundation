@@ -17,8 +17,9 @@ import (
 const Converter = "records.converter"
 
 // Follow makes sure the principal's tenant converts its records when a
-// field's type changes, and rebuilds its indexes when a version changes
-// them (the indexer). Each runs as a follower of the def stream's
+// field's type changes and recomputes them when a computed field changes,
+// rebuilds its indexes when a version changes them (the indexer), keeps
+// rollups current (Rollups) and keeps the search index (Deps.Search). Each runs as a follower of the def stream's
 // published events: entity.publish starts it before its event commits
 // (entities.Deps.OnPublish), and the record commands and records.list start
 // them after a restart, catching up on what was published meanwhile.
@@ -28,6 +29,14 @@ func Follow(args features.ServiceArgs, deps Deps) error {
 	}
 	if err := followIndexes(args, deps); err != nil {
 		return err
+	}
+	if err := followRollups(args, deps); err != nil {
+		return err
+	}
+	if deps.Search != nil {
+		if err := deps.Search.Follow(args); err != nil {
+			return err
+		}
 	}
 	tenant := args.Principal.TenantID
 	subject := live.Target{Area: live.AreaDefinitions, Type: entities.TargetType, ID: "*"}.Subject(tenant, entities.EventPublished)
@@ -45,26 +54,24 @@ func convert(deps Deps, e live.Event) error {
 	if err := json.Unmarshal(e.Data, &p); err != nil {
 		return fmt.Errorf("cannot read the publication: %w", err)
 	}
+	forget(e.TenantID)
+	if err := convertAll(deps, e, p); err != nil {
+		return err
+	}
+	if len(p.ComputedChanges) > 0 {
+		return recomputeAll(deps, e.TenantID, e.Target.ID, e.Seq)
+	}
+	return nil
+}
+
+func convertAll(deps Deps, e live.Event, p entities.Publication) error {
 	if len(p.TypeChanges) == 0 {
 		return nil
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	entries, err := deps.Projections.Watch(ctx, e.TenantID, Projector, e.Target.ID+".*")
+	todo, err := RecordsOf(deps, e.TenantID, e.Target.ID)
 	if err != nil {
 		return err
 	}
-	var todo []Record
-	for en := range entries {
-		if en == nil {
-			break
-		}
-		var r Record
-		if !en.Deleted && json.Unmarshal(en.Value.Value, &r) == nil {
-			todo = append(todo, r)
-		}
-	}
-	cancel()
 	args := features.ServiceArgs{Ctx: context.Background(), Principal: features.ServicePrincipal(e.TenantID)}
 	for _, r := range todo {
 		var id string

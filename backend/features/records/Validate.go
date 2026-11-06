@@ -110,6 +110,9 @@ func checkFields(fields []Field, path string, exists func(string) bool, e *Entit
 		}
 		typeProblems := checkType(f, p, exists, e)
 		problems = append(problems, typeProblems...)
+		if f.Searchable && !SearchableType(f) {
+			add(p+".searchable", fmt.Sprintf("%s is a %s field, which is not searched as text", f.Name, f.Type), "mark text, longText, richText, enum, multiEnum or tags fields searchable, or formulas giving text")
+		}
 		if len(typeProblems) == 0 && !IsNull(f.Default) {
 			if _, err := CheckValue(f, f.Default); err != nil {
 				add(p+".default", "the default "+err.Error(), "give a default of the field's type, or null for none")
@@ -190,8 +193,19 @@ func checkType(f Field, p string, exists func(string) bool, e *EntityType) []liv
 		}
 		problems = append(problems, checkFields(f.Fields, p+".fields", exists, nil)...)
 	case "formula":
-		if strings.TrimSpace(f.Formula) == "" {
+		switch {
+		case e == nil:
+			add(p+".type", "a formula belongs at the top level of an entity type", "")
+		case strings.TrimSpace(f.Formula) == "":
 			add(p+".formula", "a formula field needs its expression", `give formula, e.g. "quantity * price"`)
+		default:
+			if _, _, err := CompileFormula(*e, f); err != nil {
+				add(p+".formula", fmt.Sprintf("the formula does not type check: %v", err), "use the ids of the fields above it (a formula reads only those), e.g. \"quantity * price\"")
+			}
+		}
+	case "autoNumber", "createdAt", "updatedAt", "createdBy":
+		if e == nil {
+			add(p+".type", fmt.Sprintf("a %s field belongs at the top level of an entity type", f.Type), "")
 		}
 	case "rollup":
 		if e == nil {

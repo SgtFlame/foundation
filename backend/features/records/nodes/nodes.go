@@ -50,11 +50,12 @@ func plain(v any) any {
 func Contribute(reg *extensions.Registry, deps func() data.Deps) {
 	contributeWrites(reg, deps)
 	contributeReads(reg, deps)
+	contributeFiles(reg, deps)
 	node(reg, 700, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "records.onChanged"}, Title: "On record changed", Category: "Events", Event: true, Kinds: []string{livenodes.KindTrigger},
 		Description: "Starts a trigger when a record of an entity type is created, changed or deleted (runs come with forge 07-Email)",
 		Example:     "On record changed for task, when done turns true, to email the task's creator",
-		Config: json.RawMessage(`{"type":"object","properties":{` + entityConfig + `,"events":{"type":"array","title":"Events","items":{"type":"string","enum":["created","updated","deleted"]},"description":"The changes it starts on; every one when empty"}},"required":["entity"]}`),
+		Config:      json.RawMessage(`{"type":"object","properties":{` + entityConfig + `,"events":{"type":"array","title":"Events","items":{"type":"string","enum":["created","updated","deleted"]},"description":"The changes it starts on; every one when empty"}},"required":["entity"]}`),
 		Pins: cognition.Pins{Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""),
 			cognition.DataPin("record", "Record", "json", "The record after the change; nothing once deleted"),
 			cognition.DataPin("old", "Old", "json", "The values the change replaced"),

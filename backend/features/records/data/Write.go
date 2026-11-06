@@ -78,7 +78,9 @@ func Write(d live.Decision, deps Deps, typ, id string, args json.RawMessage) ([]
 		return nil, id, problems
 	}
 	for i := range events {
-		events[i].Target = &t
+		if events[i].Target == nil { // an autoNumber counter has its own
+			events[i].Target = &t
+		}
 	}
 	return events, id, nil
 }

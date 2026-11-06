@@ -52,8 +52,16 @@ type Field struct {
 	Items    *Field          `json:"items,omitempty"`    // list: what each item is (its id and name are not used)
 	Fields   []Field         `json:"fields,omitempty"`   // object: its nested fields
 	Schema   json.RawMessage `json:"schema,omitempty"`   // json: the JSON Schema its values follow
-	Formula  string          `json:"formula,omitempty"`  // formula: an expression over the record
+	Formula  string          `json:"formula,omitempty"`  // formula: an expression over the record's fields by id
 	Rollup   *Rollup         `json:"rollup,omitempty"`   // rollup
+	// Returns is the type of a formula's or rollup's values (number, text,
+	// bool, decimal …), worked out when the entity type is published
+	// (Resolve); Scale, Currency, Options and Relation then describe them
+	// as they would a field of that type.
+	Returns string `json:"returns,omitempty"`
+	// Searchable puts the field's text in the records' full-text and
+	// vector search (Records.md › Built in slice 24).
+	Searchable bool `json:"searchable,omitempty"`
 }
 
 // Option is one choice of an enum or multiEnum field.

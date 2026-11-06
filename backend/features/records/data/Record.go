@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/live"
@@ -33,7 +34,26 @@ const (
 	EventAdded     = "added"     // {field, items}: items added to a list-like field
 	EventRemoved   = "removed"   // {field, items}: items removed from one
 	EventConverted = "converted" // {values, old, problems}: a field's type changed
+	// EventRecomputed changes only computed values (a formula or rollup
+	// published anew, or records a rollup reads changed); it leaves
+	// _updatedAt and _updatedBy as they were.
+	EventRecomputed = "recomputed" // {computed, meta}
+	// EventCounted is an autoNumber counter's next number, on the
+	// counter's own target (CounterType), committed with the created event
+	// that takes it.
+	EventCounted = "counted" // {n}
 )
+
+// CounterType is the target type of the autoNumber counters, one per
+// entity type, whose id is the entity type's (entity ids never start with
+// '_'). The records.record projector keeps each as {n}, keyed
+// _counter.<entityId>.
+const CounterType = "_counter"
+
+// Counter is an autoNumber counter's state and its counted event's data.
+type Counter struct {
+	N int64 `json:"n"`
+}
 
 // Change is an event's data.
 type Change struct {
@@ -42,6 +62,14 @@ type Change struct {
 	Field    string                     `json:"field,omitempty"`
 	Items    []json.RawMessage          `json:"items,omitempty"`
 	Problems map[string]string          `json:"problems,omitempty"` // field id → why its value was cleared
+	// Computed are computed fields' new values, null to clear one; the
+	// decision works them out after the event's own change (Records.md ›
+	// Built in slice 24).
+	Computed map[string]json.RawMessage `json:"computed,omitempty"`
+	// Meta are metadata fields (createdAt, updatedAt, createdBy) that take
+	// the value of the record's own data (field id → _createdAt …) once the
+	// event is folded.
+	Meta map[string]string `json:"meta,omitempty"`
 }
 
 // Record is a record as projected: its values by field id, and its own
@@ -118,6 +146,10 @@ func Apply(r Record, e live.Event) (Record, error) {
 		}
 	case EventDeleted:
 		return nil, nil
+	case EventRecomputed:
+		if r == nil {
+			return nil, nil
+		}
 	case EventUpdated, EventConverted:
 		if r == nil {
 			return nil, nil // changes to a record that is gone
@@ -164,12 +196,45 @@ func Apply(r Record, e live.Event) (Record, error) {
 		return r, nil
 	}
 	r[MetaSeq] = raw(e.Seq)
-	r[MetaUpdatedAt], r[MetaUpdatedBy] = at, by
+	if e.Type != EventRecomputed {
+		r[MetaUpdatedAt], r[MetaUpdatedBy] = at, by
+	}
+	for k, v := range c.Computed {
+		if records.IsNull(v) {
+			delete(r, k)
+		} else {
+			r[k] = v
+		}
+	}
+	for k, m := range c.Meta {
+		v, ok := r[m]
+		if !ok {
+			continue
+		}
+		if m == MetaCreatedBy || m == MetaUpdatedBy {
+			// A user is named by their id as text, as a user field holds it
+			var n uint64
+			if json.Unmarshal(v, &n) == nil {
+				v = raw(strconv.FormatUint(n, 10))
+			}
+		}
+		r[k] = v
+	}
 	return r, nil
 }
 
 // fold is the records.record projector's fold.
 func fold(f live.Fold) (json.RawMessage, error) {
+	if f.Event.Target.Type == CounterType {
+		if f.Event.Type != EventCounted {
+			return f.State, nil
+		}
+		var c Counter
+		if err := json.Unmarshal(f.Event.Data, &c); err != nil {
+			return nil, err
+		}
+		return json.Marshal(c)
+	}
 	var r Record
 	if f.State != nil {
 		if err := json.Unmarshal(f.State, &r); err != nil {

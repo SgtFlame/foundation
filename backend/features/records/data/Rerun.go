@@ -33,10 +33,9 @@ type computed struct {
 // changes to the entity types it reads, and the subscriber gets the
 // differences (Records.md › Built in slice 20).
 func rerun(f live.Feed, d Deps, entityIDs []string, list string, compute func() (computed, error)) error {
-	args := f.Args()
-	tenant := args.Principal.TenantID
+	tenant := f.Args().Principal.TenantID
 	// Changes are followed from before the first run
-	updates := make(chan *live.Entry, 64)
+	updates := make(chan live.Position, 64)
 	for _, id := range entityIDs {
 		ch, err := d.Projections.Updates(f.Context(), tenant, Projector, id+".*")
 		if err != nil {
@@ -45,13 +44,21 @@ func rerun(f live.Feed, d Deps, entityIDs []string, list string, compute func() 
 		go func() {
 			for e := range ch {
 				select {
-				case updates <- e:
+				case updates <- e.Value.Position():
 				case <-f.Context().Done():
 					return
 				}
 			}
 		}()
 	}
+	return rerunOn(f, d, updates, list, compute)
+}
+
+// rerunOn is rerun after each change updates sends, with the position it
+// reached: records.search runs again as the search index changes.
+func rerunOn(f live.Feed, d Deps, updates <-chan live.Position, list string, compute func() (computed, error)) error {
+	args := f.Args()
+	tenant := args.Principal.TenantID
 	run := func(pos live.Position) (computed, live.Position, error) {
 		folded, err := d.Projections.Folded(f.Context(), tenant, Projector)
 		if err != nil {
@@ -73,8 +80,8 @@ func rerun(f live.Feed, d Deps, entityIDs []string, list string, compute func() 
 		select {
 		case <-f.Context().Done():
 			return nil
-		case e := <-updates:
-			pos = pos.Merge(e.Value.Position())
+		case at := <-updates:
+			pos = pos.Merge(at)
 		}
 		// Every change within the window is one run
 		timer := time.NewTimer(wait)
@@ -84,8 +91,8 @@ func rerun(f live.Feed, d Deps, entityIDs []string, list string, compute func() 
 			case <-f.Context().Done():
 				timer.Stop()
 				return nil
-			case e := <-updates:
-				pos = pos.Merge(e.Value.Position())
+			case at := <-updates:
+				pos = pos.Merge(at)
 			case <-timer.C:
 				break window
 			}

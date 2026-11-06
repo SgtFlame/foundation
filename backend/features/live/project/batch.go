@@ -22,6 +22,9 @@ const (
 	ErrCodeBatchDuplicate jetstream.ErrorCode = 10201
 	// ErrCodeAtomicDisabled: the stream does not allow atomic batches.
 	ErrCodeAtomicDisabled jetstream.ErrorCode = 10174
+	// ErrCodeTooManyInflight: the stream has as many atomic batches in
+	// flight as it takes; one may be sent again shortly.
+	ErrCodeTooManyInflight jetstream.ErrorCode = 10210
 )
 
 // BatchAck is a committed batch: the stream and its last message's
@@ -115,4 +118,11 @@ func IsConflict(err error) bool {
 		return false
 	}
 	return apiErr.ErrorCode == jetstream.JSErrCodeStreamWrongLastSequence || apiErr.ErrorCode == jetstream.JSErrCodeStreamWrongLastSequenceConstant
+}
+
+// IsBusy reports whether a batch was refused only because the stream had
+// too many in flight: nothing was stored, and it may be sent again.
+func IsBusy(err error) bool {
+	var apiErr *jetstream.APIError
+	return errors.As(err, &apiErr) && apiErr.ErrorCode == ErrCodeTooManyInflight
 }

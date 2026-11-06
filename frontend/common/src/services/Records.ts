@@ -1,11 +1,12 @@
 // Client for the backend record REST handlers
 // (backend/features/records/rest/recordhandlers): reading records once
 // (find: filtered, sorted pages from the query planner; aggregate: counts
-// and sums) and importing rows. Records are changed by the record.* commands
+// and sums; search: by searchable fields' text), importing rows, and
+// uploading files for file fields (fileUrl serves them). Records are changed by the record.* commands
 // and read live by the records.get, records.list, records.find and
 // records.aggregate queries on the live connection; use those in editors.
 
-import { http, type ResponseStatus } from './http/client.ts'
+import { API_BASE, http, type ResponseStatus } from './http/client.ts'
 import type { Problem } from '../live/LiveConnection.ts'
 
 export { ServiceError } from './http/client.ts'
@@ -142,6 +143,79 @@ export interface ImportRecordsResponse extends ResponseStatus {
   failed: { row: number; problems: Problem[] }[]
 }
 
+// A search over the records' searchable fields: in one entity type, or
+// every type the user may read when entity is left out. lexicalSemantic
+// leans to exact words (-5) or meaning (5); at 0 or below only records
+// containing the words are found. useQuery<RecordSearch>('records.search',
+// request) keeps it current, its records keyed <entity>.<id>.
+export interface SearchRecordsRequest {
+  entity?: string
+  text: string
+  limit?: number // 20 when left out, at most 100
+  lexicalSemantic?: number
+}
+
+export interface SearchRecordsResponse extends ResponseStatus {
+  records: RecordData[] // best first, each with its _score
+}
+
+export interface RecordSearch {
+  records: RecordData[]
+}
+
+// A file field's value: an uploaded file, by id
+export interface FileRef {
+  id: string
+  name: string
+  size: number
+  contentType?: string
+}
+
+export interface UploadFileResponse extends ResponseStatus {
+  file?: FileRef
+}
+
+// A rich text field's value: a ProseMirror document, as TipTap and
+// Milkdown hold it; save one with record.setRichText
+export interface RichTextDoc {
+  type: 'doc'
+  content?: RichTextNode[]
+}
+
+export interface RichTextNode {
+  type: string
+  attrs?: Record<string, unknown>
+  content?: RichTextNode[]
+  text?: string
+  marks?: { type: string; attrs?: Record<string, unknown> }[]
+}
+
+// A document's text, a line per block, as the server searches it
+export function plainText(doc: RichTextDoc | RichTextNode | null | undefined): string {
+  const text = (n: RichTextNode): string => {
+    if (n.type === 'text') return n.text ?? ''
+    if (n.type === 'hardBreak' || n.type === 'hard_break') return '\n'
+    const parts = (n.content ?? []).map(text)
+    const inline = (n.content ?? []).some((c) => c.type === 'text' || c.type === 'hardBreak' || c.type === 'hard_break')
+    return parts.join(inline ? '' : '\n')
+  }
+  return doc ? text(doc).trim() : ''
+}
+
+// A document of plain text, a paragraph per line
+export function docFromText(text: string): RichTextDoc {
+  return {
+    type: 'doc',
+    content: text.split('\n').map((line) => (line ? { type: 'paragraph', content: [{ type: 'text', text: line }] } : { type: 'paragraph' })),
+  }
+}
+
+// Where a record field's file is served: only to someone who can read the
+// record. Uploaded HTML, SVG and the like download rather than show.
+export function fileUrl(entity: string, record: string, field: string, fileId: string): string {
+  return `${API_BASE}/records/files/${entity}/${record}/${field}/${fileId}`
+}
+
 const tsidEpoch = BigInt(Date.UTC(2026, 0, 1))
 let lastTsid = 0n
 
@@ -184,6 +258,22 @@ export const Records = {
 
   async import(request: ImportRecordsRequest): Promise<ImportRecordsResponse> {
     const response = await http.post<ImportRecordsResponse>('/records/records/import', request)
+    return response.data
+  },
+
+  async search(request: SearchRecordsRequest): Promise<SearchRecordsResponse> {
+    const response = await http.post<SearchRecordsResponse>('/records/records/search', request)
+    return response.data
+  },
+
+  // Keeps a file for entity's file fields; set the reference it gives on a
+  // record with record.update. Larger than the records section's maxFileMB
+  // is refused (413).
+  async upload(entity: string, file: File): Promise<UploadFileResponse> {
+    const form = new FormData()
+    form.append('entity', entity)
+    form.append('file', file)
+    const response = await http.post<UploadFileResponse>('/records/files/upload', form)
     return response.data
   },
 }

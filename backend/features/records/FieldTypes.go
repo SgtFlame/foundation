@@ -17,12 +17,13 @@ const (
 	GroupComputed   = "computed"
 )
 
-// FieldTypes are every field type. A definition accepts all of them; which
-// values are checked is up to the records (Forge's parts 3b and 3j).
+// FieldTypes are every field type. Computed ones are never set by a
+// command: the records' decisions write their values (Records.md › Built
+// in slice 24).
 var FieldTypes = []FieldType{
 	{ID: "text", Group: GroupBasic, Description: "One line of text"},
 	{ID: "longText", Group: GroupBasic, Description: "Plain text of several lines"},
-	{ID: "richText", Group: GroupBasic, Description: "Formatted text, as block JSON"},
+	{ID: "richText", Group: GroupBasic, Description: "Formatted text: a ProseMirror document {type: \"doc\", content: [blocks]}, saved whole by record.setRichText"},
 	{ID: "number", Group: GroupBasic, Description: "A floating-point number"},
 	{ID: "decimal", Group: GroupBasic, Description: "An exact decimal number with scale digits after the point (2 when left out)"},
 	{ID: "money", Group: GroupBasic, Description: "An exact amount with scale (2 when left out) and an ISO 4217 currency; any currency when it has none"},
@@ -35,14 +36,14 @@ var FieldTypes = []FieldType{
 	{ID: "tags", Group: GroupChoices, Description: "Free-form tags"},
 	{ID: "relation", Group: GroupReferences, Description: "A record (or with many, records) of another entity type: relation {entity, many, inverse}; entity \"user\" is the tenant's users"},
 	{ID: "user", Group: GroupReferences, Description: "One of the tenant's users"},
-	{ID: "file", Group: GroupReferences, Description: "An uploaded file"},
-	{ID: "volumeFile", Group: GroupReferences, Description: "A file in one of the tenant's Volumes"},
+	{ID: "file", Group: GroupReferences, Description: "An uploaded file {id, name, size, contentType}: upload it with POST /records/files/upload (or the Upload file node), then set the reference it gives"},
+	{ID: "volumeFile", Group: GroupReferences, Description: "A file in one of the tenant's Volumes {volumeId, path}, path relative to the volume"},
 	{ID: "json", Group: GroupStructured, Description: "Any JSON value, following schema when it has one"},
 	{ID: "list", Group: GroupStructured, Description: "A list of values, each as items describes ({type, …})"},
 	{ID: "object", Group: GroupStructured, Description: "Nested fields"},
-	{ID: "formula", Group: GroupComputed, Computed: true, Description: "Computed from the record by formula, an expression"},
-	{ID: "rollup", Group: GroupComputed, Computed: true, Description: "An aggregate over a relation: rollup {relation, field, aggregate: count|sum|min|max|avg}"},
-	{ID: "autoNumber", Group: GroupComputed, Computed: true, Description: "A number given to each new record, counting up"},
+	{ID: "formula", Group: GroupComputed, Computed: true, Description: "Computed from the record by formula, an expr-lang expression over its fields by id, e.g. \"quantity * price\""},
+	{ID: "rollup", Group: GroupComputed, Computed: true, Description: "An aggregate over the records a relation field points to: rollup {relation, field, aggregate: count|sum|min|max|avg}, kept current as they change"},
+	{ID: "autoNumber", Group: GroupComputed, Computed: true, Description: "A number given to each new record, counting up from 1 with no gaps"},
 	{ID: "createdAt", Group: GroupComputed, Computed: true, Description: "When the record was made"},
 	{ID: "updatedAt", Group: GroupComputed, Computed: true, Description: "When the record last changed"},
 	{ID: "createdBy", Group: GroupComputed, Computed: true, Description: "The user who made the record"},

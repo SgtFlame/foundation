@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"maps"
 	"strconv"
 	"strings"
@@ -30,12 +31,28 @@ type Projections interface {
 	Rekeep(ctx context.Context, tenant uint64, projector, key string, fn func(value json.RawMessage, kept []string) ([]string, error)) error
 	Settle(ctx context.Context, tenant uint64, projector string) error
 	Folded(ctx context.Context, tenant uint64, projector string) (live.Position, error)
+	WaitFor(ctx context.Context, tenant uint64, projector, key string, seq uint64, timeout time.Duration) (live.Projected, error)
 	Context() context.Context
+}
+
+// Files are the tenant's uploaded files, as the record commands check them:
+// a file set on a record must exist and have been uploaded by whoever sets
+// it (records/files).
+type Files interface {
+	// Uploader is who uploaded a file; ok is false when there is none.
+	Uploader(ctx context.Context, tenant uint64, id string) (user uint64, ok bool, err error)
+	// Put keeps a file a user uploads, refusing one over max bytes with
+	// ErrTooLarge.
+	Put(ctx context.Context, tenant, user uint64, name, contentType string, r io.Reader, max int64) (records.FileRef, error)
 }
 
 // Deps are what the commands, queries and converter need, made after the
 // registry.
 type Deps struct {
+	Files Files // without it, no file can be set on a record
+	// Search keeps the searchable records' search index; without it,
+	// records are not searched (records/search)
+	Search      Searcher
 	Projections Projections
 	Bus         *bus.Bus // the converter's record.convert commands
 	// Settings reads the records section as the principal sees it.
@@ -51,6 +68,9 @@ type User struct {
 	Username    string
 	DisplayName string
 }
+
+// SettingsFor is the records section as the principal sees it.
+func (d Deps) SettingsFor(args features.ServiceArgs) recordssettings.Records { return d.settings(args) }
 
 func (d Deps) settings(args features.ServiceArgs) recordssettings.Records {
 	if d.Settings == nil {
@@ -211,14 +231,16 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				return a.Entity, nil
 			},
 			Resource: func(p features.Principal, t live.Target) string { return records.Resource(p, t.Type) },
-			Decide: func(d live.Decision) ([]live.NewEvent, []live.Problem) { return decideRecord(s, d, deps()) },
+			Decide:   func(d live.Decision) ([]live.NewEvent, []live.Problem) { return decideRecord(s, d, deps()) },
 		}
 		if s.create {
 			cmd.NewTarget = func() string { return strconv.FormatUint(features.NewTSID(), 10) }
+			cmd.Holds = func(d live.Decision) []live.Target { return counterOf(d, deps()) }
 		}
 		live.Commands.Register(reg, cmd)
 	}
 	contributeQueries(reg, deps)
+	contributeSearch(reg, deps)
 }
 
 // decideRecord decides one record command on d's target.
@@ -235,21 +257,29 @@ func decideRecord(s spec, d live.Decision, deps Deps) ([]live.NewEvent, []live.P
 	if c.record == nil && !s.create {
 		return nil, problem("target", fmt.Sprintf("there is no %s record %q", d.Target.Type, d.Target.ID), "list them with records.query")
 	}
-	if s.internal {
-		return s.decide(c)
-	}
+	// An internal command decides without a published type too: it then
+	// computes nothing
 	e, problems := Entity(d.ServiceArgs, c.deps.Projections, d.Target.Type)
-	if problems != nil {
+	if problems != nil && !s.internal {
 		return nil, problems
 	}
 	c.entity = e
 	// A record the read rule hides is not there for the principal
-	if c.record != nil && !records.Allows(e.Rule("read"), c.record, d.Principal) {
+	if !s.internal && c.record != nil && !records.Allows(e.Rule("read"), c.record, d.Principal) {
 		return nil, problem("target", fmt.Sprintf("there is no %s record %q", d.Target.Type, d.Target.ID), "list them with records.query")
 	}
 	events, problems := s.decide(c)
 	if problems != nil || len(events) == 0 {
 		return events, problems
+	}
+	if events, problems = c.compute(events, s.create); problems != nil || len(events) == 0 {
+		return events, problems
+	}
+	if s.internal {
+		return events, nil
+	}
+	if problems := c.checkFiles(events); problems != nil {
+		return nil, problems
 	}
 	return events, c.rules(s.action, events)
 }
@@ -351,6 +381,37 @@ func commandSpecs() []spec {
 				return []live.NewEvent{{Type: EventDeleted, Data: Change{Old: c.record.Values()}}}, nil
 			},
 		},
+		{
+			id: "record.setRichText", title: "Save rich text", action: "record.update", events: []string{EventUpdated},
+			description: "Saves a rich text field's whole document, a ProseMirror doc {type: \"doc\", content: [nodes]} as TipTap or Milkdown hold it; null clears it. A collaboration room's writer saves this way, so each save is an event that search and other subscribers see.",
+			args:        `{"type":"object","properties":{` + entityArg + `,"field":{"type":"string","description":"The richText field's id"},"content":{"description":"The document, or null"},` + expectArg + `},"required":["entity","field","content"]}`,
+			example:     `{"entity":"page","field":"content","content":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Hello"}]}]}}`,
+			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+				a, problems := decode[struct {
+					Field   string
+					Content json.RawMessage
+					Expect  uint64
+				}](c.Args)
+				if problems == nil {
+					problems = c.expect(struct{ Expect uint64 }{a.Expect})
+				}
+				if problems != nil {
+					return nil, problems
+				}
+				f, problems := c.field(a.Field, "args.field")
+				if problems != nil {
+					return nil, problems
+				}
+				if f.Type != "richText" {
+					return nil, problem("args.field", fmt.Sprintf("%s is a %s field, not rich text", f.Name, f.Type), "set it with record.update")
+				}
+				out, problems := c.value(f.ID, a.Content, "args.content")
+				if problems != nil || same(out, c.record[f.ID]) {
+					return nil, problems
+				}
+				return []live.NewEvent{{Type: EventUpdated, Data: Change{Values: map[string]json.RawMessage{f.ID: orNull(out)}, Old: map[string]json.RawMessage{f.ID: orNull(c.record[f.ID])}}}}, nil
+			},
+		},
 		listSpec("record.addTo", "Add to a list", EventAdded,
 			"Adds items to a multiEnum, tags, list or to-many relation field, keeping what is there: two people adding at once both keep theirs. Items already there are left."),
 		listSpec("record.removeFrom", "Remove from a list", EventRemoved,
@@ -381,6 +442,15 @@ func commandSpecs() []spec {
 					change.Problems = map[string]string{a.Field: fmt.Sprintf("%s could not become a %s (%v), so it was cleared; its old value is in the record's history", v, a.To.Type, err)}
 				}
 				return []live.NewEvent{{Type: EventConverted, Data: change}}, nil
+			},
+		},
+		{
+			id: "record.recompute", title: "Recompute a record", action: "record.update", internal: true, events: []string{EventRecomputed},
+			description: "Writes a record's computed values again; sent when a formula or rollup is published anew, or when records a rollup reads change.",
+			args:        `{"type":"object","properties":{` + entityArg + `},"required":["entity"]}`,
+			example:     `{"entity":"project"}`,
+			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+				return []live.NewEvent{{Type: EventRecomputed, Data: Change{}}}, nil
 			},
 		},
 	}

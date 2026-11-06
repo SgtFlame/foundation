@@ -15,10 +15,6 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/tools"
 )
 
-// Unchecked are the field types whose values are kept as sent until
-// Forge's part 3j checks them.
-var Unchecked = []string{"richText", "file", "volumeFile"}
-
 // IsNull reports whether a raw value is absent or JSON null.
 func IsNull(raw json.RawMessage) bool {
 	return len(raw) == 0 || string(bytes.TrimSpace(raw)) == "null"
@@ -40,9 +36,6 @@ func CheckValue(f Field, raw json.RawMessage) (json.RawMessage, error) {
 	if t.Computed {
 		return nil, fmt.Errorf("%s is computed and cannot be set", f.Name)
 	}
-	if slices.Contains(Unchecked, f.Type) {
-		return raw, nil
-	}
 	var v any
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return nil, fmt.Errorf("not valid JSON: %v", err)
@@ -62,6 +55,12 @@ func checkValue(f Field, v any) (any, error) {
 			return nil, want("text", v)
 		}
 		return s, nil
+	case "richText":
+		return checkRichText(v)
+	case "file":
+		return checkFile(v)
+	case "volumeFile":
+		return checkVolumeFile(v)
 	case "number":
 		n, ok := v.(float64)
 		if !ok || math.IsInf(n, 0) || math.IsNaN(n) {
@@ -244,12 +243,15 @@ func Convert(from, to Field, raw json.RawMessage) (json.RawMessage, error) {
 	if t, _ := FieldTypeOf(to.Type); t.Computed {
 		return nil, fmt.Errorf("a computed field keeps no values")
 	}
-	if to.Type == "json" || slices.Contains(Unchecked, to.Type) {
+	if to.Type == "json" {
 		return raw, nil
 	}
 	var v any
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return nil, err
+	}
+	if to.Type == "richText" {
+		return CheckValue(to, must(json.Marshal(DocFromText(textOf(from, v)))))
 	}
 	if item, many := ItemOf(to); many {
 		var items []any
@@ -350,7 +352,8 @@ func ItemOf(f Field) (Field, bool) {
 }
 
 // textOf is a value as text: an option's name, a number without trailing
-// zeros, money with its currency, anything structured as JSON.
+// zeros, money with its currency, rich text's text, a file's name,
+// anything else structured as JSON.
 func textOf(f Field, v any) string {
 	switch x := v.(type) {
 	case string:
@@ -367,8 +370,18 @@ func textOf(f Field, v any) string {
 	case bool:
 		return strconv.FormatBool(x)
 	case map[string]any:
-		if f.Type == "money" {
+		switch f.Type {
+		case "money":
 			return fmt.Sprintf("%v %v", x["amount"], x["currency"])
+		case "richText":
+			return PlainText(must(json.Marshal(x)))
+		case "file", "volumeFile":
+			if s, ok := x["name"].(string); ok {
+				return s
+			}
+			if s, ok := x["path"].(string); ok {
+				return s
+			}
 		}
 	}
 	return string(must(json.Marshal(v)))

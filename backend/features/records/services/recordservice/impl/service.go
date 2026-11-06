@@ -8,13 +8,15 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	"github.com/SgtFlame/foundation/backend/features/live/subscribe"
 	"github.com/SgtFlame/foundation/backend/features/records/data"
+	"github.com/SgtFlame/foundation/backend/features/records/files"
 	"github.com/SgtFlame/foundation/backend/features/records/services/recordservice"
 )
 
 type service struct {
-	bus  *bus.Bus
-	subs *subscribe.Subscriptions
-	deps data.Deps
+	bus   *bus.Bus
+	subs  *subscribe.Subscriptions
+	deps  data.Deps
+	files *files.Store
 }
 
 // command sends one record command; the bus checks access.

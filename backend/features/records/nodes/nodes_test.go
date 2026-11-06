@@ -253,10 +253,10 @@ func TestWriteNodesCommitAsOneBatch(t *testing.T) {
 // host is a handler's host, recording the view state it sets.
 type host struct{ state map[string]any }
 
-func (h *host) State(path string) any      { return h.state[path] }
-func (h *host) Set(path string, v any)     { h.state[path] = v }
-func (h *host) Value(string) any           { return nil }
-func (h *host) Do(ui.Action)               {}
+func (h *host) State(path string) any               { return h.state[path] }
+func (h *host) Set(path string, v any)              { h.state[path] = v }
+func (h *host) Value(string) any                    { return nil }
+func (h *host) Do(ui.Action)                        {}
 func (h *host) OpenEditor(_, _, _, _ string, _ any) {}
 func (h *host) Command(string, string, any) ([]live.Problem, *features.ServiceResponse) {
 	return nil, nil

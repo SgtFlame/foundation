@@ -175,7 +175,12 @@ type Command struct {
 	// NewTarget, when set, makes the target's id for a command sent
 	// without one (a record made from Go or a tool). A browser that may
 	// resend the command makes the id itself, so a resend is a duplicate.
-	NewTarget  func() string
+	NewTarget func() string
+	// Holds, when set, names other targets the command's events always
+	// change, such as a counter every create takes a number from: the bus
+	// locks them with the command's own before deciding it, so commands of
+	// this process on them do not conflict.
+	Holds      func(d Decision) []Target
 	Projection string // the projector whose value is the target's state
 	// Internal commands are sent only by the server, such as converting a
 	// record when its field's type changes: they get no tool.

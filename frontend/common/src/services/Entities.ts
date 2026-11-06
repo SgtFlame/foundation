@@ -33,8 +33,10 @@ export interface EntityField {
   items?: EntityField // list
   fields?: EntityField[] // object
   schema?: Record<string, unknown> // json
-  formula?: string
-  rollup?: { relation: string; field?: string; aggregate: string }
+  formula?: string // an expr-lang expression over the fields above it, by id
+  rollup?: { relation: string; field?: string; aggregate: string } // count, sum, avg, min, max
+  returns?: string // a formula's or rollup's value type, set when published
+  searchable?: boolean // text, longText, richText, enum, multiEnum, tags: in records.search
 }
 
 export interface EntityIndex {

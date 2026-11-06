@@ -2,9 +2,11 @@ package recordservice
 
 import (
 	"encoding/json"
+	"io"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/SgtFlame/foundation/backend/features/records"
 	"github.com/SgtFlame/foundation/backend/features/records/data"
 )
 
@@ -21,6 +23,14 @@ type Service interface {
 	// Aggregate computes aggregates over the records a query keeps, once.
 	Aggregate(args AggregateArgs) AggregateResponse
 	Import(args ImportArgs) ImportResponse
+	// Search finds records by the text of their searchable fields, once.
+	Search(args SearchArgs) SearchResponse
+	// Upload keeps a file for an entity type's file fields and returns the
+	// reference a record's field is then set to.
+	Upload(args UploadArgs) UploadResponse
+	// OpenFile reads a file a record's field holds, for someone who can
+	// read the record.
+	OpenFile(args OpenFileArgs) OpenFileResponse
 	// Create, Update and Delete are only called from Go.
 	Create(args CreateArgs) CommandResponse
 	Update(args UpdateArgs) CommandResponse
@@ -119,4 +129,44 @@ type CommandResponse struct {
 	ID       string // the record's id
 	Seq      uint64
 	Problems []live.Problem
+}
+
+type SearchArgs struct {
+	features.ServiceArgs
+	Query data.SearchQuery
+}
+
+type SearchResponse struct {
+	Common  features.ServiceResponse
+	Records []data.Record // best first, each with its _score
+}
+
+// UploadArgs are a file for entity's file fields: the principal needs to
+// create or change its records.
+type UploadArgs struct {
+	features.ServiceArgs
+	Entity      string
+	Name        string
+	ContentType string
+	Content     io.Reader
+}
+
+type UploadResponse struct {
+	Common features.ServiceResponse
+	File   records.FileRef
+}
+
+// OpenFileArgs name a file by the record field holding it.
+type OpenFileArgs struct {
+	features.ServiceArgs
+	Entity string
+	Record string
+	Field  string
+	File   string // the file's id
+}
+
+type OpenFileResponse struct {
+	Common  features.ServiceResponse
+	File    records.FileRef
+	Content io.ReadCloser // the caller closes it
 }
