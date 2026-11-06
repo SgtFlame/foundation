@@ -3,6 +3,8 @@ package live
 import (
 	"context"
 	"encoding/json"
+	"maps"
+	"slices"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -135,7 +137,7 @@ func ListOf(projector string, pattern func(f Feed) (string, error)) func(Feed) e
 
 // Apply applies one change to a query's result held as decoded JSON (maps,
 // slices and values), as a subscriber that keeps the result does, and
-// returns the new result.
+// returns the new result; data itself is left as it was.
 func Apply(data any, d Delta) any {
 	var value any
 	if d.Value != nil {
@@ -146,7 +148,11 @@ func Apply(data any, d Delta) any {
 		if m == nil {
 			return data
 		}
+		// Copied, never changed in place: a caller may hold the old data
+		// (a UI session's rendered props share it)
+		m = maps.Clone(m)
 		list, _ := m[d.List].([]any)
+		list = slices.Clone(list)
 		at := func(p *int) int {
 			if p == nil {
 				return -1
@@ -186,11 +192,14 @@ func Apply(data any, d Delta) any {
 		if !ok {
 			m = map[string]any{}
 		}
+		m = maps.Clone(m)
 		m[d.Key] = value
 		return m
 	case "remove":
 		if m, ok := data.(map[string]any); ok {
+			m = maps.Clone(m)
 			delete(m, d.Key)
+			return m
 		}
 	}
 	return data

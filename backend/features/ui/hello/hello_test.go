@@ -25,6 +25,9 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/live/services/liveservice"
 	liveimpl "github.com/SgtFlame/foundation/backend/features/live/services/liveservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/live/subscribe"
+	"github.com/SgtFlame/foundation/backend/features/records/data"
+	"github.com/SgtFlame/foundation/backend/features/records/entities"
+	recordsnodes "github.com/SgtFlame/foundation/backend/features/records/nodes"
 	"github.com/SgtFlame/foundation/backend/features/ui"
 	uicomponents "github.com/SgtFlame/foundation/backend/features/ui/components"
 	"github.com/SgtFlame/foundation/backend/features/ui/hello"
@@ -112,6 +115,12 @@ func newStack(t *testing.T) *stack {
 	uinodes.Contribute(reg)
 	ui.ContributeOverlays(reg)
 	hello.Contribute(reg)
+	// The task list's records
+	var entityDeps entities.Deps
+	var recordDeps data.Deps
+	entities.Contribute(reg, func() entities.Deps { return entityDeps })
+	data.Contribute(reg, func() data.Deps { return recordDeps })
+	recordsnodes.Contribute(reg, func() data.Deps { return recordDeps })
 	gdb, err := db.Open(db.WithPath(filepath.Join(t.TempDir(), "test.db")))
 	if err != nil {
 		t.Fatal(err)
@@ -130,6 +139,14 @@ func newStack(t *testing.T) *stack {
 	draftDeps = drafts.Deps{Engine: eng, Projections: p}
 	liveDeps = livenodes.Deps{Engine: eng, Bus: b, Subscriptions: subs, Store: p, Presence: pres}
 	uiDeps = uinodes.Deps{Engine: eng, Presence: pres}
+	recordDeps = data.Deps{Projections: p, Bus: b, Users: func(_ uint64, ids []uint64) map[uint64]data.User {
+		out := map[uint64]data.User{}
+		for _, id := range ids {
+			out[id] = data.User{Username: fmt.Sprintf("user%d", id), DisplayName: map[uint64]string{1: "Ada", 2: "Bob"}[id]}
+		}
+		return out
+	}}
+	entityDeps = entities.Deps{Projections: p, OnPublish: func(args features.ServiceArgs) error { return data.Follow(args, recordDeps) }}
 	b.Resolve = livenodes.CommandFor(func() livenodes.Deps { return liveDeps })
 	subs.Resolve = livenodes.QueryFor(func() livenodes.Deps { return liveDeps })
 	var uiService uiservice.Service = uiimpl.New(uiimpl.WithRegistry(reg), uiimpl.WithBus(b), uiimpl.WithSubscriptions(subs), uiimpl.WithStore(ui.NewKVSessions(srv.JS())),
@@ -300,6 +317,7 @@ func TestTheGraphsAreValid(t *testing.T) {
 	cognitionnodes.Contribute(reg)
 	livenodes.Contribute(reg, func() livenodes.Deps { return livenodes.Deps{} })
 	uinodes.Contribute(reg)
+	recordsnodes.Contribute(reg, func() data.Deps { return data.Deps{} })
 	hello.Contribute(reg)
 	cat := cognition.CatalogOf(reg)
 	for _, t2 := range cat.Types {
@@ -314,7 +332,7 @@ func TestTheGraphsAreValid(t *testing.T) {
 			t.Errorf("%s: %+v", b.ID, res.Problems)
 		}
 	}
-	if n != 11 {
-		t.Errorf("%d graphs, want 11", n)
+	if n != 20 {
+		t.Errorf("%d graphs, want 20", n)
 	}
 }

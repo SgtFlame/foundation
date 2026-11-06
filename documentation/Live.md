@@ -181,3 +181,7 @@ The plan had no open questions before building (its question 4, whether a batch 
 - A resent batch's ack names its targets' last sequence rather than its own.
 - A retry locks all of a command's targets; the first decision still locks only its own.
 - A batch spanning two projectors is atomic within each, not across them.
+
+## Changed in slice 23
+- **`live.Apply` copies** the list or map it changes and leaves the data it was given as it was. A UI session's rendered props share its held query's data, so a row updated in place left the bound prop equal to itself and no patch went out ([Records.md › Built in slice 23](Records.md#built-in-slice-23)).
+- **A command graph's host carries its `Decision`** (`livenodes.CommandHost.Decision`), so the record nodes read and write other records in the command's area, and **a `data.query` graph can watch a key pattern** (`livenodes.Read.Pattern`), run again, debounced, when any matching key changes.

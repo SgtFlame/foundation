@@ -96,6 +96,7 @@ import (
 	logssettings "github.com/SgtFlame/foundation/backend/features/logs/settings"
 	"github.com/SgtFlame/foundation/backend/features/records"
 	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
+	recordsnodes "github.com/SgtFlame/foundation/backend/features/records/nodes"
 	"github.com/SgtFlame/foundation/backend/features/records/entities"
 	"github.com/SgtFlame/foundation/backend/features/records/rest/entityhandlers"
 	"github.com/SgtFlame/foundation/backend/features/records/rest/recordhandlers"
@@ -423,6 +424,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Records: changed by record.* commands, converted when a field's
 		// type changes
 		recordsdata.Contribute(registry, func() recordsdata.Deps { return recordDeps })
+		recordsnodes.Contribute(registry, func() recordsdata.Deps { return recordDeps })
 		recordstools.ContributeRecords(registry, func() recordservice.Service { return recordService })
 		presence.Contribute(registry, func() *presence.Presence { return livePresence })
 		uitools.Contribute(registry)

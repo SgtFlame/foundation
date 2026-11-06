@@ -2,6 +2,7 @@ package ui
 
 import (
 	"encoding/json"
+	"net/http"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -42,9 +43,13 @@ type EditorKind struct {
 func KindID(app, kind string) string { return "app:" + app + ":" + kind }
 
 // QueryRef is a query a page holds while open, named for its bindings.
+// Bind binds params to view state: param name → "state.<path>". When the
+// state changes, the session subscribes again with the new params (a
+// state value of nil leaves the param as Params has it).
 type QueryRef struct {
 	Query  string
 	Params any
+	Bind   map[string]string
 }
 
 // Subject is what a page's tab reports to the workbench context.
@@ -66,6 +71,10 @@ type Page struct {
 	Queries func(params json.RawMessage) map[string]QueryRef
 	// Subject is what its tab is showing, from the params.
 	Subject func(params json.RawMessage) Subject
+	// Setup runs each time a session opens, before the page's queries
+	// open: for what the page needs to exist, such as an app's entity
+	// types. A failure fails the opening.
+	Setup func(h *Handle) error
 	// OnOpen sets up the view state of a new session.
 	OnOpen func(h *Handle) error
 	// Render returns the page's tree. It reads view state and query data
@@ -140,6 +149,17 @@ func (h *Handle) Command(typ, target string, args any) ([]live.Problem, *feature
 	raw, _ := json.Marshal(args)
 	problems, fail := h.s.o.Commander.Execute(h.ServiceArgs, "ui-"+newID(), typ, target, h.request, raw)
 	return problems, fail
+}
+
+// Query reads a query's result once, now, as the handle's principal: for
+// a decision, never for what the page shows, which it binds.
+func (h *Handle) Query(query string, params any) (any, *features.ServiceResponse) {
+	if h.s.o.Subs == nil {
+		return nil, h.Fail(http.StatusServiceUnavailable, Log.Code("no_queries").New("there are no queries"))
+	}
+	raw, _ := json.Marshal(params)
+	data, _, fail := h.s.o.Subs.Once(h.ServiceArgs, query, raw)
+	return data, fail
 }
 
 // Do adds a client action.

@@ -211,37 +211,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				return a.Entity, nil
 			},
 			Resource: func(p features.Principal, t live.Target) string { return records.Resource(p, t.Type) },
-			Decide: func(d live.Decision) ([]live.NewEvent, []live.Problem) {
-				c := &decision{Decision: d, deps: deps()}
-				if err := Follow(d.ServiceArgs, c.deps); err != nil {
-					log.Error(d.Context(), err, "the converter cannot start")
-				}
-				if d.State != nil {
-					if err := json.Unmarshal(d.State, &c.record); err != nil {
-						return nil, problem("", "the record cannot be read: "+err.Error(), "")
-					}
-				}
-				if c.record == nil && !s.create {
-					return nil, problem("target", fmt.Sprintf("there is no %s record %q", d.Target.Type, d.Target.ID), "list them with records.query")
-				}
-				if s.internal {
-					return s.decide(c)
-				}
-				e, problems := Entity(d.ServiceArgs, c.deps.Projections, d.Target.Type)
-				if problems != nil {
-					return nil, problems
-				}
-				c.entity = e
-				// A record the read rule hides is not there for the principal
-				if c.record != nil && !records.Allows(e.Rule("read"), c.record, d.Principal) {
-					return nil, problem("target", fmt.Sprintf("there is no %s record %q", d.Target.Type, d.Target.ID), "list them with records.query")
-				}
-				events, problems := s.decide(c)
-				if problems != nil || len(events) == 0 {
-					return events, problems
-				}
-				return events, c.rules(s.action, events)
-			},
+			Decide: func(d live.Decision) ([]live.NewEvent, []live.Problem) { return decideRecord(s, d, deps()) },
 		}
 		if s.create {
 			cmd.NewTarget = func() string { return strconv.FormatUint(features.NewTSID(), 10) }
@@ -249,6 +219,39 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		live.Commands.Register(reg, cmd)
 	}
 	contributeQueries(reg, deps)
+}
+
+// decideRecord decides one record command on d's target.
+func decideRecord(s spec, d live.Decision, deps Deps) ([]live.NewEvent, []live.Problem) {
+	c := &decision{Decision: d, deps: deps}
+	if err := Follow(d.ServiceArgs, c.deps); err != nil {
+		log.Error(d.Context(), err, "the converter cannot start")
+	}
+	if d.State != nil {
+		if err := json.Unmarshal(d.State, &c.record); err != nil {
+			return nil, problem("", "the record cannot be read: "+err.Error(), "")
+		}
+	}
+	if c.record == nil && !s.create {
+		return nil, problem("target", fmt.Sprintf("there is no %s record %q", d.Target.Type, d.Target.ID), "list them with records.query")
+	}
+	if s.internal {
+		return s.decide(c)
+	}
+	e, problems := Entity(d.ServiceArgs, c.deps.Projections, d.Target.Type)
+	if problems != nil {
+		return nil, problems
+	}
+	c.entity = e
+	// A record the read rule hides is not there for the principal
+	if c.record != nil && !records.Allows(e.Rule("read"), c.record, d.Principal) {
+		return nil, problem("target", fmt.Sprintf("there is no %s record %q", d.Target.Type, d.Target.ID), "list them with records.query")
+	}
+	events, problems := s.decide(c)
+	if problems != nil || len(events) == 0 {
+		return events, problems
+	}
+	return events, c.rules(s.action, events)
 }
 
 func commandSpecs() []spec {

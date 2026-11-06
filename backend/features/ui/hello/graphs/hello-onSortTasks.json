@@ -1,0 +1,162 @@
+{
+  "id": "hello-onSortTasks",
+  "name": "On sort tasks",
+  "description": "Sorts the tasks by the column clicked: sets the view state the task query's sort is bound to.",
+  "kind": "ui.handler",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "ui.onEvent",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "field",
+            "type": "string",
+            "description": "The column's field"
+          },
+          {
+            "id": "direction",
+            "type": "string",
+            "description": "asc or desc"
+          }
+        ]
+      }
+    },
+    {
+      "id": "shown",
+      "type": "data.expression",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "config": {
+        "expr": "{field: field, direction: direction}",
+        "type": "json"
+      },
+      "title": "Table sort"
+    },
+    {
+      "id": "sort",
+      "type": "data.expression",
+      "position": {
+        "x": 600,
+        "y": 200
+      },
+      "config": {
+        "expr": "[{field: field, desc: direction == \"desc\"}]",
+        "type": "json"
+      },
+      "title": "Query sort"
+    },
+    {
+      "id": "setShown",
+      "type": "ui.setState",
+      "position": {
+        "x": 300,
+        "y": 0
+      },
+      "config": {
+        "path": "sortShown"
+      }
+    },
+    {
+      "id": "set",
+      "type": "ui.setState",
+      "position": {
+        "x": 600,
+        "y": 0
+      },
+      "config": {
+        "path": "sort"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "setShown",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "setShown",
+        "pin": "then"
+      },
+      "to": {
+        "node": "set",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "field"
+      },
+      "to": {
+        "node": "shown",
+        "pin": "field"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "direction"
+      },
+      "to": {
+        "node": "shown",
+        "pin": "direction"
+      }
+    },
+    {
+      "from": {
+        "node": "shown",
+        "pin": "value"
+      },
+      "to": {
+        "node": "setShown",
+        "pin": "value"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "field"
+      },
+      "to": {
+        "node": "sort",
+        "pin": "field"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "direction"
+      },
+      "to": {
+        "node": "sort",
+        "pin": "direction"
+      }
+    },
+    {
+      "from": {
+        "node": "sort",
+        "pin": "value"
+      },
+      "to": {
+        "node": "set",
+        "pin": "value"
+      }
+    }
+  ]
+}

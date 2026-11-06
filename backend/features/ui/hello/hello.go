@@ -5,7 +5,8 @@
 // own top-level tab. Its handlers, the counter's command and its query are
 // graphs (graphs/*.json), built in and editable: a tenant's published
 // versions replace them. The shared graph's commands and query, and the
-// render functions, stay Go until records (03) and prefabs (04).
+// render functions, stay Go until records (03) and prefabs (04). The task
+// list (tasks.go) reads and writes records (forge 03i).
 package hello
 
 import (

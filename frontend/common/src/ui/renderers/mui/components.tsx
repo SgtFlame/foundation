@@ -352,6 +352,38 @@ interface Column {
   title?: string
   width?: number
   sortable?: boolean
+  sortField?: string
+  type?: 'text' | 'number' | 'bool' | 'date' | 'dateTime' | 'enum'
+  editable?: boolean
+  options?: { value: string; label?: string }[]
+}
+
+// at reads a row's value by a dotted path.
+function at(row: Record<string, unknown>, path: string): unknown {
+  let v: unknown = row
+  for (const part of path.split('.')) {
+    if (v === null || typeof v !== 'object') return undefined
+    v = (v as Record<string, unknown>)[part]
+  }
+  return v
+}
+
+function TableCellValue({ column, row, rowKey, emit }: { column: Column; row: Record<string, unknown>; rowKey: string; emit: P['emit'] }) {
+  const v = at(row, column.field)
+  if (column.type === 'bool') {
+    return (
+      <Checkbox size="small" checked={v === true} disabled={!column.editable} sx={{ p: 0 }}
+        slotProps={{ input: { 'aria-label': column.title ?? column.field } }}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(_, checked) => emit('edit', { key: rowKey, field: column.field, value: checked })} />
+    )
+  }
+  if (column.type === 'enum' && column.options) {
+    const o = column.options.find((x) => x.value === v)
+    return <>{o?.label ?? str(v)}</>
+  }
+  if (column.type === 'dateTime' && typeof v === 'string') return <>{new Date(v).toLocaleString()}</>
+  return <>{str(v)}</>
 }
 
 export function MuiTable(p: P) {
@@ -385,8 +417,11 @@ export function MuiTable(p: P) {
             {columns.map((c) => (
               <TableCell key={c.field} sx={{ width: c.width }}>
                 {c.sortable ? (
-                  <TableSortLabel active={sort?.field === c.field} direction={sort?.field === c.field ? sort.direction : 'asc'}
-                    onClick={() => p.emit('sort', { field: c.field, direction: sort?.field === c.field && sort.direction === 'asc' ? 'desc' : 'asc' })}>
+                  <TableSortLabel active={sort?.field === (c.sortField ?? c.field)} direction={sort?.field === (c.sortField ?? c.field) ? sort.direction : 'asc'}
+                    onClick={() => {
+                      const f = c.sortField ?? c.field
+                      p.emit('sort', { field: f, direction: sort?.field === f && sort.direction === 'asc' ? 'desc' : 'asc' })
+                    }}>
                     {c.title ?? c.field}
                   </TableSortLabel>
                 ) : (c.title ?? c.field)}
@@ -402,7 +437,7 @@ export function MuiTable(p: P) {
             return (
               <TableRow key={key} hover selected={selected.has(key)} onClick={() => select(key)} onDoubleClick={() => p.emit('open', { key })} sx={{ cursor: selection !== 'none' ? 'pointer' : undefined }}>
                 {columns.map((c) => (
-                  <TableCell key={c.field}>{str(row[c.field])}</TableCell>
+                  <TableCell key={c.field}><TableCellValue column={c} row={row} rowKey={key} emit={p.emit} /></TableCell>
                 ))}
               </TableRow>
             )

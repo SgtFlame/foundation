@@ -1,8 +1,8 @@
 # Records: entity types and their records
 
-Applications get their own data. An **entity type** is a schema for records, such as *Task* or *Customer*: its fields, title field, indexes and row rules. Entity types are definitions on the live core ([Live.md](Live.md)). They change only by `entity.*` commands, so several people can edit one at once and each sees the others' changes as they commit, and they are read by queries that are subscriptions. **Records** of those types are aggregates on the live core too: the generic `record.*` commands change them, one projector keeps them in KV with their **index entries**, and the `records.get`, `records.list` and `records.find` queries read them, through a query planner that uses an index when one fits. `records.find` is a sorted page that stays current without running again. A query can expand relations, and `records.aggregate` keeps counts and sums current; both run again, debounced, when what they read changes. An entity type's row rules hide records from every query and check every command.
+Applications get their own data. An **entity type** is a schema for records, such as *Task* or *Customer*: its fields, title field, indexes and row rules. Entity types are definitions on the live core ([Live.md](Live.md)). They change only by `entity.*` commands, so several people can edit one at once and each sees the others' changes as they commit, and they are read by queries that are subscriptions. **Records** of those types are aggregates on the live core too: the generic `record.*` commands change them, one projector keeps them in KV with their **index entries**, and the `records.get`, `records.list` and `records.find` queries read them, through a query planner that uses an index when one fits. `records.find` is a sorted page that stays current without running again. A query can expand relations, and `records.aggregate` keeps counts and sums current; both run again, debounced, when what they read changes. An entity type's row rules hide records from every query and check every command. Blueprints read and write records with the record nodes, and a page binds a record query to a component prop.
 
-It was designed in [forge 03-DataModel.md](../../forge/documentation/plans/03-DataModel.md) and is built as Forge's iteration 3, in parts. Part 3a, entity types, is slice 16. Part 3b, records, is slice 17; Forge's Data Designer (part 3c, [forge DataDesigner.md](../../forge/documentation/DataDesigner.md)) was built with it. Part 3d, indexes and the query planner, is slice 18. Part 3e, live queries, is slice 19. Part 3f, expansions and aggregates, is slice 20. Part 3g, access and row rules, is slice 21.
+It was designed in [forge 03-DataModel.md](../../forge/documentation/plans/03-DataModel.md) and is built as Forge's iteration 3, in parts. Part 3a, entity types, is slice 16. Part 3b, records, is slice 17; Forge's Data Designer (part 3c, [forge DataDesigner.md](../../forge/documentation/DataDesigner.md)) was built with it. Part 3d, indexes and the query planner, is slice 18. Part 3e, live queries, is slice 19. Part 3f, expansions and aggregates, is slice 20. Part 3g, access and row rules, is slice 21. Part 3i, record nodes and the Hello task list, is slice 23 (part 3h, atomic batches, was slice 22 in [Live.md](Live.md#built-in-slice-22)).
 
 ## Built in slice 16
 
@@ -419,3 +419,50 @@ Decided while building:
 - Users in rules are text ids, `_createdBy` included.
 - A new published version restarts every open record query on its type, from a new snapshot.
 - Access stays on `tenant:<id>/records/entity:<id>` until apps exist.
+
+## Built in slice 23
+
+Forge's part 3i ([forge 03i-TaskList.md](../../forge/documentation/plans/03i-TaskList.md)): the Blueprint record nodes, page queries bound to view state, and the Hello app's task list, the iteration's demo. The binding and the page are in [ServerUI.md](ServerUI.md#changed-in-slice-23) and [Blueprints.md](Blueprints.md#changed-in-slice-23).
+
+### Decisions
+Gaps found while reading the plan, asked before building ([forge 03i › TODO](../../forge/documentation/plans/03i-TaskList.md#todo), questions 1-4):
+- **Hello seeds *Task*.** The first time a tenant opens the task list, Hello defines and publishes *Task* (owner `app:hello`, fields `title`, `done`, `due`, `assignee`; indexes `by_due` and `by_done_due`) as the tenant's service principal. The Data Designer edits it like any other type afterwards.
+- **The list is its own top-level tab**, `app:hello:tasks`, opened from *Open task list* on Hello's main page.
+- **Rows bind `records.find` directly**, with `where` and `sort` bound to view state, so rows arrive as list changes. The "N open" count is a `data.query` graph over the *Aggregate* node.
+- **The chat acceptance runs through a real model** (Gemini), as well as through the same commands in a Go test. Columns come from *Task*'s published fields, so a published new field is a column at once.
+
+Decided while building:
+- **Write nodes decide as the record commands do.** *Create record*, *Update record*, *Delete record*, *Add to* and *Remove from* (command graphs only) call `data.Write`, which checks the principal may run the record command on the entity type, checks the args against its schema, reads the record with `Decision.Read` and runs the same decision `record.*` runs (values, defaults, required fields, `expect`, row rules). Their events name their record as `NewEvent.Target`, so a graph's writes and its own events commit as one atomic batch ([Live.md](Live.md#built-in-slice-22)). A refusal ends the run as *Reject* does: nothing commits, and the command is rejected with the record command's problems. A command graph that writes records has `area: rec`; its own target may be a record (`task.toggle`) or a name with no events of its own (`taskList.main` for `task.clearDone`).
+- **Each write sees the record as committed**: two write nodes on one record in one command both decide on the state before the command, so a record created in a command cannot also be changed by it.
+- **Read nodes work in every kind**: *Get record*, *Query* (records.find's request, from the config with a `query` input over it) and *Aggregate* (records.aggregate's, with a `request` input, and `values`, the first group's values, for a plain count). Each applies the read rule as the queries do.
+- **A `data.query` graph that read records runs again when they change.** The read nodes note a key pattern (`<entity>.*`) and the entity type's published version; the graph runs again, debounced by 100 ms, when a matching record changes (an updates-only watch), and sends a `replace`. A change folded between the run's read and the watch starting is caught by the projector's folded position, taken before the read.
+- ***Subscribe to records* is not built.** The plan lists it, but a node that keeps a subscription needs `prefab.logic` runs (forge 04-Prefabs); a page binds the query instead. *On record changed* is registered as an `app.trigger` event, with no runs until forge 07-Email.
+- ***Current user*** (`live.currentUser`, every kind) gives the run's user id as text, as a relation to `user` holds it; a handler uses it to assign a task to whoever clicked.
+- **`live.Apply` no longer changes the data it is given.** It copied nothing before, and a UI session's rendered props share the held query's data, so a list change applied in place left the bound prop equal to itself and no patch was sent: an updated row never reached the page. It now copies the list or map it changes.
+
+### Backend
+- **`records/data`**: `Write(decision, deps, command, id, args)` (the record commands' decision for another target, `decideRecord` shared with the commands) and `Get` (one record, once, with the read rule).
+- **`records/nodes`** (`recordsnodes.Contribute(reg, deps)`, wired in `serve.go` after `recordsdata.Contribute`): the write nodes, *Get record*, *Query*, *Aggregate* and *On record changed*.
+- **`live/nodes`**: `CommandHost.Decision`, `Read.Pattern`, the debounced rerun on a pattern, and *Current user*.
+
+### Verification of slice 23
+- **Go tests** (`records/nodes`, on embedded NATS with the engine and built-in graphs):
+  - `TestWriteNodesCommitAsOneBatch`: one `task.plan` command graph creates two tasks (one with a default, one with tags), updates a third, adds to and removes from its tags and deletes a fourth; all six events are one batch. The same command naming a missing record, or a create without its required title, is refused with the record command's problem, and nothing commits.
+  - `TestReadNodesInAHandler`: *Get record* (and a missing one), *Query* with `where` and a descending sort, and *Aggregate* grouped by `done`, in a `ui.handler`; a write node there is an error.
+  - `TestAQueryGraphFollowsTheRecords`: a `data.query` graph over *Aggregate* sends a new count after a create, an update, and once after a burst of five creates.
+- **Go tests** (`ui/hello`, the demo through the live connection, two users): `TestTheTaskListWithTwoUsers` opens the list (seeding *Task*), adds tasks from the form (with *Assign to me*, expanded to the user's name), sorts them by due, refuses an empty title, filters Bob's list to open tasks while Ada ticks one done, sorts Bob's by title, toggles one task from both sessions at once (it ends open, two events on, and both sessions' rows show the same `_seq`), clears the done tasks, and adds and publishes a `priority` enum with `entity.*` commands, as the chat's tools send them: Bob's open page gains the column with its labels, and a new task gets `medium`. `TestTheGraphsAreValid` resolves all 20 Hello graphs.
+- **In headless Chromium**, Forge's `serve` and Axiom, with two accounts (Ada, owner; Bob, editor):
+  - Opening the list from Hello seeded *Task*; the columns came from its fields.
+  - Ada's new task reached Bob's list in about 200 ms, with Ada as assignee; her tick reached her own row in about 250 ms and left Bob's open-only list at once, and both counts agreed.
+  - Ada and Bob clicked one task's checkbox at the same moment: both screens showed it open again, and the counts agreed.
+  - Bob sorted by title, descending, without changing Ada's order; *Clear done* removed the done task from Bob's list in about 190 ms.
+- **The chat acceptance with a real model** (Gemini, from Ada's Chat, ⚡ Fast, `gemini-3.5-flash-lite`): "add a priority field with low, medium and high to tasks, default medium, and show it as a column" listed and described the entity types, sent `entity.addField` (enum, options low/medium/high, default medium) and `entity.publish {rev: 5}`, each approved in the chat, and the task list then had a *Priority* column. 💡 Standard was refused by Gemini as overloaded, and 🧪 Deep's configured `gemini-2.5-pro` is no longer offered (see [plans/Backlog.md](plans/Backlog.md)).
+- **The whole suite** passes but for `records/data`, which fails about one run in five on HEAD as well: a race making a projection's bucket (`stream name already in use`) loses records in whichever test hits it (in [plans/Backlog.md](plans/Backlog.md)).
+
+### Decisions to review after seeing it
+- Hello seeds *Task* as the tenant's service principal, the first time anyone opens the list.
+- A record written twice in one command sees the committed state both times.
+- A `data.query` graph over records sends its whole result again on every change (debounced), unlike `records.find`.
+- *Subscribe to records* waits for prefab logic.
+- A field's default applies to records created after it: existing tasks showed an empty *Priority*.
+- From chat, the model added and published the field, then looked for a way to "show it as a column" (Volumes, queries) and stopped without a reply: it cannot know that the list's columns follow the published fields.

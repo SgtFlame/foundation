@@ -3,6 +3,7 @@ package livenodes
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
@@ -243,6 +244,21 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				return nil, "", fmt.Errorf("%s", fail.Message)
 			}
 			return cognition.Values{"data": data}, "", nil
+		},
+	})
+	node(reg, 555, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: "live.currentUser"}, Title: "Current user", Category: "Data",
+		Description: "Who the run is for: the user who sent the event, command or query (ids as text, as a relation to user holds them); no user for background work",
+		Example:     "Current user's id as a new task's assignee",
+		Pins: cognition.Pins{Out: []cognition.Pin{
+			cognition.DataPin("user", "User", "string", "The user's id; empty for background work"),
+			cognition.DataPin("tenant", "Tenant", "string", "The tenant's id")}},
+		Run: func(x *cognition.Exec, _ cognition.Values) (cognition.Values, string, error) {
+			user := ""
+			if x.Principal.Kind == features.PrincipalUser {
+				user = strconv.FormatUint(x.Principal.UserID, 10)
+			}
+			return cognition.Values{"user": user, "tenant": strconv.FormatUint(x.Principal.TenantID, 10)}, "", nil
 		},
 	})
 	node(reg, 560, cognition.NodeType{

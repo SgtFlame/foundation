@@ -68,6 +68,9 @@ func contributePages(reg *extensions.Registry) {
 							return ui.N("mui.text", "greeting").P("text", text, "sx", map[string]any{"mt": 1})
 						}),
 					),
+					ui.N("mui.card", "tasks").P("title", "Task list", "subtitle", "Shared tasks, records of the Task entity type", "variant", "outlined").C(
+						ui.N("mui.button", "openTasks").P("label", "Open task list", "variant", "contained", "icon", "checklist").E("click", "hello-onOpenTasks"),
+					),
 				),
 				r.Region("tabs", func(r *ui.Render) *ui.Node {
 					tab, _ := r.State("tab").(string)
@@ -105,6 +108,8 @@ func contributePages(reg *extensions.Registry) {
 			)
 		},
 	})
+
+	contributeTasks(reg)
 
 	ui.EditorKinds.Register(reg, ui.EditorKind{Descriptor: extensions.Descriptor{ID: ui.KindID(AppID, "main"), Source: "hello"}, App: AppID, Kind: "main", Title: "Hello", Icon: "waving_hand", Page: AppID + "/main"})
 	ui.EditorKinds.Register(reg, ui.EditorKind{Descriptor: extensions.Descriptor{ID: ui.KindID(AppID, "item"), Source: "hello"}, App: AppID, Kind: "item", Title: "Hello item", Icon: "description", Page: AppID + "/item"})

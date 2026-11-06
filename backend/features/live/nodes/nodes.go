@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
@@ -61,12 +62,29 @@ type Sender interface {
 type CommandHost struct {
 	Events   []live.NewEvent `json:"events"`
 	Problems []live.Problem  `json:"problems"`
+	// Decision is what the command decides on, for nodes that change other
+	// targets (records' write nodes); nil in a test run.
+	Decision *live.Decision `json:"-"`
 }
 
-// Read is a projected value a query graph read.
+// Read is a projected value a query graph read. With Pattern, Key is a
+// key pattern ("task.*"): the graph runs again, debounced, when any key
+// matching it changes.
 type Read struct {
 	Projector string `json:"projector"`
 	Key       string `json:"key"`
+	Pattern   bool   `json:"pattern,omitempty"`
+}
+
+// patternDebounce is how long a query graph that read a key pattern waits
+// for more changes before it runs again.
+var patternDebounce = 100 * time.Millisecond
+
+// updater is a store that can watch changes without the current keys, and
+// say how far a projector has folded.
+type updater interface {
+	Updates(ctx context.Context, tenant uint64, projector, pattern string) (<-chan *live.Entry, error)
+	Folded(ctx context.Context, tenant uint64, projector string) (live.Position, error)
 }
 
 // QueryHost is a data.query graph's host: what it read, which the query
@@ -213,7 +231,7 @@ func CommandFor(deps func() Deps) func(args features.ServiceArgs, typ string) (l
 				if dec.State != nil {
 					_ = json.Unmarshal(dec.State, &state)
 				}
-				host := &CommandHost{}
+				host := &CommandHost{Decision: &dec}
 				_, err := d.Engine.Run(engine.RunArgs{ServiceArgs: dec.ServiceArgs, GraphID: id, Event: OnCommand, Trigger: "command:" + typ,
 					Inputs: inputs("args", dec.Args, cognition.Values{"state": state, "target": dec.Target.ID}),
 					Host:   host, Trace: tracing(dec.ServiceArgs, d, id), Limits: commandLimits})
@@ -274,14 +292,23 @@ func runQuery(f live.Feed, d Deps, id string) error {
 		ctx, cancel := context.WithCancel(f.Context())
 		changed := make(chan struct{}, 1)
 		watch := append(host.Reads, Read{Projector: "cognition.published", Key: "graph." + id})
+		debounce := false
 		for _, r := range watch {
-			entries, err := f.Store().Watch(ctx, tenant, r.Projector, r.Key)
+			var entries <-chan *live.Entry
+			var err error
+			updates := false // an updates-only watch sends no marker after the current keys
+			if u, ok := f.Store().(updater); ok && r.Pattern {
+				entries, err = u.Updates(ctx, tenant, r.Projector, r.Key)
+				debounce, updates = true, true
+			} else {
+				entries, err = f.Store().Watch(ctx, tenant, r.Projector, r.Key)
+			}
 			if err != nil {
 				cancel()
 				return err
 			}
 			go func() {
-				started := false
+				started := updates
 				for e := range entries {
 					if e == nil {
 						started = true
@@ -296,8 +323,32 @@ func runQuery(f live.Feed, d Deps, id string) error {
 				}
 			}()
 		}
+		// A pattern's watch starts after the run read: a change folded in
+		// between shows as the projector being past what the run saw
+		for _, r := range host.Reads {
+			u, ok := f.Store().(updater)
+			if !ok || !r.Pattern {
+				continue
+			}
+			if folded, err := u.Folded(ctx, tenant, r.Projector); err == nil {
+				for stream, seq := range folded {
+					if !host.Pos.Reached(stream, seq) {
+						select {
+						case changed <- struct{}{}:
+						default:
+						}
+					}
+				}
+			}
+		}
 		select {
 		case <-changed:
+			if debounce {
+				select {
+				case <-time.After(patternDebounce):
+				case <-f.Context().Done():
+				}
+			}
 			cancel()
 		case <-f.Context().Done():
 			cancel()

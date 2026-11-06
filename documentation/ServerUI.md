@@ -103,3 +103,13 @@ For blueprints ([Blueprints.md](Blueprints.md)):
 - A handler a page has no Go handler for runs as the published `ui.handler` graph with that id (`ui.HandlerRunner`, `ui.Options.Graphs`, `uiimpl.WithGraphs`); `Handle.Value(path)` reads the payload and `Handle.Page()` the page.
 - **Tree overlays**: `ui.insertNode` and `ui.removeNode` add nodes to a page's tree by command (action `ui.design`); every session holds its page's `ui.overlay` query.
 - The Hello app's handlers, its counter's command and query are graphs.
+
+## Changed in slice 23
+For the Hello task list (forge 03i, [Records.md › Built in slice 23](Records.md#built-in-slice-23)):
+- **Query params bound to view state.** `QueryRef.Bind` maps a param to `state.<path>` (`{"where": "state.where", "sort": "state.sort"}`). When a handler changes that state, the session subscribes again with the new params; the old data stays shown until the new snapshot replaces it, and results from the replaced subscription are dropped. A nil state value leaves the param as `Params` has it.
+- **A new session's `OnOpen` runs before its queries open**, so bound queries open with its view state.
+- **`Page.Setup`** runs every time a session opens, before its queries: for what the page needs to exist (Hello seeds *Task* there). A failure fails the opening.
+- **`Handle.Query(query, params)`** reads a query once, as the handle's principal.
+- **`mui.table` columns** take a `type` (`text`, `number`, `bool`, `date`, `dateTime`, `enum`), `editable` (a `bool` cell's checkbox sends the new `edit` event, `{key, field, value}`), `options` (an `enum` column's labels) and `sortField` (what `sort` names when `field` is a path). `field` is a dotted path, so a column can show `_expanded.assignee.displayName`.
+- **A row updated in place reaches the page.** `live.Apply` changed the held data in place, and the rendered props shared it, so the bound prop never looked changed; it now copies (see Records.md).
+- **The Hello app** has the task list: the page `hello/tasks`, the editor kind `app:hello:tasks` (icon `checklist`, added to the icon map) and an *Open task list* button on its main page.

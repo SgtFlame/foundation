@@ -73,11 +73,13 @@ type region struct {
 }
 
 type heldQuery struct {
-	ref   QueryRef
-	data  any
-	pos   live.Position
-	ready chan struct{}
-	once  sync.Once
+	ref    QueryRef
+	params json.RawMessage // as subscribed, with bound state
+	data   any
+	pos    live.Position
+	ready  chan struct{}
+	once   sync.Once
+	cancel context.CancelFunc
 }
 
 // Session is one viewer's open page.
@@ -99,6 +101,7 @@ type Session struct {
 	closed    bool
 	ctx       context.Context
 	cancel    context.CancelFunc
+	args      features.ServiceArgs // the opener's, for subscribing again
 	o         Options
 }
 
@@ -128,11 +131,18 @@ func Open(args features.ServiceArgs, id string, page Page, params json.RawMessag
 	ctx, cancel := context.WithCancel(args.Context())
 	args.Ctx = ctx
 	s := &Session{id: id, principal: args.Principal, page: page, params: params, state: map[string]any{}, regions: map[*Node]*region{},
-		queries: map[string]*heldQuery{}, ctx: ctx, cancel: cancel, o: o}
+		queries: map[string]*heldQuery{}, ctx: ctx, cancel: cancel, args: args, o: o}
 	if rec != nil {
 		s.state, s.rev = rec.State, rec.Rev
 		if s.state == nil {
 			s.state = map[string]any{}
+		}
+	}
+	if page.Setup != nil {
+		h := &Handle{ServiceArgs: args, Params: params, s: s, request: newID()}
+		if err := page.Setup(h); err != nil {
+			cancel()
+			return nil, args.Fail(http.StatusInternalServerError, Log.Wrapf(err, "%s could not be set up", page.ID))
 		}
 	}
 	refs := map[string]QueryRef{}
@@ -143,15 +153,8 @@ func Open(args features.ServiceArgs, id string, page Page, params json.RawMessag
 	if o.Subs != nil {
 		refs[overlayQuery] = QueryRef{Query: "ui.overlay", Params: map[string]string{"page": page.ID}}
 	}
-	for name, ref := range refs {
-		q := &heldQuery{ref: ref, ready: make(chan struct{})}
-		s.queries[name] = q
-		raw, _ := json.Marshal(ref.Params)
-		if fail := o.Subs.Open(subscribe.OpenArgs{ServiceArgs: args, Query: ref.Query, Params: raw, Sink: &querySink{s: s, name: name, q: q}}); fail != nil {
-			cancel()
-			return nil, fail
-		}
-	}
+	// A new session's view state comes first, so queries bound to it
+	// open with it
 	if rec == nil && page.OnOpen != nil {
 		h := &Handle{ServiceArgs: args, Params: params, s: s, request: newID()}
 		if err := page.OnOpen(h); err != nil {
@@ -159,6 +162,12 @@ func Open(args features.ServiceArgs, id string, page Page, params json.RawMessag
 			return nil, args.Fail(http.StatusInternalServerError, Log.Wrapf(err, "%s could not open", page.ID))
 		}
 		s.changed = nil
+	}
+	for name, ref := range refs {
+		if fail := s.hold(name, ref); fail != nil {
+			cancel()
+			return nil, fail
+		}
 	}
 	deadline := time.After(ready)
 	for _, q := range s.queries {
@@ -267,6 +276,7 @@ func (s *Session) Event(args features.ServiceArgs, handler string, path []string
 
 // flush sends what the pending changes patch, with actions.
 func (s *Session) flush(actions []Action) {
+	s.rebind()
 	patches := s.update()
 	if len(patches) == 0 && len(actions) == 0 {
 		return
@@ -274,6 +284,68 @@ func (s *Session) flush(actions []Action) {
 	s.rev++
 	s.o.Send(PatchFrame{Type: "ui.patch", Session: s.id, Rev: s.rev, Patches: patches, Actions: actions})
 	s.save()
+}
+
+// boundParams are a query's params with its bound view state.
+func (s *Session) boundParams(ref QueryRef) json.RawMessage {
+	raw, _ := json.Marshal(ref.Params)
+	if len(ref.Bind) == 0 {
+		return raw
+	}
+	var m map[string]any
+	_ = json.Unmarshal(raw, &m)
+	if m == nil {
+		m = map[string]any{}
+	}
+	for param, src := range ref.Bind {
+		if len(src) > 6 && src[:6] == "state." {
+			if v := getPath(s.state, src[6:]); v != nil {
+				m[param] = v
+			}
+		}
+	}
+	raw, _ = json.Marshal(m)
+	return raw
+}
+
+// hold subscribes to a query for the page, in place of one held under
+// the same name.
+func (s *Session) hold(name string, ref QueryRef) *features.ServiceResponse {
+	if old := s.queries[name]; old != nil && old.cancel != nil {
+		old.cancel()
+	}
+	ctx, cancel := context.WithCancel(s.ctx)
+	q := &heldQuery{ref: ref, params: s.boundParams(ref), ready: make(chan struct{}), cancel: cancel}
+	if old := s.queries[name]; old != nil {
+		q.data = old.data // shown until the new snapshot replaces it
+	}
+	s.queries[name] = q
+	args := s.args
+	args.Ctx = ctx
+	if fail := s.o.Subs.Open(subscribe.OpenArgs{ServiceArgs: args, Query: ref.Query, Params: q.params, Sink: &querySink{s: s, name: name, q: q}}); fail != nil {
+		cancel()
+		return fail
+	}
+	return nil
+}
+
+// rebind subscribes again to the queries whose bound state changed.
+func (s *Session) rebind() {
+	for name, q := range s.queries {
+		if len(q.ref.Bind) == 0 {
+			continue
+		}
+		bound := false
+		for _, src := range q.ref.Bind {
+			bound = bound || slices.ContainsFunc(s.changed, func(c string) bool { return related(src, c) })
+		}
+		if !bound || string(s.boundParams(q.ref)) == string(q.params) {
+			continue
+		}
+		if fail := s.hold(name, q.ref); fail != nil {
+			s.o.Send(ErrorFrame{Type: "ui.error", Session: s.id, Code: fail.Code, Message: fail.Message, ErrorCode: fail.ErrorCode})
+		}
+	}
 }
 
 type querySink struct {
@@ -292,8 +364,16 @@ func normalize(v any) any {
 	return out
 }
 
+// current reports whether the sink's query is still the one held under
+// its name: one replaced by a rebinding is dropped.
+func (k *querySink) current() bool { return k.s.queries[k.name] == k.q }
+
 func (k *querySink) Snapshot(data any, pos live.Position) {
 	k.s.mu.Lock()
+	if !k.current() {
+		k.s.mu.Unlock()
+		return
+	}
 	k.q.data, k.q.pos = normalize(data), pos
 	k.s.queryChanged(k.name)
 	k.s.mu.Unlock()
@@ -303,6 +383,9 @@ func (k *querySink) Snapshot(data any, pos live.Position) {
 func (k *querySink) Change(delta live.Delta, pos live.Position) {
 	k.s.mu.Lock()
 	defer k.s.mu.Unlock()
+	if !k.current() {
+		return
+	}
 	k.q.pos = k.q.pos.Merge(pos)
 	if delta.Op == live.Reached.Op {
 		return
@@ -313,6 +396,12 @@ func (k *querySink) Change(delta live.Delta, pos live.Position) {
 
 func (k *querySink) Failed(resp features.ServiceResponse) {
 	k.q.once.Do(func() { close(k.q.ready) })
+	k.s.mu.Lock()
+	current := k.current()
+	k.s.mu.Unlock()
+	if !current {
+		return
+	}
 	k.s.o.Send(ErrorFrame{Type: "ui.error", Session: k.s.id, Code: resp.Code, Message: resp.Message, ErrorCode: resp.ErrorCode})
 }
 

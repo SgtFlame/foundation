@@ -1,0 +1,103 @@
+{
+  "id": "cmd-task-toggle",
+  "name": "task.toggle",
+  "description": "Decides a task's toggle: done becomes the opposite of what it is now.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "set",
+      "type": "data.expression",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "config": {
+        "expr": "{done: !(state?.done ?? false)}",
+        "type": "json"
+      },
+      "title": "Flip done"
+    },
+    {
+      "id": "update",
+      "type": "records.update",
+      "position": {
+        "x": 600,
+        "y": 0
+      },
+      "config": {
+        "entity": "task"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "update",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "update",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "set",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "set",
+        "pin": "value"
+      },
+      "to": {
+        "node": "update",
+        "pin": "set"
+      }
+    }
+  ],
+  "spec": {
+    "command": "task.toggle",
+    "title": "Toggle a task",
+    "description": "Marks a Hello task done, or not done again: the opposite of what it is when the command is decided, so two toggles at once both count.",
+    "args": {
+      "type": "object",
+      "properties": {}
+    },
+    "area": "rec",
+    "targetType": "task",
+    "projection": "records.record",
+    "action": "record.update",
+    "events": [
+      "updated"
+    ]
+  }
+}

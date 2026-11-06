@@ -22,6 +22,7 @@ import SettingsIcon from '@mui/icons-material/Settings'
 import StarIcon from '@mui/icons-material/Star'
 import WarningIcon from '@mui/icons-material/Warning'
 import WavingHandIcon from '@mui/icons-material/WavingHand'
+import ChecklistIcon from '@mui/icons-material/Checklist'
 import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import AppsIcon from '@mui/icons-material/Apps'
 import type { SvgIconProps } from '@mui/material'
@@ -51,6 +52,7 @@ export const icons: Record<string, ComponentType<SvgIconProps>> = {
   star: StarIcon,
   warning: WarningIcon,
   waving_hand: WavingHandIcon,
+  checklist: ChecklistIcon,
   account_tree: AccountTreeIcon,
   apps: AppsIcon,
 }

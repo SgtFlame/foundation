@@ -91,3 +91,13 @@ Every node type has a description, an example and its pins described. `hello_tes
 4. *Confirm* does not wait for the answer; it names the handler graph the answer runs.
 5. Command and query graphs run under tight limits (200 steps, 2 s; handlers 500, 3 s).
 6. Hello's built-in graphs are editable defaults rather than seeded drafts, so a tenant that never edits them has no rows.
+
+## Changed in slice 23
+For the Hello task list (forge 03i, [Records.md › Built in slice 23](Records.md#built-in-slice-23)):
+- **Record nodes** (`records/nodes`, category *Records*): *Create record*, *Update record*, *Delete record*, *Add to* and *Remove from* in `command` graphs, whose events commit with the command's as one batch; *Get record*, *Query* and *Aggregate* in every kind, which a `data.query` graph watches to run again; *On record changed*, an `app.trigger` event (no runs until forge 07). Elsewhere than a command graph, a write is *Send command* with `record.*`.
+- ***Current user*** (`live.currentUser`): the run's user id as text.
+- **A command graph's host** carries the command's `Decision`, so nodes can read and change other targets in its area.
+- **Hello's task graphs** (built-in, editable, owner `app:hello`):
+  - the handlers `hello-onOpenTasks`, `-onAddTask` (a title is needed; *Assign to me* uses *Current user*), `-onEditTask` (done sends `task.toggle`, other fields `record.update`), `-onFilterTasks` and `-onSortTasks` (they set the view state the rows query is bound to) and `-onClearDone`;
+  - the command graphs `cmd-task-toggle` (*Update record* with the opposite of the task's `done`, so two toggles at once both count) and `cmd-task-clearDone` (*Query* the done tasks, then *For each* *Delete record*, up to 50, one batch);
+  - the query graph `qry-hello-openTasks` (*Aggregate* count where not done → `{open, label}`).
