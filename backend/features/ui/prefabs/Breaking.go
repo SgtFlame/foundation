@@ -1,0 +1,113 @@
+package prefabs
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"slices"
+
+	"github.com/SgtFlame/foundation/backend/features/ui"
+)
+
+// Break is a change to a prefab's interface that breaks its users: a
+// prop, event or slot removed, or a prop's type changed (forge 04a
+// question 4).
+type Break struct {
+	Change string `json:"change"` // in words, e.g. "removing prop task"
+	Path   string `json:"path"`   // within the definition, e.g. props.task
+	UsedBy []Use  `json:"usedBy,omitempty"`
+	kind   string // prop, event or slot
+	name   string
+}
+
+// Use is a published prefab's node that uses the changed part.
+type Use struct {
+	Prefab string `json:"prefab"`
+	Path   string `json:"path"` // template.<node path>
+}
+
+// Breaking are the breaking changes from prev to next.
+func Breaking(prev, next ui.Prefab) []Break {
+	var out []Break
+	for _, k := range slices.Sorted(mapKeys(prev.Props)) {
+		old := prev.Props[k]
+		now, ok := next.Props[k]
+		switch {
+		case !ok:
+			out = append(out, Break{Change: "removing prop " + k, Path: "props." + k, kind: "prop", name: k})
+		case now.Type != old.Type || now.Entity != old.Entity:
+			out = append(out, Break{Change: fmt.Sprintf("changing prop %s from %s to %s", k, typeName(old), typeName(now)), Path: "props." + k + ".type", kind: "prop", name: k})
+		}
+	}
+	for _, k := range slices.Sorted(mapKeys(prev.Events)) {
+		if _, ok := next.Events[k]; !ok {
+			out = append(out, Break{Change: "removing event " + k, Path: "events." + k, kind: "event", name: k})
+		}
+	}
+	for _, k := range slices.Sorted(mapKeys(prev.Slots)) {
+		if _, ok := next.Slots[k]; !ok {
+			out = append(out, Break{Change: "removing slot " + k, Path: "slots." + k, kind: "slot", name: k})
+		}
+	}
+	return out
+}
+
+func typeName(d ui.PropDecl) string {
+	if d.Entity != "" {
+		return d.Type + " of " + d.Entity
+	}
+	return d.Type
+}
+
+// uses reports whether an instance node uses what a break changes.
+func (b Break) uses(n *ui.Node) bool {
+	switch b.kind {
+	case "prop":
+		_, set := n.Props[b.name]
+		_, bound := n.Bind[b.name]
+		return set || bound
+	case "event":
+		_, ok := n.On[b.name]
+		return ok
+	case "slot":
+		_, ok := n.Slots[b.name]
+		return ok
+	}
+	return false
+}
+
+// usedBy fills in the published prefabs each change breaks, and keeps the
+// changes that break any.
+func (c *decision) usedBy(changes []Break) []Break {
+	if len(changes) == 0 {
+		return nil
+	}
+	ctx, cancel := context.WithCancel(c.Context())
+	defer cancel()
+	entries, err := c.deps.Projections.Watch(ctx, c.Principal.TenantID, PublishedProjector, TargetType+".*")
+	if err != nil {
+		return nil
+	}
+	typ := ui.PrefabPrefix + c.Target.ID
+	for e := range entries {
+		if e == nil {
+			break
+		}
+		var p ui.Prefab
+		if e.Deleted || json.Unmarshal(e.Value.Value, &p) != nil || p.ID == c.Target.ID {
+			continue
+		}
+		for _, path := range Paths(p.Template) {
+			at, _ := find(p.Template, path)
+			if at.node == nil || at.node.Type != typ {
+				continue
+			}
+			for i := range changes {
+				if changes[i].uses(at.node) {
+					changes[i].UsedBy = append(changes[i].UsedBy, Use{Prefab: p.ID, Path: "template." + path})
+				}
+			}
+		}
+	}
+	return slices.DeleteFunc(changes, func(b Break) bool { return len(b.UsedBy) == 0 })
+}

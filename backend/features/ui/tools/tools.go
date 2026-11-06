@@ -1,6 +1,7 @@
 // Package uitools contributes the server-driven UI's chat tools: the
 // component catalog, one component's metadata, and validating a tree
-// (documentation/ServerUI.md › Tools).
+// (documentation/ServerUI.md › Tools). Published prefabs are components
+// too, as prefab.<id> (forge 04b).
 package uitools
 
 import (
@@ -8,15 +9,40 @@ import (
 	"fmt"
 
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	"github.com/SgtFlame/foundation/backend/features/live/subscribe"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 	"github.com/SgtFlame/foundation/backend/features/ui"
 )
 
-// Contribute registers the ui tools.
-func Contribute(reg *extensions.Registry) {
+// published reads a prefab's last published version, or version, as a
+// component.
+func published(call tools.Call, subs func() *subscribe.Subscriptions, id string, version int) (ui.Component, bool) {
+	if subs == nil || subs() == nil {
+		return ui.Component{}, false
+	}
+	params := map[string]any{"id": id, "published": true}
+	if version > 0 {
+		params = map[string]any{"id": id, "version": version}
+	}
+	raw, _ := json.Marshal(params)
+	data, _, fail := subs().Once(call.ServiceArgs, "prefab.describe", raw)
+	if fail != nil {
+		return ui.Component{}, false
+	}
+	raw, _ = json.Marshal(data)
+	var v struct{ Prefab ui.Prefab }
+	if json.Unmarshal(raw, &v) != nil {
+		return ui.Component{}, false
+	}
+	return ui.PrefabComponent(v.Prefab), true
+}
+
+// Contribute registers the ui tools. subs returns the subscriptions once
+// made, for the published prefabs; nil leaves them out.
+func Contribute(reg *extensions.Registry, subs func() *subscribe.Subscriptions) {
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "ui.listComponents", Source: "ui"}, Title: "List UI components", Effect: tools.EffectNone,
-		Description: "Lists the primitive UI components a page's tree may use, each with its id, title, category, description, tags and events. Describe one with ui.describeComponent for its props schema and examples.",
+		Description: "Lists the UI components a page's tree may use, each with its id, title, category, description, tags and events: the primitives, and the published prefabs as prefab.<id> (category Prefabs). Describe one with ui.describeComponent for its props schema, events, slots and examples.",
 		Run: func(call tools.Call) (tools.Result, error) {
 			var list []map[string]any
 			for _, c := range ui.Components.All(reg) {
@@ -25,6 +51,22 @@ func Contribute(reg *extensions.Registry) {
 					events = append(events, e.Name)
 				}
 				list = append(list, map[string]any{"id": c.ID, "title": c.Title, "category": c.Category, "description": c.Description, "tags": c.Tags, "events": events, "children": c.Children})
+			}
+			// Published prefabs, by their summaries
+			if subs != nil && subs() != nil {
+				if data, _, fail := subs().Once(call.ServiceArgs, "prefab.list", json.RawMessage(`{}`)); fail == nil {
+					raw, _ := json.Marshal(data)
+					var byKey map[string]struct {
+						ID, Name, Description, Owner string
+						Published                    int
+					}
+					_ = json.Unmarshal(raw, &byKey)
+					for _, p := range byKey {
+						if p.Published > 0 {
+							list = append(list, map[string]any{"id": ui.PrefabPrefix + p.ID, "title": p.Name, "category": "Prefabs", "description": p.Description, "tags": []string{p.Owner}})
+						}
+					}
+				}
 			}
 			return tools.Result{Content: map[string]any{"components": list}, Summary: fmt.Sprintf("%d components", len(list))}, nil
 		},
@@ -39,6 +81,10 @@ func Contribute(reg *extensions.Registry) {
 				return tools.Result{}, err
 			}
 			c, ok := ui.Catalog(reg)[args.ID]
+			if id, version, isPrefab := ui.InstanceOf(args.ID); isPrefab {
+				c, ok = published(call, subs, id, version)
+				c.ID = args.ID
+			}
 			if !ok {
 				return tools.Result{}, fmt.Errorf("there is no component %q; list them with ui.listComponents", args.ID)
 			}
@@ -48,14 +94,32 @@ func Contribute(reg *extensions.Registry) {
 	})
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "ui.previewTree", Source: "ui"}, Title: "Check a UI tree", Effect: tools.EffectNone,
-		Description: "Validates a component tree ({type, key, props, bind, on, children, slots}) against the catalog and returns its problems, each with the key path of the node: unknown components, invalid props, missing or repeated keys, events a component does not emit.",
+		Description: "Validates a component tree ({type, key, props, bind, on, children, slots}) against the catalog, published prefabs included, and returns its problems, each with the key path of the node: unknown components, invalid props, an sx with more than theme tokens, missing or repeated keys, events a component does not emit. For a prefab with its data, use prefab.preview.",
 		Input:       json.RawMessage(`{"type":"object","properties":{"tree":{"type":"object","description":"The root node"}},"required":["tree"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
 			args, err := tools.Decode[struct{ Tree ui.Node }](call)
 			if err != nil {
 				return tools.Result{}, err
 			}
-			problems := ui.Validate(ui.Catalog(reg), &args.Tree)
+			catalog := ui.Catalog(reg)
+			var walk func(n *ui.Node)
+			walk = func(n *ui.Node) {
+				if id, version, ok := ui.InstanceOf(n.Type); ok {
+					if c, ok := published(call, subs, id, version); ok {
+						catalog[n.Type] = c
+					}
+				}
+				for _, c := range n.Children {
+					walk(c)
+				}
+				for _, list := range n.Slots {
+					for _, c := range list {
+						walk(c)
+					}
+				}
+			}
+			walk(&args.Tree)
+			problems := ui.Validate(catalog, &args.Tree)
 			if problems == nil {
 				problems = []ui.Problem{}
 			}

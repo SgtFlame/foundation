@@ -18,6 +18,9 @@ export interface UiNode {
   on?: Record<string, UiOn>
   children?: UiNode[]
   slots?: Record<string, UiNode[]>
+  // In a design session, the key path of the template node it was drawn
+  // from (the Prefab Editor's Canvas selects by it)
+  src?: string
 }
 
 export interface UiPatch {
@@ -30,7 +33,9 @@ export interface UiPatch {
 }
 
 export interface UiAction {
-  type: 'toast' | 'navigate' | 'openEditor' | 'focus' | 'download' | 'copy' | 'confirm' | 'rename'
+  // dryRun: a command a dry run did not send (name its type, id its
+  // target, params its args)
+  type: 'toast' | 'navigate' | 'openEditor' | 'focus' | 'download' | 'copy' | 'confirm' | 'rename' | 'dryRun'
   message?: string
   severity?: 'success' | 'info' | 'warning' | 'error'
   kind?: string
@@ -55,7 +60,8 @@ export interface UiSubject {
 // Applies one patch, copying only the nodes on its path, so unchanged
 // subtrees keep their identity and React skips them
 export function applyPatch(root: UiNode, patch: UiPatch): UiNode {
-  const { op, path } = patch
+  const { op } = patch
+  const path = patch.path ?? [] // the root's
   switch (op) {
     case 'replace':
       if (path.length === 0) return patch.node!

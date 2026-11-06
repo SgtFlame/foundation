@@ -131,6 +131,9 @@ import (
 	uicomponents "github.com/SgtFlame/foundation/backend/features/ui/components"
 	"github.com/SgtFlame/foundation/backend/features/ui/hello"
 	uinodes "github.com/SgtFlame/foundation/backend/features/ui/nodes"
+	"github.com/SgtFlame/foundation/backend/features/ui/prefabs"
+	"github.com/SgtFlame/foundation/backend/features/ui/rest/prefabhandlers"
+	prefabimpl "github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/ui/rest/uihandlers"
 	"github.com/SgtFlame/foundation/backend/features/ui/services/uiservice"
 	uiimpl "github.com/SgtFlame/foundation/backend/features/ui/services/uiservice/impl"
@@ -306,7 +309,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		if err != nil {
 			return err
 		}
-		if err := db.Migrate(gdb, slices.Concat(config.Models(), usage.Models(), conversation.Models(), retrieval.Models(), chronicle.Models(), cognition.Models(), tools.Models(), records.Models())...); err != nil { // features add their models here
+		if err := db.Migrate(gdb, slices.Concat(config.Models(), usage.Models(), conversation.Models(), retrieval.Models(), chronicle.Models(), cognition.Models(), tools.Models(), records.Models(), ui.Models())...); err != nil { // features add their models here
 			return err
 		}
 
@@ -380,6 +383,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var liveToolDeps livetools.Deps
 		var draftDeps drafts.Deps
 		var entityDeps entities.Deps
+		var prefabDeps prefabs.Deps
 		var recordService recordservice.Service
 		var liveSubscriptions *subscribe.Subscriptions
 		var liveNodeDeps livenodes.Deps
@@ -407,6 +411,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		ui.ContributeAccess(registry)
 		hello.ContributeAccess(registry)
 		records.ContributeAccess(registry)
+		ui.ContributePrefabAccess(registry)
 		aisettings.Contribute(registry)
 		logssettings.Contribute(registry)
 		usagesettings.Contribute(registry)
@@ -450,8 +455,12 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		recordsdata.Contribute(registry, func() recordsdata.Deps { return recordDeps })
 		recordsnodes.Contribute(registry, func() recordsdata.Deps { return recordDeps })
 		recordstools.ContributeRecords(registry, func() recordservice.Service { return recordService })
+		// Prefabs: edited by prefab.* commands, published into the tenant
+		// database
+		prefabs.Contribute(registry, func() prefabs.Deps { return prefabDeps })
+		uitools.ContributePrefabs(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		presence.Contribute(registry, func() *presence.Presence { return livePresence })
-		uitools.Contribute(registry)
+		uitools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
 		uihandlers.ContributeLive(registry, func() uiservice.Service { return uiService })
 		confighandlers.ContributeLive(registry, func() configservice.Service { return configLive })
@@ -690,6 +699,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		entityDeps = entities.Deps{Projections: projections, DB: gdb, OnPublish: func(args features.ServiceArgs) error { return recordsdata.Follow(args, recordDeps) }}
 		recordService = recordimpl.CreateService(recordimpl.WithRecords(liveBus, subscriptions, recordDeps), recordimpl.WithFiles(recordFiles))
 		entityService := entityimpl.CreateService(entityimpl.WithEntities(entityDeps))
+		prefabDeps = prefabs.Deps{Projections: projections, DB: gdb}
+		prefabService := prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
 		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())),
 			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))
 		liveService := liveimpl.CreateService(liveimpl.WithBus(liveBus), liveimpl.WithSubscriptions(subscriptions), liveimpl.WithPresence(livePresence), liveimpl.WithRegistry(registry),
@@ -780,6 +791,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 
 		uiHandler := &uihandlers.UiHandler{}
 		uiHandler.Register(api, uiService)
+
+		prefabHandler := &prefabhandlers.PrefabHandler{}
+		prefabHandler.Register(api, prefabService)
 
 		indexHandler := &indexhandlers.IndexHandler{}
 		indexHandler.Register(volumes, indexService)

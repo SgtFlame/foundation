@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/SgtFlame/foundation/backend/features"
@@ -141,5 +142,25 @@ func apply(root *Node, p Patch) {
 				n.Props[k] = v
 			}
 		}
+	}
+}
+
+// A patch at the root has the empty path, which travels as [], never null
+func TestRootPatchesHaveAnEmptyPath(t *testing.T) {
+	old := N("mui.stack", "root", N("mui.text", "a"))
+	next := N("mui.stack", "root", N("mui.text", "a"), N("mui.text", "b"))
+	raw, _ := json.Marshal(Diff(nil, old, next))
+	if !strings.Contains(string(raw), `"path":[]`) || strings.Contains(string(raw), `"path":null`) {
+		t.Fatalf("root patches: %s", raw)
+	}
+}
+
+// A move or insert to the first place says so: index 0 is sent
+func TestPatchesToTheFirstPlaceSendTheIndex(t *testing.T) {
+	old := N("mui.stack", "root", N("mui.text", "a"), N("mui.text", "b"))
+	next := N("mui.stack", "root", N("mui.text", "c"), N("mui.text", "b"), N("mui.text", "a"))
+	raw, _ := json.Marshal(Diff(nil, old, next))
+	if !strings.Contains(string(raw), `"op":"insert","path":[],"node":{"type":"mui.text","key":"c"},"index":0`) || !strings.Contains(string(raw), `"op":"move","path":[],"index":1,"key":"b"`) {
+		t.Fatalf("patches: %s", raw)
 	}
 }

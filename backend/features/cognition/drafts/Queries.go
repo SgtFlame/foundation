@@ -247,3 +247,17 @@ func (s Source) Published(args features.ServiceArgs, id string) (cognition.Graph
 	}
 	return g, true, nil
 }
+
+// Draft reads a graph's draft from the cognition.graph projection.
+func (s Source) Draft(args features.ServiceArgs, id string) (cognition.Graph, bool, error) {
+	v, ok, err := s.Store.Get(args.Context(), args.Principal.TenantID, DraftProjector, TargetType+"."+id)
+	if err != nil || !ok || v.Value == nil {
+		return cognition.Graph{}, false, err
+	}
+	var d Draft
+	if err := json.Unmarshal(v.Value, &d); err != nil {
+		return cognition.Graph{}, false, err
+	}
+	d.Graph.ID = id
+	return d.Graph, true, nil
+}

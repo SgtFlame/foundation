@@ -98,6 +98,9 @@ func commandTool(c live.Command, deps func() Deps) tools.Tool {
 	if c.NewTarget != nil {
 		input = fmt.Sprintf(`{"type":"object","properties":{"target":{"type":"string","description":"Leave it out: a new id is made and returned"},"args":%s}}`, orObject(c.Args))
 	}
+	if c.NewTargetFor != nil {
+		input = fmt.Sprintf(`{"type":"object","properties":{"target":{"type":"string","description":"The new %s's id; leave it out to make one from its name (returned)"},"args":%s}}`, c.TargetType, orObject(c.Args))
+	}
 	return tools.Tool{
 		Descriptor: extensions.Descriptor{ID: c.ID, Source: c.Source}, Title: c.Title, Effect: tools.EffectWrite,
 		Description: c.Description, Input: json.RawMessage(input),

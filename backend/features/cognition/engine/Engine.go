@@ -49,6 +49,12 @@ type GraphSource interface {
 	Published(args features.ServiceArgs, id string) (g cognition.Graph, ok bool, err error)
 }
 
+// DraftSource is a GraphSource that also gives drafts (cognition/drafts),
+// for dry runs (forge 04c).
+type DraftSource interface {
+	Draft(args features.ServiceArgs, id string) (g cognition.Graph, ok bool, err error)
+}
+
 // purgeEvery is how often, at most, a finished run purges old traces.
 const purgeEvery = 10 * time.Minute
 
@@ -107,6 +113,21 @@ func (e *Engine) Graph(args features.ServiceArgs, id string) (cognition.Graph, b
 	}
 	b, ok := e.BuiltIn(id)
 	return b.Graph, ok
+}
+
+// Draft is the graph with the given ID as it is being edited: its draft,
+// else what Graph gives. Dry runs use it (forge 04c).
+func (e *Engine) Draft(args features.ServiceArgs, id string) (cognition.Graph, bool) {
+	if d, ok := e.source.(DraftSource); ok {
+		g, ok, err := d.Draft(args, id)
+		if err != nil {
+			log.With("graphId", id).Error(args.Context(), err, "cannot read the draft of graph %s", id)
+		}
+		if ok {
+			return g, true
+		}
+	}
+	return e.Graph(args, id)
 }
 
 // NodeTypes are the registry's node types.

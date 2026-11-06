@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -80,6 +82,10 @@ type heldQuery struct {
 	ready  chan struct{}
 	once   sync.Once
 	cancel context.CancelFunc
+	failed *features.ServiceResponse // why it ended, when it failed
+	owner  *instance                 // the prefab instance holding it, if one does
+	into   string                    // a subscription's: the state path its data is kept at
+	def    *Prefab                   // a prefab definition's, read once per change
 }
 
 // Session is one viewer's open page.
@@ -97,6 +103,10 @@ type Session struct {
 	pending   map[*Node]*region
 	queries   map[string]*heldQuery
 	changed   []string
+	instances map[string]*instance // mounted prefab instances by key path
+	seen      map[string]bool      // the instances the render under way met
+	runs      []lifecycle          // prefab.logic runs for after the tree is sent
+	fresh     []*heldQuery         // queries held while rendering
 	opened    bool
 	closed    bool
 	ctx       context.Context
@@ -131,7 +141,7 @@ func Open(args features.ServiceArgs, id string, page Page, params json.RawMessag
 	ctx, cancel := context.WithCancel(args.Context())
 	args.Ctx = ctx
 	s := &Session{id: id, principal: args.Principal, page: page, params: params, state: map[string]any{}, regions: map[*Node]*region{},
-		queries: map[string]*heldQuery{}, ctx: ctx, cancel: cancel, args: args, o: o}
+		queries: map[string]*heldQuery{}, instances: map[string]*instance{}, seen: map[string]bool{}, ctx: ctx, cancel: cancel, args: args, o: o}
 	if rec != nil {
 		s.state, s.rev = rec.State, rec.Rev
 		if s.state == nil {
@@ -150,7 +160,7 @@ func Open(args features.ServiceArgs, id string, page Page, params json.RawMessag
 		refs = page.Queries(params)
 	}
 	// Every page holds its overlay: the nodes commands added to it
-	if o.Subs != nil {
+	if o.Subs != nil && page.prefab == "" {
 		refs[overlayQuery] = QueryRef{Query: "ui.overlay", Params: map[string]string{"page": page.ID}}
 	}
 	// A new session's view state comes first, so queries bound to it
@@ -170,20 +180,38 @@ func Open(args features.ServiceArgs, id string, page Page, params json.RawMessag
 		}
 	}
 	deadline := time.After(ready)
-	for _, q := range s.queries {
-		select {
-		case <-q.ready:
-		case <-deadline:
-		case <-ctx.Done():
+	wait := func(qs []*heldQuery) {
+		for _, q := range qs {
+			select {
+			case <-q.ready:
+			case <-deadline:
+			case <-ctx.Done():
+			}
 		}
 	}
 	s.mu.Lock()
+	waiting := slices.Collect(maps.Values(s.queries))
+	s.mu.Unlock()
+	wait(waiting)
+	// Rendering may hold more queries, prefabs' definitions and their
+	// instances' queries: render again once they have their data
+	for round := 0; ; round++ {
+		s.mu.Lock()
+		s.tree = s.renderRoot()
+		fresh := s.fresh
+		s.fresh = nil
+		if len(fresh) == 0 || round == 8 {
+			break
+		}
+		s.mu.Unlock()
+		wait(fresh)
+	}
 	defer s.mu.Unlock()
-	s.tree = s.renderRoot()
 	s.changed = nil
 	s.opened = true
 	s.save()
 	s.sendTree(false)
+	s.settle()
 	return s, nil
 }
 
@@ -192,6 +220,15 @@ func (s *Session) ID() string { return s.id }
 
 // Page is the session's page.
 func (s *Session) Page() Page { return s.page }
+
+// Queries are the names of the queries the session holds, sorted: its
+// page's, its prefabs' definitions (__prefab:<id>) and its instances'
+// (<key path>#<name>, <key path>#sub:<state path>).
+func (s *Session) Queries() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Sorted(maps.Keys(s.queries))
+}
 
 // Principal is the session's viewer.
 func (s *Session) Principal() features.Principal { return s.principal }
@@ -248,8 +285,12 @@ func (s *Session) Event(args features.ServiceArgs, handler string, path []string
 		s.sendTree(true)
 		return
 	}
-	fn := s.page.Handlers[handler]
 	args.Ctx = s.ctx
+	if kp, name, ok := instanceHandler(handler); ok {
+		s.instanceEvent(args, kp, name, payload)
+		return
+	}
+	fn := s.page.Handlers[handler]
 	h := &Handle{ServiceArgs: args, Payload: payload, Params: s.params, s: s, request: newID()}
 	if fn == nil && s.o.Graphs != nil {
 		fn = func(h *Handle) error {
@@ -265,17 +306,34 @@ func (s *Session) Event(args features.ServiceArgs, handler string, path []string
 		return
 	}
 	if err := fn(h); errors.Is(err, errNoHandler) {
-		s.o.Send(ErrorFrame{Type: "ui.error", Session: s.id, Handler: handler, Code: http.StatusNotFound, Message: "this page has no handler " + handler, ErrorCode: "unknown_handler"})
+		s.handlerFailed(args, handler, err)
 		return
 	} else if err != nil {
-		f := args.Fail(http.StatusInternalServerError, Log.Wrapf(err, "%s: handler %s failed", s.page.ID, handler))
-		s.o.Send(ErrorFrame{Type: "ui.error", Session: s.id, Handler: handler, Code: f.Code, Message: f.Message, ErrorCode: f.ErrorCode})
+		s.handlerFailed(args, handler, err)
 	}
 	s.flush(h.actions)
 }
 
-// flush sends what the pending changes patch, with actions.
+// handlerFailed tells the browser a handler is missing or failed.
+func (s *Session) handlerFailed(args features.ServiceArgs, handler string, err error) {
+	if errors.Is(err, errNoHandler) {
+		s.o.Send(ErrorFrame{Type: "ui.error", Session: s.id, Handler: handler, Code: http.StatusNotFound, Message: "this page has no handler " + handler, ErrorCode: "unknown_handler"})
+		return
+	}
+	f := args.Fail(http.StatusInternalServerError, Log.Wrapf(err, "%s: handler %s failed", s.page.ID, handler))
+	s.o.Send(ErrorFrame{Type: "ui.error", Session: s.id, Handler: handler, Code: f.Code, Message: f.Message, ErrorCode: f.ErrorCode})
+}
+
+// flush sends what the pending changes patch, with actions, then runs the
+// prefab.logic runs they caused.
 func (s *Session) flush(actions []Action) {
+	s.send(actions)
+	s.settle()
+}
+
+// send sends what the pending changes patch, with actions.
+func (s *Session) send(actions []Action) {
+	s.fresh = nil
 	s.rebind()
 	patches := s.update()
 	if len(patches) == 0 && len(actions) == 0 {
@@ -374,8 +432,8 @@ func (k *querySink) Snapshot(data any, pos live.Position) {
 		k.s.mu.Unlock()
 		return
 	}
-	k.q.data, k.q.pos = normalize(data), pos
-	k.s.queryChanged(k.name)
+	k.q.data, k.q.pos, k.q.def = normalize(data), pos, nil
+	k.s.queryChanged(k.name, k.q)
 	k.s.mu.Unlock()
 	k.q.once.Do(func() { close(k.q.ready) })
 }
@@ -390,24 +448,42 @@ func (k *querySink) Change(delta live.Delta, pos live.Position) {
 	if delta.Op == live.Reached.Op {
 		return
 	}
-	k.q.data = live.Apply(k.q.data, delta)
-	k.s.queryChanged(k.name)
+	k.q.data, k.q.def = live.Apply(k.q.data, delta), nil
+	k.s.queryChanged(k.name, k.q)
 }
 
 func (k *querySink) Failed(resp features.ServiceResponse) {
-	k.q.once.Do(func() { close(k.q.ready) })
+	// Ready only once the failure is known, so an opening that waits for it
+	// renders the problem
+	defer k.q.once.Do(func() { close(k.q.ready) })
 	k.s.mu.Lock()
-	current := k.current()
-	k.s.mu.Unlock()
-	if !current {
+	defer k.s.mu.Unlock()
+	if !k.current() {
+		return
+	}
+	k.q.failed = &resp
+	// A prefab that cannot be read is a problem in place
+	if strings.HasPrefix(k.name, definitionQuery) {
+		k.s.queryChanged(k.name, k.q)
 		return
 	}
 	k.s.o.Send(ErrorFrame{Type: "ui.error", Session: k.s.id, Code: resp.Code, Message: resp.Message, ErrorCode: resp.ErrorCode})
 }
 
-// queryChanged patches what reads the query, once the page is open.
-func (s *Session) queryChanged(name string) {
-	s.changed = append(s.changed, "query:"+name)
+// queryChanged patches what reads the query, once the page is open. A
+// subscription's data goes into its state path; an instance's query
+// change runs its On query changed logic.
+func (s *Session) queryChanged(name string, q *heldQuery) {
+	switch {
+	case q.into != "":
+		setPath(s.state, q.into, q.data)
+		s.changed = append(s.changed, "state."+q.into)
+	default:
+		s.changed = append(s.changed, "query:"+name)
+		if q.owner != nil && q.owner.started {
+			s.runs = append(s.runs, lifecycle{inst: q.owner, event: onQueryChanged})
+		}
+	}
 	if s.opened && !s.closed {
 		s.flush(nil)
 	}
@@ -419,8 +495,10 @@ var errNoHandler = errors.New("no such handler")
 // renderRoot renders the whole page, with the nodes its overlay adds.
 func (s *Session) renderRoot() *Node {
 	s.pending = map[*Node]*region{}
+	s.seen = map[string]bool{}
 	r := &Render{s: s, deps: map[string]bool{}}
 	root := s.page.Render(r)
+	s.sweep("")
 	if root == nil {
 		root = N("mui.box", "root")
 	}
@@ -457,7 +535,7 @@ func (s *Session) check(n *Node) []Problem {
 	}
 	shallow := *n
 	shallow.Children, shallow.Slots = nil, nil
-	problems := Validate(s.o.Catalog, &shallow)
+	problems := validate(s.o.Catalog, &shallow, false)
 	c := s.o.Catalog[n.Type]
 	if len(n.Children) > 0 && !c.Children {
 		problems = append(problems, Problem{Message: n.Type + " takes no children"})
@@ -546,12 +624,17 @@ func (s *Session) update() []Patch {
 		}
 		reg := s.regions[old]
 		s.pending = map[*Node]*region{}
+		s.seen = map[string]bool{}
 		r := &Render{s: s, deps: map[string]bool{}}
 		next := reg.fn(r)
+		s.sweep(kpOf(append([]string{s.tree.Key}, path...)))
 		if next == nil {
 			next = N("mui.box", old.Key)
 		}
 		next.Key = old.Key
+		if within := s.pending[next]; within != nil { // as Render.Region does
+			maps.Copy(r.deps, within.deps)
+		}
 		s.pending[next] = &region{fn: reg.fn, deps: r.deps}
 		next = s.prepare(next)
 		old.Walk(func(_ []string, n *Node) { delete(s.regions, n) })

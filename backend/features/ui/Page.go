@@ -2,6 +2,9 @@ package ui
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"maps"
 	"net/http"
 
 	"github.com/SgtFlame/foundation/backend/features"
@@ -82,6 +85,10 @@ type Page struct {
 	// re-renders only the regions that read it.
 	Render   func(r *Render) *Node
 	Handlers map[string]func(h *Handle) error
+	// Dry runs its handlers and logic as dry runs (forge 04c): graphs in
+	// their drafts, and commands shown as dryRun actions, never sent.
+	Dry    bool
+	prefab string // a PrefabPage's prefab: it has no tree overlay
 }
 
 // Commander decides commands for handlers (the live bus).
@@ -91,7 +98,7 @@ type Commander interface {
 
 // Action is a client action: an effect only the browser can perform.
 type Action struct {
-	Type     string `json:"type"` // toast, navigate, openEditor, focus, download, copy, confirm, rename
+	Type     string `json:"type"` // toast, navigate, openEditor, focus, download, copy, confirm, rename, dryRun
 	Message  string `json:"message,omitempty"`
 	Severity string `json:"severity,omitempty"` // toast: success, info, warning, error
 	// openEditor
@@ -108,10 +115,13 @@ type Action struct {
 	FileName string   `json:"fileName,omitempty"`
 	// confirm: the answer is posted to Handler with {confirmed}
 	Handler string `json:"handler,omitempty"`
+	// dryRun: a command a dry run did not send, as Name (its type), ID
+	// (its target) and Params (its args)
 }
 
 // Handle is what a handler gets: the event's payload, the session's view
-// state, commands and client actions.
+// state, commands and client actions. A prefab instance's handlers and
+// logic see its own state, props and queries (forge 04b).
 type Handle struct {
 	features.ServiceArgs
 	Payload map[string]any
@@ -119,16 +129,110 @@ type Handle struct {
 	s       *Session
 	request string
 	actions []Action
+	inst    *instance      // the prefab instance it runs for, if one
+	gone    map[string]any // an unmounted instance's last state, read only
+	depth   int            // events raised on the way here
 }
 
-// State reads view state at a dotted path.
-func (h *Handle) State(path string) any { return getPath(h.s.state, path) }
+// State reads view state at a dotted path: an instance's own.
+func (h *Handle) State(path string) any {
+	switch {
+	case h.gone != nil:
+		return getPath(h.gone, path)
+	case h.inst != nil:
+		return getPath(h.s.state, h.inst.scoped(path))
+	}
+	return getPath(h.s.state, path)
+}
 
 // Set changes view state at a dotted path; regions and props that read it
-// are patched after the handler.
+// are patched after the handler. An unmounted instance's is gone.
 func (h *Handle) Set(path string, v any) {
+	switch {
+	case h.gone != nil:
+		return
+	case h.inst != nil:
+		path = h.inst.scoped(path)
+	}
 	setPath(h.s.state, path, v)
 	h.s.changed = append(h.s.changed, "state."+path)
+}
+
+// Prop reads the instance's props at a dotted path; nil outside a prefab.
+func (h *Handle) Prop(path string) any {
+	if h.inst == nil {
+		return nil
+	}
+	return getPath(h.inst.props, path)
+}
+
+// Held is the data of a query the instance declares, as it holds it.
+func (h *Handle) Held(name string) any {
+	if h.inst == nil {
+		return nil
+	}
+	if q := h.s.queries[h.inst.queries[name]]; q != nil {
+		return q.data
+	}
+	return nil
+}
+
+// maxRaise bounds events raised from handler to handler.
+const maxRaise = 16
+
+// Raise raises one of the instance's declared events: the handler its
+// user's on maps it to runs at once, with the payload, in the user's scope
+// (forge 04b question 3). An event nobody handles does nothing.
+func (h *Handle) Raise(event string, payload map[string]any) error {
+	inst := h.inst
+	if inst == nil {
+		return fmt.Errorf("Raise event runs only in a prefab")
+	}
+	if _, ok := inst.prefab.Events[event]; !ok {
+		return fmt.Errorf("%s declares no event %q", inst.prefab.Name, event)
+	}
+	o, ok := inst.on[event]
+	if !ok || inst.parent == nil || h.gone != nil {
+		return nil
+	}
+	if h.depth >= maxRaise {
+		return fmt.Errorf("events were raised %d times in a row", maxRaise)
+	}
+	all := maps.Clone(o.Payload)
+	if all == nil {
+		all = map[string]any{}
+	}
+	maps.Copy(all, payload)
+	up := &Handle{ServiceArgs: h.ServiceArgs, Payload: all, Params: h.Params, s: h.s, request: h.request, inst: inst.parent, depth: h.depth + 1}
+	err := h.s.runInstanceHandler(up, o.Handler)
+	h.actions = append(h.actions, up.actions...)
+	if errors.Is(err, errNoHandler) {
+		return fmt.Errorf("%s has no handler %s for %s's %s", inst.parent.prefab.Name, o.Handler, inst.prefab.Name, event)
+	}
+	return err
+}
+
+// Subscribe keeps a query's data at a path of the instance's state while
+// it is mounted: Subscribe to records in prefab.logic graphs. Subscribing
+// the same path again with other params replaces it.
+func (h *Handle) Subscribe(path, query string, params any) error {
+	inst := h.inst
+	if inst == nil || h.gone != nil || h.s.instances[inst.kp] != inst {
+		return fmt.Errorf("Subscribe runs only in a mounted prefab")
+	}
+	if path == "" || query == "" {
+		return fmt.Errorf("Subscribe needs a state path and a query")
+	}
+	held := inst.kp + "#sub:" + path
+	ref := QueryRef{Query: query, Params: params}
+	if q := h.s.queries[held]; q != nil && q.ref.Query == query && string(h.s.boundParams(ref)) == string(q.params) {
+		return nil
+	}
+	if p := h.s.holdAs(inst, held, ref, inst.scoped(path)); p != nil {
+		return fmt.Errorf("%s", p.Message)
+	}
+	inst.subs[path] = held
+	return nil
 }
 
 // Value reads the event's payload at a dotted path.
@@ -144,9 +248,14 @@ func (h *Handle) String(name string) string {
 }
 
 // Command sends a command as the session's user; its effect comes back
-// through the page's queries like anyone else's.
+// through the page's queries like anyone else's. A dry page's is not sent
+// but shown, as a dryRun action.
 func (h *Handle) Command(typ, target string, args any) ([]live.Problem, *features.ServiceResponse) {
 	raw, _ := json.Marshal(args)
+	if h.s.page.Dry {
+		h.Do(Action{Type: "dryRun", Name: typ, ID: target, Params: raw})
+		return nil, nil
+	}
 	problems, fail := h.s.o.Commander.Execute(h.ServiceArgs, "ui-"+newID(), typ, target, h.request, raw)
 	return problems, fail
 }
@@ -161,6 +270,10 @@ func (h *Handle) Query(query string, params any) (any, *features.ServiceResponse
 	data, _, fail := h.s.o.Subs.Once(h.ServiceArgs, query, raw)
 	return data, fail
 }
+
+// Dry is whether the handle runs in a dry page, whose graphs run in their
+// drafts.
+func (h *Handle) Dry() bool { return h.s.page.Dry }
 
 // Do adds a client action.
 func (h *Handle) Do(a Action) { h.actions = append(h.actions, a) }
@@ -218,6 +331,11 @@ func (r *Render) Region(key string, fn func(r *Render) *Node) *Node {
 		n = N("mui.box", key)
 	}
 	n.Key = key
+	// A region whose node is an inner region's (a prefab whose template's
+	// root is another prefab) renders it again, so it reads what that reads
+	if within := r.s.pending[n]; within != nil {
+		maps.Copy(inner.deps, within.deps)
+	}
 	r.s.pending[n] = &region{fn: fn, deps: inner.deps}
 	return n
 }

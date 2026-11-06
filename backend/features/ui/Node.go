@@ -17,8 +17,8 @@ var Log = logging.In("ui")
 
 // Node is one component in a tree.
 type Node struct {
-	Type string         `json:"type"`
-	Key  string         `json:"key"`
+	Type  string         `json:"type"`
+	Key   string         `json:"key"`
 	Props map[string]any `json:"props,omitempty"`
 	// Bind reads props by path: "state.<path>" (view state),
 	// "query:<name>[.<path>]" (a query the page holds) or "local.<path>"
@@ -28,6 +28,9 @@ type Node struct {
 	On       map[string]On      `json:"on,omitempty"`
 	Children []*Node            `json:"children,omitempty"`
 	Slots    map[string][]*Node `json:"slots,omitempty"`
+	// Src is the key path of the template node it was drawn from, in a
+	// design session (forge 04c): the Prefab Editor's Canvas selects by it.
+	Src string `json:"src,omitempty"`
 }
 
 // On maps a component event to a handler. Payload values that are strings

@@ -1,6 +1,10 @@
 // Renders a server-described tree with the ui.renderer contributions
 // (documentation/ServerUI.md). A node of an unknown type, or one whose
-// renderer fails, shows an inline error box rather than nothing.
+// renderer fails, shows an inline error box rather than nothing. In design
+// mode (the Prefab Editor's Canvas) each node with a src is wrapped in an
+// element carrying it as data-src, which takes no part in layout, so the
+// Canvas can find a clicked node and outline it; in 'select' mode events
+// are not sent.
 
 import { Alert, Box } from '@mui/material'
 import { Component, memo, useMemo, useSyncExternalStore, type ReactNode } from 'react'
@@ -8,6 +12,10 @@ import { useContributions } from '../workbench/extensions/index.ts'
 import { renderers, type RendererContribution } from './points.ts'
 import type { UiNode } from './types.ts'
 import type { UiSession } from './UiSession.ts'
+
+// How a design session's tree is drawn: 'select' wraps nodes and sends no
+// events, 'interact' wraps them and sends events
+export type DesignMode = 'select' | 'interact'
 
 export function ErrorBox({ messages }: { messages: string[] }) {
   return (
@@ -35,9 +43,10 @@ interface NodeViewProps {
   path: string[]
   session: UiSession
   byType: Map<string, RendererContribution>
+  design?: DesignMode
 }
 
-const NodeView = memo(function NodeView({ node, path, session, byType }: NodeViewProps) {
+const NodeView = memo(function NodeView({ node, path, session, byType, design }: NodeViewProps) {
   // Only the local paths this node binds re-render it, as a stable string
   const localBinds = Object.entries(node.bind ?? {}).filter(([, src]) => src.startsWith('local.'))
   const localKey = useSyncExternalStore(session.local.subscribe, () =>
@@ -55,47 +64,55 @@ const NodeView = memo(function NodeView({ node, path, session, byType }: NodeVie
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node, localKey])
 
-  if (!contribution) return <ErrorBox messages={[`there is no renderer for ${node.type}`]} />
-  const Renderer = contribution.component
   const childPath = (key: string) => [...path, key]
-  const render = (child: UiNode) => <NodeView key={child.key} node={child} path={childPath(child.key)} session={session} byType={byType} />
+  const render = (child: UiNode) => <NodeView key={child.key} node={child} path={childPath(child.key)} session={session} byType={byType} design={design} />
+  const view = contribution ? rendered(contribution) : <ErrorBox messages={[`there is no renderer for ${node.type}`]} />
+  if (!design || !node.src) return view
   return (
-    <NodeBoundary type={node.type}>
-      <Renderer
-        node={node}
-        path={path}
-        props={props}
-        session={session}
-        emit={(event, data) => {
-          const on = node.on?.[event]
-          if (on) session.emit(path, on, data)
-        }}
-        handles={(event) => !!node.on?.[event]}
-        setLocal={(prop, value) => {
-          const src = node.bind?.[prop]
-          if (!src?.startsWith('local.')) return false
-          session.local.set(src.slice(6), value)
-          return true
-        }}
-        renderChild={(key) => {
-          const child = node.children?.find((c) => c.key === key)
-          return child ? render(child) : null
-        }}
-        slot={(name) => (node.slots?.[name] ?? []).map((c) => <NodeView key={c.key} node={c} path={childPath(c.key)} session={session} byType={byType} />)}
-      >
-        {(node.children ?? []).map(render)}
-      </Renderer>
-    </NodeBoundary>
+    <div data-src={node.src} style={{ display: 'contents' }}>
+      {view}
+    </div>
   )
+
+  function rendered({ component: Renderer }: RendererContribution) {
+    return (
+      <NodeBoundary type={node.type}>
+        <Renderer
+          node={node}
+          path={path}
+          props={props}
+          session={session}
+          emit={(event, data) => {
+            const on = node.on?.[event]
+            if (on && design !== 'select') session.emit(path, on, data)
+          }}
+          handles={(event) => !!node.on?.[event]}
+          setLocal={(prop, value) => {
+            const src = node.bind?.[prop]
+            if (!src?.startsWith('local.')) return false
+            session.local.set(src.slice(6), value)
+            return true
+          }}
+          renderChild={(key) => {
+            const child = node.children?.find((c) => c.key === key)
+            return child ? render(child) : null
+          }}
+          slot={(name) => (node.slots?.[name] ?? []).map((c) => <NodeView key={c.key} node={c} path={childPath(c.key)} session={session} byType={byType} design={design} />)}
+        >
+          {(node.children ?? []).map(render)}
+        </Renderer>
+      </NodeBoundary>
+    )
+  }
 })
 
-// Renders a session's tree
-export function UiRenderer({ session, tree }: { session: UiSession; tree: UiNode }) {
+// Renders a session's tree; design draws a design session's (see above)
+export function UiRenderer({ session, tree, design }: { session: UiSession; tree: UiNode; design?: DesignMode }) {
   const contributions = useContributions(renderers)
   const byType = useMemo(() => new Map(contributions.map((c) => [c.id, c])), [contributions])
   return (
     <Box sx={{ height: '100%' }}>
-      <NodeView node={tree} path={[]} session={session} byType={byType} />
+      <NodeView node={tree} path={[]} session={session} byType={byType} design={design} />
     </Box>
   )
 }

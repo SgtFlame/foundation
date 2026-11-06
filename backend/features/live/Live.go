@@ -176,6 +176,9 @@ type Command struct {
 	// without one (a record made from Go or a tool). A browser that may
 	// resend the command makes the id itself, so a resend is a duplicate.
 	NewTarget func() string
+	// NewTargetFor, when set, makes the target's id from the arguments for
+	// a command sent without one, such as a prefab's id from its name.
+	NewTargetFor func(args features.ServiceArgs, cmdArgs json.RawMessage) string
 	// Holds, when set, names other targets the command's events always
 	// change, such as a counter every create takes a number from: the bus
 	// locks them with the command's own before deciding it, so commands of

@@ -540,6 +540,39 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it-7).
     - **Pending, carried forward**: serving Volume files from records; opening a record cited in chat; numbering records made before an autoNumber field; purging uploads no record holds (forge 03-DataModel question 6).
 
+25. **Prefab drafts, publish and versions** (Forge iteration 4, part 4a, [forge 04-Prefabs.md](../../forge/documentation/plans/04-Prefabs.md)). *Built* ([ServerUI.md](ServerUI.md#built-in-slice-25)).
+    - **Built**:
+      - `ui.Prefab` (props, state, events, slots, queries, a template of `ui.Node`s with `slot` and `prefab.<id>` nodes, graphs, preview) and `ui.CheckPrefab`, every problem at a path with a fix;
+      - `ui/prefabs`: drafts on the `def` stream (`ui.prefab`, `ui.prefabPublished`), the `prefab.*` commands (tree edits by key paths, `updateNode` merging per prop), each checking the whole definition, `prefab.describe` and `prefab.list`, publishing with the breaking-change check, and the versions follower into `ui_prefabs` and `ui_prefab_versions`;
+      - `prefabservice` (`/ui/prefabs`), the `prefabs` resource type, the `prefab.describe`, `prefab.list` and `prefab.listTypes` tools, and `Prefabs.ts`;
+      - in `live`, `Command.NewTargetFor`;
+      - the wiring, in Foundation's `serve.go` and Forge's.
+    - **Blockers**: none. Forge 04 question 3 (per app and a tenant library) was answered before; 04a questions 1 (access), 2 (two designers on one node), 3 (where definitions live) and 4 (breaking changes) were asked before building and answered with their proposals.
+    - **Decisions to review after seeing it**: in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-1).
+    - **Pending, carried forward**: deleting a prefab; checking pages' instances at publish (forge 05-Applications); rendering prefabs (forge 4b).
+
+26. **The template evaluator and instances** (Forge iteration 4, part 4b, [forge 04-Prefabs.md](../../forge/documentation/plans/04-Prefabs.md)). *Built* ([ServerUI.md](ServerUI.md#built-in-slice-26)).
+    - **Built**:
+      - the evaluator in `ui` (`Evaluate.go`, `Template.go`): `repeat` and `when` nodes, slots, nested and pinned (`@n`) instances as regions, bindings scoped to the instance (state, queries and local state at `instances.<key path>`), `=` expressions, `app.*` and `user.*`, problems as `ui.error` in place, definitions and instance queries held by the session (200 at most), `ui.PrefabPage`;
+      - instance handlers (`prefab:<key path>#<name>`), `Handle.Raise`, `Prop`, `Held` and `Subscribe`, lifecycle runs after the tree is sent (`ui.LogicRunner`), unmounting;
+      - in `ui/nodes`, *Raise event*, *Subscribe to records*, *Get prop*, *Get query data*, `RunLogic` and `PrefabHost`;
+      - `ui.CheckPrefab` for the constructs, bindings, expressions and pinned versions; the sx token rule in it and in `ui.Validate`;
+      - `ui.Preview`, the `prefab.preview` tool, `POST /ui/prefabs/preview` and `Prefabs.preview`; published prefabs in `ui.listComponents`, `ui.describeComponent` and `ui.previewTree`;
+      - the wiring (`uitools.Contribute` takes the subscriptions; `prefabimpl.WithRegistry`, `WithSubscriptions`), in Foundation's `serve.go` and Forge's.
+    - **Blockers**: none. Forge 04b questions 1-7 were asked before building and answered with their proposals; forge 04 question 2 (no screenshots in previews) was answered before.
+    - **Decisions to review after seeing it**: in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-2).
+    - **Pending, carried forward**: an instance of a prefab unpublished when its session rendered it waits for the session to reopen; unmount runs when a session closes; `local.*` bound into an instance's props; app settings for `app.*` (forge 05); Hello's task page as a prefab (forge 4d).
+
+27. **The Prefab Editor's design page** (Forge iteration 4, part 4c, [forge 04c-PrefabEditor.md](../../forge/documentation/plans/04c-PrefabEditor.md)). *Built* ([ServerUI.md](ServerUI.md#built-in-slice-27); the editor is Forge's, [forge PrefabEditor.md](../../forge/documentation/PrefabEditor.md)).
+    - **Built**:
+      - `ui.DesignPage()` (`prefabs/design`): a prefab's draft with its shared preview data, each node tagged with its template key path (`Node.Src`);
+      - dry pages (`Page.Dry`): commands come back as `dryRun` actions, and handlers and logic run their graphs' drafts (`Handle.Dry`, `engine.Draft`, `drafts.Source.Draft`);
+      - `UiRenderer`'s `design` mode (`select`, `interact`);
+      - fixes: root patches' path `[]`, patch index 0 sent, and a prefab whose root is another prefab drawn when made while open.
+    - **Blockers**: none. Forge 04c questions 1 (a dry preview session, select on click, *Interact*), 2 (shared preview data) and 3 (no undo) were asked before building and answered with their proposals.
+    - **Decisions to review after seeing it**: in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-3).
+    - **Pending, carried forward**: undo of one's own changes (forge 06-AIAuthoring); `GET /ui/components` still lists only primitives (the editor reads published prefabs from `prefab.list`).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -571,3 +604,6 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 22. Atomic multi-record commits (Forge 3h) | none (forge 03-DataModel 4 waits for forge 14) | the decisions in [Live.md](Live.md#decisions-to-review-after-seeing-it-1), to review after seeing |
 | 23. Record nodes and the task list (Forge 3i) | none in the plan; gaps 03i 1 (Hello seeds *Task*), 2 (its own tab), 3 (rows bind `records.find`) and 4 (a real model for the chat), answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-6), to review after seeing |
 | 24. Richer fields and search (Forge 3j) | forge 03-DataModel 3 (LanceDB, answered before), 9 (computed values written by events) and 10 (an optional retrieval source), and 09-Notion 1 (ProseMirror JSON), answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-7), to review after seeing |
+| 25. Prefab drafts (Forge 4a) | forge 04 question 3 (answered before) and 04a 1 (access), 2 (per-prop merge), 3 (KV drafts, SQLite versions) and 4 (refuse breaking changes unless allowed), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-1), to review after seeing |
+| 26. Template evaluator (Forge 4b) | forge 04 question 2 (answered before) and 04b 1 (`ui.PrefabPage`), 2 (`@n` pins), 3 (*Raise event*), 4 (200 queries per session), 5 (`=` expressions), 6 (local state per instance) and 7 (what logic runs can do), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-2), to review after seeing |
+| 27. Prefab Editor's design page (Forge 4c) | forge 04c 1 (a dry preview session over the draft), 2 (shared preview data) and 3 (no undo), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-3), to review after seeing |

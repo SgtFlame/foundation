@@ -13,7 +13,7 @@ type Patch struct {
 	Op    string         `json:"op"` // replace, insert, remove, move, props
 	Path  []string       `json:"path"`
 	Node  *Node          `json:"node,omitempty"`  // replace, insert
-	Index int            `json:"index,omitempty"` // insert, move: the position among the children
+	Index int            `json:"index"`           // insert, move: the position among the children (0 is sent too)
 	Key   string         `json:"key,omitempty"`   // move: the child moved
 	Props map[string]any `json:"props,omitempty"` // props: values to set; null removes one
 }
@@ -21,7 +21,10 @@ type Patch struct {
 // Diff is the patches that turn old into new, matching children by key.
 // The browser applies them in order.
 func Diff(path []string, old, new *Node) []Patch {
-	if old == nil || old.Type != new.Type || old.Key != new.Key || !equalJSON(old.Bind, new.Bind) || !equalJSON(old.On, new.On) || !equalJSON(old.Slots, new.Slots) {
+	if path == nil {
+		path = []string{} // the root's: [] on the wire, never null
+	}
+	if old == nil || old.Type != new.Type || old.Key != new.Key || old.Src != new.Src || !equalJSON(old.Bind, new.Bind) || !equalJSON(old.On, new.On) || !equalJSON(old.Slots, new.Slots) {
 		return []Patch{{Op: "replace", Path: path, Node: new}}
 	}
 	var patches []Patch

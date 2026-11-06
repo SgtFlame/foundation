@@ -113,3 +113,190 @@ For the Hello task list (forge 03i, [Records.md › Built in slice 23](Records.m
 - **`mui.table` columns** take a `type` (`text`, `number`, `bool`, `date`, `dateTime`, `enum`), `editable` (a `bool` cell's checkbox sends the new `edit` event, `{key, field, value}`), `options` (an `enum` column's labels) and `sortField` (what `sort` names when `field` is a path). `field` is a dotted path, so a column can show `_expanded.assignee.displayName`.
 - **A row updated in place reaches the page.** `live.Apply` changed the held data in place, and the rendered props shared it, so the bound prop never looked changed; it now copies (see Records.md).
 - **The Hello app** has the task list: the page `hello/tasks`, the editor kind `app:hello:tasks` (icon `checklist`, added to the icon map) and an *Open task list* button on its main page.
+
+## Built in slice 25
+Forge's part 4a ([forge 04-Prefabs.md](../../forge/documentation/plans/04-Prefabs.md)): what a **prefab** is, as a definition edited by several people at once. Nothing renders a prefab yet; part 4b (the template evaluator) does.
+
+### The definition
+`ui.Prefab` (`ui/Prefab.go`) is a reusable component:
+```json
+{ "id": "taskRow", "name": "Task row", "description": "One task with a checkbox", "owner": "app:hello",
+  "props":  { "task": { "type": "record", "entity": "task", "required": true } },
+  "state":  { "editing": { "type": "bool", "default": false } },
+  "events": { "toggled": { "payload": { "id": "string", "done": "bool" } } },
+  "slots":  { "actions": { "description": "Buttons at the row's end" } },
+  "queries": { },
+  "template": { "type": "mui.stack", "key": "root", "props": { "direction": "row" }, "children": [
+      { "type": "mui.checkbox", "key": "checkbox", "bind": { "checked": "props.task.done" },
+        "on": { "change": { "handler": "onToggle" } } },
+      { "type": "mui.text", "key": "title", "bind": { "text": "props.task.title" } },
+      { "type": "slot", "key": "actions", "props": { "name": "actions" } } ] },
+  "graphs": { "onToggle": "taskRow-onToggle", "logic": "taskRow-logic" },
+  "preview": { "props": { } }, "version": 0 }
+```
+- **Owner**: `app:<appId>`, or none for the tenant's library (forge 04 question 3). Any prefab of the tenant can use any other.
+- **Types** of props, state and payload fields are `ui.PrefabTypes`: `string`, `number`, `integer`, `bool`, `date`, `dateTime`, `enum` (with `options`), `json`, `record` and `records` (with `entity`).
+- **The template** is a tree of `ui.Node`s. A node's type is a primitive, `slot` (`props.name` names a declared slot) or `prefab.<id>`, an instance of another prefab (its props, events and slots are that prefab's interface; content goes in its slots, never as children). Nodes are found by **key paths** from the root, joined with `/` (`root/row/title`), so a path stays valid while other nodes move.
+- **Graphs** map a name the template's handlers use (`on: {change: {handler: "onToggle"}}`) to a graph id. A graph an event names must be a `ui.handler` graph; the others are `ui.handler` or `prefab.logic` (lifecycle; runs come with part 4b).
+- **Preview** holds sample props for the Prefab Editor; it is part of the draft, not of the interface.
+
+`ui.CheckPrefab(prefab, env)` is every problem with a definition, each at a path within it (`template.root/title.props.variant`, `props.task.entity`, `graphs.onToggle`) with a fix a model can act on. `ui.PrefabEnv` gives what it is checked against: the catalog, other prefabs (their last published version, else their draft), the prefabs each one uses (draft and published, to find a prefab that contains itself), entity types, queries (registered, or a `data.query` graph) and graph kinds. It checks names; keys (valid, unique among a node's children and slot content); every node's type; props against the component's schema, prop by prop (a bound prop counts as present, as in `ui.Validate`); required props; events a component emits; children and slots it takes; instances against the other prefab's interface; `bind` paths reading only `props.*`, `state.*`, `slots.*`, `query:<name>` of declared ones, or `local.*`; `on` handlers naming a key in `graphs`; graph kinds; declared types, entity types and query names; defaults and preview values fitting their types. `ui.PrefabsUsed(template)` lists the prefabs a template uses.
+
+### Backend
+- **Drafts** (`ui/prefabs`, following entity types): an aggregate on the `def` stream, target type `prefab`. The `ui.prefab` projection is the draft (`prefabs.Draft {prefab, rev, published, publishedRev, updatedBy, updatedAt}`) and `ui.prefabPublished` the last published version. **Every command applies its events to a copy of the draft and runs `ui.CheckPrefab`**, rejecting with problems at `prefab.<path>`, so no draft is ever invalid.
+- **Commands** (`prefabs.write`; `prefab.publish` needs `prefabs.publish`):
+  - `prefab.create {name, description?, owner?}`: its id is the target, or made from the name when none is sent (*Task row* is `taskRow`, then `taskRow_2`), through the new `live.Command.NewTargetFor`.
+  - `prefab.setInfo {name?, description?, owner?}`; `prefab.setInterface {props?, events?, slots?, state?, queries?}`, each section given replacing that section.
+  - `prefab.insertNode {parentPath?, slot?, index?, node}` (no `parentPath`: the root of an empty tree; no `index`: the end; a node without a key gets one from its type, `checkbox`, `checkbox_2`, new in the whole template), `prefab.updateNode {path, props?, bind?, on?, key?}` (a merge: each prop, binding and handler given is set, `null` clears it, one left out stays; forge 04a question 2), `prefab.moveNode {path, parentPath, slot?, index?}`, `prefab.removeNode {path}`, `prefab.wrapNodes {paths, wrapper}` (siblings, in their order, into a wrapper that takes the first one's place; wrapping the root alone makes a new root) and `prefab.unwrapNode {path}`.
+  - `prefab.attachGraph {name, graph}` and `prefab.detachGraph {name}`; `prefab.setPreview {props}`.
+  - `prefab.publish {rev, allowBreaking?}`.
+- **Each command's tool reports** `{rev, published, problems, nodes}`, `nodes` being every node's path, so a model sees the key a new node got (`prefabs.Report`).
+- **Queries** (`prefabs.read`): `prefab.describe {id, published?, version?}` (the draft, the last published version, or a version from the tenant database, which never changes) and `prefab.list {owner?, search?}` (summaries keyed `prefab.<id>`: id, name, description, owner, rev, published, changed; `owner: "tenant"` is the tenant library; `search` matches name and description). Who is editing a prefab is presence on its topic, read by the editor (part 4c).
+- **Publishing**: `prefab.publish` refuses a draft that moved since `rev`, as `bp.publish` and `entity.publish` do, and a draft with problems. **Breaking changes** (`prefabs.Breaking`): removing a prop, event or slot, or changing a prop's type or entity, since the last version. Publish reads every published prefab and lists those whose instances use the changed part (`{change, path, usedBy: [{prefab, path}]}`): it is refused with `prefab_breaking`, a problem per change naming them, unless `allowBreaking: true` (forge 04a question 4); the publication records the breaks it went through with.
+- **Versions** (forge 04a question 3): the follower `fol_ui.prefabVersions` (`prefabs.Follow`, started by `prefab.publish` before its event commits and by reads of versions) copies each version into the tenant database, `ui_prefab_versions` (`ui.PrefabVersion`: tenant, prefab id, version, name, owner, the definition as JSON, who published it and when, the event's stream and sequence) and `ui_prefabs` (`ui.PrefabRow`, each prefab's last version), in one transaction. `ui.Models()` are migrated by `serve`.
+- **REST** (`prefabservice`, `/ui/prefabs`): `GET /ui/prefabs` (each prefab's last published version), `POST /ui/prefabs/get {id, version?}` (404 `prefab_not_found`) and `POST /ui/prefabs/versions {id}`.
+- **Access** (forge 04a question 1): the resource type `prefabs` (`ui.ContributePrefabAccess`) with `read`, `write` and `publish`, on `tenant:<id>/ui/prefab:<prefabId>` (`ui.PrefabResource`); app-owned prefabs follow their app's roles once apps exist.
+- **Tools**: every `prefab.*` command is a tool (`livetools`); `uitools.ContributePrefabs` adds `prefab.describe`, `prefab.list` and `prefab.listTypes`.
+- **Wiring**: `serve.go`, in Foundation and in Forge, contributes `prefabs` after `records` and before `livetools`, and registers the handler.
+
+### Browser
+`src/services/Prefabs.ts` is the REST client and declares the definition's types (`Prefab`, `PropDecl`, `PrefabView` for `useQuery<PrefabView>('prefab.describe', …)`, `PrefabSummary` for `prefab.list`). The Prefab Editor (Forge part 4c) is the first user.
+
+### Decisions
+Made while building:
+1. **The definition and its check are in `ui`**, not `ui/prefabs`, so the template evaluator (4b, in `ui`) uses them without an import cycle.
+2. **The target is the prefab.** The plan's `prefab.insertNode {prefab, …}` names it in the args; like every command, it is the target. `insertNode` and `moveNode` take `slot` for a slot's content, and a left-out `index` is the end.
+3. **`live.Command.NewTargetFor`** makes a target's id from the arguments, so `prefab.create` makes the id from the name. `NewTarget` takes no arguments.
+4. **Generated keys are new in the whole template**, not only among siblings, so the path a model reads back is unambiguous.
+5. **Bindings are only what 4a can check**: `props.*`, `state.*`, `slots.*`, `query:<name>` and `local.*`. `app.*`, `user.*`, `=` expressions, `repeat`, `when` and the `sx` token rule are part 4b's and are refused or unchecked until then.
+6. **Instances are checked against the other prefab's last published version**, else its draft, since instances render published versions; a prefab containing itself is found through drafts and published versions both.
+7. **A breaking change is refused only when a published prefab uses the changed part** (sets or binds the prop, handles the event, fills the slot). One that breaks nothing publishes without `allowBreaking`.
+8. **A command is refused when the draft it leaves has any problem**, whatever caused it. So an interface change is made in steps: add the new prop, rebind the nodes, then remove the old one.
+
+### Verification of slice 25
+- `go test ./features/ui/prefabs` (also with `-race`, and three runs in a row), against embedded NATS and SQLite:
+  - *Task row* built by commands alone (its id made from its name, keys from types, a slot, graphs attached); a second subscription to `prefab.describe` receives each change as it lands; wrap, move, unwrap, a merged update clearing one prop, preview data and remove by key paths.
+  - Two designers: one moves a node while the other updates another node's props, five rounds at once, and both changes land each time; two updates of different props of one node both land.
+  - Rejections with problems and paths: an unknown component, an invalid prop value, an unknown prop, a duplicate key, a bind to an undeclared prop and to `user.*`, a handler with no graph, a lifecycle graph as a handler, a graph of another kind, a missing graph, detaching a graph a handler uses, an undeclared slot, an unknown entity type, removing a prop still bound, preview data for no prop, a bad owner, a prefab containing itself directly and through another, an instance missing a required prop, moving the root, a path with no node; none changes the draft.
+  - A stale publish is refused; version 1 reaches `ui_prefab_versions` with its sequence, and `ui_prefabs`; `prefab.describe {version: 1}` reads it; removing a prop *Task list* sets is refused at publish with `prefab_breaking`, naming *Task list* at `template.root/row`, and goes through with `allowBreaking`; removing an unused slot publishes.
+  - `prefab.list` by owner, the tenant library and search.
+  - The tools a chat model gets (`prefab.create` without a target, `setInterface`, `attachGraph`, `insertNode` with its report of node paths, `prefab.describe`, `prefab.list`), run directly in Go.
+- `go test` of `live/...`, `ui/...`, `records/entities`, `records/tools` and `cognition/drafts` still pass; Foundation's and Forge's `serve` vet, and the common frontend type-checks.
+- Forge's server, run fresh: `GET /api/v1/ui/prefabs` answers `{"prefabs":[]}`, `POST /ui/prefabs/get` a 404 `prefab_not_found`, and the extensions and resource types list the prefab commands, queries, projectors, tools and the `prefabs` type.
+
+### Decisions to review after seeing it
+- Decision 7 (a breaking change that breaks no published prefab publishes without the flag); pages are checked once they exist (forge 05-Applications).
+- Decision 8 (interface changes in steps), once the Prefab Editor's Interface tab (4c) shows how it feels.
+
+## Built in slice 26
+Forge's part 4b ([forge 04-Prefabs.md](../../forge/documentation/plans/04-Prefabs.md)): prefabs render. The **template evaluator** expands a prefab instance's template, props and state into primitives on the server, inside a session's render, so the browser only ever receives primitives. Instances have their own state, raise events their user handles, and run their `prefab.logic` graphs. A page can be a prefab.
+
+### Template constructs
+A template's nodes are primitives, `slot`, `prefab.<id>` and two constructs, which are nodes like any other (`ui/Template.go`), so `prefab.*` commands edit them by key paths:
+- **`repeat`**: `{"type": "repeat", "key": "rows", "props": {"each": "query:tasks", "as": "task", "key": "task._id"}, "children": [template]}`. Its one child is drawn once per row, keyed `<repeat key>_<row key>` (characters other than letters, digits, `-` and `_` become `_`), in place of the repeat among its parent's children. `each` is any binding of a list; a records query's page (`{records, next}`) repeats its records. The row's name is readable in the row's bindings and expressions. A repeat with no child yet repeats nothing.
+- **`when`**: `{"type": "when", "key": "editing", "props": {"test": "state.editing"}, "slots": {"then": [node], "else": [node]}}`. The branch the test picks (truthy: not null, false, 0, "" or empty) is drawn in place; an empty branch draws nothing.
+- **`slot`**: the content the instance's user passes in that slot, evaluated in the user's scope, inside a `mui.box` keyed by the slot node.
+- **A prefab instance**: `prefab.<id>` follows the last published version, `prefab.<id>@<n>` pins version `n` (forge 04b question 2). `ui.InstanceOf(type)` splits it.
+- **Bindings** (`bind`, `each`, `test`): `props.*`, `state.*`, `local.*`, `query:<name>`, `slots.<slot>` (whether the user passed content), `app.*` (`{id, page}` until app settings exist), `user.*` (`{id, tenant, kind}`, ids as text), a repeat's row name, or an **expression**: a value starting with `=` is an `expr-lang/expr` expression over `props`, `state`, `queries` (`queries.<name>`), `app`, `user`, `slots` and the rows (question 5). It cannot read `local`, which only the browser has. An `on` payload value starting with `=` is evaluated too.
+
+`ui.CheckPrefab` checks all of these: the constructs' props and children, row names, binding roots, expressions compiled against the names they may read (and the `props.`/`state.`/`queries.` members they read), pinned versions against that version (`PrefabEnv.Version`), and the **sx rule** below.
+
+### How it renders
+- **`ui.PrefabPage(prefab, props)`** (question 1) is a `ui.Page` whose render evaluates a published prefab as the instance at the root (key `root`); the page's params, an object, add to its props. Set its `Descriptor`, `App` and `Title`. It has no tree overlay.
+- **Instances are regions.** Each instance renders inside `r.Region(<its key>, …)`, so a change to its state or queries renders only it again. Its props are read in its user's scope, so a change there renders the user, and the instance with it.
+- **Bindings stay bindings where they can.** In the evaluated tree, an instance's `state.x` becomes `state.instances.<key path>.x`, `query:q` becomes `query:<key path>#q` and `local.x` becomes `local.instances.<key path>.x`, so a state or query change still patches a bound prop alone, without rendering. Props, rows, `app`, `user`, `slots` and expressions are read at render, and tracked by what they read.
+- **Key paths.** An instance is known by its key path from the root, joined with `/` (`root/rows_7310…`). Its view state lives at `instances.<key path>` of the session's (`state.*` in the instance), and so does its local state in the browser (question 6). A prefab whose template's root is another prefab names the inner one `<key path>/<its key>`.
+- **Definitions are queries.** A session holds `prefab.describe {id, published: true}` (or `{id, version}` for a pinned one) as `__prefab:<id>` (`__prefab:<id>@<n>`) for each prefab it renders, so a publish renders its instances again at once, while a pinned instance stays. Opening a page waits, up to 3 seconds in all, for the definitions and instance queries rendering holds, and renders again; an instance whose definition has not arrived draws an empty `mui.box` until it does.
+- **Problems are `ui.error` nodes in place**: an unknown or unpublished prefab, a missing required prop, a prop of the wrong type or one the prefab does not declare, a binding to nothing, an expression that fails, and an instance beyond the session's cap.
+- **Queries per instance.** Each mounted instance holds its declared queries (`QueryDecl`: params bound to props are read at render; params bound to state follow it as `QueryRef.Bind` does), subscribed again when their params change. A session holds at most `ui.MaxSubscriptions` (200) queries (question 4); an instance beyond the cap shows a problem with the fix "pass records down as props". `Session.Queries()` lists the names held.
+- **Handlers.** An instance's template's events send `prefab:<key path>#<graph name>` (`ui.InstanceHandler`). `Session.Event` runs that graph of the instance's prefab with a handle scoped to the instance: `State`/`Set` are its own state, `Prop` its props, `Held` its queries' data.
+
+### Events and lifecycle
+- **Raising events** (question 3). `Handle.Raise(event, payload)` raises one of the prefab's declared events: the handler its user's `on` maps it to runs at once, in the user's scope, with the user's mapped payload under the raised one, and its client actions join the event's. An event nobody handles, or one raised by the page's root, does nothing. Raises nest at most 16 deep.
+- **Lifecycle** (question 7). `prefab.logic` graphs run through `ui.LogicRunner` (`uinodes.Runner.RunLogic`): *On mount* after the instance is first drawn, *On props changed* when its props differ after its user rendered again, *On query changed* when one of its declared queries changes, and *On unmount* when it is no longer drawn. Each gets `props`. Runs are queued while rendering and run, in order, after the tree or the patches are sent; what they change is sent in turn (8 rounds at most). One session's runs are one at a time, as all its work is.
+- **Unmounting** ends the instance's queries and subscriptions and removes its state; its unmount run reads the state it had, cannot change it and shows nothing (its client actions are dropped).
+- **Subscriptions.** `Handle.Subscribe(path, query, params)` keeps a query's data at a path of the instance's state while it is mounted, so bindings read it as `state.<path>`; subscribing the same path again with other params replaces it.
+
+### Nodes (`ui/nodes`)
+- *Raise event* (`ui.raiseEvent`; `ui.handler` and `prefab.logic`): config `event` and `inputs` (payload fields, each a pin), plus a `payload` pin. It is not the command graphs' *Emit event*.
+- *Subscribe to records* (`ui.subscribe`; `prefab.logic`): config `path` and `query` (`records.find` when empty), pin `params`.
+- *Get prop* (`ui.getProp`) and *Get query data* (`ui.getQuery`).
+- *On mount*, *On props changed*, *On query changed* and *On unmount* now run.
+- These need a `uinodes.PrefabHost` (`Host` with `Prop`, `Held`, `Raise`, `Subscribe`), which `*ui.Handle` and the test host are; other hosts are unchanged. A `prefab.logic` graph's *Test* runs on the test host, which reports `raised` and `subscriptions` too.
+
+### Styling
+`sx` takes only theme tokens (`ui.CheckSx`, `ui.SxTokens`): spacing (`m`, `mt`, `mr`, `mb`, `ml`, `mx`, `my`, `p`…, `gap`, `rowGap`, `columnGap`) as theme units from 0 to 16 in halves, or `auto` for margins; `color`, `bgcolor` and `borderColor` as palette roles (`primary.main`, `text.secondary`, `background.paper`, `action.hover`, `divider`, …); `typography` as a variant. `ui.CheckPrefab` and `ui.Validate` refuse anything else, with the tokens as the fix. Go render functions are not checked, since they predate the rule.
+
+### Preview, tools and REST
+- **`ui.Preview(args, options, prefab, props, draft)`** evaluates a prefab once in a throwaway session (its draft, or its last published version; with no props, its preview data): its queries are read once and no logic runs. It returns the tree and its problems at their key paths (`ui.TreeProblems`).
+- **Tools**: `prefab.preview {prefab, props?, draft?}`. `ui.listComponents` lists the published prefabs as `prefab.<id>` (category *Prefabs*), and `ui.describeComponent` and `ui.previewTree` read them as components (`ui.PrefabComponent`: its props as the props schema, its events and slots, no children). `uitools.Contribute` takes the subscriptions for this.
+- **REST**: `POST /ui/prefabs/preview {prefab, props?, draft?}` → `{tree, problems}` (`prefabservice.Preview`, needing `prefabs.read`; `prefabimpl.WithRegistry` and `WithSubscriptions`), and `Prefabs.preview` in `Prefabs.ts`.
+
+### Decisions
+Answered before building ([forge 04b-TemplateEvaluator.md › TODO](../../forge/documentation/plans/04b-TemplateEvaluator.md#todo)), each with its proposal: 1, `ui.PrefabPage`; 2, `prefab.<id>` follows the last published version and `prefab.<id>@<n>` pins; 3, *Raise event* (`ui.raiseEvent`); 4, queries per instance, capped at 200 per session; 5, `=` expressions; 6, `local.*` scoped per instance; 7, what a `prefab.logic` run can do.
+
+Made while building:
+1. **`repeat` and `when` are nodes** with their settings as props and their content as a child and slots, not the plan's `{repeat, template}` and `{when, then, else}` fields, so every `prefab.*` command, key path and check works on them unchanged. An empty repeat is allowed, since no command may leave a problem and a repeat is inserted before its row's template.
+2. **Rows and branches take their place** among their parent's children (a row keyed `<repeat>_<row key>`), so a list's items are its children; slot content is wrapped in a `mui.box` keyed by the slot node.
+3. **`state.*`, `query:` and `local.*` stay bindings**, rewritten to the instance's scope, so the props-only patch of slice 13 holds inside prefabs; everything else is read at render.
+4. **An instance is known by its key path**, which is where its state lives; a row's key comes from its record id, so a row keeps its state while the list reorders.
+5. **Definitions are held as queries** by every session that renders them; an unknown or unpublished prefab is a problem in place, not an error frame.
+6. **Unmounting removes the instance's state**, as React does, and its unmount run reads a copy.
+7. **Expressions read queries as `queries.<name>`** and cannot read `local`; `app` is `{id, page}` until applications have settings.
+8. ***Get prop* and *Get query data*** were added, since handlers see their instance's props and queries; *Raise event* takes its payload as declared input pins.
+9. **`uinodes.PrefabHost`** is a separate interface, so hosts that only run handlers need nothing new.
+10. **The sx rule exempts Go render functions** (Hello's pages use `height`, `flex` and `minHeight`); the token set is strict (no sizes, flex or borders) until forge 04 question 4 is answered.
+11. **`prefab.preview` is a throwaway session**, so it renders exactly as a page does.
+
+### Verification of slice 26
+- `go test ./features/ui/prefabs` (`render_test.go`; also with `-race`, three runs in a row), against embedded NATS and SQLite, with graphs published by `bp.import`/`bp.publish` and prefabs by `prefab.*` commands, and a session opened with `ui.Open` on `ui.PrefabPage("taskList", …)`:
+  - the page renders only primitives: *Task list*'s heading from its page props, a pinned *Badge*, and a row per task from a `records.find` repeat, in order and keyed by record id, each a *Task row* with a nested *Badge* labelled by an expression, a `when` showing nothing, and the list's slot content reading the list's props; the checkbox's handler names the instance's graph;
+  - another user renaming a task patches only that row's instance, and a state change (*Edit*) only its own;
+  - a row's toggle raises `toggled` with the task's id, the list's handler gets the payload and sends `record.update`, and the row shows it done;
+  - republishing *Badge* draws every row's badge again, while the pinned one stays;
+  - *On mount* runs for each row and *Subscribe to records* fills its state (its count shows 2); a record change runs the list's *On query changed* and the row's *On props changed*; deleting the task runs its *On unmount* with its last props, and its subscription and queries are no longer held;
+  - an `sx` with a raw colour and a width is refused with the tokens as the fix, and `ui.Validate` refuses one; `ui.Preview` of a draft uses its preview data, and reports an instance of a prefab that is only drafted, and a required prop bound to nothing, at their key paths.
+- The rest of `go test ./features/ui/...`, `live/...`, `records/...`, `cognition/...` and `tools/...` pass; 4a's test now expects `user.*` to be a binding. Foundation's and Forge's `serve` vet, and the common frontend type-checks.
+- Forge's server, run fresh: `POST /api/v1/ui/prefabs/preview {prefab: "nope"}` answers a `ui.error` tree with the problem at `["root"]`, and the extension points list `prefab.preview`, `ui.raiseEvent` and `ui.subscribe`.
+
+### Decisions to review after seeing it
+In the Prefab Editor's canvas ([forge 4c](../../forge/documentation/plans/04c-PrefabEditor.md)) and with Hello's task page as *Task list* ([forge 4d](../../forge/documentation/plans/04d-TaskListPrefabs.md)):
+- rows in place and slot content in a box (decision 2), and how they lay out;
+- an instance's state removed when it is no longer drawn (decision 6);
+- the strict sx token set (decision 10, forge 04 question 4).
+
+## Built in slice 27
+Forge's part 4c ([forge 04c-PrefabEditor.md](../../forge/documentation/plans/04c-PrefabEditor.md)) builds the Prefab Editor in Forge ([forge PrefabEditor.md](../../forge/documentation/PrefabEditor.md)). What it needs from Foundation is a page that draws a prefab's draft for design, a renderer that can select instead of click, and dry runs.
+
+### The design page
+- **`ui.DesignPage()`** (`ui/Design.go`, page `prefabs/design`, `ui.DesignPageID`, registered by `prefabs.Contribute`, needing `prefabs.read`) draws a prefab's **draft** with params `{prefab}`: the root instance reads the draft (`__prefab:<id>~draft`), nested prefabs their published versions, and its props are the draft's **preview data** (`prefab.setPreview`, shared by everyone editing it; forge 04c question 2). Every command on the draft or its preview draws it again, as any query change does.
+- **`Node.Src`** (`src` on the wire): in a design session each evaluated node carries the key path of the template node it was drawn from (`root/row/title`), so the browser can select it. A repeat's rows carry their template child's path, a `when`'s branch its branch's, slot content its own, and a nested prefab's nodes nothing but its root, which carries the instance's path. Only design sessions set it; `Diff` replaces a node whose `src` changes.
+- **Dry pages.** `Page.Dry` runs a page's handlers and logic as dry runs (forge 04c question 1): `Handle.Command` sends nothing and adds a `dryRun` client action (`name` the command, `id` its target, `params` its args) instead, and `uinodes.Runner` runs **drafts** of the graphs (`Handle.Dry()`, `engine.Draft`, which reads `drafts.Source.Draft` when the source is an `engine.DraftSource`, else the published graph). The design page is dry, so its *On mount* logic and, with *Interact*, its handlers run without committing anything. Queries are read as usual.
+
+### Browser
+- **`UiRenderer`'s `design` mode** (`'select' | 'interact'`): every node with a `src` is wrapped in `<div data-src style="display: contents">`, which takes no part in layout, so the host can find the node under the pointer (`closest('[data-src]')`) and outline it (a `Range` over the wrapper's contents gives its box). In `'select'` the nodes' events are not sent; in `'interact'` they are.
+- `UiNode.src` and the `dryRun` action in `ui/types.ts`.
+
+### Fixed while building
+1. **A patch at the root had `"path": null`** (a nil slice), which the browser's `applyPatch` could not read; `Diff` now sends `[]`, and `applyPatch` reads a missing path as the root. No page had patched its root's own children before.
+2. **A move or insert to index 0 sent no index** (`omitempty`), so the browser put the node last. `Patch.Index` is always sent.
+3. **A prefab whose template's root is another prefab**, made while the page was open, stayed an empty box: the outer instance's region and the inner one's share a node, and the outer one replaced the inner one's entry, losing what it read (the inner prefab's definition). `Render.Region` and `Session.update` now give the outer region what the inner one reads.
+
+### Decisions
+Answered before building ([forge 04c-PrefabEditor.md › TODO](../../forge/documentation/plans/04c-PrefabEditor.md#todo)), each with its proposal: 1, the Canvas is a dry preview session over the draft, a click selects and *Interact* runs handlers dry; 2, preview data is shared, in the draft; 3, no undo in this part.
+
+Made while building:
+1. **A registered page, not a new frame**: the Canvas is an ordinary UI session on `prefabs/design`, so it resumes, patches and shows problems as every page does.
+2. **Template paths travel on nodes** (`src`) rather than as a side map, so a patch carries them with the nodes it replaces.
+3. **The whole design page is dry**, not only with *Interact*: logic runs on mount in its draft, so the Canvas shows what an instance's logic does, and nothing it sends is committed.
+4. **Dry runs read graph drafts** of every graph the page runs, nested prefabs' too.
+5. **Wrappers use `display: contents`** so the renderers and their layout are untouched; the Canvas measures contents, not the wrapper.
+
+### Verification of slice 27
+- `go test ./features/ui/prefabs` (`render_test.go`): `TestTheDesignPageDrawsTheDraftDry` opens `ui.DesignPage()` over *Task list*'s draft: the nodes carry their template paths (the root, the heading, the pinned badge, a repeat's rows as `root/rows/row`, slot content as `root/rows/row/by`, a nested prefab's inner nodes none), the shared preview data are its props and a `prefab.setPreview` patches the heading, and a row's toggle raises `toggled`, whose handler's `record.update` comes back as a `dryRun` action while the record stays unchanged. `TestARootInstanceAddedLaterIsDrawn` inserts a published *Badge* as an empty prefab's root while its design page is open, and the chip is patched in.
+- `go test ./features/ui`: root patches have the path `[]`, and a move or insert to the first place sends index 0.
+- The rest of `go test ./features/ui/...` and `./features/cognition/...` pass; `go vet` passes; the common frontend type-checks.
+- In Forge's Axiom in headless Chromium, against Forge's server: see [forge PrefabEditor.md › Verification](../../forge/documentation/PrefabEditor.md#verification).
+
+### Decisions to review after seeing it
+- Logic running dry on the Canvas, and *Interact*'s dry-run log (decisions 3 and 4).

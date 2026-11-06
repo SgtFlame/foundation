@@ -138,6 +138,9 @@ func (b *Bus) Execute(r Request) Result {
 	if r.Target == "" && cmd.NewTarget != nil {
 		r.Target = cmd.NewTarget()
 	}
+	if r.Target == "" && cmd.NewTargetFor != nil {
+		r.Target = cmd.NewTargetFor(r.ServiceArgs, r.Args)
+	}
 	if !live.ValidToken(r.Target) {
 		return rejected(live.Problem{Path: "target", Message: fmt.Sprintf("%q is not a valid target id", r.Target), Fix: "use letters, digits, '-' and '_' only"})
 	}

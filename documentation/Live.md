@@ -191,3 +191,7 @@ For autoNumber fields ([Records.md](Records.md#built-in-slice-24)):
 - **`Command.Holds`** names other targets a command's events always change, such as a counter every create takes a number from. The bus locks them with the command's own target before the first decision, so this process's commands on them take turns instead of conflicting. Commands on several servers can still conflict, three tries at most.
 - **A batch refused as one too many in flight is sent again.** JetStream limits the atomic batches in flight on a stream (error 10210, `project.IsBusy`); nothing was stored, so the bus waits a few milliseconds and decides again, up to 50 times, before failing. These waits do not count among the three tries.
 
+
+## Changed in slice 25
+For prefabs ([ServerUI.md › Built in slice 25](ServerUI.md#built-in-slice-25)):
+- **`Command.NewTargetFor(args, cmdArgs)`** makes a target's id from the arguments for a command sent without one, as `prefab.create` makes `taskRow` from *Task row*. `NewTarget`, which takes none, is tried first. The command's tool then describes its target as optional, made from the name.

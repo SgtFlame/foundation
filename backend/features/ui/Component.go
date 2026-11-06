@@ -74,8 +74,15 @@ func Catalog(reg *extensions.Registry) map[string]Component {
 }
 
 // Validate reports a tree's problems: unknown components, invalid props,
-// missing or repeated keys, and children or slots a component does not take.
+// an sx with more than theme tokens (CheckSx), missing or repeated keys,
+// and children or slots a component does not take.
 func Validate(catalog map[string]Component, root *Node) []Problem {
+	return validate(catalog, root, true)
+}
+
+// validate is Validate; sx is checked only when tokens is set, since the
+// Go render functions that predate prefabs use more.
+func validate(catalog map[string]Component, root *Node, tokens bool) []Problem {
 	var problems []Problem
 	var check func(path []string, n *Node)
 	check = func(path []string, n *Node) {
@@ -94,6 +101,11 @@ func Validate(catalog map[string]Component, root *Node) []Problem {
 		raw, _ := json.Marshal(props)
 		if err := tools.CheckArgs(c.Props, raw); err != nil {
 			problems = append(problems, Problem{Path: path, Message: fmt.Sprintf("%s props: %v", n.Type, err)})
+		}
+		if sx, ok := n.Props["sx"]; ok && tokens {
+			for _, m := range CheckSx(sx) {
+				problems = append(problems, Problem{Path: path, Message: m, Fix: SxTokens})
+			}
 		}
 		if len(n.Children) > 0 && !c.Children {
 			problems = append(problems, Problem{Path: path, Message: fmt.Sprintf("%s takes no children", n.Type)})

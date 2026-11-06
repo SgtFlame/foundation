@@ -24,4 +24,5 @@ Budgets and alerts (including alerts on log queries); saved Log Explorer queries
 
 ### Building
 - **`records/data` tests fail about one run in five** (on HEAD before slice 23 as well): two projections making the same KV bucket at once get `stream name already in use`, and the test that hits it loses records (`TestAScanStopsAtTheLimitAndSaysSo`, `TestACursorWalksEveryPageOnce`). Making a bucket should treat that error as made by the other, and read it. Seen in slice 23.
+- **`ui/hello`'s task test fails when run more than once in a process** (`go test -count=3`): Hello's `seeded` cache is package-wide, so the second run skips seeding *Task* against its fresh NATS. The cache should be per projections (or cleared by the test). Seen in slice 26; one run passes, also with `-race`.
 - On the 7 GB codespace the linker can be killed for lack of memory while linking `out/cli`, and test binaries while the vite dev server and `serve` run. Link with `GOGC=25 GOFLAGS=-ldflags=-s backend/scripts/build.sh` (see CLAUDE.md › *Building*), or stop the other processes.
