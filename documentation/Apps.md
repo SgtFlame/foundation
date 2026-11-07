@@ -1,6 +1,6 @@
 # Apps
 
-Applications built from blueprints: a **manifest** of pages, navigation, editor kinds, entity types, commands, queries, roles, settings and triggers, edited by several people at once, then published, installed into a tenant and run in the workbench. Built as Forge's iteration 5 ([forge 05-Applications.md](../../forge/documentation/plans/05-Applications.md)), one part per slice. What remains is in Forge's plans for parts 5f and 5g.
+Applications built from blueprints: a **manifest** of pages, navigation, editor kinds, entity types, commands, queries, roles, settings and triggers, edited by several people at once, then published, installed into a tenant and run in the workbench. Built as Forge's iteration 5 ([forge 05-Applications.md](../../forge/documentation/plans/05-Applications.md)), one part per slice. What remains is in the parts' TODOs in Forge's plans; part 5g, the Tasks app, is Forge's ([forge TasksApp.md](../../forge/documentation/TasksApp.md)).
 
 ## Built in slice 31
 Forge's part 5a ([forge 05a-AppDrafts.md](../../forge/documentation/plans/05a-AppDrafts.md)): what an app is, as a draft edited by commands. Nothing is published, installed or run yet.
@@ -408,3 +408,19 @@ Made while building:
 ### Decisions to review after seeing it
 - Decisions 1 and 2 (the draft run is the author's, no app roles), once the Tasks app is tried by two authors with different access (forge 5g).
 - Decision 5: editor kinds inside the draft's main tab.
+
+## Built in slice 37
+Forge's part 5g ([forge 05g-TasksApp.md](../../forge/documentation/plans/05g-TasksApp.md)), the iteration's demo: the Tasks app is Forge's, a sample of its starter library ([forge TasksApp.md](../../forge/documentation/TasksApp.md)). What it needed from Foundation:
+
+- **An imported prefab reads its app's own queries.** `prefab.import` of a new prefab owned by `app:<appId>` checked its queries against the owner of the draft before the command (none), so a page prefab naming the app's `myTasks` was refused (*there is no query "myTasks"*). The check now takes the owner from the definition the command leaves (`decision.env(owner)` in `ui/prefabs/Commands.go`).
+- **Icons** `open_in_new`, `swap_horiz` and `task_alt` in the browser's icon map (`ui/renderers/mui/iconMap.ts`).
+
+### Decisions
+1. **An editor kind's subject type is how the runtime finds the tab's record** (`entityOf`, slice 34): an app whose kind names another type than its entity type's id gets a tab titled by the page's title. Forge's Tasks names `tasksTask`; nothing checks it yet.
+
+### Verification of slice 37
+- `go test ./features/apps/installs` with `TestAnImportedPrefabReadsItsAppsQuery`: a new prefab owned by `app:tasks` reading `myTasks` imports, the same with no owner is refused at `prefab.queries.mine.query`; the test fails without the fix. `go test` of `ui/...`, `apps/...` and `live/...` pass; the common frontend type-checks.
+- Forge's Tasks tests and its browser run of the demo: [forge TasksApp.md › Verification](../../forge/documentation/TasksApp.md#verification).
+
+### Decisions to review after seeing it
+- Decision 1: whether `apps.CheckManifest` should refuse an editor kind whose subject type is not one of the app's entity types when its page has an `:id`.

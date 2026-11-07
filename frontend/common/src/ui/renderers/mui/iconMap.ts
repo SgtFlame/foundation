@@ -32,6 +32,9 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import ListIcon from '@mui/icons-material/List'
 import TaskIcon from '@mui/icons-material/Task'
 import TableRowsIcon from '@mui/icons-material/TableRows'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz'
+import TaskAltIcon from '@mui/icons-material/TaskAlt'
 import type { SvgIconProps } from '@mui/material'
 import { createElement, type ComponentType } from 'react'
 
@@ -68,6 +71,9 @@ export const icons: Record<string, ComponentType<SvgIconProps>> = {
   arrow_back: ArrowBackIcon,
   arrow_forward: ArrowForwardIcon,
   list: ListIcon,
+  open_in_new: OpenInNewIcon,
+  swap_horiz: SwapHorizIcon,
+  task_alt: TaskAltIcon,
   task: TaskIcon,
   table_rows: TableRowsIcon,
 }

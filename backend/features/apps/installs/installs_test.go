@@ -523,3 +523,16 @@ func TestManifestOwnedGraphsAreNotLiveAlone(t *testing.T) {
 		"spec": map[string]any{"command": "task.reassign", "title": "x", "description": "x", "area": "rec", "targetType": "task", "projection": data.Projector, "action": "record.update"}},
 		"target", `must have the id "cmd-tasks-task-reassign"`)
 }
+
+// A new prefab an app owns may read the app's own query when it is
+// imported whole, as the Tasks sample's pages are (forge 05g): the check
+// takes the owner from the imported definition, not the empty draft.
+func TestAnImportedPrefabReadsItsAppsQuery(t *testing.T) {
+	f := setup(t)
+	f.ok("bp.import", "qry-tasks-myTasks", map[string]any{"graph": myTasks(1)})
+	def := map[string]any{"name": "Mine", "owner": "app:tasks", "queries": map[string]any{"mine": map[string]any{"query": "myTasks"}},
+		"template": map[string]any{"type": "mui.text", "key": "root", "props": map[string]any{"text": "Mine"}}}
+	f.ok("prefab.import", "mine", map[string]any{"prefab": def})
+	def["owner"] = ""
+	f.refused("prefab.import", "theirs", map[string]any{"prefab": def}, "prefab.queries.mine.query", `there is no query "myTasks"`)
+}

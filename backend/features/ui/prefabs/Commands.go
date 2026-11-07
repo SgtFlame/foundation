@@ -92,8 +92,9 @@ func (c *decision) drafted(id string) (ui.Prefab, bool) {
 }
 
 // env is what the prefab is checked against: the catalog and the tenant's
-// other prefabs, entity types, queries and graphs.
-func (c *decision) env() ui.PrefabEnv {
+// other prefabs, entity types, queries and graphs; owner is the prefab's
+// as the command leaves it, whose app's own queries it may read.
+func (c *decision) env(owner string) ui.PrefabEnv {
 	return ui.PrefabEnv{
 		Catalog: ui.Catalog(c.reg),
 		Prefab: func(id string) (ui.Prefab, bool) {
@@ -131,7 +132,7 @@ func (c *decision) env() ui.PrefabEnv {
 				return true
 			}
 			// An app's own query, whose graph has the app's id in its own
-			app, ok := strings.CutPrefix(c.prefab().Owner, "app:")
+			app, ok := strings.CutPrefix(owner, "app:")
 			if ok {
 				_, ok = c.graphKind(livenodes.QueryGraphID(app + "." + name))
 			}
@@ -349,7 +350,7 @@ func (c *decision) check(events []live.NewEvent) []live.Problem {
 			return problem("", err.Error(), "")
 		}
 	}
-	problems := ui.CheckPrefab(d.Prefab, c.env())
+	problems := ui.CheckPrefab(d.Prefab, c.env(d.Prefab.Owner))
 	for i := range problems {
 		problems[i].Path = strings.TrimSuffix("prefab."+problems[i].Path, ".")
 	}
