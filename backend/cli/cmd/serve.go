@@ -25,6 +25,9 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ai/services/embedservice"
 	embedimpl "github.com/SgtFlame/foundation/backend/features/ai/services/embedservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/ai/settings"
+	"github.com/SgtFlame/foundation/backend/features/apps"
+	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
+	apptools "github.com/SgtFlame/foundation/backend/features/apps/tools"
 	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/SgtFlame/foundation/backend/features/authz/rest/authzhandlers"
 	authzimpl "github.com/SgtFlame/foundation/backend/features/authz/services/authzservice/impl"
@@ -133,8 +136,8 @@ import (
 	uinodes "github.com/SgtFlame/foundation/backend/features/ui/nodes"
 	"github.com/SgtFlame/foundation/backend/features/ui/prefabs"
 	"github.com/SgtFlame/foundation/backend/features/ui/rest/prefabhandlers"
-	prefabimpl "github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/ui/rest/uihandlers"
+	prefabimpl "github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/ui/services/uiservice"
 	uiimpl "github.com/SgtFlame/foundation/backend/features/ui/services/uiservice/impl"
 	uisettings "github.com/SgtFlame/foundation/backend/features/ui/settings"
@@ -309,7 +312,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		if err != nil {
 			return err
 		}
-		if err := db.Migrate(gdb, slices.Concat(config.Models(), usage.Models(), conversation.Models(), retrieval.Models(), chronicle.Models(), cognition.Models(), tools.Models(), records.Models(), ui.Models())...); err != nil { // features add their models here
+		if err := db.Migrate(gdb, slices.Concat(config.Models(), usage.Models(), conversation.Models(), retrieval.Models(), chronicle.Models(), cognition.Models(), tools.Models(), records.Models(), ui.Models(), apps.Models())...); err != nil { // features add their models here
 			return err
 		}
 
@@ -384,6 +387,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var draftDeps drafts.Deps
 		var entityDeps entities.Deps
 		var prefabDeps prefabs.Deps
+		var appDeps manifests.Deps
 		var recordService recordservice.Service
 		var liveSubscriptions *subscribe.Subscriptions
 		var liveNodeDeps livenodes.Deps
@@ -412,6 +416,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		hello.ContributeAccess(registry)
 		records.ContributeAccess(registry)
 		ui.ContributePrefabAccess(registry)
+		apps.ContributeAccess(registry)
 		aisettings.Contribute(registry)
 		logssettings.Contribute(registry)
 		usagesettings.Contribute(registry)
@@ -459,6 +464,10 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// database
 		prefabs.Contribute(registry, func() prefabs.Deps { return prefabDeps })
 		uitools.ContributePrefabs(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
+		// Apps: manifests edited by app.* commands, after the prefabs and
+		// records they name
+		manifests.Contribute(registry, func() manifests.Deps { return appDeps })
+		apptools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		presence.Contribute(registry, func() *presence.Presence { return livePresence })
 		uitools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
@@ -700,6 +709,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		recordService = recordimpl.CreateService(recordimpl.WithRecords(liveBus, subscriptions, recordDeps), recordimpl.WithFiles(recordFiles))
 		entityService := entityimpl.CreateService(entityimpl.WithEntities(entityDeps))
 		prefabDeps = prefabs.Deps{Projections: projections, DB: gdb}
+		appDeps = manifests.Deps{Projections: projections, DB: gdb}
 		prefabService := prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
 		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())),
 			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))

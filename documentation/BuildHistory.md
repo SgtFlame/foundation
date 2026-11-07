@@ -605,6 +605,16 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-6).
     - **Pending, carried forward**: the chat acceptance with a real model; the default of 8 tool steps per round, and no retry on a provider's 429/503 (in [plans/Backlog.md](plans/Backlog.md)).
 
+31. **App drafts and the manifest** (Forge iteration 5, part 5a, [forge 05a-AppDrafts.md](../../forge/documentation/plans/05a-AppDrafts.md)). *Built* ([Apps.md](Apps.md#built-in-slice-31)).
+    - **Built**:
+      - `apps.Manifest` and `apps.CheckManifest` (routes and their params against the prefab's props, nav, home, frame, editor kinds, entities, command and query graphs defining their names, roles' actions and row rules, settings, triggers, requires, and the owner of every part);
+      - drafts on the `def` stream (`apps/manifests`, the `apps.app` projection) changed by `app.create`, `app.setInfo`, `app.setNav`, `app.setSettingsSchema` and `app.add|update|remove<Item>` per keyed list, an update a merge patch on the item; a renamed route followed in home, nav and editor kinds;
+      - `app.describe` (with the parts it names or owns, following their drafts) and `app.list`; their tools; `apps_apps` kept by a follower; the `app` resource type;
+      - `src/services/Apps.ts`, the manifest's types for the browser.
+    - **Blockers**: none. Forge 05a questions 1 (KV drafts, the app in SQLite by a follower), 2 (owned parts, others as requirements), 3 (`read`, `write`, `publish`, `install`) and 4 (per item, per field) were asked before building and answered with their proposals.
+    - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it).
+    - **Pending, carried forward**: `app.delete`; the Applications editor (forge 5f); publish and install (5b), where an app's command graphs, already tenant commands once published, must be kept apart (forge 05b question 3).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -642,3 +652,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 28. Task list demo (Forge 4d) | forge 04d 1 (seeded by commands on first open), 2 (overlays for Go pages), and gaps 3 (*Sort by* and a direction toggle) and 4 (everything carries over, rename in the row), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-4), to review after seeing |
 | 29. Starter library (Forge 4e) | forge 04e 1 (seeded by Forge: `cli seed` and *Seed prefabs*), 2 (a form-merge primitive besides the plan's) and 3 (the changer's name, from the change), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-5), to review after seeing |
 | 30. Variants and the chat acceptance (Forge 4f) | forge 04f 1 (Gemini plus a Go test) and gap 2 (a node field for the variant), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-6), and the chat acceptance with a real model |
+| 31. App drafts (Forge 5a) | forge 05-Applications 6 (a slice per part, answered before) and 05a 1 (KV drafts, the app in SQLite), 2 (owned parts, others required), 3 (the `app` actions) and 4 (per item, per field), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it), to review after seeing |
