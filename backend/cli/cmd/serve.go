@@ -28,6 +28,9 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/apps"
 	"github.com/SgtFlame/foundation/backend/features/apps/installs"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
+	apphandlers "github.com/SgtFlame/foundation/backend/features/apps/rest/apphandlers"
+	"github.com/SgtFlame/foundation/backend/features/apps/services/appservice"
+	appimpl "github.com/SgtFlame/foundation/backend/features/apps/services/appservice/impl"
 	apptools "github.com/SgtFlame/foundation/backend/features/apps/tools"
 	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/SgtFlame/foundation/backend/features/authz/rest/authzhandlers"
@@ -390,6 +393,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var prefabDeps prefabs.Deps
 		var appDeps manifests.Deps
 		var installDeps installs.Deps
+		var appService appservice.Service
 		var recordService recordservice.Service
 		var liveSubscriptions *subscribe.Subscriptions
 		var liveNodeDeps livenodes.Deps
@@ -471,6 +475,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		manifests.Contribute(registry, func() manifests.Deps { return appDeps })
 		installs.Contribute(registry, func() installs.Deps { return installDeps })
 		apptools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
+		apptools.ContributeTransfer(registry, func() appservice.Service { return appService })
 		presence.Contribute(registry, func() *presence.Presence { return livePresence })
 		uitools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
@@ -717,6 +722,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		prefabDeps = prefabs.Deps{Projections: projections, DB: gdb}
 		appDeps = manifests.Deps{Projections: projections, DB: gdb}
 		installDeps = installs.Deps{Projections: projections, DB: gdb, Nodes: liveNodeDeps, Roles: policy, Config: configService}
+		appService = appimpl.CreateService(appimpl.WithDeps(func() appimpl.Deps {
+			return appimpl.Deps{Projections: projections, DB: gdb, Bus: liveBus, Subscriptions: subscriptions, Registry: registry}
+		}))
 		// An installed app's own entity types are under its path (forge 05c)
 		records.SetPlacement(installs.Placement(func() installs.Deps { return installDeps }))
 		prefabService := prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
@@ -813,6 +821,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 
 		prefabHandler := &prefabhandlers.PrefabHandler{}
 		prefabHandler.Register(api, prefabService)
+		appHandler := &apphandlers.AppHandler{}
+		appHandler.Register(api, appService)
 
 		indexHandler := &indexhandlers.IndexHandler{}
 		indexHandler.Register(volumes, indexService)

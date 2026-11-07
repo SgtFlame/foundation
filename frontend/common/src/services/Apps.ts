@@ -1,8 +1,15 @@
-// Types of application manifests (backend/features/apps). An app has no
-// REST handlers yet: its draft is edited by the app.* commands and read by
-// the app.describe and app.list queries on the live connection, e.g.
-// useQuery<AppView>('app.describe', { id }). uint64 IDs are strings,
-// since a JavaScript number cannot hold every uint64.
+// Types of application manifests (backend/features/apps) and the client of
+// appservice (/apps): exporting a published app as one document, checking
+// one and importing one. An app's draft is edited by the app.* commands
+// and read by the app.describe and app.list queries on the live
+// connection, e.g. useQuery<AppView>('app.describe', { id }). uint64 IDs
+// are strings, since a JavaScript number cannot hold every uint64.
+
+import { http, type ResponseStatus } from './http/client.ts'
+import type { Problem } from '../live/LiveConnection.ts'
+import type { Graph } from './Cognition.ts'
+import type { EntityType } from './Entities.ts'
+import type { Prefab } from './Prefabs.ts'
 
 export interface AppPage {
   route: string // /mine, or /task/:id: its params become the prefab's props
@@ -158,4 +165,94 @@ export interface InstalledApp {
   installedBy: string
   installedAt: string
   updatedAt: string
+}
+
+// An exported app (apps.Document, format forge.app/1): its manifest, its
+// own parts, the tenant's parts it uses, the parts of apps it requires,
+// the primitives they use and, when asked for, sample records.
+export interface AppDocument {
+  format: string
+  app: string
+  version: number
+  publishedAt: string
+  exportedAt: string
+  manifest: AppManifest
+  parts: AppDocumentParts
+  tenantParts: AppDocumentParts
+  appParts: AppDocumentParts
+  primitives: { components: string[]; nodes: string[]; graphs: string[] }
+  seed?: Record<string, { id: string; values: Record<string, unknown> }[]>
+}
+
+export interface AppDocumentParts {
+  prefabs: { id: string; version: number; publishedAt?: string; prefab: Prefab }[]
+  graphs: { id: string; version: number; publishedAt?: string; graph: Graph }[]
+  entities: { id: string; version: number; publishedAt?: string; entity: EntityType }[]
+}
+
+export interface ExportAppRequest {
+  id: string
+  version?: number // the last published when left out
+  seed?: boolean // include the records of the app's own entity types
+}
+
+export interface ExportAppResponse extends ResponseStatus {
+  document?: AppDocument
+  problems: Problem[]
+}
+
+export interface CheckAppResponse extends ResponseStatus {
+  problems: Problem[]
+}
+
+export interface ImportAppRequest {
+  document: AppDocument
+  id?: string // the app's id here, when not the document's
+  overwrite?: string[] // <type>:<id> of parts to overwrite, such as prefab:recordTable
+  keep?: string[] // <type>:<id> of parts to keep as this tenant has them
+  dryRun?: boolean
+}
+
+// One side of a part in an import's plan.
+export interface PartVersion {
+  owner?: string
+  version: number
+  publishedAt?: string
+  updatedAt?: string
+  changed?: boolean // the tenant's draft has unpublished changes
+}
+
+export interface ImportPartPlan {
+  type: 'prefab' | 'graph' | 'entity'
+  id: string
+  group: 'parts' | 'tenantParts'
+  name: string
+  status: 'new' | 'same' | 'duplicate'
+  decision?: 'overwrite' | 'keep'
+  document: PartVersion
+  target?: PartVersion
+}
+
+export interface ImportAppResponse extends ResponseStatus {
+  plan: { app: string; parts: ImportPartPlan[] }
+  imported: boolean
+  version?: number
+  problems: Problem[]
+}
+
+// Export, check and import resolve their refusals too (a check that
+// fails, a duplicate to decide: 409 and 422 carry problems and the plan),
+// and throw ServiceError on any other failure.
+const withProblems = { validateStatus: (s: number) => (s >= 200 && s < 300) || s === 409 || s === 422 }
+
+export const Apps = {
+  async export(request: ExportAppRequest): Promise<ExportAppResponse> {
+    return (await http.post<ExportAppResponse>('/apps/export', request, withProblems)).data
+  },
+  async check(document: AppDocument): Promise<CheckAppResponse> {
+    return (await http.post<CheckAppResponse>('/apps/check', { document }, withProblems)).data
+  },
+  async import(request: ImportAppRequest): Promise<ImportAppResponse> {
+    return (await http.post<ImportAppResponse>('/apps/import', request, withProblems)).data
+  },
 }

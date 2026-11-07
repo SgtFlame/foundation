@@ -22,6 +22,7 @@ const routes = [
   'live',
   'ui',
   'records',
+  'apps',
 ]
 
 // The Vite configuration every app built on common needs; an app with

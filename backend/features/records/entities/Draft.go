@@ -43,6 +43,7 @@ type Draft struct {
 // Events an entity type's commands commit.
 const (
 	EventCreated       = "created"       // {entity}
+	EventImported      = "imported"      // {entity}: the whole definition replaced
 	EventInfoSet       = "infoSet"       // Info
 	EventFieldAdded    = "fieldAdded"    // {field}
 	EventFieldUpdated  = "fieldUpdated"  // {field}: the whole field as it now is
@@ -107,6 +108,13 @@ func Apply(d *Draft, e live.Event) error {
 		if err != nil {
 			return err
 		}
+		*x = v.Entity
+	case EventImported:
+		v, err := decode[struct{ Entity records.EntityType }](e.Data)
+		if err != nil {
+			return err
+		}
+		v.Entity.Version = x.Version
 		*x = v.Entity
 	case EventInfoSet:
 		in, err := decode[Info](e.Data)

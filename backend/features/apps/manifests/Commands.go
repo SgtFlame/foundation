@@ -366,6 +366,56 @@ func commandSpecs() []spec {
 			},
 		},
 	}
+	specs = append(specs, spec{
+		id: "app.setManifest", title: "Replace an app's manifest", events: []string{EventManifestSet},
+		description: "Replaces the app's whole manifest (pages, nav, home, frame, editor kinds, entity types, commands, queries, roles, settings, triggers, requires), checked whole against its parts. Importing an app (app.import) uses it; to change one item, use its own command.",
+		args:        `{"type":"object","properties":{"manifest":{"type":"object","description":"A manifest as app.describe gives it; its id and version are the app's own"}},"required":["manifest"]}`,
+		example:     `{"manifest":{"name":"Tasks","pages":[{"route":"/mine","prefab":"myTasks"}],"entities":["task"]}}`,
+		decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+			a, problems := args[struct{ Manifest *apps.Manifest }](c)
+			if problems != nil {
+				return nil, problems
+			}
+			if a.Manifest == nil {
+				return nil, problem("args.manifest", "the manifest is missing", "give the manifest as app.describe returns it")
+			}
+			m := *a.Manifest
+			m.ID, m.Version = c.Target.ID, c.draft.Published
+			apps.Normalize(&m)
+			if equal(m, c.draft.Manifest) {
+				return nil, nil
+			}
+			return ev(EventManifestSet, map[string]any{"manifest": m}), nil
+		},
+	}, spec{
+		id: "app.setSeed", title: "Set an app's sample records", events: []string{EventSeedSet},
+		description: "Sets the sample records the next published version carries, replacing them: entity type → records {id, values}. Installing the version creates them in each of the app's own entity types that has no records yet.",
+		args:        `{"type":"object","properties":{"seed":{"type":"object","description":"entity type → [{id, values: {field id → value}}]"}},"required":["seed"]}`,
+		example:     `{"seed":{"task":[{"id":"t1","values":{"title":"Write the plan"}}]}}`,
+		decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+			a, problems := args[struct{ Seed apps.Seed }](c)
+			if problems != nil {
+				return nil, problems
+			}
+			for entity, recs := range a.Seed {
+				if !slices.Contains(c.manifest().Entities, entity) {
+					return nil, problem("args.seed."+entity, fmt.Sprintf("the app does not use the entity type %s", entity), "add it with app.addEntity first, or leave its records out")
+				}
+				for i, r := range recs {
+					if !live.ValidToken(r.ID) {
+						return nil, problem(fmt.Sprintf("args.seed.%s.%d.id", entity, i), fmt.Sprintf("%q is not a record id", r.ID), "give each record its id")
+					}
+				}
+			}
+			if len(a.Seed) == 0 {
+				a.Seed = nil
+			}
+			if equal(a.Seed, c.draft.Seed) {
+				return nil, nil
+			}
+			return ev(EventSeedSet, map[string]any{"seed": a.Seed}), nil
+		},
+	})
 	for _, l := range Lists {
 		specs = append(specs, listSpecs(l)...)
 	}

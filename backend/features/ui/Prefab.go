@@ -204,6 +204,10 @@ func PrefabsUsed(root *Node) []string {
 	return out
 }
 
+// WalkTemplate visits a template's nodes, their children and their
+// slots' content, depth first, with each one's key path.
+func WalkTemplate(root *Node, fn func(path []string, n *Node)) { walkAll(root, nil, fn) }
+
 // walkAll visits n, its children and its slots' content, depth first,
 // with each one's key path.
 func walkAll(n *Node, path []string, fn func(path []string, n *Node)) {

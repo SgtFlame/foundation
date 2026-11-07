@@ -35,9 +35,12 @@ type Draft struct {
 	Published    int              `json:"published"`
 	PublishedRev int              `json:"publishedRev"`
 	Versions     []VersionSummary `json:"versions"`
-	CreatedBy    uint64           `json:"createdBy,string"`
-	UpdatedBy    uint64           `json:"updatedBy,string"`
-	UpdatedAt    time.Time        `json:"updatedAt"`
+	// Seed are sample records the next version carries, created at
+	// install into entity types that have none (forge iteration question 3).
+	Seed      apps.Seed `json:"seed,omitempty"`
+	CreatedBy uint64    `json:"createdBy,string"`
+	UpdatedBy uint64    `json:"updatedBy,string"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Events an app's commands commit, beside each list's added, updated and
@@ -48,6 +51,8 @@ const (
 	EventNavSet      = "navSet"      // {nav}
 	EventSettingsSet = "settingsSet" // {settings}
 	EventPublished   = "published"   // Published; the version itself is an event on its own target
+	EventManifestSet = "manifestSet" // {manifest}: the whole manifest replaced
+	EventSeedSet     = "seedSet"     // {seed}
 )
 
 // VersionTargetType is a published version's target type on the def
@@ -338,6 +343,16 @@ func Apply(d *Draft, e live.Event) error {
 			if in.Requires != nil {
 				m.Requires = *in.Requires
 			}
+		}
+	case EventManifestSet:
+		var v struct{ Manifest apps.Manifest }
+		if v, err = decode[struct{ Manifest apps.Manifest }](e.Data); err == nil {
+			*m = v.Manifest
+		}
+	case EventSeedSet:
+		var v struct{ Seed apps.Seed }
+		if v, err = decode[struct{ Seed apps.Seed }](e.Data); err == nil {
+			d.Seed = v.Seed
 		}
 	case EventNavSet:
 		var in struct{ Nav []apps.NavItem }

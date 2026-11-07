@@ -1,6 +1,6 @@
 # Apps
 
-Applications built from blueprints: a **manifest** of pages, navigation, editor kinds, entity types, commands, queries, roles, settings and triggers, edited by several people at once, then published, installed into a tenant and run in the workbench. Built as Forge's iteration 5 ([forge 05-Applications.md](../../forge/documentation/plans/05-Applications.md)), one part per slice. What remains is in Forge's plans for parts 5e to 5g.
+Applications built from blueprints: a **manifest** of pages, navigation, editor kinds, entity types, commands, queries, roles, settings and triggers, edited by several people at once, then published, installed into a tenant and run in the workbench. Built as Forge's iteration 5 ([forge 05-Applications.md](../../forge/documentation/plans/05-Applications.md)), one part per slice. What remains is in Forge's plans for parts 5f and 5g.
 
 ## Built in slice 31
 Forge's part 5a ([forge 05a-AppDrafts.md](../../forge/documentation/plans/05a-AppDrafts.md)): what an app is, as a draft edited by commands. Nothing is published, installed or run yet.
@@ -293,3 +293,85 @@ Made while building:
 - Decision 6 for an app with no entity types of its own: everyone who may read the app sees it.
 - Decision 10: the Records app not in the Apps section.
 
+
+## Built in slice 35
+Forge's part 5e ([forge 05e-ExportImport.md](../../forge/documentation/plans/05e-ExportImport.md)): a published app is exported as one JSON document and imported into another tenant, and every export runs the **blueprints-only check** (forge Architecture rule 1).
+
+Answered before building (2026-11-07): forge iteration question 3, sample records are opt-in (`seed: true`), carried by the version and created at install only into an entity type with no records of its own; 05e question 1, the app keeps its id when free, else import is refused unless a new id is given; asked again, since parts name each other deep in prefab props and graph configs, **every part keeps its id** and only the app's `cmd-<app>-…`/`qry-<app>-…` graphs follow a new app id; 2, the tenant's parts an app uses are copied into the document, kept apart from its own, and import asks before overwriting one the target has, showing both sides' versions and dates.
+
+### The document
+`apps.Document` (`apps/Document.go`, format `forge.app/1`):
+```json
+{ "format": "forge.app/1", "app": "tasks", "version": 3, "publishedAt": "…", "exportedAt": "…",
+  "manifest":    { "id": "tasks", "pages": […], "roles": […], "settings": {…}, … },
+  "parts":       { "prefabs":  [ { "id": "myTasks", "version": 2, "publishedAt": "…", "prefab": {…} } ],
+                   "graphs":   [ { "id": "cmd-tasks-task-reassign", "version": 1, "publishedAt": "…", "graph": {…} } ],
+                   "entities": [ { "id": "task", "version": 1, "publishedAt": "…", "entity": {…} } ] },
+  "tenantParts": { "prefabs": [ { "id": "recordTable", … } ], "graphs": […], "entities": [ { "id": "customer", … } ] },
+  "appParts":    { "prefabs": [], "graphs": [], "entities": [] },
+  "primitives":  { "components": [ "mui.stack", "mui.text" ], "nodes": [ "data.expression", … ], "graphs": [] },
+  "seed":        { "task": [ { "id": "t1", "values": { "title": "Write docs" } } ] } }
+```
+- **parts** are the app's own (owner `app:<id>`), **tenantParts** the tenant's it uses (a tenant-library prefab, an entity type with owner `tenant` or none, a graph of no app), **appParts** those of the apps it requires: carried so the document checks whole, never imported.
+- Each part is the version the app version pinned: prefabs and entity types from their version tables, graphs from the version's copies (dated by the app version, since graphs keep no publication times). Built-in graphs the server provides are named in `primitives.graphs`, not copied.
+- **The closure**: the entity types the parts name beyond the manifest's (a relation's target, a node's `entity` config, a prefab prop's `entity` or a literal `entity` prop on a template node) are added at their last published version.
+- **Seed** (with `seed: true`): the records of the app's own entity types the exporter may read, with only what a command may set (no computed or `file` fields, no removed fields, no metadata), oldest first.
+
+### The check
+`apps.CheckDocument(doc, env)` (`apps.DocumentEnv`: the server's components, node types, built-in graphs and live queries) gives every problem at a path (`parts.prefab[myTasks].template.root/note.type`, `tenantParts.graph[x].graph.nodes.2.config.entity`, `primitives.components[mui.hologram]`, `manifest.pages[/mine].prefab`), each with a fix:
+- the format, and the manifest being the document's app; each part where its owner says (an own part with another owner, a tenant part owned by an app, an app part of an app not in `requires.apps`), once;
+- **primitives**: every component, node type and built-in graph the document names exists here; every component a template uses and node type a graph uses is among them;
+- **references**: every prefab instance, prefab graph, query, entity type (props, relations, node configs, literal `entity` props) is in the document or a primitive; `ui.CheckPrefab` on every prefab against the document alone; an instance pinning a version (`prefab.x@3`) is refused, since another tenant numbers versions anew;
+- `apps.CheckManifest` against the document's parts; sample records only of the app's own entity types, with valid ids.
+
+`apps.Used` gives the primitives a document's parts use, which the export lists.
+
+### appservice
+`apps/services/appservice` (`/apps`), following the service → handler → DTO layout:
+- **`Export {id, version?, seed?}`** (`POST /apps/export`, `app.read` on the app): the document, or 422 `app_check_failed` with the check's problems; 404 `app_version_not_found`.
+- **`Check {document}`** (`POST /apps/check`, `app.read`): the problems against this server.
+- **`Import {document, id?, overwrite?, keep?, dryRun?}`** (`POST /apps/import`, `app.write` on the tenant):
+  1. the check, against this server (422);
+  2. the app's id, the document's or `id`; refused 409 `app_import_exists` (path `id`) when the tenant has an app of that id. Under a new id, the app's own parts take its owner and its `cmd-<old>-`/`qry-<old>-` graphs are renamed, with what names them;
+  3. **the plan**: each part of `parts` and `tenantParts` is `new`, `same` (the tenant's published definition equals the document's, versions aside: nothing to import) or `duplicate`, with `document` and `target` sides `{owner, version, publishedAt, updatedAt, changed}`. A duplicate needs a decision, `overwrite: ["prefab:note"]` or `keep: ["prefab:note"]`; any left undecided refuses the import with 409 `app_import_duplicate`, one problem per part saying both sides (*this tenant already has the prefab note (version 1, published 2026-11-07 21:10 UTC, changed …); the document has version 1, published …*) and the plan, and nothing is changed. A required app's part the tenant lacks is refused (`app_requires`). `dryRun` returns the plan;
+  4. **the commands**, sent as the importer through the bus, each waited for: `app.create` first (so the app's command and query graphs are never live alone), the entity types (`entity.import`; one relating to a type not here yet first without its relations, computed fields, indexes and rules, then whole; each published after the types it relates to), the graphs (`bp.import`, `bp.publish`), the prefabs, each after those it uses (`prefab.import`, `prefab.publish`, breaking changes allowed when overwriting), then `app.setManifest`, `app.setSeed` and `app.publish`: version 1 here, ready for `app.install`. A refused command stops it there with that command's problems (422).
+- **Tools** (`apptools.ContributeTransfer`): `app.export`, `app.check` and `app.import` (write), whose description tells the model to ask the user about each duplicate with both sides' versions and dates before calling again.
+- **The browser**: `Apps.ts` has the document's and plan's types and `Apps.export|check|import`, resolving 409 and 422 with their problems and plan. The import dialog is the Applications editor's (forge 5f). The dev proxy routes `/api/v1/apps`.
+
+### New commands
+- **`entity.import {entity}`** (`records/entities`, event `imported`): replaces an entity type's whole draft or makes it, fields keeping their ids, so records keep their values; its published versions stay until it is published again.
+- **`app.setManifest {manifest}`** (event `manifestSet`): replaces the whole manifest, checked whole.
+- **`app.setSeed {seed}`** (event `seedSet`): the draft's sample records (`Draft.Seed`), of entity types the app uses; `app.publish` copies them, as the draft was at the rev published, into `Version.Seed`.
+
+### Sample records at install
+The follower `apps.seed` (`installs/Seed.go`, started with the installs follower) creates an installed or upgraded version's sample records as the tenant's service principal (`record.create` with the record's id), into each of the app's **own** entity types that has no records but those, so installing again or upgrading creates only the missing ones. A refused record is logged and left out.
+
+### Wiring
+`serve.go`, in Foundation and in Forge: `apptools.ContributeTransfer` after `apptools.Contribute`; `appimpl.CreateService(appimpl.WithDeps(...))` with the projections, the tenant database, the bus, the subscriptions and the registry, after the installs' deps; `apphandlers` registered on `api`. `ui.WalkTemplate` walks a template's nodes, children and slots.
+
+### Decisions
+Made while building:
+1. **An `appservice` after all**: export and import are a file going out and coming in, not a live read or one command, so they follow the REST layout; slice 32's decision 1 still holds for the rest.
+2. **Import is the author's commands**, sent as the importer and checked by each part's own command, rather than events written behind them: access, checks and projections are those of any edit.
+3. **`same` parts are not asked about**: a part published here exactly as the document has it is left alone.
+4. **Keep and overwrite are per part**, named `<type>:<id>`; an own part may be kept too, and the check at publish then says whether the tenant's version fits.
+5. **Graphs are dated by their app version**: graphs keep no publication time of their own.
+6. **Pinned instances (`prefab.x@3`) fail the check**: version numbers differ per tenant.
+7. **File field values are not exported** as sample records: the files' content would have to travel too.
+8. **A partial import stays** when a command is refused midway (the app's draft and the parts so far), named by the error; importing again under the same id is then refused until the draft is removed (`app.delete` is not built).
+9. **The default frame is not exported**: an app naming no frame uses the target's *App frame*.
+10. **Component and node versions**: the plan's "primitives by id and version" is by id only; primitives carry no versions yet (slice 31's decision 6).
+
+### Verification of slice 35
+- `go test ./features/apps/...` (also with `-race`, three runs in a row; `installs/transfer_test.go`), against embedded NATS and SQLite: Tasks in tenant 1 with its own entity type, two prefabs and two graphs, the tenant prefab *Note* that *My tasks* renders, the tenant entity type *Customer* a task relates to, two roles, a setting and two tasks:
+  - the export: own and tenant parts apart, *Customer* found through the relation, *Note*'s version and date, the primitives `mui.stack` and `mui.text` and the graphs' node types, the two tasks as seed only when asked;
+  - imported into tenant 3 (every part `new`; *Task* imported first without its relation to *Customer*), installed there and in tenant 1: the same pages, nav, roles, settings, editor kinds, commands, pinned prefabs and owned types; the two tasks created at install; the app's command decided by the imported graph;
+  - the round trip: exported again from tenant 3, the same document but for its dates;
+  - duplicates: with tenant 3's own *Note* and the same *Customer*, the import is refused once, at `tenantParts.prefab[note]`, its message giving both versions and dates and its fix the `overwrite` and `keep` arguments; the plan has *Note* `duplicate` with the target's date, *Customer* `same`, *My tasks* `new`; nothing was made; a dry run keeping *Note* plans; overwriting imports and publishes *Note* as version 2 with the document's definition; importing again is refused at `id`; under `tasks2` its command graph is `cmd-tasks2-task-reassign`, owned by `app:tasks2`;
+  - the check: an export passes its own; a missing component (`primitives.components[mui.hologram]`), a node type not listed, the tenant prefab left out, a node config naming `invoice`, another app's owner on an own part and a pinned instance are each named at their path; exporting an app whose handler graph reads a never-published entity type is refused (422) naming it.
+- `go test` of `records/entities`, `ui/...`, `live/...` and `cognition/drafts` still pass, and every `app.*` command's example still fits its schema; the full backend suite (`scripts/build.sh --test ./...`) passes but for `kb/services/collabservice/impl`'s `TestRoomSeedRelaySaveHandover`, which fails every run on its temp directory's cleanup (*directory not empty*: a file still written into the volume as the test ends), in code this slice does not touch; Foundation's and Forge's `serve` vet; Forge's starter tests pass; the common frontend type-checks.
+- Forge's server, run fresh and seeded with `cli seed`: `POST /apps/export {id: "records"}` gives the Records app with the starter's five prefabs and four graphs as tenant parts and no problems; `POST /apps/check` passes it; importing it again is refused at `id`; a dry run as `records2` plans every part `same`; with *Empty state* changed in the document, the import is refused with 409 `app_import_duplicate` naming both sides' versions and dates; with `keep: ["prefab:emptyState"]` it imports `records2` as version 1. The server's extensions list `app.export`, `app.check`, `app.import`, `app.setManifest` and `app.setSeed`.
+
+### Decisions to review after seeing it
+- The export document, read as a person would ★ (forge 05e).
+- Decisions 3 and 4, once the Applications editor's import dialog (forge 5f) asks about duplicates; and decision 8, a partial import, once `app.delete` exists.

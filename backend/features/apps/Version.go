@@ -32,9 +32,12 @@ type Version struct {
 	// Graphs are copies of its graphs as they were published: its
 	// commands' and queries', and those its prefabs name. A graph keeps
 	// only its last published version, so the app keeps its own.
-	Graphs      map[string]cognition.Graph `json:"graphs"`
-	PublishedBy uint64                     `json:"publishedBy,string"`
-	PublishedAt time.Time                  `json:"publishedAt"`
+	Graphs map[string]cognition.Graph `json:"graphs"`
+	// Seed are sample records, created at install into the app's own
+	// entity types that have none (forge iteration question 3).
+	Seed        Seed      `json:"seed,omitempty"`
+	PublishedBy uint64    `json:"publishedBy,string"`
+	PublishedAt time.Time `json:"publishedAt"`
 }
 
 // VersionID is a version's target id on the def stream: tasks-v3.

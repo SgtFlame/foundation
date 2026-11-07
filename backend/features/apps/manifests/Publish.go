@@ -35,11 +35,11 @@ func publishSpec() spec {
 			if a.Rev < 1 || a.Rev > c.draft.Rev {
 				return nil, problem("args.rev", fmt.Sprintf("the draft has no rev %d: it is at rev %d", a.Rev, c.draft.Rev), "publish rev "+strconv.Itoa(c.draft.Rev))
 			}
-			m, err := c.manifestAt(a.Rev)
+			d, err := c.draftAt(a.Rev)
 			if err != nil {
 				return nil, problem("args.rev", "the draft at that rev cannot be read: "+err.Error(), "publish rev "+strconv.Itoa(c.draft.Rev))
 			}
-			v, problems := c.pin(m)
+			v, problems := c.pin(d.Manifest)
 			if problems != nil {
 				return nil, problems
 			}
@@ -53,6 +53,7 @@ func publishSpec() spec {
 			}
 			v.App, v.Version, v.Rev = c.Target.ID, c.draft.Published+1, a.Rev
 			v.Manifest.Version = v.Version
+			v.Seed = d.Seed
 			v.PublishedBy, v.PublishedAt = c.Principal.UserID, time.Now().UTC()
 			target := live.Target{Area: live.AreaDefinitions, Type: VersionTargetType, ID: apps.VersionID(v.App, v.Version)}
 			return []live.NewEvent{
@@ -63,11 +64,11 @@ func publishSpec() spec {
 	}
 }
 
-// manifestAt is the manifest as it was at rev: the draft's own when rev
-// is its last, else its events folded again up to rev.
-func (c *decision) manifestAt(rev int) (apps.Manifest, error) {
+// draftAt is the draft as it was at rev: the draft itself when rev is
+// its last, else its events folded again up to rev.
+func (c *decision) draftAt(rev int) (Draft, error) {
 	if rev == c.draft.Rev {
-		return c.draft.Manifest, nil
+		return c.draft, nil
 	}
 	var d Draft
 	var failed error
@@ -83,7 +84,7 @@ func (c *decision) manifestAt(rev int) (apps.Manifest, error) {
 	if err == nil && d.Rev != rev {
 		err = fmt.Errorf("only %d events were found", d.Rev)
 	}
-	return d.Manifest, err
+	return d, err
 }
 
 // published reads a part's last published version.

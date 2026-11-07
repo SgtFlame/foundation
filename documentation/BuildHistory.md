@@ -647,6 +647,16 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **★ review pending**: the Apps section with several apps; the frame, its navigation and back and forward.
     - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-3).
 
+35. **Export and import** (Forge iteration 5, part 5e, [forge 05e-ExportImport.md](../../forge/documentation/plans/05e-ExportImport.md)). *Built* ([Apps.md](Apps.md#built-in-slice-35)).
+    - **Built**:
+      - the export document (`apps.Document`: manifest, own parts, tenant parts, required apps' parts, primitives, opt-in sample records) and its check, `apps.CheckDocument`, the blueprints-only check;
+      - `appservice` (`POST /apps/export|check|import`) and the `app.export`, `app.check` and `app.import` tools; import plans each part (`new`, `same`, `duplicate` with both sides' versions and dates), refuses until every duplicate is decided (`overwrite`, `keep`), and sends the author's commands;
+      - `entity.import`, `app.setManifest`, `app.setSeed`; `Version.Seed` and the `apps.seed` follower creating sample records at install;
+      - the browser's `Apps.export|check|import`.
+    - **Blockers**: none. Forge iteration question 3 (opt-in seed data) and 05e questions 1 (the app's id) and 2 (tenant parts copied, duplicates asked about), with a follow-up on part ids (kept), were asked before building and answered.
+    - **★ review pending**: the export document, read as a person would.
+    - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-4).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -688,3 +698,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 32. Publish and install (Forge 5b) | forge 05-Applications 5 (publish at the rev seen) and 05b 1 (pinned parts), 2 (one install per tenant), 3 (`<appId>.<name>` on the live core) and 4 (triggers recorded), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-1), and an upgrade seen by an open session (5d) |
 | 33. App roles, access and settings (Forge 5c) | forge 05c 1 (roles made by the system, scoped to the app), 2 (read-only app roles), 3 (own types under the app's path), 4 (row rules per role) and 5 (tenant roles stop at the app fence), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-2), app roles in the Role Editor and Share dialog, and the section in Settings |
 | 34. Running apps in the workbench (Forge 5d) | forge 05-Applications 1 (run drafts, with 5f) and 2 (the app's own history), and 05d 1 (Hello stays Go, Records a manifest app) and 2 (*App frame* in Forge), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-3), the Apps section with several apps, the frame and its navigation |
+| 35. Export and import (Forge 5e) | forge 05-Applications 3 (opt-in seed data) and 05e 1 (the app's id; parts keep theirs) and 2 (tenant parts copied, duplicates asked about), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-4), the export document read as a person would |

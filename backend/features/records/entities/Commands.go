@@ -270,6 +270,46 @@ func commandSpecs() []spec {
 			},
 		},
 		{
+			id: "entity.import", title: "Import an entity type", create: true, events: []string{EventImported},
+			description: "Replaces the target entity type's whole draft with a definition given as JSON (its name, description, owner, title field, fields with their ids, indexes and access, as entity.describe gives it), or makes it. Records keep their values by field id, so a field kept by id keeps its values. Its published versions stay until it is published again. Importing an app (app.import) uses it.",
+			args:        `{"type":"object","properties":{"entity":{"type":"object","description":"An entity type as entity.describe returns it: {name, description?, owner?, titleField?, fields, indexes?, access?}"}},"required":["entity"]}`,
+			example:     `{"entity":{"name":"Task","owner":"app:tasks","titleField":"title","fields":[{"id":"title","name":"title","type":"text","required":true},{"id":"done","name":"done","type":"bool"}]}}`,
+			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+				if c.Target.ID == records.UserEntity || strings.HasPrefix(c.Target.ID, "_") {
+					return nil, problem("target", fmt.Sprintf("%q cannot be an entity type's id", c.Target.ID), "choose an id starting with a letter or digit, other than user")
+				}
+				a, problems := args[struct{ Entity *records.EntityType }](c)
+				if problems != nil {
+					return nil, problems
+				}
+				if a.Entity == nil {
+					return nil, problem("args.entity", "the definition is missing", "give the entity type as entity.describe returns it")
+				}
+				e := *a.Entity
+				e.ID, e.Version, e.Hidden = c.Target.ID, 0, false
+				if e.Fields == nil {
+					e.Fields = []records.Field{}
+				}
+				if e.Indexes == nil {
+					e.Indexes = []records.Index{}
+				}
+				for i := range e.Fields {
+					if !live.ValidToken(e.Fields[i].ID) {
+						return nil, problem(fmt.Sprintf("args.entity.fields.%d.id", i), fmt.Sprintf("%q is not a valid field id", e.Fields[i].ID), "give every field its id, as entity.describe does")
+					}
+					records.Normalize(&e.Fields[i])
+				}
+				if c.exists {
+					cur := *c.entity()
+					cur.Version = 0
+					if equalJSON(cur, e) {
+						return nil, nil
+					}
+				}
+				return ev(EventImported, map[string]any{"entity": e}), nil
+			},
+		},
+		{
 			id: "entity.setInfo", title: "Describe an entity type", events: []string{EventInfoSet},
 			description: "Sets an entity type's name, description, owner and title field (the field shown as a record's title).",
 			args:        `{"type":"object","properties":{"name":{"type":"string"},"description":{"type":"string"},"owner":{"type":"string"},"titleField":{"type":"string","description":"A field's id"}}}`,
@@ -626,3 +666,10 @@ func computed(typ string) bool {
 }
 
 func must(raw []byte, _ error) []byte { return raw }
+
+// equalJSON compares two values as their JSON.
+func equalJSON(a, b any) bool {
+	ra, _ := json.Marshal(a)
+	rb, _ := json.Marshal(b)
+	return string(ra) == string(rb)
+}

@@ -246,11 +246,15 @@ func fold(f live.Fold) (json.RawMessage, error) {
 }
 
 // Follow makes sure the principal's tenant copies its installs into the
-// tenant database (apps_installs) and keeps its apps' roles (forge 05c):
+// tenant database (apps_installs), keeps its apps' roles (forge 05c) and
+// creates their sample records (forge 05e):
 // the install commands start it before their events commit, and
 // app.installs after a restart.
 func Follow(args features.ServiceArgs, deps Deps) error {
 	if err := followAccess(args, deps); err != nil {
+		return err
+	}
+	if err := followSeed(args, deps); err != nil {
 		return err
 	}
 	if deps.DB == nil {
