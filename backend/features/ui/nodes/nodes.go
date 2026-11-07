@@ -60,10 +60,11 @@ var handlerLimits = &engine.Limits{MaxSteps: 500, MaxWallMs: 3000, MaxLoop: 500}
 type Runner struct{ Deps func() Deps }
 
 // graphFor is the graph a handle runs: its published version, or in a dry
-// page (the Prefab Editor's Canvas, forge 04c) its draft.
+// page (the Prefab Editor's Canvas, forge 04c) or an app's draft run
+// (forge 05f) its draft.
 // An installed app's page runs the copy its app version made (forge 05d).
 func graphFor(d Deps, h *ui.Handle, id string) (cognition.Graph, bool) {
-	if h.Dry() {
+	if h.Drafts() {
 		return d.Engine.Draft(h.ServiceArgs, id)
 	}
 	if pinned := h.Page().Graph; pinned != nil {

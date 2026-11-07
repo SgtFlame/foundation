@@ -375,3 +375,36 @@ Made while building:
 ### Decisions to review after seeing it
 - The export document, read as a person would ★ (forge 05e).
 - Decisions 3 and 4, once the Applications editor's import dialog (forge 5f) asks about duplicates; and decision 8, a partial import, once `app.delete` exists.
+
+## Built in slice 36
+Forge's part 5f ([forge 05f-ApplicationsEditor.md](../../forge/documentation/plans/05f-ApplicationsEditor.md)), its Foundation side: an app's **draft run**. The Applications editor is Forge's ([forge ApplicationsEditor.md](../../forge/documentation/ApplicationsEditor.md)).
+
+Answered before building (2026-11-07): forge iteration question 1, a draft app runs for its authors, sharing its data; forge 05f question 3, its shape: a live tab for the app's authors, the draft manifest with its prefabs and graphs in their drafts, its commands and queries sent for real on the app's records; records need published entity types, so the editor finds entity types with unpublished changes and publishes them alone, without the app.
+
+### The draft run
+- **`<appId>/draft`** (`apps/installs/Draft.go`, resolved by the `apps` app source before installed pages, `mine` when the tenant has the app's draft): the main tab as the draft has it, `mainPage` over a `manifestOf` that reads the draft manifest from the page's own `app.describe` query (`__draft`), so a page, a route, nav or the name changed in the draft renders the open session again; handlers (navigation) read the draft from the projection (`manifests.GetDraft`). Its reach is `app.write` on the app (the authors), its title `<name> (draft)`, its frame the draft's (or the published *App frame*). Nothing is installed, and the installed app, if any, is untouched.
+- **`ui.Page.Drafts`**: the evaluator renders every prefab instance in its draft (`prefab.describe {id}`), and `uinodes` runs every handler and logic graph in its draft (`Handle.Drafts`, true on a dry page too), but unlike `Dry` the page's commands are sent.
+- **`draft.<appId>.<name>`** (`apps.DraftScoped`, `DraftUnscoped`, `DraftPrefix`): the page maps the app's own command and query names to these (`AppCommands`, `AppQueries`), and `installs.CommandFor`/`QueryFor` resolve them before installed names: a command by the draft of the graph the draft manifest names for it, read again when it is decided; a query by its graph's draft, run again when that draft changes (`livenodes.QueryRun.Watch` on `cognition.graph`). Both need `app.write` on the app. A command the draft no longer names is not one (404).
+- **What reopens a session**: its commands' and queries' names and its frame are fixed when it opens (`draftShape`); when they change, `Stale` makes the next event reopen it (`page_changed`), as an upgrade does. Every other change reaches the open session as it lands.
+- `apps.CheckManifest` refuses the app id `draft`. `ui.AppPage`'s main page no longer captures one manifest: `mainPage(page, src, frame, declared)` serves installed versions (`fixed(m)`) and drafts alike; `frameOf` reads a draft frame for a draft run.
+
+### Browser
+`AppHost` names its app by its page (`<appId>/<page>`) when its kind is not `app:<appId>:<kind>`, so Forge's `forge-app-draft` tab hosts `<appId>/draft`.
+
+### Decisions
+Made while building:
+1. **The draft run is a page of the `apps` source**, not an install: nothing is recorded, nothing is pinned, and the app's roles and settings section are not made. It runs as the author, so row rules of the draft's roles do not apply.
+2. **Draft commands and queries need `app.write`**, in place of the manifest's entity actions, since no app role exists before an install. Their record nodes still check the author's access to the records, so an author who is only an *Editor* reaches an installed app's records only through its roles (slice 33's decision 7).
+3. **The draft's records are the app's records**: the same entity types, under the app's path while it is installed; the authors share them with each other and with the installed app's users.
+4. **The page follows the draft through its own `app.describe` subscription**, so a change re-renders the session; only a change to the command and query names or the frame reopens it, at its next event, since those are fixed when it opens.
+5. **Editor kinds do not open their own tabs from a draft run**: their routes open inside the draft's main tab.
+6. **`draft.` is a reserved prefix** rather than another separator, since live names are dotted and an app id is a token.
+
+### Verification of slice 36
+- `go test ./features/apps/installs` (`draft_test.go`, `TestDraftRun`), against embedded NATS and SQLite: the Tasks app with only its entity type published: `tasks/draft` shows *My tasks* from its draft, titled *Tasks (draft)*; a `prefab.updateNode` reaches the open page; a page added to the draft is navigated to in the same session, and a route with a param shows its prefab's draft; `draft.tasks.task.reassign` sets the record by the graph's draft, and after `bp.import` of a changed graph the next command runs the new draft; `tasks.task.reassign` is not a command (nothing installed); `draft.tasks.myTasks` answers from its draft, and from the new one after an import; a removed command answers 404; `app.create` with the id `draft` is refused at `manifest.id`.
+- `go test -race` of `apps/...`, `ui/...`, `live/...`, `records/...` (but `records/search`, which needs `scripts/build.sh`) and `cognition/drafts` pass, but for one run of `ui/prefabs`' `TestAPrefabPageRendersPrimitives`, whose race is the test reading the session's tree (`ss.tree()`) while a later query patches it, in the test, not in this slice's code; it passed three runs in a row on its own. Foundation's `serve` vets; Forge's builds and its starter tests pass; the common frontend type-checks.
+- In headless Chromium, with Forge's Applications editor: the draft run showed the draft of *My tasks*, and a `prefab.updateNode` sent over the socket reached the open tab (see forge [ApplicationsEditor.md](../../forge/documentation/ApplicationsEditor.md#verification)).
+
+### Decisions to review after seeing it
+- Decisions 1 and 2 (the draft run is the author's, no app roles), once the Tasks app is tried by two authors with different access (forge 5g).
+- Decision 5: editor kinds inside the draft's main tab.

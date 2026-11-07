@@ -131,6 +131,9 @@ func pageOf(args features.ServiceArgs, d Deps, id string) (ui.Page, bool, error)
 	if !ok {
 		return ui.Page{}, false, nil
 	}
+	if name == draftPage {
+		return draftPageOf(args, d, app)
+	}
 	tenant := args.Principal.TenantID
 	c := cacheOf(d.Projections)
 	in, running := c.installed(tenant)[app]
@@ -162,11 +165,11 @@ func pageOf(args features.ServiceArgs, d Deps, id string) (ui.Page, bool, error)
 		page.AppQueries[q.Name] = apps.Scoped(app, q.Name)
 	}
 	if name == "main" {
-		home := m.HomeRoute()
-		if home == "" {
+		if m.HomeRoute() == "" {
 			return ui.Page{}, true, fmt.Errorf("the app %s has no page without params to open on", app)
 		}
-		return mainPage(args, d, page, v, home), true, nil
+		frame, declared := frameOf(args, d, v.Manifest.Frame, v.Prefabs, false)
+		return mainPage(page, fixed(m), frame, declared), true, nil
 	}
 	i := slices.IndexFunc(m.EditorKinds, func(k apps.EditorKind) bool { return k.Kind == name })
 	if i < 0 {
@@ -302,18 +305,30 @@ func kindPage(page ui.Page, v apps.Version, k apps.EditorKind) ui.Page {
 	return out
 }
 
-// mainPage is the app's own tab: its frame around the page at the
-// current route (the view state's route), which navigation changes with
-// the tab's own history.
-func mainPage(args features.ServiceArgs, d Deps, page ui.Page, v apps.Version, home string) ui.Page {
-	m := v.Manifest
-	frame, declared := frameOf(args, d, v)
+// manifestOf is the manifest a main page follows: an installed version's,
+// which never changes, or a draft run's, read again as it changes. render
+// reads it while rendering, so a change renders the page again; handle
+// reads it for a handler.
+type manifestOf struct {
+	render func(r *ui.Render) apps.Manifest
+	handle func(h *ui.Handle) apps.Manifest
+	suffix string // after the app's name in the tab's title
+}
+
+func fixed(m apps.Manifest) manifestOf {
+	return manifestOf{render: func(*ui.Render) apps.Manifest { return m }, handle: func(*ui.Handle) apps.Manifest { return m }}
+}
+
+// mainPage is the app's own tab: its frame (none when empty, with the
+// props it declares) around the page at the current route (the view
+// state's route), which navigation changes with the tab's own history.
+func mainPage(page ui.Page, src manifestOf, frame string, declared map[string]bool) ui.Page {
 	// The page at a route; an unknown one (a page an upgrade removed) is home
-	at := func(route string) (apps.Page, string, map[string]any) {
+	at := func(m apps.Manifest, route string) (apps.Page, string, map[string]any) {
 		pg, params, ok := m.FindPage(route)
 		if !ok {
-			route = home
-			pg, params, _ = m.FindPage(home)
+			route = m.HomeRoute()
+			pg, params, _ = m.FindPage(route)
 		}
 		props := map[string]any{}
 		for k, v := range params {
@@ -321,7 +336,7 @@ func mainPage(args features.ServiceArgs, d Deps, page ui.Page, v apps.Version, h
 		}
 		return pg, route, props
 	}
-	titleAt := func(pg apps.Page, props map[string]any) string {
+	titleAt := func(m apps.Manifest, pg apps.Page, props map[string]any) string {
 		if pg.Title != "" {
 			return pg.Title
 		}
@@ -332,16 +347,20 @@ func mainPage(args features.ServiceArgs, d Deps, page ui.Page, v apps.Version, h
 		}
 		return m.Name
 	}
-	subjectAt := func(pg apps.Page, route string, props map[string]any) *ui.Subject {
+	subjectAt := func(m apps.Manifest, pg apps.Page, route string, props map[string]any) *ui.Subject {
 		var k *apps.EditorKind
 		if kind, ok := m.KindFor(pg.Route); ok {
 			k = &kind
 		}
-		return subjectOf(page.App, route, entityOf(m, k, props), props, m.Name+" › "+titleAt(pg, props))
+		return subjectOf(page.App, route, entityOf(m, k, props), props, m.Name+" › "+titleAt(m, pg, props))
 	}
 	out := ui.AppPage(func(r *ui.Render) *ui.Node {
+		m := src.render(r)
 		route, _ := r.State(stateRoute).(string)
-		pg, route, props := at(route)
+		pg, route, props := at(m, route)
+		if pg.Prefab == "" {
+			return ui.ErrorNode("root", []ui.Problem{{Message: fmt.Sprintf("%s has no page without params to open on", m.Name), Fix: "add one with app.addPage"}})
+		}
 		content := &ui.Node{Type: ui.PrefabPrefix + pg.Prefab, Key: "page_" + pathKey(route), Props: props,
 			On: map[string]ui.On{"navigate": {Handler: handlerNavigate}}}
 		if frame == "" {
@@ -358,8 +377,8 @@ func mainPage(args features.ServiceArgs, d Deps, page ui.Page, v apps.Version, h
 				selected = n.Route
 			}
 		}
-		all := map[string]any{"title": titleAt(pg, props), "appName": m.Name, "nav": nav, "selected": selected,
-			"subject": subjectAt(pg, route, props).Object, "canBack": len(back) > 0, "canForward": len(forward) > 0}
+		all := map[string]any{"title": titleAt(m, pg, props), "appName": m.Name, "nav": nav, "selected": selected,
+			"subject": subjectAt(m, pg, route, props).Object, "canBack": len(back) > 0, "canForward": len(forward) > 0}
 		given := map[string]any{}
 		for _, p := range frameProps {
 			if declared[p] {
@@ -372,15 +391,17 @@ func mainPage(args features.ServiceArgs, d Deps, page ui.Page, v apps.Version, h
 	})
 	out.Descriptor, out.App, out.Description, out.Title = page.Descriptor, page.App, page.Description, page.Title
 	out.Reach, out.Pins, out.Graph, out.AppCommands, out.AppQueries, out.Stale = page.Reach, page.Pins, page.Graph, page.AppCommands, page.AppQueries, page.Stale
+	out.Drafts, out.Queries = page.Drafts, page.Queries
 	out.Framed = frame != ""
 	out.OnOpen = func(h *ui.Handle) error {
 		var p struct{ Route string }
 		_ = json.Unmarshal(h.Params, &p)
-		_, route, _ := at(p.Route)
+		_, route, _ := at(src.handle(h), p.Route)
 		h.Set(stateRoute, route)
 		return nil
 	}
 	navigate := func(h *ui.Handle, route string) error {
+		m := src.handle(h)
 		if _, _, ok := m.FindPage(route); !ok {
 			h.Toast("warning", fmt.Sprintf("%s has no page at %s", m.Name, route))
 			return nil
@@ -417,9 +438,10 @@ func mainPage(args features.ServiceArgs, d Deps, page ui.Page, v apps.Version, h
 		handlerForward:  step(stateForward, stateBack),
 	}
 	out.Heading = func(r *ui.Render) (string, *ui.Subject) {
+		m := src.render(r)
 		route, _ := r.State(stateRoute).(string)
-		pg, route, props := at(route)
-		return m.Name, subjectAt(pg, route, props)
+		pg, route, props := at(m, route)
+		return m.Name + src.suffix, subjectAt(m, pg, route, props)
 	}
 	return out
 }
@@ -433,19 +455,22 @@ func push(list []any, route string) []any {
 	return out
 }
 
-// frameOf is the app's frame and the props it declares: the manifest's,
-// at its pinned version, else the default frame when the tenant has it
-// published; empty for none (the page alone, under the tab's header).
-func frameOf(args features.ServiceArgs, d Deps, v apps.Version) (string, map[string]bool) {
-	id := strings.TrimPrefix(v.Manifest.Frame, ui.PrefabPrefix)
+// frameOf is the app's frame and the props it declares: the manifest's
+// (frame, prefab.<id>), at its pinned version or in its draft, else the
+// default frame when the tenant has it published; empty for none (the
+// page alone, under the tab's header).
+func frameOf(args features.ServiceArgs, d Deps, frame string, pins map[string]int, draft bool) (string, map[string]bool) {
+	id := strings.TrimPrefix(frame, ui.PrefabPrefix)
 	if id == "" {
 		id = apps.DefaultFrame
 	}
 	params := map[string]any{"id": id, "published": true}
-	if pin, ok := v.Prefabs[id]; ok {
+	if pin, ok := pins[id]; ok {
 		params = map[string]any{"id": id, "version": pin}
-	} else if _, ok, err := d.Projections.Get(args.Context(), args.Principal.TenantID, prefabs.PublishedProjector, prefabs.TargetType+"."+id); err != nil || !ok {
+	} else if _, ok, err := d.Projections.Get(args.Context(), args.Principal.TenantID, prefabs.PublishedProjector, prefabs.TargetType+"."+id); (err != nil || !ok) && (!draft || frame == "") {
 		return "", nil // the tenant has no such frame published
+	} else if draft {
+		params = map[string]any{"id": id}
 	}
 	if d.Nodes.Subscriptions == nil {
 		return "", nil

@@ -100,6 +100,9 @@ func (c *check) info() {
 	if !live.ValidToken(c.m.ID) {
 		c.add("id", fmt.Sprintf("%q is not an app id", c.m.ID), "use letters, digits, _ and -")
 	}
+	if c.m.ID+"." == DraftPrefix {
+		c.add("id", fmt.Sprintf("%q is kept for apps' draft runs", c.m.ID), "choose another id")
+	}
 	if strings.TrimSpace(c.m.Name) == "" {
 		c.add("name", "an app needs a name", "set one with app.setInfo {name}")
 	}

@@ -250,6 +250,17 @@ func foldVersion(f live.Fold) (json.RawMessage, error) {
 	return f.Event.Data, nil
 }
 
+// GetDraft reads an app's draft in a tenant.
+func GetDraft(ctx context.Context, store live.Store, tenant uint64, app string) (Draft, bool) {
+	raw, ok := get(ctx, store, tenant, DraftProjector, TargetType+"."+app)
+	var d Draft
+	if !ok || json.Unmarshal(raw, &d) != nil {
+		return Draft{}, false
+	}
+	apps.Normalize(&d.Manifest)
+	return d, true
+}
+
 // GetVersion reads a published version of an app; version 0 is its last.
 func GetVersion(args features.ServiceArgs, store live.Store, app string, version int) (apps.Version, bool) {
 	ctx, tenant := args.Context(), args.Principal.TenantID

@@ -86,7 +86,7 @@ function AppHost({ object, registry, tabId, page }: AppHostProps) {
             break
           case 'navigate':
             // From a page outside the app's main tab: open the app there
-            if (a.page) openAppAt(registry, parseKind(object.kind).app, a.page)
+            if (a.page) openAppAt(registry, parseKind(object.kind).app || page.split('/')[0], a.page)
             break
           case 'copy':
             void navigator.clipboard.writeText(a.text ?? '')
@@ -106,7 +106,7 @@ function AppHost({ object, registry, tabId, page }: AppHostProps) {
         }
       }
     },
-    [registry, tabId, object.kind],
+    [registry, tabId, object.kind, page],
   )
 
   // One session per tab, resumed by its id after a reload
@@ -125,8 +125,11 @@ function AppHost({ object, registry, tabId, page }: AppHostProps) {
   const state: UiSessionState = useSyncExternalStore(session.subscribe, session.getState)
   const status = useSyncExternalStore((l) => live.onStatus(l), () => live.getStatus())
 
-  // An app's main tab goes to the routes deep links and other tabs ask for
-  const { app, kind } = parseKind(object.kind)
+  // An app's main tab goes to the routes deep links and other tabs ask for.
+  // A tab of another kind (Forge's draft run) names its app by its page
+  const parsed = parseKind(object.kind)
+  const app = parsed.app || page.split('/')[0]
+  const kind = parsed.app ? parsed.kind : page.split('/')[1]
   useEffect(() => {
     if (kind !== 'main') return
     return onNavigateRequest(tabId, (route) => session.emit([], { handler: 'app.navigate', payload: { route } }))

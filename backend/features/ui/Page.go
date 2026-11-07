@@ -120,6 +120,10 @@ type Page struct {
 	// Dry runs its handlers and logic as dry runs (forge 04c): graphs in
 	// their drafts, and commands shown as dryRun actions, never sent.
 	Dry bool
+	// Drafts renders every prefab in its draft and runs graphs in their
+	// drafts, but sends its commands: an app's draft run by its authors
+	// (forge 05f question 3).
+	Drafts bool
 
 	// An installed app's page (forge 05d):
 	// Reach replaces Action: opening needs any one of them.
@@ -379,6 +383,10 @@ func (h *Handle) Query(query string, params any) (any, *features.ServiceResponse
 // Dry is whether the handle runs in a dry page, whose graphs run in their
 // drafts.
 func (h *Handle) Dry() bool { return h.s.page.Dry }
+
+// Drafts is whether the handle's graphs run in their drafts: a dry page,
+// or an app's draft run.
+func (h *Handle) Drafts() bool { return h.s.page.Dry || h.s.page.Drafts }
 
 // Do adds a client action. A navigate action on an app's page goes to
 // the route in the page itself (forge 05d).

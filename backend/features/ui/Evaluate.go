@@ -527,6 +527,9 @@ func (e *evaluator) definition(r *Render, id string, version int, draft bool) (*
 	if pin, ok := s.page.Pins[id]; ok && !draft && version == 0 {
 		version = pin // an installed app's version pins it (forge 05d)
 	}
+	if s.page.Drafts && version == 0 {
+		draft = true // an app's draft run (forge 05f)
+	}
 	name, params := definitionQuery+id, map[string]any{"id": id, "published": true}
 	switch {
 	case draft:

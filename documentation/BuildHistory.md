@@ -657,6 +657,16 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **★ review pending**: the export document, read as a person would.
     - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-4).
 
+36. **Draft runs** (Forge iteration 5, part 5f, [forge 05f-ApplicationsEditor.md](../../forge/documentation/plans/05f-ApplicationsEditor.md)), with Forge's Applications editor ([forge ApplicationsEditor.md](../../forge/documentation/ApplicationsEditor.md)). *Built* ([Apps.md](Apps.md#built-in-slice-36)).
+    - **Built**:
+      - `ui.Page.Drafts` (prefabs rendered and graphs run in their drafts, commands sent) and `Handle.Drafts`;
+      - `<appId>/draft` in the `apps` app source, following the draft manifest live through its own `app.describe`; `mainPage` over a manifest source, shared with installed apps;
+      - `draft.<appId>.<name>` commands and queries resolved by `installs.CommandFor`/`QueryFor` from the draft's graphs, needing `app.write`; the app id `draft` refused;
+      - `AppHost` naming its app by its page for other kinds of tab.
+    - **Blockers**: none. Forge iteration question 1 (draft runs) was answered before; 05f questions 1 (no undo), 2 (parts edited in their editors) and 3 (the draft run's shape, and publishing entity types alone) were asked before building and answered.
+    - **★ review pending**: the Applications editor's tabs with two authors (forge 5f).
+    - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-5).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -699,3 +709,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 33. App roles, access and settings (Forge 5c) | forge 05c 1 (roles made by the system, scoped to the app), 2 (read-only app roles), 3 (own types under the app's path), 4 (row rules per role) and 5 (tenant roles stop at the app fence), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-2), app roles in the Role Editor and Share dialog, and the section in Settings |
 | 34. Running apps in the workbench (Forge 5d) | forge 05-Applications 1 (run drafts, with 5f) and 2 (the app's own history), and 05d 1 (Hello stays Go, Records a manifest app) and 2 (*App frame* in Forge), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-3), the Apps section with several apps, the frame and its navigation |
 | 35. Export and import (Forge 5e) | forge 05-Applications 3 (opt-in seed data) and 05e 1 (the app's id; parts keep theirs) and 2 (tenant parts copied, duplicates asked about), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-4), the export document read as a person would |
+| 36. Draft runs (Forge 5f) | forge 05-Applications 1 (run drafts, answered before) and 05f 1 (no undo), 2 (parts in their editors) and 3 (a live draft tab; entity types published alone), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-5), the Applications editor with two authors |

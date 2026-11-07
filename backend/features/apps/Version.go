@@ -74,6 +74,25 @@ func Unscoped(typ string) (app, name string, ok bool) {
 	return app, name, ok && app != "" && name != ""
 }
 
+// DraftPrefix starts the live name of a command or query of an app's
+// draft run (forge 05f question 3): draft.<appId>.<name>, decided and
+// answered by the draft's graphs. No app may have the id draft.
+const DraftPrefix = "draft."
+
+// DraftScoped is a draft run's name for one of the app's own commands or
+// queries.
+func DraftScoped(app, name string) string { return DraftPrefix + Scoped(app, name) }
+
+// DraftUnscoped splits a draft run's name into the app and the name
+// inside it.
+func DraftUnscoped(typ string) (app, name string, ok bool) {
+	rest, ok := strings.CutPrefix(typ, DraftPrefix)
+	if !ok {
+		return "", "", false
+	}
+	return Unscoped(rest)
+}
+
 // Install is an app installed in a tenant (forge 05b question 2: once per
 // tenant, upgraded in place): the version it runs, whole, so every reader
 // sees one version or the next, never a mix.
