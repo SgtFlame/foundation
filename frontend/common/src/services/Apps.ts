@@ -104,6 +104,9 @@ export interface AppPart {
 export interface AppView {
   manifest: AppManifest
   rev: number
+  published: number // the last published version, 0 before the first
+  publishedRev: number // the rev it was published from
+  changed: boolean // the draft has changes the next version will take
   createdBy?: string
   updatedBy?: string
   updatedAt?: string
@@ -119,4 +122,39 @@ export interface AppSummary {
   rev: number
   pages: number
   updatedAt?: string
+}
+
+// useQuery<AppVersions>('app.versions', { id }): the app's published versions
+export interface AppVersions {
+  published: number
+  publishedRev: number
+  rev: number
+  versions: { version: number; rev: number; publishedBy: string; publishedAt: string }[]
+}
+
+// One command or query of an installed app, by its name on the live core
+// (<appId>.<name>)
+export interface InstalledEntry {
+  name: string
+  title?: string
+  description?: string
+  args?: unknown // a command's args or a query's params, JSON Schema
+  action?: string
+}
+
+// One app in the app.installs query, keyed "app.<id>"
+export interface InstalledApp {
+  app: string
+  name: string
+  icon?: string
+  description?: string
+  status: 'installed' | 'uninstalled'
+  version: number
+  commands: InstalledEntry[]
+  queries: InstalledEntry[]
+  editorKinds: AppEditorKind[]
+  triggers: AppTrigger[]
+  installedBy: string
+  installedAt: string
+  updatedAt: string
 }

@@ -253,6 +253,46 @@ func (p *Projections) Follow(ctx context.Context, tenant uint64, area live.Area,
 	return nil
 }
 
+// History reads a target's events in order, from the first, passing each
+// to fn until it returns false or the events committed so far are read:
+// what a command reads when it needs an earlier state of its target (an
+// app published at the rev its publisher saw).
+func (p *Projections) History(ctx context.Context, tenant uint64, t live.Target, fn func(live.Event) bool) error {
+	stream, err := p.Stream(ctx, tenant, t.Area)
+	if err != nil {
+		return err
+	}
+	last, err := stream.GetLastMsgForSubject(ctx, t.Subjects(tenant))
+	if errors.Is(err, jetstream.ErrMsgNotFound) {
+		return nil
+	}
+	if err != nil {
+		return log.Wrapf(err, "cannot read the history of %s", t.Key())
+	}
+	cons, err := stream.OrderedConsumer(ctx, jetstream.OrderedConsumerConfig{FilterSubjects: []string{t.Subjects(tenant)}})
+	if err != nil {
+		return log.Wrapf(err, "cannot read the history of %s", t.Key())
+	}
+	for {
+		msg, err := cons.Next(jetstream.FetchMaxWait(5 * time.Second))
+		if err != nil {
+			return log.Wrapf(err, "cannot read the history of %s", t.Key())
+		}
+		meta, err := msg.Metadata()
+		if err != nil {
+			return err
+		}
+		var e live.Event
+		if err := json.Unmarshal(msg.Data(), &e); err != nil {
+			return log.Wrapf(err, "cannot read an event of %s", t.Key())
+		}
+		e.Stream, e.Seq = meta.Stream, meta.Sequence.Stream
+		if !fn(e) || e.Seq >= last.Sequence {
+			return nil
+		}
+	}
+}
+
 func (p *Projections) fold(pr live.Projector, kv jetstream.KeyValue, msg jetstream.Msg) {
 	ctx := p.ctx
 	meta, err := msg.Metadata()

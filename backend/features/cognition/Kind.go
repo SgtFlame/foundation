@@ -32,9 +32,12 @@ type Kind struct {
 	// Spec is the JSON Schema of the graph's Spec, such as a command
 	// graph's command type and args; empty when the kind has none.
 	Spec json.RawMessage
-	// IDFor, when set, is the graph id the spec requires: a command
-	// graph's id follows from its command type, so the bus finds it.
-	IDFor func(spec json.RawMessage) (string, error)
+	// IDFor, when set, is the graph ids the spec allows, the first the
+	// one to use: a command graph's id follows from its command type, so
+	// the bus finds it. A graph owned by an app (app:<appId>) may also
+	// have the id of <appId>.<type>, so two apps can define one command
+	// type (forge 05b question 3).
+	IDFor func(spec json.RawMessage, owner string) ([]string, error)
 	// Host makes what a test run's nodes act on (a UI session, a command's
 	// decision) and reports what they did; nil runs tests with none.
 	Host func(args features.ServiceArgs, g Graph, inputs Values) (host any, report func() any)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
@@ -35,15 +36,18 @@ const fieldsSchema = `{"type":"object","properties":{"outputs":{"type":"array","
 // Contribute registers the kinds and nodes; deps returns their
 // dependencies once made.
 func Contribute(reg *extensions.Registry, deps func() Deps) {
-	idFor := func(field string, id func(string) string) func(json.RawMessage) (string, error) {
-		return func(spec json.RawMessage) (string, error) {
+	idFor := func(field string, id func(string) string) func(json.RawMessage, string) ([]string, error) {
+		return func(spec json.RawMessage, owner string) ([]string, error) {
 			var s map[string]any
 			_ = json.Unmarshal(spec, &s)
 			name, _ := s[field].(string)
 			if name == "" {
-				return "", fmt.Errorf("the spec names no %s", field)
+				return nil, fmt.Errorf("the spec names no %s", field)
 			}
-			return id(name), nil
+			if app, ok := strings.CutPrefix(owner, "app:"); ok {
+				return []string{id(app + "." + name), id(name)}, nil
+			}
+			return []string{id(name)}, nil
 		}
 	}
 	for i, k := range []cognition.Kind{

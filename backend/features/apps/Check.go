@@ -387,11 +387,15 @@ func (c *check) requires() {
 }
 
 // primitive tells whether p is a component, or the family of one.
-func (c *check) primitive(p string) bool {
-	if _, ok := c.env.Catalog[p]; ok {
+func (c *check) primitive(p string) bool { return HasPrimitive(c.env.Catalog, p) }
+
+// HasPrimitive tells whether p is a component of the catalog, or the
+// family of one.
+func HasPrimitive(catalog map[string]ui.Component, p string) bool {
+	if _, ok := catalog[p]; ok {
 		return true
 	}
-	for id := range c.env.Catalog {
+	for id := range catalog {
 		if strings.HasPrefix(id, p+".") {
 			return true
 		}

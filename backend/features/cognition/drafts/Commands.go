@@ -654,12 +654,12 @@ func checkSpec(cat cognition.Catalog, g cognition.Graph) []live.Problem {
 		return problem("args.spec", "the spec is not valid: "+err.Error(), "describe the kind with bp.listKinds")
 	}
 	if k.IDFor != nil {
-		id, err := k.IDFor(spec)
+		ids, err := k.IDFor(spec, g.Owner)
 		if err != nil {
 			return problem("args.spec", err.Error(), "")
 		}
-		if id != g.ID {
-			return problem("target", fmt.Sprintf("a %s graph with this spec must have the id %q", k.Title, id), fmt.Sprintf("create it with the target %q", id))
+		if !slices.Contains(ids, g.ID) {
+			return problem("target", fmt.Sprintf("a %s graph with this spec must have the id %q", k.Title, ids[0]), fmt.Sprintf("create it with the target %q", ids[0]))
 		}
 	}
 	return nil

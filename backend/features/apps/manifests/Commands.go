@@ -1,6 +1,7 @@
 package manifests
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -32,6 +33,7 @@ type Projections interface {
 	live.Store
 	WaitFor(ctx context.Context, tenant uint64, projector, key string, seq uint64, timeout time.Duration) (live.Projected, error)
 	Follow(ctx context.Context, tenant uint64, area live.Area, name string, subjects []string, fn func(live.Event) error) error
+	History(ctx context.Context, tenant uint64, t live.Target, fn func(live.Event) bool) error
 }
 
 // Deps are what the commands, queries and follower need, made after the
@@ -158,13 +160,19 @@ func newID(base string, taken func(string) bool) string {
 type spec struct {
 	id, title, description, args, example string
 	events                                []string
-	create                                bool // may target an app that does not exist yet
+	create                                bool   // may target an app that does not exist yet
+	action                                string // app.write when empty
 	decide                                func(c *decision) ([]live.NewEvent, []live.Problem)
 }
 
 // Contribute registers the apps' projector, commands and queries; deps
 // returns their dependencies once made.
 func Contribute(reg *extensions.Registry, deps func() Deps) {
+	live.Projectors.Register(reg, live.Projector{
+		Descriptor: extensions.Descriptor{ID: VersionProjector, Source: "apps"}, Title: "App versions",
+		Description: "Every published app version, keyed appVersion.<appId>-v<n>: {app, version, rev, manifest, prefabs, entities, graphs, publishedBy, publishedAt}",
+		Area:        live.AreaDefinitions, Types: []string{VersionTargetType}, Fold: foldVersion,
+	})
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: DraftProjector, Source: "apps"}, Title: "App drafts",
 		Description: "Each app's draft, as its app.* commands left it: {manifest, rev, createdBy, updatedBy, updatedAt}",
@@ -174,7 +182,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		cmd := live.Command{
 			Descriptor: extensions.Descriptor{ID: s.id, Source: "apps"}, Title: s.title, Description: s.description,
 			Args: json.RawMessage(s.args), Examples: []json.RawMessage{json.RawMessage(s.example)}, Events: s.events,
-			Area: live.AreaDefinitions, TargetType: TargetType, Projection: DraftProjector, Action: "app.write",
+			Area: live.AreaDefinitions, TargetType: TargetType, Projection: DraftProjector, Action: cmp.Or(s.action, "app.write"),
 			Resource: func(p features.Principal, t live.Target) string {
 				if s.create {
 					return apps.Resource(p, "")
@@ -198,7 +206,17 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				}
 				return events, c.check(events)
 			},
-			Report: func(args features.ServiceArgs, t live.Target, seq uint64) any { return report(args, deps(), t.ID, seq) },
+			Report: func(args features.ServiceArgs, t live.Target, seq uint64) any {
+				if s.id == "app.publish" {
+					// An install right after publishing finds the new version
+					if r, ok := report(args, deps(), t.ID, seq).(Report); ok {
+						key := VersionTargetType + "." + apps.VersionID(t.ID, r.Published)
+						_, _ = deps().Projections.WaitFor(args.Context(), args.Principal.TenantID, VersionProjector, key, seq, 2*time.Second)
+						return r
+					}
+				}
+				return report(args, deps(), t.ID, seq)
+			},
 		}
 		if s.create {
 			cmd.NewTargetFor = func(args features.ServiceArgs, raw json.RawMessage) string {
@@ -213,6 +231,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		live.Commands.Register(reg, cmd)
 	}
 	contributeQueries(reg, deps)
+	contributeVersions(reg, deps)
 }
 
 // check applies the events to a copy of the draft and checks the whole
@@ -222,6 +241,9 @@ func (c *decision) check(events []live.NewEvent) []live.Problem {
 	var d Draft
 	_ = json.Unmarshal(raw, &d)
 	for _, e := range events {
+		if e.Target != nil {
+			continue // another target's, such as a published version
+		}
 		data, err := json.Marshal(e.Data)
 		if err == nil {
 			err = Apply(&d, live.Event{Type: e.Type, Target: c.Target, Data: data})
@@ -241,9 +263,10 @@ func (c *decision) check(events []live.NewEvent) []live.Problem {
 // problems (none: a command leaving any is refused) and the keys of its
 // lists, so a model sees what is there.
 type Report struct {
-	Rev      int                 `json:"rev"`
-	Problems []live.Problem      `json:"problems"`
-	Keys     map[string][]string `json:"keys"`
+	Rev       int                 `json:"rev"`
+	Published int                 `json:"published"` // the last published version
+	Problems  []live.Problem      `json:"problems"`
+	Keys      map[string][]string `json:"keys"`
 }
 
 func report(args features.ServiceArgs, deps Deps, id string, seq uint64) any {
@@ -259,7 +282,7 @@ func report(args features.ServiceArgs, deps Deps, id string, seq uint64) any {
 	for _, l := range Lists {
 		keys[l.Field] = Keys(d.Manifest, l.Item)
 	}
-	return Report{Rev: d.Rev, Problems: []live.Problem{}, Keys: keys}
+	return Report{Rev: d.Rev, Published: d.Published, Problems: []live.Problem{}, Keys: keys}
 }
 
 const requiresSchema = `"requires":{"type":"object","description":"{primitives: [component ids or families such as mui], apps: [app ids]}: what a tenant needs before the app installs","properties":{"primitives":{"type":"array","items":{"type":"string"}},"apps":{"type":"array","items":{"type":"string"}}}}`
@@ -346,7 +369,7 @@ func commandSpecs() []spec {
 	for _, l := range Lists {
 		specs = append(specs, listSpecs(l)...)
 	}
-	return specs
+	return append(specs, publishSpec())
 }
 
 // listSpecs are a list's add, update and remove commands.

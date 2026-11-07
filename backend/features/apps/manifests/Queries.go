@@ -20,12 +20,18 @@ import (
 // View is the app.describe query's result: the manifest and a summary of
 // each of its parts.
 type View struct {
-	Manifest  apps.Manifest `json:"manifest"`
-	Rev       int           `json:"rev"`
-	CreatedBy uint64        `json:"createdBy,string,omitempty"`
-	UpdatedBy uint64        `json:"updatedBy,string,omitempty"`
-	UpdatedAt time.Time     `json:"updatedAt,omitzero"`
-	Parts     []Part        `json:"parts"`
+	Manifest apps.Manifest `json:"manifest"`
+	Rev      int           `json:"rev"`
+	// Published is the last published version and PublishedRev the rev it
+	// was published from; Changed is the draft having changes since, which
+	// the next version will take (forge iteration 5 question 5).
+	Published    int       `json:"published"`
+	PublishedRev int       `json:"publishedRev"`
+	Changed      bool      `json:"changed"`
+	CreatedBy    uint64    `json:"createdBy,string,omitempty"`
+	UpdatedBy    uint64    `json:"updatedBy,string,omitempty"`
+	UpdatedAt    time.Time `json:"updatedAt,omitzero"`
+	Parts        []Part    `json:"parts"`
 }
 
 // Part is a prefab, graph or entity type the manifest names or the app
@@ -207,7 +213,7 @@ func contributeQueries(reg *extensions.Registry, deps func() Deps) {
 			pos := live.Position{}
 			last := ""
 			view := func() View {
-				return View{Manifest: d.Manifest, Rev: d.Rev, CreatedBy: d.CreatedBy, UpdatedBy: d.UpdatedBy, UpdatedAt: d.UpdatedAt, Parts: partsOf(d.Manifest, known, builtins)}
+				return View{Manifest: d.Manifest, Rev: d.Rev, Published: d.Published, PublishedRev: d.PublishedRev, Changed: d.Rev != d.PublishedRev, CreatedBy: d.CreatedBy, UpdatedBy: d.UpdatedBy, UpdatedAt: d.UpdatedAt, Parts: partsOf(d.Manifest, known, builtins)}
 			}
 			for {
 				var w watched
@@ -317,6 +323,62 @@ func contributeQueries(reg *extensions.Registry, deps func() Deps) {
 					shown[e.Key] = true
 					raw, _ := json.Marshal(s)
 					f.Change(live.Delta{Op: "upsert", Key: e.Key, Value: raw}, pos)
+				}
+			}
+			return nil
+		},
+	})
+}
+
+// Versions is the app.versions query's result.
+type Versions struct {
+	Published    int              `json:"published"`
+	PublishedRev int              `json:"publishedRev"`
+	Rev          int              `json:"rev"`
+	Versions     []VersionSummary `json:"versions"`
+}
+
+func contributeVersions(reg *extensions.Registry, deps func() Deps) {
+	live.Queries.Register(reg, live.Query{
+		Descriptor: extensions.Descriptor{ID: "app.versions", Source: "apps"}, Title: "An app's versions",
+		Description: "An app's published versions, oldest first: {published, publishedRev, rev, versions: [{version, rev, publishedBy, publishedAt}]}. rev above publishedRev means the draft has changes the next version will take.",
+		Params:      json.RawMessage(`{"type":"object","properties":{"id":{"type":"string","description":"The app's id"}},"required":["id"]}`),
+		Examples:    []json.RawMessage{json.RawMessage(`{"id":"tasks"}`)},
+		Action:      "app.read",
+		Resource: func(p features.Principal, params json.RawMessage) string {
+			id, _ := describeParams(params)
+			return apps.Resource(p, id)
+		},
+		Run: func(f live.Feed) error {
+			id, err := describeParams(f.Params())
+			if err != nil {
+				return err
+			}
+			_ = FollowVersions(f.Args(), deps())
+			entries, err := f.Store().Watch(f.Context(), f.Args().Principal.TenantID, DraftProjector, TargetType+"."+id)
+			if err != nil {
+				return err
+			}
+			v := Versions{Versions: []VersionSummary{}}
+			pos := live.Position{}
+			started := false
+			for e := range entries {
+				if e == nil {
+					started = true
+					f.Snapshot(v, pos)
+					continue
+				}
+				var d Draft
+				if !e.Deleted && json.Unmarshal(e.Value.Value, &d) == nil {
+					v = Versions{Published: d.Published, PublishedRev: d.PublishedRev, Rev: d.Rev, Versions: d.Versions}
+					if v.Versions == nil {
+						v.Versions = []VersionSummary{}
+					}
+				}
+				pos = live.Position{e.Value.Stream: e.Value.Seq}
+				if started {
+					raw, _ := json.Marshal(v)
+					f.Change(live.Delta{Op: "replace", Value: raw}, pos)
 				}
 			}
 			return nil

@@ -26,6 +26,7 @@ import (
 	embedimpl "github.com/SgtFlame/foundation/backend/features/ai/services/embedservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/ai/settings"
 	"github.com/SgtFlame/foundation/backend/features/apps"
+	"github.com/SgtFlame/foundation/backend/features/apps/installs"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	apptools "github.com/SgtFlame/foundation/backend/features/apps/tools"
 	"github.com/SgtFlame/foundation/backend/features/authz"
@@ -388,6 +389,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var entityDeps entities.Deps
 		var prefabDeps prefabs.Deps
 		var appDeps manifests.Deps
+		var installDeps installs.Deps
 		var recordService recordservice.Service
 		var liveSubscriptions *subscribe.Subscriptions
 		var liveNodeDeps livenodes.Deps
@@ -467,6 +469,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Apps: manifests edited by app.* commands, after the prefabs and
 		// records they name
 		manifests.Contribute(registry, func() manifests.Deps { return appDeps })
+		installs.Contribute(registry, func() installs.Deps { return installDeps })
 		apptools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		presence.Contribute(registry, func() *presence.Presence { return livePresence })
 		uitools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
@@ -682,8 +685,11 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// any other; handlers that are graphs run in the UI sessions
 		liveNodeDeps = livenodes.Deps{Engine: cognitionEngine, Bus: liveBus, Subscriptions: subscriptions, Store: projections, Presence: livePresence}
 		uiNodeDeps = uinodes.Deps{Engine: cognitionEngine, Presence: livePresence}
-		liveBus.Resolve = livenodes.CommandFor(func() livenodes.Deps { return liveNodeDeps })
-		subscriptions.Resolve = livenodes.QueryFor(func() livenodes.Deps { return liveNodeDeps })
+		// An installed app's commands and queries are <appId>.<name>, run by
+		// the graphs its version pinned; a manifest app's own graphs are
+		// live only through its install
+		liveBus.Resolve = installs.CommandFor(func() installs.Deps { return installDeps }, livenodes.CommandFor(func() livenodes.Deps { return liveNodeDeps }))
+		subscriptions.Resolve = installs.QueryFor(func() installs.Deps { return installDeps }, livenodes.QueryFor(func() livenodes.Deps { return liveNodeDeps }))
 		liveToolDeps = livetools.Deps{Bus: liveBus, Subscriptions: subscriptions}
 		liveSubscriptions = subscriptions
 		recordEmbedder = embedService
@@ -710,6 +716,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		entityService := entityimpl.CreateService(entityimpl.WithEntities(entityDeps))
 		prefabDeps = prefabs.Deps{Projections: projections, DB: gdb}
 		appDeps = manifests.Deps{Projections: projections, DB: gdb}
+		installDeps = installs.Deps{Projections: projections, DB: gdb, Nodes: liveNodeDeps}
 		prefabService := prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
 		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())),
 			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))

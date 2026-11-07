@@ -27,11 +27,17 @@ const DraftProjector = "apps.app"
 // Draft is the apps.app projection's value: a manifest as it is being
 // edited.
 type Draft struct {
-	Manifest  apps.Manifest `json:"manifest"`
-	Rev       int           `json:"rev"` // events folded
-	CreatedBy uint64        `json:"createdBy,string"`
-	UpdatedBy uint64        `json:"updatedBy,string"`
-	UpdatedAt time.Time     `json:"updatedAt"`
+	Manifest apps.Manifest `json:"manifest"`
+	Rev      int           `json:"rev"` // events folded; app.publish names the one its sender saw
+	// Published is the last published version, 0 before the first, and
+	// PublishedRev the rev it was published from: below Rev, the draft has
+	// changes for the next version (forge iteration 5 question 5).
+	Published    int              `json:"published"`
+	PublishedRev int              `json:"publishedRev"`
+	Versions     []VersionSummary `json:"versions"`
+	CreatedBy    uint64           `json:"createdBy,string"`
+	UpdatedBy    uint64           `json:"updatedBy,string"`
+	UpdatedAt    time.Time        `json:"updatedAt"`
 }
 
 // Events an app's commands commit, beside each list's added, updated and
@@ -41,7 +47,30 @@ const (
 	EventInfoSet     = "infoSet"     // Info
 	EventNavSet      = "navSet"      // {nav}
 	EventSettingsSet = "settingsSet" // {settings}
+	EventPublished   = "published"   // Published; the version itself is an event on its own target
 )
+
+// VersionTargetType is a published version's target type on the def
+// stream, its id apps.VersionID (tasks-v3); its published event holds the
+// whole apps.Version.
+const VersionTargetType = "appVersion"
+
+// VersionProjector keeps every published version, by its target.
+const VersionProjector = "apps.version"
+
+// Published is the app's published event: which version, from which rev.
+type Published struct {
+	Version int `json:"version"`
+	Rev     int `json:"rev"`
+}
+
+// VersionSummary is one published version in the draft, newest last.
+type VersionSummary struct {
+	Version     int       `json:"version"`
+	Rev         int       `json:"rev"`
+	PublishedBy uint64    `json:"publishedBy,string"`
+	PublishedAt time.Time `json:"publishedAt"`
+}
 
 // Info changes an app's own fields; nil leaves them.
 type Info struct {
@@ -315,6 +344,18 @@ func Apply(d *Draft, e live.Event) error {
 		if in, err = decode[struct{ Nav []apps.NavItem }](e.Data); err == nil {
 			m.Nav = in.Nav
 		}
+	case EventPublished:
+		var p Published
+		if p, err = decode[Published](e.Data); err == nil {
+			d.Published = p.Version
+			// Published at the rev before this event: nothing waits for the
+			// next version; at an earlier rev, the changes since do
+			d.PublishedRev = p.Rev
+			if p.Rev == d.Rev {
+				d.PublishedRev = d.Rev + 1
+			}
+			d.Versions = append(d.Versions, VersionSummary{Version: p.Version, Rev: p.Rev, PublishedBy: e.UserID, PublishedAt: e.Time})
+		}
 	case EventSettingsSet:
 		var in struct{ Settings apps.Settings }
 		if in, err = decode[struct{ Settings apps.Settings }](e.Data); err == nil {
@@ -332,8 +373,11 @@ func Apply(d *Draft, e live.Event) error {
 	}
 	d.Rev++
 	d.UpdatedBy, d.UpdatedAt = e.UserID, e.Time
-	m.ID = e.Target.ID
+	m.ID, m.Version = e.Target.ID, d.Published
 	apps.Normalize(m)
+	if d.Versions == nil {
+		d.Versions = []VersionSummary{}
+	}
 	return nil
 }
 

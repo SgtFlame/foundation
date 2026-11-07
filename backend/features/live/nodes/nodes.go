@@ -226,25 +226,30 @@ func CommandFor(deps func() Deps) func(args features.ServiceArgs, typ string) (l
 		return live.Command{
 			Descriptor: extensions.Descriptor{ID: typ, Source: "graph:" + id}, Title: spec.Title, Description: spec.Description,
 			Args: spec.Args, Events: spec.Events, Area: live.Area(spec.Area), TargetType: spec.TargetType, Projection: spec.Projection, Action: spec.Action,
-			Decide: func(dec live.Decision) ([]live.NewEvent, []live.Problem) {
-				var state any
-				if dec.State != nil {
-					_ = json.Unmarshal(dec.State, &state)
-				}
-				host := &CommandHost{Decision: &dec}
-				_, err := d.Engine.Run(engine.RunArgs{ServiceArgs: dec.ServiceArgs, GraphID: id, Event: OnCommand, Trigger: "command:" + typ,
-					Inputs: inputs("args", dec.Args, cognition.Values{"state": state, "target": dec.Target.ID}),
-					Host:   host, Trace: tracing(dec.ServiceArgs, d, id), Limits: commandLimits})
-				if err != nil {
-					return nil, []live.Problem{{Message: "the command graph failed: " + err.Error(), Fix: "see its run in the graph's Log Viewer"}}
-				}
-				if len(host.Problems) > 0 {
-					return nil, host.Problems
-				}
-				return host.Events, nil
-			},
+			Decide: func(dec live.Decision) ([]live.NewEvent, []live.Problem) { return Decide(d, dec, typ, id, nil) },
 		}, true
 	}
+}
+
+// Decide decides a command by running its command graph: g, or the
+// published graph id names when g is nil (an installed app runs the
+// version it pinned).
+func Decide(d Deps, dec live.Decision, typ, id string, g *cognition.Graph) ([]live.NewEvent, []live.Problem) {
+	var state any
+	if dec.State != nil {
+		_ = json.Unmarshal(dec.State, &state)
+	}
+	host := &CommandHost{Decision: &dec}
+	_, err := d.Engine.Run(engine.RunArgs{ServiceArgs: dec.ServiceArgs, GraphID: id, Graph: g, Event: OnCommand, Trigger: "command:" + typ,
+		Inputs: inputs("args", dec.Args, cognition.Values{"state": state, "target": dec.Target.ID}),
+		Host:   host, Trace: tracing(dec.ServiceArgs, d, id), Limits: commandLimits})
+	if err != nil {
+		return nil, []live.Problem{{Message: "the command graph failed: " + err.Error(), Fix: "see its run in the graph's Log Viewer"}}
+	}
+	if len(host.Problems) > 0 {
+		return nil, host.Problems
+	}
+	return host.Events, nil
 }
 
 // QueryFor is the query a tenant's published query graph defines, for the
@@ -265,17 +270,47 @@ func QueryFor(deps func() Deps) func(args features.ServiceArgs, typ string) (liv
 		return live.Query{
 			Descriptor: extensions.Descriptor{ID: typ, Source: "graph:" + id}, Title: spec.Title, Description: spec.Description,
 			Params: spec.Params, Action: spec.Action,
-			Run: func(f live.Feed) error { return runQuery(f, d, id) },
+			Run: func(f live.Feed) error {
+				return RunQuery(f, d, QueryRun{ID: id, Watch: Read{Projector: "cognition.published", Key: "graph." + id}})
+			},
 		}, true
 	}
 }
 
-func runQuery(f live.Feed, d Deps, id string) error {
+// QueryRun is how a query graph runs for one subscription.
+type QueryRun struct {
+	ID string // the graph's id
+	// Graph, when set, is the graph to run, read again before each run (an
+	// installed app's pinned version); an error ends the subscription.
+	// When it is another version than the last run's, the subscription
+	// takes a fresh snapshot.
+	Graph func() (*cognition.Graph, error)
+	// Watch runs it again when it changes, beside what the graph read:
+	// the graph published again, or the app upgraded.
+	Watch Read
+}
+
+// RunQuery runs a query graph for a subscription: once for its snapshot,
+// then again whenever a value it read or q.Watch changes.
+func RunQuery(f live.Feed, d Deps, q QueryRun) error {
 	tenant := f.Args().Principal.TenantID
+	id := q.ID
 	first := true
+	version := 0
 	for {
+		var g *cognition.Graph
+		if q.Graph != nil {
+			var err error
+			if g, err = q.Graph(); err != nil {
+				return err
+			}
+			if !first && g.Version != version {
+				first = true // another version: a fresh snapshot
+			}
+			version = g.Version
+		}
 		host := &QueryHost{Pos: live.Position{}}
-		res, err := d.Engine.Run(engine.RunArgs{ServiceArgs: f.Args(), GraphID: id, Event: OnQuery, Trigger: "query",
+		res, err := d.Engine.Run(engine.RunArgs{ServiceArgs: f.Args(), GraphID: id, Graph: g, Event: OnQuery, Trigger: "query",
 			Inputs: inputs("params", f.Params(), nil), Host: host, Trace: tracing(f.Args(), d, id), Limits: commandLimits})
 		if err != nil {
 			return err
@@ -288,10 +323,10 @@ func runQuery(f live.Feed, d Deps, id string) error {
 			raw, _ := json.Marshal(value)
 			f.Change(live.Delta{Op: "replace", Value: raw}, host.Pos)
 		}
-		// Run again when what it read changes, or when it is published again
+		// Run again when what it read changes, or what q watches
 		ctx, cancel := context.WithCancel(f.Context())
 		changed := make(chan struct{}, 1)
-		watch := append(host.Reads, Read{Projector: "cognition.published", Key: "graph." + id})
+		watch := append(host.Reads, q.Watch)
 		debounce := false
 		for _, r := range watch {
 			var entries <-chan *live.Entry

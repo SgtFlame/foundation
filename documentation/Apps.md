@@ -1,6 +1,6 @@
 # Apps
 
-Applications built from blueprints: a **manifest** of pages, navigation, editor kinds, entity types, commands, queries, roles, settings and triggers, edited by several people at once, then published, installed into a tenant and run in the workbench. Built as Forge's iteration 5 ([forge 05-Applications.md](../../forge/documentation/plans/05-Applications.md)), one part per slice. What remains is in Forge's plans for parts 5b to 5g.
+Applications built from blueprints: a **manifest** of pages, navigation, editor kinds, entity types, commands, queries, roles, settings and triggers, edited by several people at once, then published, installed into a tenant and run in the workbench. Built as Forge's iteration 5 ([forge 05-Applications.md](../../forge/documentation/plans/05-Applications.md)), one part per slice. What remains is in Forge's plans for parts 5c to 5g.
 
 ## Built in slice 31
 Forge's part 5a ([forge 05a-AppDrafts.md](../../forge/documentation/plans/05a-AppDrafts.md)): what an app is, as a draft edited by commands. Nothing is published, installed or run yet.
@@ -89,3 +89,71 @@ Made while building:
 In the Applications editor (forge 5f):
 - Decision 3 (flat update arguments) and the merge's rule that lists are replaced whole (a role's `actions`), once two authors edit one role's actions.
 - Decision 8 (`app.describe` watching every part draft of the tenant): its cost with many prefabs and graphs.
+
+## Built in slice 32
+Forge's part 5b ([forge 05b-PublishInstall.md](../../forge/documentation/plans/05b-PublishInstall.md)): an app's lifecycle after its draft. A published **version** pins every part, an **install** puts the version's commands and queries on the live core, and **upgrade** and **uninstall** change it in place. Roles and settings (5c) and running pages in the workbench (5d) are not built yet.
+
+Answered before building (2026-11-07), each with its proposal: forge iteration question 5, a publish takes the draft at the rev its publisher last saw, the others are told, and their later changes stay for the next version; 5b question 1, an installed app follows no part: a part published again reaches users only by a new app version and an upgrade; 2, one install per app per tenant, upgraded in place; 3, an app's commands and queries are `<appId>.<name>` on the live core and `<name>` inside the app; 4, triggers are recorded at install and none runs until forge iteration 11.
+
+### Publishing
+- **`app.publish {rev}`** (`apps/manifests/Publish.go`, action `app.publish`) publishes the manifest **as it was at `rev`**: the draft's own when `rev` is its last, else its events folded again up to `rev` (`Projections.History`, an ordered read of one target's events). Changes made since stay in the draft. `app.describe` gives `published`, `publishedRev` and `changed` (rev ≠ publishedRev), which is how the other authors are told and see what the next version will take.
+- **Every part must be published**, and is checked as published: an unpublished prefab, graph or entity type is refused first, plainly (`parts.prefab[myTasks]`, code `app_unpublished`); then `apps.CheckManifest` runs against the published versions only, and `ui.CheckPrefab` runs on every prefab the version renders (left by forge 4a: the instances in its pages), with problems at `parts.prefab[<id>].<path>`.
+- **The version** (`apps.Version`) holds the manifest and the pins: `prefabs` (the published version of every prefab its pages and frame render, and of those they render in turn), `entities` (each entity type's version), and `graphs`, **copies** of its command and query graphs and of those its prefabs name: a graph keeps only its last published version, so the app keeps its own.
+- **Stored** as its own target, type `appVersion`, id `apps.VersionID` (`tasks-v3`), its `published` event committed in one batch with the draft's `published {version, rev}`; the `apps.version` projection keeps every version (`manifests.GetVersion`), and the follower `apps.versions` copies each into `apps_versions` (`apps.VersionRow`). Publishing starts the projection before it commits, and `GetVersion` waits for it to settle when the draft names a version it has not folded yet (after a restart).
+- **`app.versions {id}`** (`app.read`): `{published, publishedRev, rev, versions: [{version, rev, publishedBy, publishedAt}]}`, live.
+
+### Installing
+- **`apps/installs`**: an app's install is an aggregate on the `def` stream, target type `appInstall`, id the app's (once per tenant), folded into `apps.install` as `apps.Install {app, status, version, installedBy, installedAt, updatedBy, updatedAt}`, holding the **whole version** it runs, so every reader sees one version or the next. The follower `apps.installs` keeps `apps_installs` (`apps.InstallRow`).
+- **Commands** (action `app.install` on `tenant:<id>/app:<appId>`):
+  - `app.install {version?}` (the last when left out): refused when installed already, when the app has no such version, and when the tenant lacks what it **requires** (`apps.Missing`: a primitive not in the catalog, an app not installed), each named at `requires.primitives[<id>]` or `requires.apps[<id>]` (code `app_requires`).
+  - `app.upgrade {version?}`: only to a newer version, checked the same way.
+  - `app.uninstall {}`: the commands and queries leave the live core; records stay, and installing again finds them.
+- **`app.installs {}`** (`app.read`): every install keyed `app.<appId>`, `{app, name, icon, description, status, version, commands, queries, editorKinds, triggers, …}`, each command and query by its live name with its args' schema and action: what the Apps section (5d) and the chat read.
+
+### The app's commands and queries
+- **On the live core** (forge 05b question 3): `installs.CommandFor` and `installs.QueryFor` wrap `livenodes.CommandFor`/`QueryFor` as the bus's and the subscriptions' `Resolve`. `<appId>.<name>` of an installed app is its command or query, built from the pinned graph's spec.
+- **A command decides by its pinned graph** (`livenodes.Decide` with `RunArgs.Graph`), reading the install again when it is decided: one decided after an upgrade runs the new version's graph, and one the new version removed is refused (`app_command_removed`). Once the upgrade is projected, the scoped name no longer resolves (404).
+- **A query** runs its pinned graph (`livenodes.RunQuery` with a `QueryRun{Graph, Watch}`) and runs again when the install changes: a fresh **snapshot** when the query's graph is another version, and the subscription ends, with a message saying why, when the query is removed or the app uninstalled.
+- **Graph ids** (`cognition.Kind.IDFor(spec, owner)`): a graph owned by `app:<appId>` may have the app's id in its own, `cmd-<appId>-<type>` and `qry-<appId>-<name>` (`cmd-tasks-task-reassign` defines `task.reassign`), so two apps can define one command type; the plain id stays allowed. A prefab of an app may declare a query whose graph has that id.
+- **A manifest app's graphs are live only through its install**: a published command or query graph owned by an app that has a draft (`apps.app`) is not a command or query by itself. Apps written in Go (Hello) keep theirs live.
+- **Tools**: an installed app's commands are sent by the chat with `live.command` and its queries read with `live.query`; `app.installs` lists them with their schemas.
+
+### Wiring
+`serve.go`, in Foundation and in Forge: `installs.Contribute` after `manifests.Contribute`, `installs.Deps{Projections, DB, Nodes: liveNodeDeps}`, and the bus's and subscriptions' `Resolve` set to `installs.CommandFor`/`QueryFor` around the graph resolvers. `apps.Models()` adds `apps_versions` and `apps_installs`. The browser's types (`AppView.published|publishedRev|changed`, `AppVersions`, `InstalledApp`) are in `src/services/Apps.ts`.
+
+### Decisions
+Made while building:
+1. **No `appservice`.** As in slice 31, the lifecycle is commands and queries: publishing and versions in `apps/manifests`, installs and the runtime in `apps/installs`.
+2. **The version copies its graphs** and names its prefab and entity type versions: prefab and entity type versions are kept, graph versions are not.
+3. **A version is its own target** committed in the publish's batch, so the draft's projection stays small and every version is one read.
+4. **Publishing at an earlier rev folds the draft's events again** (`Projections.History`) rather than keeping old drafts.
+5. **Parts must be published before the app.** The publish does not publish them: what a part's author has not published is not frozen into an app.
+6. **The install holds its whole version**, read again by every decision and every query run.
+7. **Commands read the install as projected.** A command sent in the milliseconds between an upgrade's ack and its projection may be decided by the old version.
+8. **Upgrades go only forward**; after an uninstall, any version may be installed.
+9. **The manifest command's `action`** (`entity:task.update`) is not checked yet: the bus checks the graph spec's action. What app actions grant is 5c's.
+10. **No per-app tools**: tools are registered once for every tenant, so the chat uses `live.command` and `app.installs`.
+11. **Install creates no entity buckets**: every record is in the one `records.record` projection, so there is nothing to create.
+12. **Editor kinds are registered by being installed**: `app.installs` lists them; opening them is 5d.
+
+### Not built yet (in forge 5c and 5d)
+- Roles made at install and the installer granted *manager*; the settings section (5c).
+- Pages rendering the pinned prefab versions, and graphs named by prefabs run from the version's copies; removed pages closing their tabs and open sessions reloading at their next event (5d, ★ in forge 05b).
+- Triggers running (forge iteration 11).
+
+### Verification of slice 32
+- `go test ./features/apps/...` (also with `-race`, three runs in a row), against embedded NATS and SQLite, with the record nodes:
+  - a publish before the parts are published names each one; a rev past the draft's is refused; published, the version pins the prefabs, the entity type and copies of the two graphs, and `app.versions` lists it;
+  - before installing, neither `tasks.task.reassign` nor `task.reassign` is a command; installed, `app.installs` lists the scoped command and query, the editor kind and the trigger; `tasks.task.reassign` sets a record's assignee through its graph's *Update record*, and a subscription to `tasks.myTasks` takes its snapshot;
+  - the graphs published again change nothing installed; after publishing and upgrading, the command is decided by the new graph and the open subscription takes a fresh snapshot under the new query; an upgrade that removes the command refuses it (404) and one that removes the query ends its subscription with that reason;
+  - uninstall keeps the record; installing version 2 again runs its graph; `apps_versions` and `apps_installs` follow;
+  - publishing at the rev seen while another author added a trigger: the version lacks it, the draft keeps it with `changed`; publishing at the last rev leaves nothing waiting;
+  - requires: an app requiring an app not installed is refused at `requires.apps[tasks]`, then installs once it is; a primitive the server lacks is named by `apps.Missing`;
+  - a command graph owned by a manifest app is not a command by itself, while one owned by a Go app is; `cmd-crm-task-reassign` owned by `app:tasks` is refused, naming `cmd-tasks-task-reassign`.
+- `go test` of `live/...`, `cognition/...`, `ui/...` (Hello, prefabs) and `records/nodes` still pass; Foundation's `serve` vets, Forge's builds, Forge's starter tests pass, and the common frontend type-checks.
+- Forge's server, run fresh, over the live socket: `app.install` of an app with no version is refused naming it; `app.create`, `app.publish {rev: 1}` and `app.install` straight after are acked (the first run found the version projection started only by the install's read, so the install missed the version; publishing now starts it).
+
+### Decisions to review after seeing it
+- In the Applications editor's Versions tab (forge 5f): the notice to other authors as `changed` and `publishedRev`, and a publish refused until every part is published.
+- Decision 7, once two people use an app while it is upgraded.
+

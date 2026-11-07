@@ -613,6 +613,16 @@ Each slice ends with something to look at, and the ★ marks where a decision is
       - `src/services/Apps.ts`, the manifest's types for the browser.
     - **Blockers**: none. Forge 05a questions 1 (KV drafts, the app in SQLite by a follower), 2 (owned parts, others as requirements), 3 (`read`, `write`, `publish`, `install`) and 4 (per item, per field) were asked before building and answered with their proposals.
     - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it).
+
+32. **Publish, install, upgrade and uninstall** (Forge iteration 5, part 5b, [forge 05b-PublishInstall.md](../../forge/documentation/plans/05b-PublishInstall.md)). *Built* ([Apps.md](Apps.md#built-in-slice-32)).
+    - **Built**:
+      - `app.publish {rev}`: the manifest at the rev its publisher saw (`Projections.History`), checked against published parts only (with `ui.CheckPrefab` on every prefab it renders), frozen as an `apps.Version` pinning prefab and entity type versions and copying its graphs; the `apps.version` projection, `apps_versions`, `app.versions`;
+      - `apps/installs`: `app.install`, `app.upgrade`, `app.uninstall` on the `appInstall` target, `requires` checked, the `apps.install` projection holding the whole version, `apps_installs`, `app.installs`;
+      - an installed app's commands and queries as `<appId>.<name>` (`installs.CommandFor`/`QueryFor` around the graph resolvers), decided and answered by the pinned graphs (`livenodes.Decide`, `livenodes.RunQuery`), a fresh snapshot after an upgrade; app-scoped graph ids (`Kind.IDFor(spec, owner)`); a manifest app's graphs live only through its install;
+      - the browser's types in `src/services/Apps.ts`.
+    - **Blockers**: none. Forge iteration question 5 and 05b questions 1 to 4 were asked before building and answered with their proposals.
+    - **★ review pending**: an upgrade seen by an open session (5d).
+    - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-1).
     - **Pending, carried forward**: `app.delete`; the Applications editor (forge 5f); publish and install (5b), where an app's command graphs, already tenant commands once published, must be kept apart (forge 05b question 3).
 
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
@@ -653,3 +663,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 29. Starter library (Forge 4e) | forge 04e 1 (seeded by Forge: `cli seed` and *Seed prefabs*), 2 (a form-merge primitive besides the plan's) and 3 (the changer's name, from the change), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-5), to review after seeing |
 | 30. Variants and the chat acceptance (Forge 4f) | forge 04f 1 (Gemini plus a Go test) and gap 2 (a node field for the variant), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-6), and the chat acceptance with a real model |
 | 31. App drafts (Forge 5a) | forge 05-Applications 6 (a slice per part, answered before) and 05a 1 (KV drafts, the app in SQLite), 2 (owned parts, others required), 3 (the `app` actions) and 4 (per item, per field), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it), to review after seeing |
+| 32. Publish and install (Forge 5b) | forge 05-Applications 5 (publish at the rev seen) and 05b 1 (pinned parts), 2 (one install per tenant), 3 (`<appId>.<name>` on the live core) and 4 (triggers recorded), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-1), and an upgrade seen by an open session (5d) |

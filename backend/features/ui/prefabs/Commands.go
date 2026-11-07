@@ -127,7 +127,14 @@ func (c *decision) env() ui.PrefabEnv {
 			if slices.ContainsFunc(live.Queries.All(c.reg), func(q live.Query) bool { return q.ID == name }) {
 				return true
 			}
-			_, ok := c.graphKind(livenodes.QueryGraphID(name))
+			if _, ok := c.graphKind(livenodes.QueryGraphID(name)); ok {
+				return true
+			}
+			// An app's own query, whose graph has the app's id in its own
+			app, ok := strings.CutPrefix(c.prefab().Owner, "app:")
+			if ok {
+				_, ok = c.graphKind(livenodes.QueryGraphID(app + "." + name))
+			}
 			return ok
 		},
 		Graph: c.graphKind,
