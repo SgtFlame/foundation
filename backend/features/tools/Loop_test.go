@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -305,5 +306,23 @@ func TestLoopSurvivesBrokenTools(t *testing.T) {
 	out := loop.Run(args)
 	if out.Reply != "ok" || out.Calls[0].Status != StatusFailed || out.Calls[1].Status != StatusFailed {
 		t.Fatalf("outcome = %+v", out)
+	}
+}
+
+// A failed tool's content (a command's problems with their fixes) reaches
+// the model beside the error (forge 04f).
+func TestLoopKeepsAFailedToolsContent(t *testing.T) {
+	refused := Tool{Descriptor: extensions.Descriptor{ID: "test.refused"}, Effect: EffectRead, Run: func(Call) (Result, error) {
+		return Result{Content: map[string]any{"problems": []any{map[string]any{"path": "args.path", "fix": "the nodes are card, card/stack"}}}}, errors.New("there is no node at root")
+	}}
+	chat := &scriptChat{script: []chatservice.Message{calls(callOf("test_refused", `{}`)), answer("ok")}}
+	loop, args := newLoop(t, chat)
+	args.Tools = []Tool{refused}
+	out := loop.Run(args)
+	if c := out.Calls[0]; c.Status != StatusFailed || !strings.Contains(c.Result, `"error":"there is no node at root"`) || !strings.Contains(c.Result, "card/stack") {
+		t.Fatalf("call = %+v", c)
+	}
+	if sent, _ := json.Marshal(chat.got[1].Messages); !strings.Contains(string(sent), "card/stack") {
+		t.Errorf("the model did not get the fix: %s", sent)
 	}
 }

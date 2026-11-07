@@ -585,6 +585,26 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-4).
     - **Pending, carried forward**: both prefabs built by hand in the Prefab Editor (the demo ran on the seeded ones, with the chip colour changed by hand); clearing the add form after adding; a record scan missing a record rewritten during it ([plans/Backlog.md](plans/Backlog.md)).
 
+29. **The starter library's primitives** (Forge iteration 4, part 4e, [forge 04e-StarterLibrary.md](../../forge/documentation/plans/04e-StarterLibrary.md)). *Built* ([ServerUI.md](ServerUI.md#built-in-slice-29); the prefabs themselves are Forge's, [forge StarterLibrary.md](../../forge/documentation/StarterLibrary.md)).
+    - **Built**:
+      - `prefab.import` (a whole definition replaces the draft);
+      - the `presence:<binding>` binding source, and `=` expressions over props in query params;
+      - the primitives `record.fieldEditor`, `record.fieldValue`, `record.form` (the form merge), `presence.avatars` and `mui.breadcrumbs`; `mui.textField`'s `debounce`; `mui.table`'s `recordField` and actions columns;
+      - `_title` on expanded records; the `tenants.action` point in Administration › Tenants; `foundation(backend, more)` routes.
+    - **Blockers**: none. Forge 04e questions 1 (seeded by Forge, a CLI and a Tenants button), 2 (plus a form-merge primitive) and 3 (the changer's name) were asked before building and answered.
+    - **Decisions to review after seeing it**: in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-5).
+    - **Pending, carried forward**: rich-text formatting in the form; a user picker for `user` fields; variants and the chat acceptance (forge 4f).
+
+30. **Variants and the chat acceptance** (Forge iteration 4, part 4f, [forge 04f-VariantsAndChat.md](../../forge/documentation/plans/04f-VariantsAndChat.md)). *Built*, but for the acceptance's run with a real model ([ServerUI.md](ServerUI.md#built-in-slice-30); the editor's side in [forge PrefabEditor.md](../../forge/documentation/PrefabEditor.md#variants-built-with-slice-30)).
+    - **Built**:
+      - variants: `ui.Prefab.Variants`, `prefab.setVariants`, `ui.Node.Variant` set by `prefab.insertNode`/`updateNode`, checked, rendered under the instance's props, a variant on `ui.PrefabPage`, `ui.Preview` and `prefab.preview`, removing a used variant breaking;
+      - for the chat: a failed tool's content (a command's problems and fixes) reaches the model; command tools refuse arguments beside `args`; "no node" lists the node paths; `prefab.publish` waits for the published projection;
+      - the acceptance's commands as a Go test through their tools (`TestTheChatBuildsAContactCard`).
+    - **Blockers**: none. Forge 04f question 1 (Gemini plus a Go test) and gap 2 (a node field for the variant) were asked before building and answered.
+    - **★ review pending**: the chat acceptance with a real model. Standard was overloaded; at Fast the model got as far as the card's texts and the Edit handler's graph over several rounds, cut short by the 8-step limit and then by the free Gemini quota (429), and never published.
+    - **Decisions to review after seeing it**: in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-6).
+    - **Pending, carried forward**: the chat acceptance with a real model; the default of 8 tool steps per round, and no retry on a provider's 429/503 (in [plans/Backlog.md](plans/Backlog.md)).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -620,3 +640,5 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 26. Template evaluator (Forge 4b) | forge 04 question 2 (answered before) and 04b 1 (`ui.PrefabPage`), 2 (`@n` pins), 3 (*Raise event*), 4 (200 queries per session), 5 (`=` expressions), 6 (local state per instance) and 7 (what logic runs can do), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-2), to review after seeing |
 | 27. Prefab Editor's design page (Forge 4c) | forge 04c 1 (a dry preview session over the draft), 2 (shared preview data) and 3 (no undo), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-3), to review after seeing |
 | 28. Task list demo (Forge 4d) | forge 04d 1 (seeded by commands on first open), 2 (overlays for Go pages), and gaps 3 (*Sort by* and a direction toggle) and 4 (everything carries over, rename in the row), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-4), to review after seeing |
+| 29. Starter library (Forge 4e) | forge 04e 1 (seeded by Forge: `cli seed` and *Seed prefabs*), 2 (a form-merge primitive besides the plan's) and 3 (the changer's name, from the change), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-5), to review after seeing |
+| 30. Variants and the chat acceptance (Forge 4f) | forge 04f 1 (Gemini plus a Go test) and gap 2 (a node field for the variant), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-6), and the chat acceptance with a real model |

@@ -172,7 +172,8 @@ func jsonText(v any) string {
 
 // PrefabComponent describes a published prefab as a component of the
 // catalog, prefab.<id>: its props as the props schema, its events and
-// slots, and no children (content goes in its slots).
+// slots, and no children (content goes in its slots); an example per
+// variant.
 func PrefabComponent(p Prefab) Component {
 	props := map[string]any{}
 	var required []string
@@ -207,6 +208,10 @@ func PrefabComponent(p Prefab) Component {
 	}
 	ex, _ := json.Marshal(map[string]any{"type": c.ID, "key": p.ID, "props": p.Preview.Props})
 	c.Examples = []json.RawMessage{ex}
+	for _, v := range slices.Sorted(maps.Keys(p.Variants)) {
+		ex, _ := json.Marshal(map[string]any{"type": c.ID, "key": p.ID, "variant": v, "props": p.Preview.Props})
+		c.Examples = append(c.Examples, ex)
+	}
 	if p.Owner != "" {
 		c.Tags = []string{p.Owner}
 	}

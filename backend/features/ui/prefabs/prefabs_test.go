@@ -439,30 +439,34 @@ func TestListFindsTheLibrary(t *testing.T) {
 	}
 }
 
+// tool runs a tool as a chat model's call would: its input checked, then
+// run as the local principal.
+func (f *fixture) tool(name string, input any) tools.Result {
+	f.t.Helper()
+	for _, tool := range tools.Tools.All(f.reg) {
+		if tool.ID != name {
+			continue
+		}
+		raw, _ := json.Marshal(input)
+		if err := tools.CheckArgs(tool.Input, raw); err != nil {
+			f.t.Fatalf("%s: %v", name, err)
+		}
+		res, err := tool.Run(tools.Call{ServiceArgs: args(), Name: name, Args: raw})
+		if err != nil {
+			f.t.Fatalf("%s: %v %v", name, err, res.Content)
+		}
+		return res
+	}
+	f.t.Fatalf("there is no tool %s", name)
+	return tools.Result{}
+}
+
 // TestTheChatBuildsTaskRow runs the tools a chat model gets: the prefab.*
 // commands' own tools, then prefab.describe.
 func TestTheChatBuildsTaskRow(t *testing.T) {
 	f := setup(t)
 	f.base()
-	run := func(name string, input any) tools.Result {
-		t.Helper()
-		for _, tool := range tools.Tools.All(f.reg) {
-			if tool.ID != name {
-				continue
-			}
-			raw, _ := json.Marshal(input)
-			if err := tools.CheckArgs(tool.Input, raw); err != nil {
-				t.Fatalf("%s: %v", name, err)
-			}
-			res, err := tool.Run(tools.Call{ServiceArgs: args(), Name: name, Args: raw})
-			if err != nil {
-				t.Fatalf("%s: %v %v", name, err, res.Content)
-			}
-			return res
-		}
-		t.Fatalf("there is no tool %s", name)
-		return tools.Result{}
-	}
+	run := f.tool
 	res := run("prefab.create", map[string]any{"args": map[string]any{"name": "Task row"}})
 	if res.Content["target"] != "taskRow" {
 		t.Fatalf("prefab.create: %v", res.Content)
@@ -484,4 +488,35 @@ func TestTheChatBuildsTaskRow(t *testing.T) {
 	if res := run("prefab.list", map[string]any{}); res.Summary != "1 prefabs" {
 		t.Errorf("prefab.list: %s", res.Summary)
 	}
+}
+
+// prefab.import replaces a whole draft, or makes one, and is checked like
+// any other command; presence: bindings and props expressions in query
+// params are checked too (forge 04e).
+func TestImportReplacesTheDraft(t *testing.T) {
+	f := setup(t)
+	f.base()
+	def := map[string]any{"name": "Presence", "props": map[string]any{"object": map[string]any{"type": "string", "required": true}},
+		"queries":  map[string]any{"one": map[string]any{"query": "prefab.describe", "bind": map[string]any{"id": "=props.object + \"Row\""}}},
+		"template": map[string]any{"type": "presence.avatars", "key": "root", "bind": map[string]any{"users": "presence:props.object"}}}
+	res := f.ok("prefab.import", "", map[string]any{"prefab": def})
+	if res.Target != "presence" {
+		t.Fatalf("the id made from the imported name is %q", res.Target)
+	}
+	if v := f.describe("presence"); v.Prefab.Template == nil || v.Prefab.Template.Type != "presence.avatars" {
+		t.Fatalf("imported: %+v", v.Prefab)
+	}
+	// Importing the same definition changes nothing
+	if again := f.ok("prefab.import", "presence", map[string]any{"prefab": def}); again.Seq != res.Seq {
+		t.Errorf("an unchanged import committed seq %d after %d", again.Seq, res.Seq)
+	}
+	def["name"] = "Who is here"
+	f.ok("prefab.import", "presence", map[string]any{"prefab": def})
+	if v := f.describe("presence"); v.Prefab.Name != "Who is here" {
+		t.Errorf("name after import: %q", v.Prefab.Name)
+	}
+	bad := map[string]any{"name": "Bad", "template": map[string]any{"type": "presence.avatars", "key": "root", "bind": map[string]any{"users": "presence:props.nothing"}}}
+	f.rejected("prefab.import", "bad", map[string]any{"prefab": bad}, "prefab.template.root.bind.users", "does not declare")
+	bad = map[string]any{"name": "Bad", "queries": map[string]any{"one": map[string]any{"query": "prefab.describe", "bind": map[string]any{"id": "=state.x"}}}}
+	f.rejected("prefab.import", "bad", map[string]any{"prefab": bad}, "prefab.queries.one.bind.id", "reads state")
 }

@@ -24,16 +24,19 @@ type Prefab struct {
 	Description string `json:"description,omitempty"`
 	// Owner is the app the prefab belongs to (app:<appId>); empty puts it
 	// in the tenant's library. Any prefab of the tenant can use any other.
-	Owner    string               `json:"owner,omitempty"`
-	Props    map[string]PropDecl  `json:"props"`
-	State    map[string]StateDecl `json:"state"`
-	Events   map[string]EventDecl `json:"events"`
-	Slots    map[string]SlotDecl  `json:"slots"`
-	Queries  map[string]QueryDecl `json:"queries"`
-	Template *Node                `json:"template,omitempty"`
-	Graphs   map[string]string    `json:"graphs"` // a name the template's handlers use → a graph id
-	Preview  PrefabPreview        `json:"preview"`
-	Version  int                  `json:"version"` // the published version; 0 in a draft never published
+	Owner   string               `json:"owner,omitempty"`
+	Props   map[string]PropDecl  `json:"props"`
+	State   map[string]StateDecl `json:"state"`
+	Events  map[string]EventDecl `json:"events"`
+	Slots   map[string]SlotDecl  `json:"slots"`
+	Queries map[string]QueryDecl `json:"queries"`
+	// Variants are named prop presets an instance picks with its node's
+	// variant (forge 04f); its own props override the variant's.
+	Variants map[string]VariantDecl `json:"variants,omitempty"`
+	Template *Node                  `json:"template,omitempty"`
+	Graphs   map[string]string      `json:"graphs"` // a name the template's handlers use → a graph id
+	Preview  PrefabPreview          `json:"preview"`
+	Version  int                    `json:"version"` // the published version; 0 in a draft never published
 }
 
 // PropDecl is one prop of a prefab's interface.
@@ -75,6 +78,12 @@ type QueryDecl struct {
 	Params      map[string]any    `json:"params,omitempty"`
 	Bind        map[string]string `json:"bind,omitempty"`
 	Description string            `json:"description,omitempty"`
+}
+
+// VariantDecl is a named preset of a prefab's props.
+type VariantDecl struct {
+	Description string         `json:"description,omitempty"`
+	Props       map[string]any `json:"props"`
 }
 
 // PrefabPreview is the sample data the Prefab Editor renders with. It is
@@ -304,6 +313,19 @@ func (c *prefabCheck) iface() {
 			}
 		}
 	}
+	c.names("variants", maps.Keys(p.Variants))
+	for _, k := range slices.Sorted(maps.Keys(p.Variants)) {
+		for _, prop := range slices.Sorted(maps.Keys(p.Variants[k].Props)) {
+			d, ok := p.Props[prop]
+			path := "variants." + k + ".props." + prop
+			switch {
+			case !ok:
+				c.add(path, fmt.Sprintf("there is no prop %q", prop), "a variant presets declared props only")
+			case !fits(d.Type, d.Options, p.Variants[k].Props[prop]):
+				c.add(path, fmt.Sprintf("the value does not fit %s", d.Type), "")
+			}
+		}
+	}
 	for _, k := range slices.Sorted(maps.Keys(p.Queries)) {
 		q := p.Queries[k]
 		path := "queries." + k
@@ -314,11 +336,34 @@ func (c *prefabCheck) iface() {
 			c.add(path+".query", fmt.Sprintf("there is no query %q", q.Query), "name a registered query (live.listQueries) or a data.query graph")
 		}
 		for param, from := range q.Bind {
+			if src, ok := strings.CutPrefix(from, "="); ok {
+				c.paramExpression(path+".bind."+param, src)
+				continue
+			}
 			root, _, _ := strings.Cut(from, ".")
 			ok := (root == "props" && c.declared(p.Props, from, "props.")) || (root == "state" && c.declared(p.State, from, "state."))
 			if !ok {
-				c.add(path+".bind."+param, fmt.Sprintf("param %s reads %q, which is not a declared prop or state value", param, from), "bind it to props.<prop> or state.<value>")
+				c.add(path+".bind."+param, fmt.Sprintf("param %s reads %q, which is not a declared prop or state value", param, from), "bind it to props.<prop> or state.<value>, or an expression over the props starting with =")
 			}
+		}
+	}
+}
+
+// paramExpression checks a query param's expression, which reads only the
+// props: it is read when the instance's props change.
+func (c *prefabCheck) paramExpression(path, src string) {
+	if err := checkExpression(src, nil); err != nil {
+		c.add(path, fmt.Sprintf("the expression %q: %v", src, err), "a param's expression reads only props")
+		return
+	}
+	reads, _ := expressionReads(src)
+	for _, r := range reads {
+		if r[0] != "props" {
+			c.add(path, fmt.Sprintf("the expression %q reads %s", src, r[0]), "a param's expression reads only props; bind state with state.<value>")
+			return
+		}
+		if r[1] != "" {
+			c.bind(path, "props."+r[1])
 		}
 	}
 }
@@ -424,6 +469,9 @@ func (c *prefabCheck) node(n *Node, parent []string) {
 		if len(n.Children) > 0 && ok && !children {
 			c.add(path+".children", fmt.Sprintf("%s takes no children", n.Type), "insert them into a container such as mui.stack")
 		}
+	}
+	if n.Variant != "" && !strings.HasPrefix(n.Type, PrefabPrefix) {
+		c.add(path+".variant", fmt.Sprintf("%s has no variants", n.Type), "only a prefab instance (prefab.<id>) picks a variant; clear it with prefab.updateNode {variant: null}")
 	}
 	if known || n.Type == SlotType || n.Type == RepeatType {
 		for _, ev := range slices.Sorted(maps.Keys(n.On)) {
@@ -553,9 +601,13 @@ func (c *prefabCheck) instance(n *Node, path string) (events, slots []string) {
 	for _, k := range slices.Sorted(maps.Keys(other.Props)) {
 		_, set := n.Props[k]
 		_, bound := n.Bind[k]
-		if other.Props[k].Required && !set && !bound {
+		_, preset := other.Variants[n.Variant].Props[k]
+		if other.Props[k].Required && !set && !bound && !preset {
 			c.add(path+".props."+k, fmt.Sprintf("prefab %s needs the prop %s", id, k), "set it, or bind it")
 		}
+	}
+	if _, ok := other.Variants[n.Variant]; n.Variant != "" && !ok {
+		c.add(path+".variant", fmt.Sprintf("prefab %s has no variant %q", id, n.Variant), "use one of: "+strings.Join(slices.Sorted(maps.Keys(other.Variants)), ", ")+"; or none")
 	}
 	if len(n.Children) > 0 {
 		c.add(path+".children", "a prefab takes no children", "pass content in its slots")
@@ -685,6 +737,14 @@ func (c *prefabCheck) bind(path, from string) {
 		}
 		return
 	}
+	if src, ok := strings.CutPrefix(from, PresencePrefix); ok {
+		if src == "" || strings.HasPrefix(src, PresencePrefix) || strings.HasPrefix(src, "query:") {
+			c.add(path, fmt.Sprintf("%q does not name an object", from), "presence:<binding>, whose value is \"<type>.<id>\", such as presence:props.object")
+			return
+		}
+		c.bind(path, src)
+		return
+	}
 	root, _, _ := strings.Cut(from, ".")
 	if slices.Contains(c.rows, root) {
 		return
@@ -707,7 +767,7 @@ func (c *prefabCheck) bind(path, from string) {
 	case "slots":
 		ok = c.declared(c.p.Slots, from, "slots.")
 	default:
-		c.add(path, fmt.Sprintf("%q is not a binding a prefab can read", from), "bind to props.<prop>, state.<value>, slots.<slot>, query:<name>, local.<path>, app.<setting>, user.<field>, a repeat's row, or an expression starting with =")
+		c.add(path, fmt.Sprintf("%q is not a binding a prefab can read", from), "bind to props.<prop>, state.<value>, slots.<slot>, query:<name>, presence:<binding>, local.<path>, app.<setting>, user.<field>, a repeat's row, or an expression starting with =")
 		return
 	}
 	if !ok {

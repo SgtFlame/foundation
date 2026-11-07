@@ -85,23 +85,24 @@ type evaluator struct {
 // PrefabPage is a page drawn from a published prefab (forge 04b question
 // 1): its template, queries and handlers are the prefab's. props are its
 // props; the page's params, an object, add those the prefab declares (a
-// tab's params always hold its id, which a prefab need not take). Set the
-// Descriptor, App and Title.
-func PrefabPage(prefab string, props map[string]any) Page {
+// tab's params always hold its id, which a prefab need not take). variant,
+// when set, is one of the prefab's variants (forge 04f), under props. Set
+// the Descriptor, App and Title.
+func PrefabPage(prefab, variant string, props map[string]any) Page {
 	return Page{Description: "The prefab " + prefab, prefab: prefab, Render: func(r *Render) *Node {
 		e := &evaluator{s: r.s}
-		return e.root(r, prefab, props)
+		return e.root(r, prefab, variant, props)
 	}}
 }
 
 // root evaluates the page's prefab as the instance at the root.
-func (e *evaluator) root(r *Render, prefab string, props map[string]any) *Node {
+func (e *evaluator) root(r *Render, prefab, variant string, props map[string]any) *Node {
 	all := maps.Clone(props)
 	if all == nil {
 		all = map[string]any{}
 	}
 	_ = json.Unmarshal(r.s.params, &e.params)
-	n := &Node{Type: PrefabPrefix + prefab, Key: "root", Props: all}
+	n := &Node{Type: PrefabPrefix + prefab, Key: "root", Props: all, Variant: variant}
 	return e.instance(r, &scope{}, n, nil, "")
 }
 
@@ -252,6 +253,13 @@ func (e *evaluator) primitive(r *Render, sc *scope, n *Node, path []string, key 
 				continue
 			}
 			bind(prop, "state."+inst.scoped(from[6:]))
+		case strings.HasPrefix(from, PresencePrefix) && inst != nil:
+			held, err := e.presence(r, sc, from[len(PresencePrefix):])
+			if err != nil {
+				problems = append(problems, Problem{Message: fmt.Sprintf("%s: %v", prop, err)})
+				continue
+			}
+			bind(prop, "query:"+held)
 		case strings.HasPrefix(from, "query:") && inst != nil:
 			name, rest, dotted := strings.Cut(from[6:], ".")
 			held := inst.queries[name]
@@ -358,6 +366,13 @@ func (e *evaluator) read(r *Render, sc *scope, from string) (any, error) {
 	if inst == nil {
 		return nil, fmt.Errorf("%q is read outside a prefab", from)
 	}
+	if src, ok := strings.CutPrefix(from, PresencePrefix); ok {
+		held, err := e.presence(r, sc, src)
+		if err != nil {
+			return nil, err
+		}
+		return r.Query(held), nil
+	}
 	if q, ok := strings.CutPrefix(from, "query:"); ok {
 		name, rest, _ := strings.Cut(q, ".")
 		held := inst.queries[name]
@@ -439,6 +454,39 @@ func (e *evaluator) expression(r *Render, sc *scope, src string) (any, error) {
 	}
 	maps.Copy(env, sc.rows)
 	return evalExpression(src, env)
+}
+
+// PresencePrefix starts a presence binding: presence:<binding> reads who
+// is in the object the binding names ("<type>.<id>", such as
+// record_task.123), as the live.presence query gives it: one entry per
+// connection, {connection, userId, name, color, state, at}.
+const PresencePrefix = "presence:"
+
+// presence holds, for the instance, the live.presence query of the object
+// a presence binding names, and gives the session's name for it. Being
+// in an object is the browser's: presence.avatars joins one.
+func (e *evaluator) presence(r *Render, sc *scope, src string) (string, error) {
+	inst := sc.inst
+	if inst == nil {
+		return "", fmt.Errorf("presence is read outside a prefab")
+	}
+	v, err := e.read(r, sc, src)
+	if err != nil {
+		return "", err
+	}
+	object, _ := v.(string)
+	typ, id, ok := strings.Cut(object, ".")
+	if !ok || !live.ValidToken(typ) || !live.ValidToken(id) {
+		return "", fmt.Errorf("%s gives %q, which is not an object (<type>.<id>)", src, object)
+	}
+	// A query's name holds no '.', which would start a path into its data
+	held := inst.kp + "#" + PresencePrefix + typ + "~" + id
+	if e.s.queries[held] == nil {
+		if p := e.s.holdAs(inst, held, QueryRef{Query: "live.presence", Params: map[string]any{"object": object}}, ""); p != nil {
+			return "", fmt.Errorf("%s", p.Message)
+		}
+	}
+	return held, nil
 }
 
 // definition is a prefab's definition as the session holds it, or why it
@@ -528,7 +576,7 @@ func (e *evaluator) instance(r *Render, sc *scope, n *Node, path []string, key s
 	return r.Region(key, func(r *Render) *Node {
 		out := ErrorNode(key, problems)
 		if len(problems) == 0 {
-			out = e.mount(r, sc, kp, id, version, draft, props, on, n.Slots, path, key)
+			out = e.mount(r, sc, kp, id, version, draft, n.Variant, props, on, n.Slots, path, key)
 		}
 		if n.Src != "" {
 			out.Src = n.Src
@@ -539,7 +587,8 @@ func (e *evaluator) instance(r *Render, sc *scope, n *Node, path []string, key s
 
 // mount renders an instance's template with its state, queries and
 // lifecycle: a new one is mounted, one whose props changed is told so.
-func (e *evaluator) mount(r *Render, outer *scope, kp, id string, version int, draft bool, props map[string]any, on map[string]On, slots map[string][]*Node, path []string, key string) *Node {
+// Its props are its defaults, under its variant's, under those given.
+func (e *evaluator) mount(r *Render, outer *scope, kp, id string, version int, draft bool, variant string, props map[string]any, on map[string]On, slots map[string][]*Node, path []string, key string) *Node {
 	s := e.s
 	s.seen[kp] = true
 	def, problems := e.definition(r, id, version, draft)
@@ -563,12 +612,20 @@ func (e *evaluator) mount(r *Render, outer *scope, kp, id string, version int, d
 			}
 		}
 	}
-	// Its props: what was given, then the defaults; required ones present
+	preset, ok := def.Variants[variant]
+	if variant != "" && !ok {
+		return ErrorNode(key, []Problem{{Message: fmt.Sprintf("%s has no variant %q", def.Name, variant), Fix: "use one of its variants (prefab.describe " + id + "), or none"}})
+	}
+	// Its props: what was given, then the variant's, then the defaults;
+	// required ones present
 	full := map[string]any{}
 	for _, k := range slices.Sorted(maps.Keys(def.Props)) {
 		d := def.Props[k]
 		v, given := props[k]
 		if !given || v == nil {
+			v = preset.Props[k]
+		}
+		if v == nil {
 			v = d.Default
 		}
 		switch {
@@ -653,6 +710,13 @@ func (s *Session) holdFor(inst *instance, name string, d QueryDecl) *Problem {
 			}
 		case "state":
 			bind[param] = "state." + inst.scoped(rest)
+		default:
+			// An expression over the props, read now
+			if src, ok := strings.CutPrefix(from, "="); ok {
+				if v, err := evalExpression(src, map[string]any{"props": inst.props}); err == nil && v != nil {
+					params[param] = v
+				}
+			}
 		}
 	}
 	ref := QueryRef{Query: d.Query, Params: params, Bind: bind}

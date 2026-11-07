@@ -18,6 +18,8 @@ export interface UiNode {
   on?: Record<string, UiOn>
   children?: UiNode[]
   slots?: Record<string, UiNode[]>
+  // A prefab instance's variant: its props are the variant's, under its own
+  variant?: string
   // In a design session, the key path of the template node it was drawn
   // from (the Prefab Editor's Canvas selects by it)
   src?: string

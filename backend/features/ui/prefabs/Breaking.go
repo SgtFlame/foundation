@@ -10,13 +10,13 @@ import (
 )
 
 // Break is a change to a prefab's interface that breaks its users: a
-// prop, event or slot removed, or a prop's type changed (forge 04a
-// question 4).
+// prop, event, slot or variant removed, or a prop's type changed (forge
+// 04a question 4, 04f).
 type Break struct {
 	Change string `json:"change"` // in words, e.g. "removing prop task"
 	Path   string `json:"path"`   // within the definition, e.g. props.task
 	UsedBy []Use  `json:"usedBy,omitempty"`
-	kind   string // prop, event or slot
+	kind   string // prop, event, slot or variant
 	name   string
 }
 
@@ -49,6 +49,11 @@ func Breaking(prev, next ui.Prefab) []Break {
 			out = append(out, Break{Change: "removing slot " + k, Path: "slots." + k, kind: "slot", name: k})
 		}
 	}
+	for _, k := range slices.Sorted(mapKeys(prev.Variants)) {
+		if _, ok := next.Variants[k]; !ok {
+			out = append(out, Break{Change: "removing variant " + k, Path: "variants." + k, kind: "variant", name: k})
+		}
+	}
 	return out
 }
 
@@ -72,6 +77,8 @@ func (b Break) uses(n *ui.Node) bool {
 	case "slot":
 		_, ok := n.Slots[b.name]
 		return ok
+	case "variant":
+		return n.Variant == b.name
 	}
 	return false
 }

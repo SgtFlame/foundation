@@ -6,6 +6,9 @@ package livetools
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -111,6 +114,16 @@ func commandTool(c live.Command, deps func() Deps) tools.Tool {
 			}](call)
 			if err != nil {
 				return tools.Result{}, err
+			}
+			// A model sometimes puts the command's args beside args (forge
+			// 04f): say so, rather than run the command without them
+			var top map[string]json.RawMessage
+			_ = json.Unmarshal(call.Args, &top)
+			delete(top, "target")
+			delete(top, "args")
+			if len(top) > 0 {
+				misplaced := slices.Sorted(maps.Keys(top))
+				return tools.Result{}, fmt.Errorf("%s belong inside args: call %s with {target, args: {%s, ...}}", strings.Join(misplaced, ", "), c.ID, strings.Join(misplaced, ", "))
 			}
 			res := deps().Bus.Execute(bus.Request{ServiceArgs: call.ServiceArgs, ID: commandID(call), Type: c.ID, Target: args.Target, RequestID: call.ID, Args: args.Args})
 			if res.Common.Code >= 300 {

@@ -29,6 +29,8 @@ import { Tenants, type Member, type TenantSummary } from '../../services/Tenants
 import { Users, type UserSummary } from '../../services/Users.ts'
 import { useSession } from '../../session/session.ts'
 import { useCan } from '../../session/permissions.ts'
+import { useContributions } from '../../workbench/extensions/index.ts'
+import { tenantActions, type TenantActionContribution } from './points.ts'
 
 const defaultTenant = '1'
 
@@ -143,6 +145,9 @@ function TenantsEditor() {
   const [creating, setCreating] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [asking, setAsking] = useState<TenantActionContribution>()
+  const [done, setDone] = useState<string>()
+  const actions = useContributions(tenantActions, { can, tenantId: s.account?.tenantId ?? defaultTenant })
   const fail = useCallback((err: unknown) => setError((err as Error).message), [])
 
   const load = useCallback(() => {
@@ -175,6 +180,11 @@ function TenantsEditor() {
           <DeleteIcon />
         </ToolbarAction>
       </Stack>
+      {done && (
+        <Alert severity="success" onClose={() => setDone(undefined)} sx={{ m: 1 }}>
+          {done}
+        </Alert>
+      )}
       {error && (
         <Alert severity="error" onClose={() => setError(undefined)} sx={{ m: 1 }}>
           {error}
@@ -192,6 +202,15 @@ function TenantsEditor() {
           ))}
         </List>
         <Box sx={{ flex: 1, minWidth: 0 }}>
+          {tenant && actions.length > 0 && (
+            <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+              {actions.map((a) => (
+                <Button key={a.id} size="small" variant="outlined" onClick={() => setAsking(a)}>
+                  {a.title}
+                </Button>
+              ))}
+            </Stack>
+          )}
           {tenant ? (
             <Members tenant={tenant} users={users} current={tenant.id === (s.account?.tenantId ?? defaultTenant)} onChange={load} fail={fail} />
           ) : (
@@ -205,6 +224,26 @@ function TenantsEditor() {
       {renaming && tenant && (
         <NameDialog open title={`Rename ${tenant.name}`} onClose={() => setRenaming(false)} onCreate={(name) => { setRenaming(false); void run(() => Tenants.rename(tenant.id, name)) }} />
       )}
+      <Dialog open={!!asking && !!tenant} onClose={() => setAsking(undefined)}>
+        <DialogTitle>{asking?.confirm.title}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">{asking?.confirm.text}</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAsking(undefined)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              const a = asking
+              setAsking(undefined)
+              setDone(undefined)
+              if (a && tenant) void run(async () => setDone((await a.run(tenant)) || `${a.title}: done`))
+            }}
+          >
+            {asking?.confirm.label ?? asking?.title}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Dialog open={deleting && !!tenant} onClose={() => setDeleting(false)}>
         <DialogTitle>Delete {tenant?.name}?</DialogTitle>
         <DialogContent>

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -211,7 +212,13 @@ func (l Loop) call(args RunArgs, step, n int, c chatservice.ToolCall, byWire map
 	}
 	end := func(status Status, content map[string]any, failure string) (ToolCall, chatservice.ToolResult) {
 		if failure != "" {
-			content = map[string]any{"error": failure}
+			// What a failed tool returns beside its error (a command's
+			// problems, with their paths and fixes) is for the model too
+			content = maps.Clone(content)
+			if content == nil {
+				content = map[string]any{}
+			}
+			content["error"] = failure
 		}
 		body, size := l.cap(args.Settings, content)
 		rec.Status, rec.Error, rec.Result, rec.ResultBytes = status, failure, string(body), size
@@ -291,7 +298,7 @@ func (l Loop) call(args RunArgs, step, n int, c chatservice.ToolCall, byWire map
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
 		return end(StatusTimeout, nil, fmt.Sprintf("The tool did not finish within %s.", args.Settings.Timeout()))
 	case err != nil:
-		return end(StatusFailed, nil, err.Error())
+		return end(StatusFailed, res.Content, err.Error())
 	}
 	rec.Summary = res.Summary
 	content := res.Content

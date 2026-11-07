@@ -4,9 +4,10 @@ import { extensions } from '../workbench/extensions/index.ts'
 import { loadEditorKinds } from './editorKinds.ts'
 import { renderers } from './points.ts'
 import { muiRenderers } from './renderers/mui/index.ts'
+import { starterRenderers } from './renderers/record/index.tsx'
 
 // The renderers of the primitives, by the server's component ids
-for (const [id, component] of Object.entries(muiRenderers)) {
+for (const [id, component] of Object.entries({ ...muiRenderers, ...starterRenderers })) {
   extensions.contribute(renderers, { id, source: 'ui', component })
 }
 extensions.contribute(renderers, { id: 'layout.flex', source: 'ui', component: lazy(() => import('./renderers/flexlayout/FlexLayout.tsx')) })

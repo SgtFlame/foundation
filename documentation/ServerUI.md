@@ -342,3 +342,80 @@ Made while building:
 - The prefabs' graphs as Hello's built-ins rather than made by `bp.*` on first open (decision 1).
 - A new *Task* field shown only once *Task row* is changed to show it, where the table showed it as a column at once.
 - The rows' layout (a row of a checkbox, a text field, the chip and the assignee, rather than a table with headers), and *Sort by* with a direction button in place of sortable headers.
+
+## Built in slice 29
+Forge's part 4e, the starter library ([forge 04e-StarterLibrary.md](../../forge/documentation/plans/04e-StarterLibrary.md)): Foundation gets what the starter prefabs need, and Forge keeps and seeds the prefabs themselves ([forge StarterLibrary.md](../../forge/documentation/StarterLibrary.md)).
+
+### Importing a prefab
+`prefab.import {prefab}` (`ui/prefabs`, event `imported`) replaces a prefab's whole draft with a definition as `prefab.describe` gives it, or makes it (its id from the definition's name when no target is sent). It is checked whole like every other command; an import identical to the draft commits nothing; the draft keeps its published versions until it is published again. Seeding a tenant with ready-made prefabs uses it.
+
+### Bindings
+- **`presence:<binding>`** reads who is in an object: the binding after the prefix (`props.object`, a row, an `=` expression) gives `"<type>.<id>"`, and the instance holds the `live.presence` query of that object under `<key path>#presence:<type>~<id>` (no `.` in a query's name). On a primitive it stays a `query:` binding, so a change patches that prop alone; on a prefab instance it is read at render. `ui.CheckPrefab` checks the inner binding (`ui.PresencePrefix`). Being *in* an object is the browser's: `presence.avatars`'s `join`.
+- **A query param may be an `=` expression over the props** (`bind: {where: "={_id: props.id}"}`), read when the instance's props change; `ui.CheckPrefab` refuses one that reads anything but `props`.
+
+### Primitives
+- **`record.fieldEditor`** (`field`, `value`, `problem`, `label`, `entity`, `disabled`; event `change {value}`): the input for a field by its type, values in the record's format: text, long text and rich text (a plain-text editor making a ProseMirror document), number, decimal and money (with or without a fixed currency), bool, date, date and time (local, sent in UTC), duration, enum and multi-enum, tags, relation (a picker over the target type's records, named by its title field, live from `records.find`; a relation to `user` takes ids), user (an id), file (upload through `Records.upload`), and JSON for json, list, object and volume file; a computed field shows its value read-only. On its own, a text-like field sends `change` on blur or Enter, the rest at once.
+- **`record.fieldValue`** (`field`, `value`, `expanded`, `entity`, `record`): a value shown by its type (dates, money with its currency, an enum's option as a chip, related records by their titles, a file as a link, rich text as text, JSON as a block); a formula or rollup is shown as what it returns.
+- **`record.form`**, the form-merge primitive (forge 04e question 2): a field editor per visible field with Save and Cancel. It keeps what this user typed per field until saved (`renderers/record/formMerge.ts`): a field they have not touched follows the `record` prop, so others' changes land in place; a touched field another change moves becomes a conflict showing the other value and who made it (*Use theirs* / *Keep mine*; Save waits until each is chosen); an edit the record comes to hold is dropped (the save landed). `save {set, seq}` carries only the fields this user changed; `problems` (field id → message) shows under each field. The name is that of the user whose change moved the field (question 3), from `users` (presence entries) matched to the record's `_updatedBy` at that change.
+- **`presence.avatars`** (`users`, `join`, `max`, `self`): who is in an object, one avatar per user in their colour, this window left out unless `self`; with `join`, this window is present in that object while the node is shown.
+- **`mui.breadcrumbs`** (`items: [{label, id}]`, event `navigate {id, index}`).
+- `mui.textField` takes `debounce` (ms) for its `change`; `mui.table` columns take `recordField` (cells drawn as `record.fieldValue` draws them) and `type: "actions"` with `actions: [{id, label, icon}]`, each button sending `action {key, action}`.
+
+### Elsewhere
+- **Expanded records carry `_title`** (`records/data`, `data.MetaTitle`): the related type's title field, or a user's display name, so a view names a related record without knowing its type.
+- **Administration › Tenants takes actions**: the browser point `tenants.action` (`editors/tenants/points.ts`: `{title, confirm: {title, text, label?}, run(tenant)}`) adds a button above the selected tenant's members, confirmed in a dialog, its result shown as an alert. Forge's *Seed prefabs* is one.
+- **`foundation(backend, more)`**: an app with backend routes of its own names them (Forge: `forge`), and the dev server proxies them too.
+
+### Decisions
+Answered before building ([forge 04e › TODO](../../forge/documentation/plans/04e-StarterLibrary.md#todo)): 1, the library is seeded into tenants by Forge (`cli seed` and the Tenants editor's *Seed prefabs*), not built into Foundation; 2, the plan's primitives plus a form-merge primitive (`record.form`); 3, the name of the user whose change moved the field.
+
+Made while building:
+1. **Seeding is by commands, whole definitions at a time**: `prefab.import` was added rather than replaying `prefab.insertNode` and friends, so re-seeding resets a changed prefab in one event.
+2. **Presence bindings read; the browser joins.** The server cannot keep a connection present (that is the live connection's refresh loop), so `presence.avatars`'s `join` sets the window's presence, and `presence:` only reads.
+3. **Who is named for a conflict is resolved in the browser from presence**, since records hold user ids only. A user who changed a field and left before the change arrived shows as *Someone*. User ids in records are JSON numbers, which lose digits past 2^53 in the browser; they are matched to presence's string ids as numbers, which round alike.
+4. **Save sends no `expect`.** `record.update` records only the fields that change, and conflicts are settled in the form before Save, so a change to another field never refuses the save.
+5. **Rich text is edited as plain text in the form** (a paragraph per line); formatting is kept only for fields the user does not touch.
+
+### Verification of slice 29
+- `go test ./features/ui/prefabs` (`TestImportReplacesTheDraft`): an import makes a prefab with its id from the name, an identical import commits nothing, a changed one replaces the draft, a `presence:` binding of an undeclared prop and a param expression reading state are refused at their paths. `go test ./features/ui/...` and `./features/records/...` (but `records/search`, which needs the CGO build) pass.
+- Forge's `go test ./features/starter` seeds the library and renders the Record table, form and detail for every entity type with only `entity` and `id` (see [forge StarterLibrary.md](../../forge/documentation/StarterLibrary.md#verification)); `presence:` bindings and param expressions are exercised there, and in headless Chromium two users edit one record in `record.form`.
+
+### Decisions to review after seeing it
+- The conflict's look (an alert under the field with *Use theirs* / *Keep mine*) and Save waiting until each conflict is settled.
+- Rich text as plain text in the form (decision 5); a relation to `user`, and a `user` field, edited as ids.
+
+## Built in slice 30
+Forge's part 4f, variants and the chat acceptance ([forge 04f-VariantsAndChat.md](../../forge/documentation/plans/04f-VariantsAndChat.md)), finishing iteration 4 but for the acceptance's run with a real model. The Prefab Editor's side is in [forge PrefabEditor.md](../../forge/documentation/PrefabEditor.md#variants-built-with-slice-30).
+
+### Variants
+- **`ui.Prefab.Variants`** (`variants`, left out when there are none): `name → ui.VariantDecl {description?, props}`, named presets of the prefab's props, set whole by **`prefab.setVariants {variants}`** (event `variantsSet`). `ui.CheckPrefab` refuses a variant name that is not a valid name, a preset of an undeclared prop (`variants.<name>.props.<prop>`) and a value that does not fit its prop's type.
+- **An instance picks one with its node's `variant`** (`ui.Node.Variant`, forge 04f question 2), beside `key`, `props` and `bind`: `{"type": "prefab.tag", "variant": "loud"}`. `prefab.insertNode` takes it on the node, and `prefab.updateNode {variant}` sets it (`null` or `""` clears it; the event carries `""`). `ui.CheckPrefab` refuses a variant the instanced prefab does not declare (at `template.<path>.variant`, the fix listing its variants) and one on any node that is not a prefab instance; a required prop the variant presets needs no value of its own.
+- **Rendering**: an instance's props are its prop defaults, under its variant's presets, under its own props and bindings (`mount` in `Evaluate.go`; a bound prop that is `null` falls back to the variant's). An unknown variant at render time is a `ui.error` naming the prefab's. **`ui.PrefabPage(prefab, variant, props)`** takes a variant for the page's root (`""` for none; Hello's and Forge's pages pass `""`), and so do **`ui.Preview`**, the `prefab.preview` tool and `POST /ui/prefabs/preview` (`variant`).
+- **Removing a variant a published prefab's instance uses is a breaking change** (`prefabs.Breaking`: `removing variant <name>` at `variants.<name>`), refused with `prefab_breaking` unless `allowBreaking`, like a removed prop. Changing a variant's presets is not breaking.
+- `ui.PrefabComponent` gives an example per variant (`{type, key, variant, props}`), so `ui.describeComponent` shows a model each one.
+
+### For the chat
+Found while running the acceptance with a real model (see *Verification*), and fixed:
+- **A failed tool's content reaches the model** (`tools.Loop`): the result is the tool's content with `error` beside it, where it was `{error}` alone. A refused command's tool returns its `problems`, so the model now sees each problem's path and fix (`ui.CheckPrefab`'s fixes were written for it, and never reached it).
+- **A command tool refuses arguments put beside `args`** (`live/tools`): `{target, parentPath, args: {node}}` used to run the command without `parentPath` (here inserting a second root); now it fails with "parentPath belong inside args: call prefab.insertNode with {target, args: {parentPath, ...}}".
+- **"There is no node at …" lists the template's node paths** (up to 40) in its fix, or says the tree is empty. Models assume the root's key is `root`; a root inserted without a key is named from its type (`card`).
+- **`prefab.publish`'s report waits for the published projection** as well as the draft, so a `prefab.preview` sent right after renders the new version instead of "there is no published prefab".
+
+### Decisions
+Answered before building ([forge 04f › TODO](../../forge/documentation/plans/04f-VariantsAndChat.md#todo)): 1, the acceptance runs through Gemini from the Chat, plus a Go test of the same commands; 2, an instance names its variant in a node field, not a prop.
+
+Made while building:
+1. **`prefab.setVariants` replaces them all**, like a section of `prefab.setInterface`; it is its own command, since variants are not part of what an instance's props are checked against.
+2. **Variants are left out of the JSON when there are none** (`omitempty`), so prefabs without them, the starter library's among them, are unchanged.
+3. **A dropped variant instance starts without the preview values its variant presets** (the Palette, in Forge), so the variant's presets show rather than the preview data's.
+
+### Verification of slice 30
+- `go test ./features/ui/prefabs` (`TestVariants`): a variant presetting an undeclared prop, or a value of the wrong type, is refused at its path; instances pick variants, one presetting a required prop needs no label, an unknown variant and a variant on a primitive are refused; `updateNode` sets, clears (`null`) and sets again; rendered, the variant's props show under the instance's own (*mine* keeps its own colour over *loud*'s); a page and a preview take a variant, an unknown one is a problem; the component has an example per variant; removing a variant two published instances use is refused naming both, and publishes once it is back.
+- `go test ./features/ui/prefabs` (`TestTheChatBuildsAContactCard`), the acceptance's commands through their tools as a model calls them: `prefab.list`, `prefab.listTypes`, a *Contact* entity type created and published, `prefab.create` (*Contact card* → `contactCard`), its interface (a required `contact` record prop, the `edit` event with `id`), a card with the name and email bound, a `ui.handler` graph built by `bp.create`/`bp.addNode`/`bp.connect` (*Get prop* `contact._id` into *Raise event* `edit`) and published, attached, an Edit button in the card's `actions` slot, preview data, `prefab.preview` of the draft with no problems and the name, email and Edit in its tree, published, and previewed published with no problems. Arguments put beside `args` are refused. Three runs in a row pass.
+- `go test` of `./features/tools`, `./features/ui/...`, `./features/live/...` and `./features/conversation/...` pass; Forge's `./features/starter` passes; the common frontend type-checks and Axiom builds and lints.
+- **In headless Chromium**, Forge's `serve` and Axiom: *Tag* (with *loud* and *done*) imported and published, and *Tags* holding a plain and a *loud* instance: on the Canvas the *loud* chip is primary beside the default one, the Inspector shows *Variant: loud* with its description, and the Components tab lists *done* and *loud* under *Tag*.
+- **The chat acceptance with a real model is not finished.** Gemini answered from Forge's Chat only at ⚡ Fast (`gemini-3.5-flash-lite`); 💡 Standard was refused as overloaded on every try but one, which failed midway. Over several rounds the model listed the prefabs and components, made `contactCard` with `name` and `email` string props (not a contact record) and the `edit` event, inserted a card, a stack and the two texts, and, once the fixes reached it, made a `ui.handler` graph for the button. Every round ended early: at first after the `tools` section's 8 steps per round (raised to 40 for the run), then by Gemini's 429s, which were the free quota running out. It never published. Its mistakes, each refused with a fix: paths starting with `root/`, `h6` for `mui.text`, `children` for a button's label, a handler before its graph, and arguments beside `args`.
+
+### Decisions to review after seeing it
+- Variants as a node field, presets under the instance's props, and a dropped variant leaving out the preview values it presets.
+- Whether `prefab.preview`'s problems are enough to fix layout without a screenshot (forge 04 question 2): not yet seen, since the model never reached a preview.

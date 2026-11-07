@@ -17,6 +17,11 @@ import (
 // slice 20). It is never stored.
 const MetaExpanded = "_expanded"
 
+// MetaTitle is an expanded record's title: its type's titleField value,
+// or a user's display name, so a view can name it without knowing the
+// related type.
+const MetaTitle = "_title"
+
 // expansion is one relation field a query follows.
 type expansion struct {
 	field  records.Field
@@ -141,7 +146,7 @@ func (p *planned) related(args features.ServiceArgs, d Deps, x expansion, ids []
 		}
 		for n, u := range d.Users(args.Principal.TenantID, nums) {
 			id := strconv.FormatUint(n, 10)
-			out[id] = Record{MetaID: raw(id), MetaEntity: raw(records.UserEntity), "username": raw(u.Username), "displayName": raw(u.DisplayName)}
+			out[id] = Record{MetaID: raw(id), MetaEntity: raw(records.UserEntity), "username": raw(u.Username), "displayName": raw(u.DisplayName), MetaTitle: raw(u.DisplayName)}
 		}
 		return out, nil
 	}
@@ -152,6 +157,10 @@ func (p *planned) related(args features.ServiceArgs, d Deps, x expansion, ids []
 			return nil, log.Wrap(fmt.Errorf("expanding %s: %w", x.field.ID, err))
 		}
 		if r != nil && records.Allows(rule, r, args.Principal) {
+			if t := x.e.TitleField; t != "" && !records.IsNull(r[t]) {
+				r = maps.Clone(r)
+				r[MetaTitle] = r[t]
+			}
 			out[id] = r
 		}
 	}

@@ -403,7 +403,7 @@ func (st *render) build() (ids []string) {
 }
 
 func page() ui.Page {
-	p := ui.PrefabPage("taskList", map[string]any{"heading": "Our tasks"})
+	p := ui.PrefabPage("taskList", "", map[string]any{"heading": "Our tasks"})
 	p.ID, p.App, p.Title = "test/tasks", "test", "Tasks"
 	return p
 }
@@ -563,7 +563,7 @@ func TestStylingAndPreview(t *testing.T) {
 	st.insert("card", "root", map[string]any{"type": "prefab.badge", "key": "who", "bind": map[string]any{"label": "props.name"}})
 	st.insert("card", "root", map[string]any{"type": "prefab.draftOnly", "key": "inner"})
 	st.rev(prefabs.DraftProjector, "prefab.card", "card")
-	tree, problems, fail := ui.Preview(user(), ui.Options{Catalog: ui.Catalog(st.reg), Subs: st.subs}, "card", nil, true)
+	tree, problems, fail := ui.Preview(user(), ui.Options{Catalog: ui.Catalog(st.reg), Subs: st.subs}, "card", "", nil, true)
 	if fail != nil {
 		t.Fatal(fail.Message)
 	}
@@ -574,7 +574,7 @@ func TestStylingAndPreview(t *testing.T) {
 		t.Errorf("the preview's problems: %+v", problems)
 	}
 	// A required prop bound to nothing at run time is a problem in place
-	tree, problems, _ = ui.Preview(user(), ui.Options{Catalog: ui.Catalog(st.reg), Subs: st.subs}, "card", map[string]any{}, true)
+	tree, problems, _ = ui.Preview(user(), ui.Options{Catalog: ui.Catalog(st.reg), Subs: st.subs}, "card", "", map[string]any{}, true)
 	if len(problems) != 2 || strings.Join(problems[0].Path, "/") != "root/who" || !strings.Contains(problems[0].Message, "needs the prop label") {
 		t.Errorf("without a name the badge has a problem: %+v %s", problems, text(tree))
 	}

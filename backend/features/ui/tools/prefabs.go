@@ -26,7 +26,7 @@ func ContributePrefabs(reg *extensions.Registry, subs func() *subscribe.Subscrip
 
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "prefab.describe", Source: "ui"}, Title: "Describe a prefab", Effect: tools.EffectRead,
-		Description: "Describes a prefab (a reusable component): its props, events, slots, state and queries, its template (nodes {type, key, props, bind, on, children, slots}, found by key paths such as root/row/title), its graphs and preview data, and its draft's rev for prefab.publish. With published, its last published version; with version, that one.",
+		Description: "Describes a prefab (a reusable component): its props, events, slots, state and queries, its variants (named prop presets), its template (nodes {type, key, variant, props, bind, on, children, slots}, found by key paths such as root/row/title), its graphs and preview data, and its draft's rev for prefab.publish. With published, its last published version; with version, that one.",
 		Input:       json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},"published":{"type":"boolean"},"version":{"type":"integer"}},"required":["id"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
 			data, err := once(call, "prefab.describe")
@@ -60,18 +60,18 @@ func ContributePrefabs(reg *extensions.Registry, subs func() *subscribe.Subscrip
 
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "prefab.preview", Source: "ui"}, Title: "Preview a prefab", Effect: tools.EffectRead,
-		Description: "Evaluates a prefab with props (its preview data when left out): its last published version, or with draft its draft. Returns the evaluated tree of primitives, as a browser would get it, and its problems, each with the key path of the node it is at (an unknown prefab, a missing required prop, a binding to nothing). Its queries are read once and its logic does not run.",
-		Input:       json.RawMessage(`{"type":"object","properties":{"prefab":{"type":"string","description":"The prefab's id"},"props":{"type":"object"},"draft":{"type":"boolean"}},"required":["prefab"]}`),
+		Description: "Evaluates a prefab with props (its preview data when left out), and variant, one of its variants, under them: its last published version, or with draft its draft. Returns the evaluated tree of primitives, as a browser would get it, and its problems, each with the key path of the node it is at (an unknown prefab, a missing required prop, a binding to nothing). Its queries are read once and its logic does not run.",
+		Input:       json.RawMessage(`{"type":"object","properties":{"prefab":{"type":"string","description":"The prefab's id"},"props":{"type":"object"},"variant":{"type":"string"},"draft":{"type":"boolean"}},"required":["prefab"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
 			a, err := tools.Decode[struct {
-				Prefab string
-				Props  map[string]any
-				Draft  bool
+				Prefab, Variant string
+				Props           map[string]any
+				Draft           bool
 			}](call)
 			if err != nil {
 				return tools.Result{}, err
 			}
-			tree, problems, fail := ui.Preview(call.ServiceArgs, ui.Options{Catalog: ui.Catalog(reg), Subs: subs()}, a.Prefab, a.Props, a.Draft)
+			tree, problems, fail := ui.Preview(call.ServiceArgs, ui.Options{Catalog: ui.Catalog(reg), Subs: subs()}, a.Prefab, a.Variant, a.Props, a.Draft)
 			if fail != nil {
 				return tools.Result{}, fmt.Errorf("%s", fail.Message)
 			}

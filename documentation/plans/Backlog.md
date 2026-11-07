@@ -21,6 +21,8 @@ Budgets and alerts (including alerts on log queries); saved Log Explorer queries
 ### App-wide issues seen while verifying
 - **Dark preference**: under a dark browser preference the page body turns dark but the MUI theme stays light, so side-bar headings (*COGNITION* and others) are hard to read. No MUI theme follows the preference yet (`ui.appearance`, [Configuration.md](Configuration.md)). Seen since slice 7.
 - **Deep's model is retired**: the 🧪 Deep level's default model, `gemini-2.5-pro`, is refused by Gemini as no longer offered to new users (it suggests `gemini-3.1-pro-preview`). The `ai.chat.levels` defaults and the `ai.models` catalog need it replaced. Seen in slice 23.
+- **Too few tool steps for building**: the `tools` section's default of 8 model steps per round ends a round long before a prefab is built (the contact card needs about 20 calls), and the forced last answer came back empty (slice 30). Raise the default, or let a round ask to go on.
+- **No retry when the provider is busy**: a Gemini 503 ("high demand") or 429 ends the round at once, losing its progress; the history window then carries no tool calls, so "go on" has no context (slice 30). Retry with a backoff, within the free quota, and carry a failed round's tool calls into the next.
 
 ### Building
 - **`records/data` tests fail about one run in five** (on HEAD before slice 23 as well): two projections making the same KV bucket at once get `stream name already in use`, and the test that hits it loses records (`TestAScanStopsAtTheLimitAndSaysSo`, `TestACursorWalksEveryPageOnce`). Making a bucket should treat that error as made by the other, and read it. Seen in slice 23.

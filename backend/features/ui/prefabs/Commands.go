@@ -234,7 +234,14 @@ func keyed(n *ui.Node, taken map[string]bool) {
 func (c *decision) node(path, arg string) (place, []live.Problem) {
 	at, ok := find(c.prefab().Template, path)
 	if !ok {
-		return at, problem(arg, fmt.Sprintf("there is no node at %q", path), "paths are node keys from the root joined with '/', such as root/row/title; prefab.describe shows the template")
+		fix := "the tree is empty: insert its root first, with no parentPath"
+		if paths := Paths(c.prefab().Template); len(paths) > 0 {
+			if len(paths) > 40 {
+				paths = append(paths[:40], "…")
+			}
+			fix = "paths are node keys from the root joined with '/'; this prefab's nodes are " + strings.Join(paths, ", ")
+		}
+		return at, problem(arg, fmt.Sprintf("there is no node at %q", path), fix)
 	}
 	return at, nil
 }
@@ -292,10 +299,23 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			},
 			Report: func(args features.ServiceArgs, t live.Target, seq uint64) any { return report(args, deps(), t.ID, seq) },
 		}
+		if s.id == "prefab.publish" {
+			// A preview right after publishing renders the new version
+			cmd.Report = func(args features.ServiceArgs, t live.Target, seq uint64) any {
+				_, _ = deps().Projections.WaitFor(args.Context(), args.Principal.TenantID, PublishedProjector, TargetType+"."+t.ID, seq, 2*time.Second)
+				return report(args, deps(), t.ID, seq)
+			}
+		}
 		if s.create {
 			cmd.NewTargetFor = func(args features.ServiceArgs, raw json.RawMessage) string {
-				var a struct{ Name string }
+				var a struct {
+					Name   string
+					Prefab struct{ Name string } // prefab.import's
+				}
 				_ = json.Unmarshal(raw, &a)
+				if a.Name == "" {
+					a.Name = a.Prefab.Name
+				}
 				return newID(slug(a.Name), func(id string) bool {
 					_, ok := get(args.Context(), deps().Projections, args.Principal.TenantID, DraftProjector, TargetType+"."+id)
 					return ok
@@ -384,7 +404,7 @@ func mapKeys[V any](m map[string]V) func(func(string) bool) {
 	}
 }
 
-const nodeSchema = `{"type":"object","description":"A ui.Node: {type, key?, props?, bind?, on?, children?, slots?}. type is a component (ui.listComponents), slot (props.name: a declared slot) or prefab.<id>; a key is made from the type when left out","properties":{"type":{"type":"string"},"key":{"type":"string"},"props":{"type":"object"},"bind":{"type":"object","description":"prop → props.<prop>, state.<value>, slots.<slot>, query:<name>[.path] or local.<path>"},"on":{"type":"object","description":"event → {handler: a name in the prefab's graphs, payload?}"},"children":{"type":"array","items":{"type":"object"}},"slots":{"type":"object"}},"required":["type"]}`
+const nodeSchema = `{"type":"object","description":"A ui.Node: {type, key?, variant?, props?, bind?, on?, children?, slots?}. type is a component (ui.listComponents), slot (props.name: a declared slot) or prefab.<id>; a key is made from the type when left out","properties":{"type":{"type":"string"},"key":{"type":"string"},"variant":{"type":"string","description":"A prefab instance's variant: one its prefab declares"},"props":{"type":"object"},"bind":{"type":"object","description":"prop → props.<prop>, state.<value>, slots.<slot>, query:<name>[.path] or local.<path>"},"on":{"type":"object","description":"event → {handler: a name in the prefab's graphs, payload?}"},"children":{"type":"array","items":{"type":"object"}},"slots":{"type":"object"}},"required":["type"]}`
 
 const ifaceSchema = `"props":{"type":"object","description":"name → {type, entity?, options?, description, required?, default?}; type is one of string, number, integer, bool, date, dateTime, enum, json, record, records"},` +
 	`"events":{"type":"object","description":"name → {description, payload: {field: type}}"},` +
@@ -410,6 +430,32 @@ func commandSpecs() []spec {
 				p := ui.Prefab{ID: c.Target.ID, Name: a.Name, Description: a.Description, Owner: a.Owner}
 				normalize(&p)
 				return ev(EventCreated, map[string]any{"prefab": p}), nil
+			},
+		},
+		{
+			id: "prefab.import", title: "Import a prefab", create: true, events: []string{EventImported},
+			description: "Replaces the target prefab's whole draft with a definition given as JSON (its name, description, owner, interface, template, graphs and preview, as prefab.describe gives it), or makes it. Its published versions stay until it is published again. Seeding a tenant with ready-made prefabs uses it.",
+			args:        `{"type":"object","properties":{"prefab":{"type":"object","description":"A prefab as prefab.describe returns it: {name, description?, owner?, props, events, slots, state, queries, template, graphs, preview}"}},"required":["prefab"]}`,
+			example:     `{"prefab":{"name":"Empty state","props":{"title":{"type":"string","default":"Nothing here"}},"template":{"type":"mui.empty","key":"root","bind":{"title":"props.title"}}}}`,
+			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+				a, problems := args[struct{ Prefab *ui.Prefab }](c)
+				if problems != nil {
+					return nil, problems
+				}
+				if a.Prefab == nil {
+					return nil, problem("args.prefab", "the definition is missing", "give the prefab as prefab.describe returns it")
+				}
+				p := *a.Prefab
+				p.ID, p.Version = c.Target.ID, 0
+				normalize(&p)
+				if c.exists {
+					cur := *c.prefab()
+					cur.Version = 0
+					if equal(cur, p) {
+						return nil, nil
+					}
+				}
+				return ev(EventImported, map[string]any{"prefab": p}), nil
 			},
 		},
 		{
@@ -473,13 +519,19 @@ func commandSpecs() []spec {
 		},
 		{
 			id: "prefab.updateNode", title: "Change a node", events: []string{EventNodeUpdated},
-			description: "Changes the node at path: each prop, binding and event handler given is set, one given as null is cleared, and one left out stays, so designers changing different props of one node do not overwrite each other. key renames the node, which changes its path and its subtree's.",
-			args:        `{"type":"object","properties":{"path":{"type":"string"},"props":{"type":"object"},"bind":{"type":"object","description":"prop → path, or null to clear"},"on":{"type":"object","description":"event → {handler, payload?}, or null to clear"},"key":{"type":"string"}},"required":["path"]}`,
+			description: "Changes the node at path: each prop, binding and event handler given is set, one given as null is cleared, and one left out stays, so designers changing different props of one node do not overwrite each other. key renames the node, which changes its path and its subtree's. variant picks a prefab instance's variant (null clears it); its own props override the variant's.",
+			args:        `{"type":"object","properties":{"path":{"type":"string"},"props":{"type":"object"},"bind":{"type":"object","description":"prop → path, or null to clear"},"on":{"type":"object","description":"event → {handler, payload?}, or null to clear"},"key":{"type":"string"},"variant":{"type":"string","description":"One of the instanced prefab's variants, or null for none"}},"required":["path"]}`,
 			example:     `{"path":"root/title","props":{"variant":"body2"}}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				u, problems := args[Update](c)
 				if problems != nil {
 					return nil, problems
+				}
+				// null clears the variant; the event says so with ""
+				var raw struct{ Variant json.RawMessage }
+				_ = json.Unmarshal(c.Args, &raw)
+				if string(raw.Variant) == "null" {
+					u.Variant = new(string)
 				}
 				at, problems := c.node(u.Path, "args.path")
 				if problems != nil {
@@ -504,7 +556,10 @@ func commandSpecs() []spec {
 				if u.Key == n.Key {
 					u.Key = ""
 				}
-				if len(u.Props)+len(u.Bind)+len(u.On) == 0 && u.Key == "" {
+				if u.Variant != nil && *u.Variant == n.Variant {
+					u.Variant = nil
+				}
+				if len(u.Props)+len(u.Bind)+len(u.On) == 0 && u.Key == "" && u.Variant == nil {
 					return nil, nil
 				}
 				return ev(EventNodeUpdated, u), nil
@@ -666,8 +721,30 @@ func commandSpecs() []spec {
 			},
 		},
 		{
+			id: "prefab.setVariants", title: "Set a prefab's variants", events: []string{EventVariantsSet},
+			description: "Sets a prefab's variants, replacing them all: named presets of its props (compact: {props: {dense: true}}) that an instance picks with its node's variant, its own props overriding the variant's. Removing a variant that published prefabs use breaks them, which prefab.publish reports.",
+			args:        `{"type":"object","properties":{"variants":{"type":"object","description":"name → {description?, props: {prop: value}}","additionalProperties":{"type":"object","properties":{"description":{"type":"string"},"props":{"type":"object"}},"required":["props"]}}},"required":["variants"]}`,
+			example:     `{"variants":{"compact":{"description":"One line, small text","props":{"dense":true}}}}`,
+			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+				a, problems := args[struct{ Variants map[string]ui.VariantDecl }](c)
+				if problems != nil {
+					return nil, problems
+				}
+				for k, v := range a.Variants {
+					if v.Props == nil {
+						v.Props = map[string]any{}
+						a.Variants[k] = v
+					}
+				}
+				if equal(a.Variants, c.prefab().Variants) || len(a.Variants)+len(c.prefab().Variants) == 0 {
+					return nil, nil
+				}
+				return ev(EventVariantsSet, map[string]any{"variants": a.Variants}), nil
+			},
+		},
+		{
 			id: "prefab.publish", title: "Publish a prefab", events: []string{EventPublished}, action: "prefabs.publish",
-			description: "Publishes the draft as a new version, which its instances follow; it is also kept in the tenant database. rev is the draft's rev the publisher last saw: a change made since is not published unseen. Removing a prop, event or slot or changing a prop's type since the last version is refused when published prefabs use it, listing them ({change, usedBy: [{prefab, path}]}), unless allowBreaking is true.",
+			description: "Publishes the draft as a new version, which its instances follow; it is also kept in the tenant database. rev is the draft's rev the publisher last saw: a change made since is not published unseen. Removing a prop, event, slot or variant or changing a prop's type since the last version is refused when published prefabs use it, listing them ({change, usedBy: [{prefab, path}]}), unless allowBreaking is true.",
 			args:        `{"type":"object","properties":{"rev":{"type":"integer","description":"The draft's rev as last seen (prefab.* results and prefab.describe give it)"},"allowBreaking":{"type":"boolean","description":"Publish although published prefabs using it break"}},"required":["rev"]}`,
 			example:     `{"rev":7}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {

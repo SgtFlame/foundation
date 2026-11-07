@@ -24,8 +24,9 @@ const routes = [
   'records',
 ]
 
-// The Vite configuration every app built on common needs
-export function foundation(backend = 'http://localhost:8080'): Plugin {
+// The Vite configuration every app built on common needs; an app with
+// backend routes of its own names them in more (Forge: forge)
+export function foundation(backend = 'http://localhost:8080', more: string[] = []): Plugin {
   return {
     name: 'foundation',
     config: (config) => ({
@@ -45,7 +46,7 @@ export function foundation(backend = 'http://localhost:8080'): Plugin {
       },
       server: {
         proxy: Object.fromEntries(
-          routes.map((route) => [`/api/v1/${route}`, { target: backend, ws: route === 'live' }]),
+          [...routes, ...more].map((route) => [`/api/v1/${route}`, { target: backend, ws: route === 'live' }]),
         ),
       },
     }),

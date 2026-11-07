@@ -64,13 +64,14 @@ type ListVersionsResponse struct {
 }
 
 // PreviewArgs name the prefab to evaluate and its props; nil props take
-// its preview data. Draft evaluates its draft, else its last published
-// version.
+// its preview data. Variant is one of its variants, under the props. Draft
+// evaluates its draft, else its last published version.
 type PreviewArgs struct {
 	features.ServiceArgs
-	Prefab string
-	Props  map[string]any
-	Draft  bool
+	Prefab  string
+	Props   map[string]any
+	Variant string
+	Draft   bool
 }
 
 type PreviewResponse struct {

@@ -59,6 +59,13 @@ export interface QueryDecl {
   description?: string
 }
 
+// A named preset of a prefab's props, which an instance picks with its
+// node's variant
+export interface VariantDecl {
+  description?: string
+  props: Record<string, unknown>
+}
+
 export interface Prefab {
   id: string
   name: string
@@ -69,6 +76,7 @@ export interface Prefab {
   events: Record<string, EventDecl>
   slots: Record<string, SlotDecl>
   queries: Record<string, QueryDecl>
+  variants?: Record<string, VariantDecl>
   template?: UiNode // nodes found by key paths, such as root/row/title
   graphs: Record<string, string> // a name the template's handlers use → a graph id
   preview: { props?: Record<string, unknown> }
@@ -127,6 +135,7 @@ export interface ListVersionsResponse extends ResponseStatus {
 export interface PreviewRequest {
   prefab: string
   props?: Record<string, unknown> // its preview data when left out
+  variant?: string // one of its variants, under props
   draft?: boolean // its draft, not its last published version
 }
 

@@ -11,7 +11,7 @@ func (s *service) Preview(args prefabservice.PreviewArgs) prefabservice.PreviewR
 	if failed := s.check(args.ServiceArgs, args.Prefab); failed != nil {
 		return prefabservice.PreviewResponse{Common: *failed}
 	}
-	tree, problems, fail := ui.Preview(args.ServiceArgs, ui.Options{Catalog: ui.Catalog(s.reg), Subs: s.subs}, args.Prefab, args.Props, args.Draft)
+	tree, problems, fail := ui.Preview(args.ServiceArgs, ui.Options{Catalog: ui.Catalog(s.reg), Subs: s.subs}, args.Prefab, args.Variant, args.Props, args.Draft)
 	if fail != nil {
 		return prefabservice.PreviewResponse{Common: *fail}
 	}

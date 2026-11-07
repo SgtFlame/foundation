@@ -28,6 +28,9 @@ type Node struct {
 	On       map[string]On      `json:"on,omitempty"`
 	Children []*Node            `json:"children,omitempty"`
 	Slots    map[string][]*Node `json:"slots,omitempty"`
+	// Variant picks one of a prefab instance's variants (forge 04f): its
+	// props are the variant's, overridden by the node's own.
+	Variant string `json:"variant,omitempty"`
 	// Src is the key path of the template node it was drawn from, in a
 	// design session (forge 04c): the Prefab Editor's Canvas selects by it.
 	Src string `json:"src,omitempty"`

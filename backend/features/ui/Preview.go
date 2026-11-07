@@ -10,15 +10,16 @@ import (
 
 // Preview evaluates a prefab once (forge 04b › Preview): its draft, or its
 // last published version, with props (its preview data when none), and
-// gives the evaluated tree and its problems with their key paths. Its
-// queries are read once and no logic runs. o needs Catalog and Subs.
-func Preview(args features.ServiceArgs, o Options, id string, props map[string]any, draft bool) (*Node, []Problem, *features.ServiceResponse) {
+// gives the evaluated tree and its problems with their key paths; variant,
+// when set, is one of its variants. Its queries are read once and no logic
+// runs. o needs Catalog and Subs.
+func Preview(args features.ServiceArgs, o Options, id, variant string, props map[string]any, draft bool) (*Node, []Problem, *features.ServiceResponse) {
 	page := Page{Descriptor: extensions.Descriptor{ID: "prefab/" + id}, Title: id, prefab: id, Render: func(r *Render) *Node {
 		e := &evaluator{s: r.s, samples: props == nil}
 		if draft {
 			e.draft = id
 		}
-		return e.root(r, id, props)
+		return e.root(r, id, variant, props)
 	}}
 	var tree *Node
 	o.Send = func(f any) {

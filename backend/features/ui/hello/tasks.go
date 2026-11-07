@@ -132,7 +132,7 @@ func refused(what string, problems any, fail *features.ServiceResponse) error {
 }
 
 func contributeTasks(reg *extensions.Registry) {
-	page := ui.PrefabPage(TaskListPrefab, nil)
+	page := ui.PrefabPage(TaskListPrefab, "", nil)
 	page.Descriptor = extensions.Descriptor{ID: AppID + "/tasks", Source: "hello"}
 	page.App, page.Title, page.Action = AppID, "Tasks", "hello.read"
 	page.Description = "The Hello app's shared task list, the Task list prefab: add tasks, tick them done, rename them, show all, open or done ones, and sort them, live for everyone who has it open."

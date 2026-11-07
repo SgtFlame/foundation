@@ -6,12 +6,13 @@ import (
 )
 
 type PreviewRequest struct {
-	Prefab string         `json:"prefab"`
-	Props  map[string]any `json:"props,omitempty"` // its preview data when left out
-	Draft  bool           `json:"draft,omitempty"` // its draft, not its last published version
+	Prefab  string         `json:"prefab"`
+	Props   map[string]any `json:"props,omitempty"`   // its preview data when left out
+	Variant string         `json:"variant,omitempty"` // one of its variants, under props
+	Draft   bool           `json:"draft,omitempty"`   // its draft, not its last published version
 }
 
 // ToArgs converts the request to the service's PreviewArgs.
 func (r PreviewRequest) ToArgs(args features.ServiceArgs) prefabservice.PreviewArgs {
-	return prefabservice.PreviewArgs{ServiceArgs: args, Prefab: r.Prefab, Props: r.Props, Draft: r.Draft}
+	return prefabservice.PreviewArgs{ServiceArgs: args, Prefab: r.Prefab, Props: r.Props, Variant: r.Variant, Draft: r.Draft}
 }

@@ -44,6 +44,7 @@ type Draft struct {
 // Events a prefab's commands commit.
 const (
 	EventCreated       = "created"       // {prefab}
+	EventImported      = "imported"      // {prefab}: the whole definition replaced
 	EventInfoSet       = "infoSet"       // Info
 	EventInterfaceSet  = "interfaceSet"  // Interface
 	EventNodeInserted  = "nodeInserted"  // Insert
@@ -55,6 +56,7 @@ const (
 	EventGraphAttached = "graphAttached" // {name, graph}
 	EventGraphDetached = "graphDetached" // {name}
 	EventPreviewSet    = "previewSet"    // {props}
+	EventVariantsSet   = "variantsSet"   // {variants}
 	EventPublished     = "published"     // Publication
 )
 
@@ -93,6 +95,9 @@ type Update struct {
 	Bind  map[string]*string `json:"bind,omitempty"`
 	On    map[string]*ui.On  `json:"on,omitempty"`
 	Key   string             `json:"key,omitempty"`
+	// Variant picks an instance's variant; "" clears it (null in the
+	// command's args), and nil leaves it.
+	Variant *string `json:"variant,omitempty"`
 }
 
 // Move puts the node at Path under the node at ParentPath (into its slot
@@ -138,6 +143,13 @@ func Apply(d *Draft, e live.Event) error {
 		var v struct{ Prefab ui.Prefab }
 		if v, err = decode[struct{ Prefab ui.Prefab }](e.Data); err == nil {
 			*p = v.Prefab
+		}
+	case EventImported:
+		var v struct{ Prefab ui.Prefab }
+		if v, err = decode[struct{ Prefab ui.Prefab }](e.Data); err == nil {
+			version := p.Version
+			*p = v.Prefab
+			p.Version = version
 		}
 	case EventInfoSet:
 		var in Info
@@ -213,6 +225,14 @@ func Apply(d *Draft, e live.Event) error {
 		var in struct{ Name string }
 		if in, err = decode[struct{ Name string }](e.Data); err == nil {
 			delete(p.Graphs, in.Name)
+		}
+	case EventVariantsSet:
+		var in struct{ Variants map[string]ui.VariantDecl }
+		if in, err = decode[struct{ Variants map[string]ui.VariantDecl }](e.Data); err == nil {
+			p.Variants = in.Variants
+			if len(p.Variants) == 0 {
+				p.Variants = nil
+			}
 		}
 	case EventPreviewSet:
 		var in struct{ Props map[string]any }
@@ -458,6 +478,9 @@ func update(p *ui.Prefab, in Update) error {
 	}
 	if in.Key != "" {
 		n.Key = in.Key
+	}
+	if in.Variant != nil {
+		n.Variant = *in.Variant
 	}
 	return nil
 }

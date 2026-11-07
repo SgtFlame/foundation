@@ -57,6 +57,8 @@ import MarkdownText from '../../../components/markdown/MarkdownText.tsx'
 import type { RendererProps } from '../../points.ts'
 import { ErrorBox } from '../../UiRenderer.tsx'
 import { NamedIcon } from './icons.tsx'
+import type { Field } from '../record/fields.ts'
+import { FieldDisplay } from '../record/FieldValue.tsx'
 
 type P = RendererProps
 const str = (v: unknown) => (v === undefined || v === null ? '' : String(v))
@@ -158,7 +160,7 @@ export function MuiBadge(p: P) {
 // An input's value: controlled by its binding when it has one, otherwise
 // held here, starting from the server's value and following it when it
 // changes (a prefab's prop, read at render), so it can still be typed in
-function useValue<T>(p: P, initial: T): [T, (v: T) => void] {
+function useValue<T>(p: P, initial: T, send: (v: T) => void = (v) => p.emit('change', { value: v })): [T, (v: T) => void] {
   const server = p.props.value as T | undefined
   const [own, setOwn] = useState<T>(server ?? initial)
   const [seen, setSeen] = useState(server)
@@ -172,13 +174,25 @@ function useValue<T>(p: P, initial: T): [T, (v: T) => void] {
     value,
     (v: T) => {
       if (!p.setLocal('value', v)) setOwn(v)
-      p.emit('change', { value: v })
+      send(v)
     },
   ]
 }
 
+// A change sent once typing pauses for debounce milliseconds (every
+// change when it is 0)
+function useDebounced(p: P, event: string): (v: unknown) => void {
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const ms = Number(p.props.debounce ?? 0)
+  return (v) => {
+    clearTimeout(timer.current)
+    if (ms > 0) timer.current = setTimeout(() => p.emit(event, { value: v }), ms)
+    else p.emit(event, { value: v })
+  }
+}
+
 export function MuiTextField(p: P) {
-  const [value, setValue] = useValue<string>(p, '')
+  const [value, setValue] = useValue<string>(p, '', useDebounced(p, 'change'))
   const multiline = !!p.props.multiline
   return (
     <TextField size="small" label={p.props.label as string} placeholder={p.props.placeholder as string} value={value ?? ''}
@@ -360,8 +374,10 @@ interface Column {
   width?: number
   sortable?: boolean
   sortField?: string
-  type?: 'text' | 'number' | 'bool' | 'date' | 'dateTime' | 'enum'
+  type?: 'text' | 'number' | 'bool' | 'date' | 'dateTime' | 'enum' | 'actions'
   editable?: boolean
+  recordField?: Field
+  actions?: { id: string; label?: string; icon?: string }[]
   options?: { value: string; label?: string }[]
 }
 
@@ -377,6 +393,29 @@ function at(row: Record<string, unknown>, path: string): unknown {
 
 function TableCellValue({ column, row, rowKey, emit }: { column: Column; row: Record<string, unknown>; rowKey: string; emit: P['emit'] }) {
   const v = at(row, column.field)
+  if (column.type === 'actions') {
+    return (
+      <Stack direction="row" spacing={0.5}>
+        {(column.actions ?? []).map((a) => {
+          const send = (e: { stopPropagation(): void }) => {
+            e.stopPropagation()
+            emit('action', { key: rowKey, action: a.id })
+          }
+          return a.icon ? (
+            <Tooltip key={a.id} title={a.label ?? a.id}>
+              <IconButton size="small" aria-label={a.label ?? a.id} onClick={send}><NamedIcon name={a.icon} fontSize="small" /></IconButton>
+            </Tooltip>
+          ) : (
+            <Button key={a.id} size="small" onClick={send}>{a.label ?? a.id}</Button>
+          )
+        })}
+      </Stack>
+    )
+  }
+  if (column.recordField) {
+    const expanded = at(row, `_expanded.${column.recordField.id}`)
+    return <FieldDisplay field={column.recordField} value={v} expanded={expanded} entity={str(row._entity) || undefined} record={rowKey} />
+  }
   if (column.type === 'bool') {
     return (
       <Checkbox size="small" checked={v === true} disabled={!column.editable} sx={{ p: 0 }}
