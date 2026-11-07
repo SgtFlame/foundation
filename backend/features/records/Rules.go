@@ -1,12 +1,15 @@
 package records
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
 )
@@ -78,12 +81,37 @@ func Allows(rule *vm.Program, record map[string]json.RawMessage, p features.Prin
 	return err == nil && ok
 }
 
+// RuleFor is the rule a principal is held to for an action on the type's
+// records: the type's own rule, and the row rules of the app roles that
+// give the principal the action (forge 05c question 4), any of which
+// allows a record. It returns the rule's source too, for messages.
+func (e EntityType) RuleFor(ctx context.Context, p features.Principal, action string) (*vm.Program, string) {
+	src := ruleSource(e.Access, action)
+	roles, restricted := authz.RowRules(ctx, p, "record."+action, Resource(p, e.ID), e.ID)
+	if restricted {
+		either := "(" + strings.Join(roles, ") || (") + ")"
+		if src == "" {
+			src = either
+		} else {
+			src = "(" + src + ") && (" + either + ")"
+		}
+	}
+	prog, err := CompileRule(src)
+	if err != nil {
+		prog, _ = CompileRule("false")
+	}
+	return prog, src
+}
+
+func ruleSource(a Access, action string) string {
+	return map[string]string{"read": a.Read, "create": a.Create, "update": a.Update, "delete": a.Delete}[action]
+}
+
 // Rule is the entity type's rule for an action (read, create, update or
 // delete); nil when it has none. A rule that does not compile, which
 // Check refuses, allows nothing.
 func (e EntityType) Rule(action string) *vm.Program {
-	src := map[string]string{"read": e.Access.Read, "create": e.Access.Create, "update": e.Access.Update, "delete": e.Access.Delete}[action]
-	p, err := CompileRule(src)
+	p, err := CompileRule(ruleSource(e.Access, action))
 	if err != nil {
 		p, _ = CompileRule("false")
 	}

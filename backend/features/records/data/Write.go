@@ -104,7 +104,7 @@ func Get(args features.ServiceArgs, deps Deps, entity, id string) (Record, live.
 	if err := json.Unmarshal(v.Value, &r); err != nil {
 		return nil, nil, log.Wrap(err)
 	}
-	if !records.Allows(e.Rule("read"), r, args.Principal) {
+	if !records.Allows(first(e.RuleFor(args.Context(), args.Principal, "read")), r, args.Principal) {
 		return nil, v.Position(), nil
 	}
 	return r, v.Position(), nil

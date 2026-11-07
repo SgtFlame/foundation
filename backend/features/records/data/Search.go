@@ -107,7 +107,7 @@ func Visible(args features.ServiceArgs, d Deps, hits []SearchHit, limit int) []R
 		}
 		v, ok, err := d.Projections.Get(args.Context(), args.Principal.TenantID, Projector, Key(h.Entity, h.ID))
 		var r Record
-		if err != nil || !ok || v.Value == nil || json.Unmarshal(v.Value, &r) != nil || !records.Allows(e.Rule("read"), r, args.Principal) {
+		if err != nil || !ok || v.Value == nil || json.Unmarshal(v.Value, &r) != nil || !records.Allows(first(e.RuleFor(args.Context(), args.Principal, "read")), r, args.Principal) {
 			continue
 		}
 		r["_score"] = raw(h.Score)

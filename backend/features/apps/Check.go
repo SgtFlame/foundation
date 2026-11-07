@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features/cognition"
+	"github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/records"
 	"github.com/SgtFlame/foundation/backend/features/tools"
@@ -263,10 +264,23 @@ func (c *check) entities() {
 	}
 }
 
-// action checks an action named by a command or a role: <resource>.<action>.
+// action checks an action named by a command or a role:
+// entity:<id>.<read|create|update|delete|*> on one of the app's own
+// entity types (forge 05c question 1: its roles reach nothing beyond it).
 func (c *check) action(path, a string) {
-	if i := strings.LastIndex(a, "."); i <= 0 || i == len(a)-1 || strings.ContainsAny(a, " /") {
-		c.add(path, fmt.Sprintf("%q is not an action", a), "use <resource>.<action>, such as entity:task.update or entity:task.*")
+	entity, _, ok := EntityAction(a)
+	if !ok {
+		c.add(path, fmt.Sprintf("%q is not an action", a), "use entity:<id>.<action>, the action read, create, update, delete or *, such as entity:task.update or entity:task.*")
+		return
+	}
+	if !slices.Contains(c.m.Entities, entity) {
+		c.add(path, fmt.Sprintf("the app does not use the entity type %s", entity), "add it with app.addEntity, or name one the app uses")
+		return
+	}
+	if c.env.Entity != nil {
+		if e, ok := c.env.Entity(entity); ok && e.Owner != Owner(c.m.ID) {
+			c.add(path, fmt.Sprintf("the entity type %s is not the app's own, so the app's roles cannot reach it", entity), "use one of the app's own entity types; the tenant's roles give access to the others")
+		}
 	}
 }
 
@@ -282,7 +296,9 @@ func (c *check) commands() {
 		}
 		seen[cmd.Type] = true
 		c.graph(path+".graph", cmd.Graph, "command", "command", cmd.Type)
-		if cmd.Action != "" {
+		if _, acts, ok := EntityAction(cmd.Action); ok && len(acts) > 1 {
+			c.add(path+".action", fmt.Sprintf("a command needs one action, and %s is every one", cmd.Action), "name the one it does, such as entity:task.update")
+		} else if cmd.Action != "" {
 			c.action(path+".action", cmd.Action)
 		}
 	}
@@ -305,8 +321,15 @@ func (c *check) queries() {
 
 func (c *check) roles() {
 	seen := map[string]bool{}
+	installer := ""
 	for _, r := range c.m.Roles {
 		path := "roles[" + r.ID + "]"
+		if r.Installer {
+			if installer != "" {
+				c.add(path+".installer", fmt.Sprintf("the role %s is marked as the installer's already", installer), "mark one role only, with installer: false on the others")
+			}
+			installer = r.ID
+		}
 		switch {
 		case !live.ValidToken(r.ID):
 			c.add(path+".id", fmt.Sprintf("%q is not a role id", r.ID), "use letters, digits, _ and -")
@@ -348,6 +371,19 @@ func (c *check) settings() {
 	}
 	if err := tools.CheckArgs(schema, defaults); err != nil {
 		c.add("settings.defaults", fmt.Sprintf("the defaults do not fit the schema: %v", err), "")
+		return
+	}
+	// The settings become a configuration section at install (forge 05c)
+	sec, err := config.ParseSchema(schema)
+	if err != nil {
+		c.add("settings.schema", fmt.Sprintf("the schema cannot be a settings section's: %v", err), "use the types object, string, integer, number, boolean, enum and array")
+		return
+	}
+	if s.Defaults == nil {
+		return
+	}
+	for _, e := range sec.Validate(s.Defaults) {
+		c.add("settings.defaults."+e.Path, e.Message, "")
 	}
 }
 

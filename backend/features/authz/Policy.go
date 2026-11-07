@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -72,8 +73,12 @@ func (pol *Policy) Roles() (map[uint64]Role, error) {
 
 // RoleFrom is a custom role as a Role.
 func RoleFrom(c CustomRole) Role {
-	r := Role{ID: c.ID, Name: c.Name, Description: c.Description, Scope: OnTenant, TenantID: c.TenantID, Revision: c.Revision, Permissions: []string{}}
+	r := Role{ID: c.ID, Name: c.Name, Description: c.Description, Scope: OnTenant, TenantID: c.TenantID, Revision: c.Revision, Permissions: []string{},
+		App: c.AppID, AppRole: c.AppRole}
 	_ = json.Unmarshal([]byte(c.Permissions), &r.Permissions)
+	if c.Rules != "" {
+		_ = json.Unmarshal([]byte(c.Rules), &r.Rules)
+	}
 	return r
 }
 
@@ -144,21 +149,12 @@ func (pol *Policy) decide(ctx context.Context, p features.Principal, action, res
 	if typ.Owned && OwnedBy(path, p.UserID) {
 		return Decision{Allowed: true, Reason: "you own it"}
 	}
-	grants, err := pol.GrantsOf(p.UserID)
-	if err != nil {
-		log.Error(ctx, err, "authz: cannot read grants")
-		return Decision{Reason: "grants could not be read"}
+	allowing, reason := pol.allowing(ctx, p, typ, action, path, true)
+	if reason != "" {
+		return Decision{Reason: reason}
 	}
-	roles, err := pol.Roles()
-	if err != nil {
-		log.Error(ctx, err, "authz: cannot read roles")
-		return Decision{Reason: "roles could not be read"}
-	}
-	for _, g := range grants {
-		role, ok := roles[g.RoleID]
-		if !ok || !Covers(Split(g.Resource), path) || !role.Holds(action) {
-			continue
-		}
+	if len(allowing) > 0 {
+		g, role := allowing[0].Grant, allowing[0].Role
 		reason := fmt.Sprintf("%s granted on %s", role.Name, g.Resource)
 		if g.GrantedBy == 0 {
 			reason += " by the system"
@@ -172,6 +168,88 @@ func (pol *Policy) decide(ctx context.Context, p features.Principal, action, res
 		pol.audit(ctx, AccessAudit{Kind: AuditDenied, UserID: p.UserID, TenantID: p.TenantID, Action: action, Resource: resource, Reason: d.Reason})
 	}
 	return d
+}
+
+// allowing is the grants of p that give action on the resource at path,
+// each with its role, the first found first when first is set (a check
+// needs one; RowRules needs them all). reason says why grants or roles
+// could not be read.
+func (pol *Policy) allowing(ctx context.Context, p features.Principal, typ ResourceType, action string, path []string, first bool) ([]Held, string) {
+	grants, err := pol.GrantsOf(p.UserID)
+	if err != nil {
+		log.Error(ctx, err, "authz: cannot read grants")
+		return nil, "grants could not be read"
+	}
+	roles, err := pol.Roles()
+	if err != nil {
+		log.Error(ctx, err, "authz: cannot read roles")
+		return nil, "roles could not be read"
+	}
+	var out []Held
+	for _, g := range grants {
+		role, ok := roles[g.RoleID]
+		grant := Split(g.Resource)
+		if !ok || !Covers(grant, path) || !role.HoldsOn(action, path) || !crosses(typ, role, grant, path) {
+			continue
+		}
+		out = append(out, Held{Grant: g, Role: role})
+		if first {
+			break
+		}
+	}
+	return out, ""
+}
+
+// crosses tells whether a grant on grant may reach path past the type's
+// fence: a segment of the fence's kind below the grant ("app:tasks" under a
+// grant on the tenant) is crossed only by the Super Administrator, the
+// tenant's Owner and Administrator, and that app's own roles.
+func crosses(typ ResourceType, role Role, grant, path []string) bool {
+	if typ.Fence == "" {
+		return true
+	}
+	for _, seg := range path[len(grant):] {
+		kind, id, _ := strings.Cut(seg, ":")
+		if kind == typ.Fence && !role.CrossesFences() && role.App != id {
+			return false
+		}
+	}
+	return true
+}
+
+// CrossesFences tells whether the role reaches past every fence: the Super
+// Administrator, the tenant's Owner and Administrator.
+func (r Role) CrossesFences() bool {
+	return r.ID == RoleSuperAdmin || r.ID == RoleOwner || r.ID == RoleAdmin
+}
+
+// RowRules are the row rules p's roles put on a resource for action
+// (forge 05c question 4), under key (an entity type's id): restricted is
+// false when some grant giving the action has no rule for key (a role
+// with none for it, or any other role, such as the tenant's Owner), and
+// otherwise rules are the rules of every role giving it, any of which
+// allows a row. Service principals, and checks before a policy is
+// installed, are not restricted. The rules' language is the caller's.
+func RowRules(ctx context.Context, p features.Principal, action, resource, key string) (rules []string, restricted bool) {
+	pol := installed.Load()
+	if pol == nil || p.Kind != features.PrincipalUser {
+		return nil, false
+	}
+	typ, _, ok := actionOf(pol.registry, action)
+	if !ok {
+		return nil, false
+	}
+	allowing, _ := pol.allowing(ctx, p, typ, action, Split(resource), false)
+	for _, h := range allowing {
+		rule, ok := h.Role.Rules[key]
+		if !ok || rule == "" {
+			return nil, false
+		}
+		if !slices.Contains(rules, rule) {
+			rules = append(rules, rule)
+		}
+	}
+	return rules, len(rules) > 0
 }
 
 // changes tells whether actions of a class change something, so a denied

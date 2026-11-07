@@ -395,7 +395,8 @@ func prepare(args features.ServiceArgs, d Deps, q Query) (*planned, error) {
 	if problems != nil {
 		return nil, log.Code("entity_not_found").Errorf("%s", problems[0].Message)
 	}
-	p := &planned{e: e, q: q, rule: e.Rule("read"), who: args.Principal}
+	rule, _ := e.RuleFor(args.Context(), args.Principal, "read")
+	p := &planned{e: e, q: q, rule: rule, who: args.Principal}
 	var and []Filter
 	ids := make([]string, 0, len(q.Where))
 	for id := range q.Where {

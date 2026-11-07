@@ -126,7 +126,7 @@ var Lists = []List{
 		Update:   `{"name":"myTasks","description":"The open tasks assigned to me"}`,
 		Describe: "a named data.query graph pages bind to"},
 	{Item: "role", Field: "roles", Key: "id", Title: "role", Required: []string{"actions"},
-		Props:    `"id":{"type":"string"},"title":{"type":"string"},"description":{"type":"string"},"actions":{"type":"array","items":{"type":"string"},"description":"<resource>.<action>, such as entity:task.read or entity:task.*"},"rowRules":{"type":"object","description":"entity type → a rule over record and principal, such as record.assignee == principal.user; null clears one"}`,
+		Props:    `"id":{"type":"string"},"title":{"type":"string"},"description":{"type":"string"},"actions":{"type":"array","items":{"type":"string"},"description":"entity:<id>.<read|create|update|delete|*> on the app's own entity types, such as entity:task.read or entity:task.*"},"rowRules":{"type":"object","description":"entity type → a rule over record and principal, such as record.assignee == principal.user, that every record the role reads or changes must pass; null clears one"},"installer":{"type":"boolean","description":"Whoever installs the app gets this role; the first role when none is marked"}`,
 		Example:  `{"id":"member","title":"Member","actions":["entity:task.read","entity:task.create"],"rowRules":{"task":"record.assignee == principal.user"}}`,
 		Update:   `{"id":"member","rowRules":{"task":"record.assignee == principal.user || record.public"}}`,
 		Describe: "a role, made a custom role in each tenant the app is installed in"},

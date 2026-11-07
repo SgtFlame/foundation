@@ -2,8 +2,9 @@
 // (documentation/RBAC.md › Services: useCan). The server's check is
 // authoritative; this mirrors its rules over the user's grants from
 // GET /authz/me: a grant on a path covers it and everything under it, the
-// self actions need no grant, and a user-owned type under "user:<id>" is
-// theirs.
+// self actions need no grant, a user-owned type under "user:<id>" is
+// theirs, an app's role holds its scoped permissions only on its scope, and
+// a fenced type's records under an app are reached only past the fence.
 
 import { useEffect, useSyncExternalStore } from 'react'
 import { Authz, type MeResponse } from '../services/Authz.ts'
@@ -69,10 +70,25 @@ export function can(p: MeResponse | undefined, userId: string | undefined, actio
   const path = segments(resource)
   const type = action.split('.')[0]
   if (userId && p.ownedTypes.includes(type) && path.includes(`user:${userId}`)) return true
+  const fence = p.fences?.[type]
   return p.grants.some((h) => {
     if (h.grant.expiresAt && Date.parse(h.grant.expiresAt) <= Date.now()) return false
     const g = segments(h.grant.resource)
-    return g.every((s, i) => path[i] === s) && g.length <= path.length && h.permissions.includes(action)
+    if (!(g.every((s, i) => path[i] === s) && g.length <= path.length && holdsOn(h.permissions, action, path))) return false
+    return !fence || h.crossesFences || path.slice(g.length).every((s) => !s.startsWith(`${fence}:`) || s === `${fence}:${h.app}`)
+  })
+}
+
+// holdsOn mirrors authz.Role.HoldsOn: a plain permission anywhere, a scoped
+// one ("app:tasks/entity:task/record.read") only on its scope below the tenant
+function holdsOn(perms: string[], action: string, path: string[]): boolean {
+  if (perms.includes(action)) return true
+  const below = path[0]?.startsWith('tenant:') ? path.slice(1) : path
+  return perms.some((p) => {
+    const i = p.lastIndexOf('/')
+    if (i <= 0 || p.slice(i + 1) !== action) return false
+    const scope = p.slice(0, i).split('/')
+    return scope.length <= below.length && scope.every((s, j) => below[j] === s)
   })
 }
 

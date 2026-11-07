@@ -625,6 +625,17 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-1).
     - **Pending, carried forward**: `app.delete`; the Applications editor (forge 5f); publish and install (5b), where an app's command graphs, already tenant commands once published, must be kept apart (forge 05b question 3).
 
+33. **App roles, access and settings** (Forge iteration 5, part 5c, [forge 05c-AppAccessSettings.md](../../forge/documentation/plans/05c-AppAccessSettings.md)). *Built* ([Apps.md](Apps.md#built-in-slice-33)).
+    - **Built**:
+      - an app's roles as custom roles of the tenant (`CustomRole.AppID|AppRole|Rules`), made, changed and removed by the system as it is installed, upgraded and uninstalled (`Policy.SyncAppRoles`, `RemoveAppRoles`, the `apps.access` follower), the installer given the marked or first role; scoped permissions (`app:<appId>/entity:<id>/record.<action>`, `Role.HoldsOn`); read-only in `authzservice` and the Role Editor;
+      - an installed app's own entity types under `tenant:<id>/app:<appId>/entity:<id>` (`records.SetPlacement`, `installs.Placement`), the `app` fence on `record` (`ResourceType.Fence`), the manifest command's action checked;
+      - row rules per role (`authz.RowRules`, `EntityType.RuleFor`) in every record query, subscription, command, node and tool;
+      - per-tenant settings sections (`config.SectionSources`), the app's `app.<appId>`, the `app.settings` query, `app.settings` in prefab bindings and expressions, the *App setting* node;
+      - the browser: `Authz.ts` types, `can` with scoped permissions and fences, the Role Editor's *App roles*.
+    - **Blockers**: none. Forge 05c questions 1 to 4, and 5 found while preparing the build, were asked before building and answered with their proposals.
+    - **★ review pending**: app roles in the Role Editor and the Share dialog; an app's section in Settings.
+    - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-2).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -664,3 +675,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 30. Variants and the chat acceptance (Forge 4f) | forge 04f 1 (Gemini plus a Go test) and gap 2 (a node field for the variant), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-6), and the chat acceptance with a real model |
 | 31. App drafts (Forge 5a) | forge 05-Applications 6 (a slice per part, answered before) and 05a 1 (KV drafts, the app in SQLite), 2 (owned parts, others required), 3 (the `app` actions) and 4 (per item, per field), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it), to review after seeing |
 | 32. Publish and install (Forge 5b) | forge 05-Applications 5 (publish at the rev seen) and 05b 1 (pinned parts), 2 (one install per tenant), 3 (`<appId>.<name>` on the live core) and 4 (triggers recorded), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-1), and an upgrade seen by an open session (5d) |
+| 33. App roles, access and settings (Forge 5c) | forge 05c 1 (roles made by the system, scoped to the app), 2 (read-only app roles), 3 (own types under the app's path), 4 (row rules per role) and 5 (tenant roles stop at the app fence), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-2), app roles in the Role Editor and Share dialog, and the section in Settings |

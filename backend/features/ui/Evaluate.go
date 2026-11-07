@@ -403,6 +403,9 @@ func (e *evaluator) read(r *Render, sc *scope, from string) (any, error) {
 	case "slots":
 		return len(sc.slots[rest]) > 0, nil
 	case "app":
+		if path, ok := strings.CutPrefix(rest, "settings"); ok && (path == "" || path[0] == '.') {
+			return e.appSettings(r, strings.TrimPrefix(path, ".")), nil
+		}
 		return getPath(e.app(), rest), nil
 	case "user":
 		return getPath(e.user(), rest), nil
@@ -414,6 +417,30 @@ func (e *evaluator) read(r *Render, sc *scope, from string) (any, error) {
 
 func (e *evaluator) app() map[string]any {
 	return map[string]any{"id": e.s.page.App, "page": e.s.page.ID}
+}
+
+// appSettingsQuery names the query a session holds its app's settings
+// under, for app.settings bindings (forge 05c).
+const appSettingsQuery = "__app.settings"
+
+// appSettings reads the page's app's settings at path (all of them when
+// empty), held as the app.settings query so a changed setting patches what
+// reads it; nil on a page of no app, or while loading.
+func (e *evaluator) appSettings(r *Render, path string) any {
+	s := e.s
+	if s.page.App == "" {
+		return nil
+	}
+	if _, ok := s.queries[appSettingsQuery]; !ok {
+		if s.o.Subs == nil || s.hold(appSettingsQuery, QueryRef{Query: "app.settings", Params: map[string]any{"app": s.page.App}}) != nil {
+			return nil
+		}
+		s.fresh = append(s.fresh, s.queries[appSettingsQuery])
+	}
+	if path == "" {
+		return r.Query(appSettingsQuery)
+	}
+	return r.Query(appSettingsQuery, path)
 }
 
 func (e *evaluator) user() map[string]any {
@@ -448,7 +475,11 @@ func (e *evaluator) expression(r *Render, sc *scope, src string) (any, error) {
 			}
 		}
 	}
-	env := map[string]any{"props": inst.props, "state": state, "queries": queries, "app": e.app(), "user": e.user(), "slots": slotsOf}
+	app := e.app()
+	if slices.ContainsFunc(reads, func(rd [2]string) bool { return rd[0] == "app" && rd[1] == "settings" }) {
+		app["settings"] = e.appSettings(r, "")
+	}
+	env := map[string]any{"props": inst.props, "state": state, "queries": queries, "app": app, "user": e.user(), "slots": slotsOf}
 	if env["state"] == nil {
 		env["state"] = map[string]any{}
 	}

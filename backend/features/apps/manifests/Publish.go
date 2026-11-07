@@ -200,6 +200,9 @@ func (c *decision) pin(m apps.Manifest) (apps.Version, []live.Problem) {
 	for _, e := range m.Entities {
 		et, _ := c.publishedEntity(e)
 		v.Entities[e] = et.Version
+		if et.Owner == apps.Owner(m.ID) {
+			v.Owned = append(v.Owned, e)
+		}
 	}
 	slices.SortFunc(problems, func(a, b live.Problem) int { return strings.Compare(a.Path, b.Path) })
 	return v, problems

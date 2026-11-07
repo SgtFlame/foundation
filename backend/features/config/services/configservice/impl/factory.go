@@ -93,6 +93,10 @@ func CreateService(opts ...Option) configservice.Service {
 	return instance
 }
 
+// New makes a service apart from the singleton, for tests that need one
+// per registry.
+func New(opts ...Option) configservice.Service { return newService(opts...) }
+
 func newService(opts ...Option) *service {
 	s := &service{registry: extensions.NewRegistry(), env: map[string]map[string]any{}, server: map[string]map[string]any{}, cache: map[string][]byte{}}
 	for _, opt := range opts {

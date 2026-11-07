@@ -533,3 +533,6 @@ Decided while building:
 - Uploads not set on any record are kept (purging waits for forge 03-DataModel question 6).
 - Unsafe file types download rather than show.
 
+
+## Since slice 33
+Forge 05c ([Apps.md › Built in slice 33](Apps.md#built-in-slice-33)): `records.Resource` puts an installed manifest app's own entity types at `tenant:<id>/app:<appId>/entity:<id>` (`records.SetPlacement`, set by `serve.go` to `installs.Placement`), behind the `app` fence on the `record` type. Row rules are per principal: `EntityType.RuleFor(ctx, p, action)` is the type's rule `&&` the `or` of the app roles' rules for the type (`authz.RowRules`); every query, subscription, command, node and tool uses it in place of `Rule`. A new record read or write must call `RuleFor`, never `Rule`.

@@ -156,12 +156,12 @@ func (c *decision) expect(a struct{ Expect uint64 }) []live.Problem {
 // before and after the change, and delete's on the record before.
 func (c *decision) rules(action string, events []live.NewEvent) []live.Problem {
 	verb := strings.TrimPrefix(action, "record.")
-	rule := c.entity.Rule(verb)
+	rule, src := c.entity.RuleFor(c.Context(), c.Principal, verb)
 	if rule == nil || c.Principal.Kind == features.PrincipalService {
 		return nil
 	}
 	refused := func(which string) []live.Problem {
-		return []live.Problem{{Code: "row_rule", Path: "target", Message: fmt.Sprintf("%s's %s rule (%s) refuses this %s", c.entity.Name, verb, ruleSource(c.entity.Access, verb), which),
+		return []live.Problem{{Code: "row_rule", Path: "target", Message: fmt.Sprintf("%s's %s rule (%s) refuses this %s", c.entity.Name, verb, src, which),
 			Fix: "only records the rule allows can be changed this way; describe the entity type for its rules"}}
 	}
 	if c.record != nil && !records.Allows(rule, c.record, c.Principal) {
@@ -183,10 +183,6 @@ func (c *decision) rules(action string, events []live.NewEvent) []live.Problem {
 		return refused("change")
 	}
 	return nil
-}
-
-func ruleSource(a records.Access, verb string) string {
-	return map[string]string{"read": a.Read, "create": a.Create, "update": a.Update, "delete": a.Delete}[verb]
 }
 
 func decode[T any](raw json.RawMessage) (T, []live.Problem) {
@@ -265,7 +261,7 @@ func decideRecord(s spec, d live.Decision, deps Deps) ([]live.NewEvent, []live.P
 	}
 	c.entity = e
 	// A record the read rule hides is not there for the principal
-	if !s.internal && c.record != nil && !records.Allows(e.Rule("read"), c.record, d.Principal) {
+	if !s.internal && c.record != nil && !records.Allows(first(e.RuleFor(d.Context(), d.Principal, "read")), c.record, d.Principal) {
 		return nil, problem("target", fmt.Sprintf("there is no %s record %q", d.Target.Type, d.Target.ID), "list them with records.query")
 	}
 	events, problems := s.decide(c)

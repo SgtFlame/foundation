@@ -95,11 +95,16 @@ type Query struct {
 // 05c). Its row rules are per entity type, expressions over record and
 // principal.
 type Role struct {
-	ID          string            `json:"id"`
-	Title       string            `json:"title,omitempty"`
-	Description string            `json:"description,omitempty"`
-	Actions     []string          `json:"actions"`
-	RowRules    map[string]string `json:"rowRules,omitempty"`
+	ID          string `json:"id"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	// Actions are entity:<id>.<read|create|update|delete|*> on the app's
+	// own entity types.
+	Actions  []string          `json:"actions"`
+	RowRules map[string]string `json:"rowRules,omitempty"`
+	// Installer marks the role whoever installs the app is given; without
+	// one, it is the first role.
+	Installer bool `json:"installer,omitempty"`
 }
 
 // Settings become the configuration section app.<id> when the app is

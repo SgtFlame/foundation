@@ -2,6 +2,7 @@ package authz
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 )
@@ -31,11 +32,49 @@ type Role struct {
 	BuiltIn     bool
 	Permissions []string // "*" is every permission
 	Revision    int
+	// App is the app whose role this is (forge 05c), empty for every other;
+	// AppRole is its id in the app's manifest.
+	App     string
+	AppRole string
+	// Rules are an app role's row rules by key (an entity type's id),
+	// expressions the owning feature runs (records); see RowRules.
+	Rules map[string]string
 }
 
 // Holds tells whether the role contains permission.
 func (r Role) Holds(permission string) bool {
 	return slices.Contains(r.Permissions, "*") || slices.Contains(r.Permissions, permission)
+}
+
+// HoldsOn tells whether the role holds action on the resource at path: a
+// plain permission anywhere it is granted, and a scoped one
+// ("app:tasks/entity:task/record.read", an app's role) only on its scope,
+// a path below the tenant, and under it.
+func (r Role) HoldsOn(action string, path []string) bool {
+	if r.Holds(action) {
+		return true
+	}
+	if len(path) > 0 && strings.HasPrefix(path[0], "tenant:") {
+		path = path[1:]
+	}
+	for _, p := range r.Permissions {
+		scope, perm, ok := ScopedPermission(p)
+		if ok && perm == action && Covers(scope, path) {
+			return true
+		}
+	}
+	return false
+}
+
+// ScopedPermission splits an app role's permission into its scope below
+// the tenant and the permission: "app:tasks/entity:task/record.read" is
+// [app:tasks entity:task] and record.read.
+func ScopedPermission(p string) (scope []string, permission string, ok bool) {
+	i := strings.LastIndex(p, "/")
+	if i <= 0 {
+		return nil, p, false
+	}
+	return strings.Split(p[:i], "/"), p[i+1:], true
 }
 
 // builtin describes a built-in role by the actions it takes.

@@ -142,7 +142,7 @@ func runGet(f live.Feed, d Deps, p getParams) error {
 	if problems != nil {
 		return log.Code("entity_not_found").Errorf("%s", problems[0].Message)
 	}
-	rule := e.Rule("read")
+	rule, _ := e.RuleFor(f.Context(), args.Principal, "read")
 	entries, err := f.Store().Watch(f.Context(), args.Principal.TenantID, Projector, Key(p.Entity, p.ID))
 	if err != nil {
 		return err

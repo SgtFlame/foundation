@@ -9,10 +9,12 @@ import (
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/apps"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
+	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	livenodes "github.com/SgtFlame/foundation/backend/features/live/nodes"
+	"github.com/SgtFlame/foundation/backend/features/records"
 )
 
 // Resolver is how the bus or the subscriptions find a command or query no
@@ -29,8 +31,8 @@ func CommandFor(deps func() Deps, inner Resolver[live.Command]) Resolver[live.Co
 		d := deps()
 		if app, name, ok := apps.Unscoped(typ); ok {
 			if in, ok := Running(args.Context(), d.Projections, args.Principal.TenantID, app); ok {
-				if _, g, ok := in.Version.Command(name); ok {
-					return command(d, typ, app, name, g), true
+				if c, g, ok := in.Version.Command(name); ok {
+					return command(d, typ, app, name, c, g), true
 				}
 			}
 		}
@@ -91,11 +93,13 @@ func manifestOwned(args features.ServiceArgs, d Deps, source string) bool {
 // command is an installed app's command. Its decision reads the install
 // again, so one decided after an upgrade runs the new version's graph, and
 // one the new version removed is refused.
-func command(d Deps, typ, app, name string, g cognition.Graph) live.Command {
+func command(d Deps, typ, app, name string, c apps.Command, g cognition.Graph) live.Command {
 	spec, _ := specOf[livenodes.CommandSpec](g.Spec)
+	action, resource := actionOf(c, spec)
 	return live.Command{
 		Descriptor: extensions.Descriptor{ID: typ, Source: "app:" + app}, Title: spec.Title, Description: spec.Description,
-		Args: spec.Args, Events: spec.Events, Area: live.Area(spec.Area), TargetType: spec.TargetType, Projection: spec.Projection, Action: spec.Action,
+		Args: spec.Args, Events: spec.Events, Area: live.Area(spec.Area), TargetType: spec.TargetType, Projection: spec.Projection,
+		Action: action, Resource: resource,
 		Decide: func(dec live.Decision) ([]live.NewEvent, []live.Problem) {
 			in, ok := Running(dec.Context(), d.Projections, dec.Principal.TenantID, app)
 			if !ok {
@@ -138,6 +142,17 @@ func query(d Deps, typ, app, name string, g cognition.Graph) live.Query {
 			})
 		},
 	}
+}
+
+// actionOf is the action an app's command needs: the manifest's
+// (entity:task.update is record.update on task's records, under the app's
+// path while it is installed), else its graph's.
+func actionOf(c apps.Command, spec livenodes.CommandSpec) (string, func(features.Principal, live.Target) string) {
+	entity, acts, ok := apps.EntityAction(c.Action)
+	if !ok || len(acts) != 1 {
+		return spec.Action, nil
+	}
+	return authz.Permission("record", acts[0]), func(p features.Principal, _ live.Target) string { return records.Resource(p, entity) }
 }
 
 func specOf[T any](raw json.RawMessage) (T, error) {
@@ -183,8 +198,9 @@ func summaryOf(in apps.Install) Summary {
 		InstalledBy: in.InstalledBy, InstalledAt: in.InstalledAt, UpdatedAt: in.UpdatedAt}
 	for _, c := range m.Commands {
 		spec, _ := specOf[livenodes.CommandSpec](in.Version.Graphs[c.Graph].Spec)
+		action, _ := actionOf(c, spec)
 		s.Commands = append(s.Commands, Entry{Name: apps.Scoped(in.App, c.Type), Title: firstOf(c.Title, spec.Title),
-			Description: firstOf(c.Description, spec.Description), Args: spec.Args, Action: spec.Action})
+			Description: firstOf(c.Description, spec.Description), Args: spec.Args, Action: action})
 	}
 	for _, q := range m.Queries {
 		spec, _ := specOf[livenodes.QuerySpec](in.Version.Graphs[q.Graph].Spec)

@@ -19,7 +19,10 @@ export async function peopleFor(resource: string, tenantId: string): Promise<Per
 
 // Whether a role may be granted on resource: app roles only on "app"
 export function grantable(role: Role, resource: string): boolean {
-  return role.scope === 'app' ? resource === 'app' : resource.startsWith('tenant:')
+  if (role.scope === 'app') return resource === 'app'
+  // An app's role: on the tenant, or on the app and below
+  if (role.app) return /^tenant:\d+$/.test(resource) || resource.split('/')[1] === `app:${role.app}`
+  return resource.startsWith('tenant:')
 }
 
 // The ancestors of a path, nearest first: "tenant:1/volume:4" → ["tenant:1", "app"]

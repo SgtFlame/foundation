@@ -401,7 +401,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var conversationLive conversationservice.Service
 		var collabLive collabservice.Service
 		registry := extensions.NewRegistry()
-		registry.Declare(config.Sections, conversation.ContextProviders, conversation.RoundFollowers, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, authz.ResourceTypes,
+		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.RoundFollowers, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, authz.ResourceTypes,
 			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds)
 		// Each feature declares its resource types and their actions
 		authz.Contribute(registry)
@@ -716,7 +716,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		entityService := entityimpl.CreateService(entityimpl.WithEntities(entityDeps))
 		prefabDeps = prefabs.Deps{Projections: projections, DB: gdb}
 		appDeps = manifests.Deps{Projections: projections, DB: gdb}
-		installDeps = installs.Deps{Projections: projections, DB: gdb, Nodes: liveNodeDeps}
+		installDeps = installs.Deps{Projections: projections, DB: gdb, Nodes: liveNodeDeps, Roles: policy, Config: configService}
+		// An installed app's own entity types are under its path (forge 05c)
+		records.SetPlacement(installs.Placement(func() installs.Deps { return installDeps }))
 		prefabService := prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
 		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())),
 			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))

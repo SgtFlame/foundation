@@ -150,7 +150,7 @@ func (p *planned) related(args features.ServiceArgs, d Deps, x expansion, ids []
 		}
 		return out, nil
 	}
-	rule := x.e.Rule("read")
+	rule, _ := x.e.RuleFor(args.Context(), args.Principal, "read")
 	for _, id := range ids {
 		r, _, err := get(args, d, x.target, id)
 		if err != nil {

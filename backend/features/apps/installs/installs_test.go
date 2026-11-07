@@ -40,12 +40,15 @@ import (
 )
 
 type fixture struct {
-	t    *testing.T
-	bus  *bus.Bus
-	subs *subscribe.Subscriptions
-	p    *project.Projections
-	db   *gorm.DB
-	n    atomic.Int64
+	t       *testing.T
+	reg     *extensions.Registry
+	install *installs.Deps // as serve.go makes them, for a test to add to
+	data    *data.Deps
+	bus     *bus.Bus
+	subs    *subscribe.Subscriptions
+	p       *project.Projections
+	db      *gorm.DB
+	n       atomic.Int64
 }
 
 func setup(t *testing.T) *fixture {
@@ -84,7 +87,7 @@ func setup(t *testing.T) *fixture {
 	t.Cleanup(p.Close)
 	eng := engine.New(gdb, reg, nil)
 	eng.SetSource(drafts.Source{Store: p})
-	f := &fixture{t: t, bus: bus.New(p), subs: subscribe.New(p, reg), p: p, db: gdb}
+	f := &fixture{t: t, reg: reg, install: &installDep, data: &dataDeps, bus: bus.New(p), subs: subscribe.New(p, reg), p: p, db: gdb}
 	nodeDeps = livenodes.Deps{Engine: eng, Bus: f.bus, Subscriptions: f.subs, Store: p}
 	draftDeps = drafts.Deps{Engine: eng, Projections: p}
 	dataDeps = data.Deps{Projections: p, Bus: f.bus}

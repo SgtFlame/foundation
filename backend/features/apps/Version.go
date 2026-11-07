@@ -26,6 +26,9 @@ type Version struct {
 	Prefabs map[string]int `json:"prefabs"`
 	// Entities are the published versions of its entity types.
 	Entities map[string]int `json:"entities"`
+	// Owned are the entity types the app owns, whose records are under its
+	// path while it is installed (forge 05c question 3).
+	Owned []string `json:"owned,omitempty"`
 	// Graphs are copies of its graphs as they were published: its
 	// commands' and queries', and those its prefabs name. A graph keeps
 	// only its last published version, so the app keeps its own.

@@ -23,6 +23,9 @@ export interface ResourceType {
   source: string
   parent: string
   owned?: boolean
+  // A kind of path segment ("app") that grants above it cross only through
+  // the Owner, Administrator and the app's own roles (forge 05c)
+  fence?: string
   actions: Action[]
 }
 
@@ -32,8 +35,13 @@ export interface Role {
   description?: string
   scope: 'app' | 'tenant'
   builtIn?: boolean
-  permissions: string[] // '*' is every permission
+  permissions: string[] // '*' is every permission; an app's are scoped: 'app:tasks/entity:task/record.read'
   revision?: number
+  // An app's role (forge 05c): read-only, changed by the app's upgrades;
+  // appRole is its id in the manifest, rules its row rules by entity type
+  app?: string
+  appRole?: string
+  rules?: Record<string, string>
 }
 
 export interface Grant {
@@ -50,6 +58,8 @@ export interface Held {
   grant: Grant
   roleName: string
   permissions: string[]
+  app?: string // the app whose role it is, whose fence it crosses
+  crossesFences?: boolean // the Owner, Administrator and Super Administrator
 }
 
 export interface MeResponse extends ResponseStatus {
@@ -57,6 +67,7 @@ export interface MeResponse extends ResponseStatus {
   grants: Held[]
   self: string[]
   ownedTypes: string[]
+  fences?: Record<string, string> // resource type → the segment kind fencing it
 }
 
 export interface ResourceTypesResponse extends ResponseStatus {

@@ -42,8 +42,9 @@ export interface AppRole {
   id: string
   title?: string
   description?: string
-  actions: string[]
+  actions: string[] // entity:<id>.<read|create|update|delete|*> on the app's own entity types
   rowRules?: Record<string, string> // entity type → rule
+  installer?: boolean // whoever installs the app gets it; else the first role
 }
 
 export interface AppSettings {

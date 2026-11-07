@@ -52,6 +52,55 @@ interface Draft {
 
 const draftOf = (r: Role): Draft => ({ id: r.builtIn ? undefined : r.id, name: r.name, description: r.description ?? '', permissions: new Set(r.permissions), revision: r.revision ?? 0 })
 
+// An app's role (forge 05c): its permissions are scoped to the app's own
+// entity types, and its row rules limit which records it reaches. Both come
+// from the app's manifest, so they are shown, never edited.
+function AppPermissions({ types, role }: { types: ResourceType[]; role: Role }) {
+  const title = (perm: string) => {
+    const [type, action] = perm.split('.')
+    const t = types.find((x) => x.id === type)
+    return t?.actions.find((a) => a.name === action)?.title ?? perm
+  }
+  const rows = role.permissions.map((p) => {
+    const i = p.lastIndexOf('/')
+    const scope = i > 0 ? p.slice(0, i) : ''
+    const entity = scope.split('/').find((s) => s.startsWith('entity:'))?.slice('entity:'.length)
+    return { key: p, entity: entity ?? scope, perm: p.slice(i + 1) }
+  })
+  return (
+    <Stack spacing={1} sx={{ minWidth: 0 }}>
+      <Table size="small" aria-label="Permissions">
+        <TableHead>
+          <TableRow>
+            <TableCell>Entity type</TableCell>
+            <TableCell>Permission</TableCell>
+            <TableCell>Row rule</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.key}>
+              <TableCell>{r.entity}</TableCell>
+              <TableCell>
+                {title(r.perm)}
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  {r.key}
+                </Typography>
+              </TableCell>
+              <TableCell sx={{ fontFamily: 'monospace', fontSize: 13 }}>{role.rules?.[r.entity] ?? 'every record'}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      {rows.length === 0 && (
+        <Typography variant="body2" color="text.secondary">
+          This role holds no permission.
+        </Typography>
+      )}
+    </Stack>
+  )
+}
+
 // The permission matrix. Read-only for built-in roles. A tenant role (every
 // custom role) holds only tenant permissions, so app actions are left out.
 function Matrix({ types, draft, scope, readOnly, onChange }: { types: ResourceType[]; draft: Draft; scope: Role['scope']; readOnly: boolean; onChange: (perms: Set<string>) => void }) {
@@ -326,12 +375,13 @@ function RolesEditor() {
   }, [tenantId])
 
   const role = roles.find((r) => r.id === selected)
-  const readOnly = !draft?.id && !!role?.builtIn
+  const readOnly = (!draft?.id && !!role?.builtIn) || !!role?.app
   const grouped = useMemo(
     () => [
       { title: 'Application roles', list: roles.filter((r) => r.builtIn && r.scope === 'app') },
       { title: 'Tenant roles', list: roles.filter((r) => r.builtIn && r.scope === 'tenant') },
-      { title: 'Custom roles', list: roles.filter((r) => !r.builtIn) },
+      { title: 'App roles', list: roles.filter((r) => r.app).sort((a, b) => a.app!.localeCompare(b.app!)) },
+      { title: 'Custom roles', list: roles.filter((r) => !r.builtIn && !r.app) },
     ],
     [roles],
   )
@@ -382,7 +432,7 @@ function RolesEditor() {
               </ToolbarAction>
               <ToolbarAction
                 title="Duplicate as a custom role"
-                disabled={!mayWrite || !role || role.scope === 'app'}
+                disabled={!mayWrite || !role || role.scope === 'app' || !!role.app}
                 onClick={() => {
                   if (!role) return
                   setSelected(undefined)
@@ -410,7 +460,7 @@ function RolesEditor() {
                             setDraft(draftOf(r))
                           }}
                         >
-                          <ListItemText primary={r.name} secondary={r.description} slotProps={{ secondary: { noWrap: true } }} />
+                          <ListItemText primary={r.name} secondary={r.app ? `App ${r.app}` : r.description} slotProps={{ secondary: { noWrap: true } }} />
                         </ListItemButton>
                       )),
                     ],
@@ -429,6 +479,7 @@ function RolesEditor() {
                     <TextField size="small" label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} disabled={!mayWrite} />
                   )}
                   {role?.builtIn && <Chip size="small" label="Built-in" />}
+                  {role?.app && <Chip size="small" label={`App ${role.app}`} />}
                   {(role?.scope ?? 'tenant') === 'app' ? <Chip size="small" variant="outlined" label="Granted on the application" /> : <Chip size="small" variant="outlined" label="Granted in a tenant" />}
                   <Box sx={{ flex: 1 }} />
                   {!readOnly && mayWrite && (
@@ -459,7 +510,9 @@ function RolesEditor() {
                   <Stack spacing={0.5}>
                     <Typography variant="body2">{draft.description}</Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Built-in roles cannot be changed; duplicate a tenant role to make a custom one.
+                      {role?.app
+                        ? `This role belongs to the app ${role.app}: it changes with the app's manifest and an upgrade, and goes when the app is uninstalled. Its grants are managed here.`
+                        : 'Built-in roles cannot be changed; duplicate a tenant role to make a custom one.'}
                     </Typography>
                   </Stack>
                 ) : (
@@ -473,6 +526,8 @@ function RolesEditor() {
                 )}
                 {pane === 'grants' && role ? (
                   <Grants key={role.id} role={role} people={people} fail={fail} />
+                ) : role?.app ? (
+                  <AppPermissions types={types} role={role} />
                 ) : (
                   <Matrix types={types} draft={draft} scope={role?.scope ?? 'tenant'} readOnly={readOnly || !mayWrite} onChange={(p) => setDraft({ ...draft, permissions: p })} />
                 )}

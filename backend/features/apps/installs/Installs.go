@@ -16,6 +16,8 @@ import (
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/apps"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
+	"github.com/SgtFlame/foundation/backend/features/authz"
+	"github.com/SgtFlame/foundation/backend/features/config/services/configservice"
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
@@ -56,6 +58,10 @@ type Deps struct {
 	Projections Projections
 	DB          *gorm.DB       // the tenant database, which holds the installs
 	Nodes       livenodes.Deps // runs the pinned graphs
+	// Roles makes and removes the apps' roles (forge 05c); nil makes none.
+	Roles *authz.Policy
+	// Config resolves the apps' settings sections and tells their changes.
+	Config configservice.Service
 }
 
 type change struct {
@@ -207,6 +213,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		})
 	}
 	contributeQueries(reg, deps)
+	contributeSettings(reg, deps)
 }
 
 // fold is the apps.install projector's fold.
@@ -238,9 +245,13 @@ func fold(f live.Fold) (json.RawMessage, error) {
 }
 
 // Follow makes sure the principal's tenant copies its installs into the
-// tenant database (apps_installs): the install commands start it before
-// their events commit, and app.installs after a restart.
+// tenant database (apps_installs) and keeps its apps' roles (forge 05c):
+// the install commands start it before their events commit, and
+// app.installs after a restart.
 func Follow(args features.ServiceArgs, deps Deps) error {
+	if err := followAccess(args, deps); err != nil {
+		return err
+	}
 	if deps.DB == nil {
 		return nil
 	}

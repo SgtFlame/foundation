@@ -50,7 +50,13 @@ type ResourceType struct {
 	Parent                string // the type it lives under: "app" or "tenant"
 	// Owned types are user-owned: an action on a resource whose path names
 	// the principal (".../user:<id>/...") is allowed, the implied Owner.
-	Owned   bool
+	Owned bool
+	// Fence is a kind of path segment ("app") that grants above it reach
+	// only through the roles that may cross it (forge 05c question 5): the
+	// Super Administrator, the tenant's Owner and Administrator, and the
+	// roles of the app the segment names. An Editor of the tenant does not
+	// reach an installed app's records.
+	Fence   string
 	Actions []Action
 }
 

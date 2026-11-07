@@ -14,7 +14,7 @@ func (s *service) Get(args configservice.GetArgs) configservice.GetResponse {
 	if f != nil {
 		return configservice.GetResponse{Common: *args.Fail(f.status, f.err)}
 	}
-	sec, f := s.section(args.Section)
+	sec, f := s.section(args.ServiceArgs, args.Section)
 	if f != nil {
 		return configservice.GetResponse{Common: *args.Fail(f.status, f.err)}
 	}

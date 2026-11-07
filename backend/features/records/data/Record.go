@@ -247,3 +247,6 @@ func fold(f live.Fold) (json.RawMessage, error) {
 	}
 	return json.Marshal(r)
 }
+
+// first is a rule without its source.
+func first[T, U any](t T, _ U) T { return t }
