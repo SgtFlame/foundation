@@ -13,13 +13,13 @@ for (const [id, component] of Object.entries({ ...muiRenderers, ...starterRender
 extensions.contribute(renderers, { id: 'layout.flex', source: 'ui', component: lazy(() => import('./renderers/flexlayout/FlexLayout.tsx')) })
 extensions.contribute(renderers, { id: 'graph.canvas', source: 'ui', component: lazy(() => import('./renderers/graph/GraphCanvas.tsx')) })
 
-// The installed apps' editor kinds, once there is a session
+// The apps' editor kinds, followed once there is a session
 let loaded = false
 function loadWhenSignedIn() {
   const { status } = session.get()
   if (loaded || (status !== 'signedIn' && status !== 'singleUser')) return
   loaded = true
-  void loadEditorKinds()
+  loadEditorKinds()
 }
 session.subscribe(loadWhenSignedIn)
 loadWhenSignedIn()

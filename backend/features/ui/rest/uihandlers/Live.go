@@ -1,6 +1,7 @@
 package uihandlers
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 
@@ -15,8 +16,60 @@ import (
 
 // ContributeLive handles the ui.* frames on every live connection, given
 // the service once made. A connection's sessions end with it; their
-// records stay, so the browser resumes them when it reconnects.
+// records stay, so the browser resumes them when it reconnects. It also
+// registers the ui.editorKinds query (forge 05d).
 func ContributeLive(reg *extensions.Registry, service func() uiservice.Service) {
+	live.Queries.Register(reg, live.Query{
+		Descriptor: extensions.Descriptor{ID: "ui.editorKinds", Source: "ui"}, Title: "Apps and their editor kinds",
+		Description: "The apps of this tenant, Go and installed, and the kinds of top-level tab their pages open as: {apps: [{id, title, description, icon, reach}], kinds: [{id, app, kind, title, icon, page}]}. Replaced whole when an app is installed, upgraded or uninstalled. reach is what a user needs to use an app, any one of them.",
+		Params:      json.RawMessage(`{"type":"object","properties":{}}`),
+		Action:      "ui.read",
+		Run: func(f live.Feed) error {
+			ctx, cancel := context.WithCancel(f.Context())
+			defer cancel()
+			var changed []<-chan struct{}
+			for _, src := range ui.AppSources.All(reg) {
+				if src.Changed != nil {
+					changed = append(changed, src.Changed(ctx, f.Args().Principal.TenantID))
+				}
+			}
+			kinds := func() (any, bool) {
+				resp := service().EditorKinds(uiservice.EditorKindsArgs{ServiceArgs: f.Args()})
+				v := uidto.EditorKindsResponseFrom(resp)
+				return struct {
+					Apps  []uidto.App        `json:"apps"`
+					Kinds []uidto.EditorKind `json:"kinds"`
+				}{v.Apps, v.Kinds}, resp.Common.Code < 300
+			}
+			v, _ := kinds()
+			f.Snapshot(v, live.Position{})
+			merged := make(chan struct{}, 1)
+			for _, c := range changed {
+				go func() {
+					for range c {
+						select {
+						case merged <- struct{}{}:
+						default:
+						}
+					}
+				}()
+			}
+			for {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-merged:
+					v, ok := kinds()
+					if !ok {
+						continue
+					}
+					raw, _ := json.Marshal(v)
+					f.Change(live.Delta{Op: "replace", Value: raw}, live.Position{})
+				}
+			}
+		},
+	})
+
 	live.Extensions.Register(reg, live.Extension{
 		Descriptor: extensions.Descriptor{ID: "ui", Source: "ui"},
 		Frames:     []string{"ui.open", "ui.event", "ui.close"},

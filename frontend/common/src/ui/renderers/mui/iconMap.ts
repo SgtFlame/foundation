@@ -27,6 +27,11 @@ import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import AppsIcon from '@mui/icons-material/Apps'
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
+import ListIcon from '@mui/icons-material/List'
+import TaskIcon from '@mui/icons-material/Task'
+import TableRowsIcon from '@mui/icons-material/TableRows'
 import type { SvgIconProps } from '@mui/material'
 import { createElement, type ComponentType } from 'react'
 
@@ -59,6 +64,12 @@ export const icons: Record<string, ComponentType<SvgIconProps>> = {
   apps: AppsIcon,
   arrow_upward: ArrowUpwardIcon,
   arrow_downward: ArrowDownwardIcon,
+  // An app's frame and navigation (forge 05d)
+  arrow_back: ArrowBackIcon,
+  arrow_forward: ArrowForwardIcon,
+  list: ListIcon,
+  task: TaskIcon,
+  table_rows: TableRowsIcon,
 }
 
 // An icon by name, as a component for places that take one (the Editors view)

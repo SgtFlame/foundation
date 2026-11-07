@@ -9,6 +9,7 @@ import { workbenchContext } from '../../workbench/context/WorkbenchContextStore.
 import { extensions } from '../../workbench/extensions/index.ts'
 import { editors } from '../../workbench/points.ts'
 import { session } from '../../session/session.ts'
+import { onKindsRemoved, openDeepLink } from '../../ui/editorKinds.ts'
 import { bordersJson, syncBorders } from './borders.ts'
 import { createFactory } from './ComponentFactory.tsx'
 import { EditorRegistry } from './EditorRegistry.ts'
@@ -113,6 +114,20 @@ function Workbench() {
     if (linked) registry.edit(logsOn(linked))
     return onOpenLogs((view) => registry.edit(logsOn(view)))
   }, [registry])
+  // App deep links (/workbench?app=<appId>&route=/task/123)
+  useEffect(() => openDeepLink(registry, location.search), [registry])
+  // An app uninstalled, or an editor kind an upgrade removed: its tabs close
+  useEffect(
+    () =>
+      onKindsRemoved((kinds) => {
+        const gone: string[] = []
+        model.visitNodes((node) => {
+          if (node instanceof TabNode && kinds.includes(node.getComponent() ?? '')) gone.push(node.getId())
+        })
+        for (const id of gone) registry.close(id)
+      }),
+    [model, registry],
+  )
 
   return (
     <WorkbenchContextProvider>

@@ -41,6 +41,14 @@ type Manifest struct {
 	Version  int       `json:"version"` // the published version; 0 in a draft never published
 }
 
+// DefaultFrame is the prefab an app that names no frame is framed by:
+// Forge's starter App frame (forge 05d question 2). Without it, a plain
+// frame drawn by the runtime.
+const DefaultFrame = "appFrame"
+
+// FrameSlot is the frame's slot the current page goes in.
+const FrameSlot = "page"
+
 // Page is a route to a prefab. The route's params (/task/:id) become the
 // prefab's props.
 type Page struct {

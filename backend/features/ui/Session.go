@@ -28,6 +28,7 @@ type TreeFrame struct {
 	Tree    *Node    `json:"tree"`
 	Title   string   `json:"title,omitempty"`
 	Subject *Subject `json:"subject,omitempty"`
+	Framed  bool     `json:"framed,omitempty"` // drawn in its app's frame (forge 05d)
 	Stale   bool     `json:"stale,omitempty"`
 }
 
@@ -38,6 +39,9 @@ type PatchFrame struct {
 	Rev     int64    `json:"rev"`
 	Patches []Patch  `json:"patches"`
 	Actions []Action `json:"actions,omitempty"`
+	// Title and Subject, when the page's Heading changed them
+	Title   string   `json:"title,omitempty"`
+	Subject *Subject `json:"subject,omitempty"`
 }
 
 // ErrorFrame ← a page that could not open, or a handler that failed.
@@ -109,6 +113,8 @@ type Session struct {
 	fresh     []*heldQuery         // queries held while rendering
 	opened    bool
 	closed    bool
+	title     string // the title and subject last sent
+	subject   *Subject
 	ctx       context.Context
 	cancel    context.CancelFunc
 	args      features.ServiceArgs // the opener's, for subscribing again
@@ -269,12 +275,32 @@ func (s *Session) save() {
 }
 
 func (s *Session) sendTree(stale bool) {
-	f := TreeFrame{Type: "ui.tree", Session: s.id, Rev: s.rev, Tree: s.tree, Title: s.page.Title, Stale: stale}
-	if s.page.Subject != nil {
-		sub := s.page.Subject(s.params)
-		f.Subject = &sub
+	s.title, s.subject = s.heading()
+	s.o.Send(TreeFrame{Type: "ui.tree", Session: s.id, Rev: s.rev, Tree: s.tree, Title: s.title, Subject: s.subject, Framed: s.page.Framed, Stale: stale})
+}
+
+// heading is the tab's title and subject: the page's Heading over its
+// data, else its Title and Subject.
+func (s *Session) heading() (string, *Subject) {
+	if s.page.Heading != nil {
+		return s.page.Heading(&Render{s: s, deps: map[string]bool{}})
 	}
-	s.o.Send(f)
+	var sub *Subject
+	if s.page.Subject != nil {
+		v := s.page.Subject(s.params)
+		sub = &v
+	}
+	return s.page.Title, sub
+}
+
+// stale tells the browser an app's session is of a version since
+// upgraded, so it opens it again (forge 05d); the event is not run.
+func (s *Session) stale(handler string) bool {
+	if s.page.Stale == nil || !s.page.Stale() {
+		return false
+	}
+	s.o.Send(ErrorFrame{Type: "ui.error", Session: s.id, Handler: handler, Code: http.StatusConflict, Message: "the app was upgraded; its page opens again", ErrorCode: "page_changed"})
+	return true
 }
 
 // Event runs a handler for an event on the node at path, then sends the
@@ -284,6 +310,9 @@ func (s *Session) Event(args features.ServiceArgs, handler string, path []string
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
+		return
+	}
+	if s.stale(handler) {
 		return
 	}
 	if path != nil && s.tree.At(path) == nil {
@@ -341,11 +370,20 @@ func (s *Session) send(actions []Action) {
 	s.fresh = nil
 	s.rebind()
 	patches := s.update()
-	if len(patches) == 0 && len(actions) == 0 {
+	f := PatchFrame{Type: "ui.patch", Session: s.id, Patches: patches, Actions: actions}
+	if s.page.Heading != nil && s.tree != nil {
+		title, sub := s.heading()
+		if title != s.title || !equalJSON(normalize(sub), normalize(s.subject)) {
+			s.title, s.subject = title, sub
+			f.Title, f.Subject = title, sub
+		}
+	}
+	if len(patches) == 0 && len(actions) == 0 && f.Title == "" && f.Subject == nil {
 		return
 	}
 	s.rev++
-	s.o.Send(PatchFrame{Type: "ui.patch", Session: s.id, Rev: s.rev, Patches: patches, Actions: actions})
+	f.Rev = s.rev
+	s.o.Send(f)
 	s.save()
 }
 

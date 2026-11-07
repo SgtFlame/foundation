@@ -524,6 +524,9 @@ func (e *evaluator) presence(r *Render, sc *scope, src string) (string, error) {
 // has none; nil with no problem is still loading.
 func (e *evaluator) definition(r *Render, id string, version int, draft bool) (*Prefab, []Problem) {
 	s := e.s
+	if pin, ok := s.page.Pins[id]; ok && !draft && version == 0 {
+		version = pin // an installed app's version pins it (forge 05d)
+	}
 	name, params := definitionQuery+id, map[string]any{"id": id, "published": true}
 	switch {
 	case draft:
@@ -750,7 +753,7 @@ func (s *Session) holdFor(inst *instance, name string, d QueryDecl) *Problem {
 			}
 		}
 	}
-	ref := QueryRef{Query: d.Query, Params: params, Bind: bind}
+	ref := QueryRef{Query: s.page.Query(d.Query), Params: params, Bind: bind}
 	held := inst.kp + "#" + name
 	inst.queries[name] = held
 	q := s.queries[held]

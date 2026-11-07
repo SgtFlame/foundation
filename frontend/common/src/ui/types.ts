@@ -57,6 +57,7 @@ export interface UiSubject {
   type: string
   id: string
   label: string
+  object?: string // the presence object its viewers are in, "<type>.<id>"
 }
 
 // Applies one patch, copying only the nodes on its path, so unchanged

@@ -636,6 +636,17 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **★ review pending**: app roles in the Role Editor and the Share dialog; an app's section in Settings.
     - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-2).
 
+34. **Running apps in the workbench** (Forge iteration 5, part 5d, [forge 05d-AppRuntime.md](../../forge/documentation/plans/05d-AppRuntime.md)). *Built* ([Apps.md](Apps.md#built-in-slice-34)).
+    - **Built**:
+      - the `ui.appSource` point and `apps/installs/Pages.go`: installed apps, their kinds (`app:<appId>:main`, `app:<appId>:<kind>`) and pages resolved from the install, with their reach, pinned prefab versions, copied graphs and scoped command and query names;
+      - the main tab (`ui.AppPage`): the frame around the page at the current route, the tab's own history in view state (`app.navigate`, `app.back`, `app.forward`), root instances' events reaching the page's handlers, the *Navigate* node; an editor kind's tab with its record and the manifest's title and subject templates (`Page.Heading`, sent again when they change); presence on `record_<entity>.<id>`; upgrades reopening sessions (`page_changed`) and removed pages failing to open (`app_page_gone`);
+      - the live `ui.editorKinds` query; the Apps section shown by reach, tabs of removed kinds closing, `openApp` at a route, deep links (`/workbench?app=…&route=…`), `AppHost` without a header in a frame, renamed by the page's title;
+      - `grow` and `fill` on `mui.box` and `mui.stack`, five icons; `ui.ApplyPatch`;
+      - Forge: *App frame* in the starter library, the Records app as a manifest app seeded and installed by `cli seed`.
+    - **Blockers**: none. Forge iteration questions 1 (run drafts, built with 5f) and 2 (the app's own history), and 05d questions 1 (Hello stays Go, Records becomes a manifest app) and 2 (*App frame* in Forge), were asked before building and answered with their proposals.
+    - **★ review pending**: the Apps section with several apps; the frame, its navigation and back and forward.
+    - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-3).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -676,3 +687,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 31. App drafts (Forge 5a) | forge 05-Applications 6 (a slice per part, answered before) and 05a 1 (KV drafts, the app in SQLite), 2 (owned parts, others required), 3 (the `app` actions) and 4 (per item, per field), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it), to review after seeing |
 | 32. Publish and install (Forge 5b) | forge 05-Applications 5 (publish at the rev seen) and 05b 1 (pinned parts), 2 (one install per tenant), 3 (`<appId>.<name>` on the live core) and 4 (triggers recorded), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-1), and an upgrade seen by an open session (5d) |
 | 33. App roles, access and settings (Forge 5c) | forge 05c 1 (roles made by the system, scoped to the app), 2 (read-only app roles), 3 (own types under the app's path), 4 (row rules per role) and 5 (tenant roles stop at the app fence), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-2), app roles in the Role Editor and Share dialog, and the section in Settings |
+| 34. Running apps in the workbench (Forge 5d) | forge 05-Applications 1 (run drafts, with 5f) and 2 (the app's own history), and 05d 1 (Hello stays Go, Records a manifest app) and 2 (*App frame* in Forge), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-3), the Apps section with several apps, the frame and its navigation |

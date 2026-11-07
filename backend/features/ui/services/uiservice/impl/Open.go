@@ -24,17 +24,27 @@ func (s *service) Open(args uiservice.OpenArgs) uiservice.OpenResponse {
 			break
 		}
 	}
+	// An installed app's (forge 05d)
+	for _, src := range ui.AppSources.All(s.reg) {
+		if page != nil || src.Page == nil {
+			break
+		}
+		p, mine, err := src.Page(args.ServiceArgs, args.Page)
+		switch {
+		case err != nil:
+			return fail(args.Fail(http.StatusNotFound, log.Code("app_page_gone").Public(err.Error()).Wrap(err)))
+		case mine:
+			page = &p
+		}
+	}
 	if page == nil {
 		return fail(args.Fail(http.StatusNotFound, log.Code("page_not_found").Errorf("there is no page %q", args.Page)))
 	}
 	if !live.ValidToken(args.Session) {
 		return fail(args.Fail(http.StatusBadRequest, log.Code("invalid_session").Errorf("%q is not a session id", args.Session)))
 	}
-	resource := authz.Tenant(args.Principal)
-	if page.Action != "" {
-		if err := authz.Check(args.Context(), args.Principal, page.Action, resource).Err(page.Action, resource); err != nil {
-			return fail(args.Fail(authz.Status, err))
-		}
+	if err := reach(args.ServiceArgs, *page); err != nil {
+		return fail(args.Fail(authz.Status, err))
 	}
 	if len(args.Params) == 0 {
 		args.Params = json.RawMessage(`{}`)
@@ -86,4 +96,31 @@ func (c commander) Execute(args features.ServiceArgs, id, typ, target, request s
 		return res.Problems, &res.Common
 	}
 	return nil, nil
+}
+
+// reach checks that the principal may open the page: its Action on the
+// tenant, or any one of its Reach (an installed app's).
+func reach(args features.ServiceArgs, page ui.Page) error {
+	tenant := authz.Tenant(args.Principal)
+	if len(page.Reach) == 0 {
+		if page.Action == "" {
+			return nil
+		}
+		return authz.Check(args.Context(), args.Principal, page.Action, tenant).Err(page.Action, tenant)
+	}
+	var first error
+	for _, r := range page.Reach {
+		resource := tenant
+		if r.Resource != "" {
+			resource += "/" + r.Resource
+		}
+		err := authz.Check(args.Context(), args.Principal, r.Action, resource).Err(r.Action, resource)
+		if err == nil {
+			return nil
+		}
+		if first == nil {
+			first = err
+		}
+	}
+	return first
 }

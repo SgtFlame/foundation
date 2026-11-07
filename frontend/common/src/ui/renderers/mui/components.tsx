@@ -64,11 +64,15 @@ type P = RendererProps
 const str = (v: unknown) => (v === undefined || v === null ? '' : String(v))
 const sxOf = (p: P) => p.props.sx as object | undefined
 
+// grow: the rest of the row or column it is in, scrolling what does not fit
+const growOf = (p: P) => (p.props.grow ? { flex: '1 1 0', minWidth: 0, minHeight: 0, overflow: 'auto' } : undefined)
+
 export function MuiStack(p: P) {
   const { direction, spacing, alignItems, justifyContent, wrap } = p.props
   return (
     <Stack direction={(direction as 'row' | 'column') ?? 'column'} spacing={(spacing as number) ?? 1}
-      sx={{ alignItems: alignItems as string, justifyContent: justifyContent as string, flexWrap: wrap ? 'wrap' : undefined, ...sxOf(p) }} useFlexGap={!!wrap}>
+      sx={{ alignItems: alignItems as string, justifyContent: justifyContent as string, flexWrap: wrap ? 'wrap' : undefined, height: p.props.fill ? '100%' : undefined, ...growOf(p), ...sxOf(p) }}
+      useFlexGap={!!wrap}>
       {p.children}
     </Stack>
   )
@@ -87,7 +91,7 @@ export function MuiGrid(p: P) {
 }
 
 export function MuiBox(p: P) {
-  return <Box sx={sxOf(p)}>{p.children}</Box>
+  return <Box sx={{ ...growOf(p), ...sxOf(p) }}>{p.children}</Box>
 }
 
 export function MuiCard(p: P) {

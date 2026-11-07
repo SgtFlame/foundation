@@ -17,6 +17,8 @@ export interface UiSessionState {
   rev: number
   title?: string
   subject?: UiSubject
+  // Drawn in its app's frame, which shows its title and presence
+  framed?: boolean
   // The page could not open, or a handler failed (handler is set)
   error?: { message: string; errorCode?: string; handler?: string }
   status: 'opening' | 'open' | 'closed'
@@ -73,7 +75,15 @@ export class UiSession {
       live.on('ui.tree', (f) => {
         if (f.session !== this.id) return
         if (f.stale) logger.With('session', this.id).debug('the tree changed under an event; showing the current one')
-        this.set({ tree: f.tree as UiNode, rev: Number(f.rev), title: f.title as string | undefined, subject: f.subject as UiSubject | undefined, status: 'open', error: undefined })
+        this.set({
+          tree: f.tree as UiNode,
+          rev: Number(f.rev),
+          title: f.title as string | undefined,
+          subject: f.subject as UiSubject | undefined,
+          framed: !!f.framed,
+          status: 'open',
+          error: undefined,
+        })
         const queued = this.queued
         this.queued = []
         for (const frame of queued) live.send({ ...frame, type: 'ui.event', rev: this.state.rev })
@@ -82,7 +92,9 @@ export class UiSession {
         if (f.session !== this.id || !this.state.tree) return
         let tree = this.state.tree
         for (const p of (f.patches as UiPatch[]) ?? []) tree = applyPatch(tree, p)
-        this.set({ ...this.state, tree, rev: Number(f.rev) })
+        // A page whose heading follows its data sends a new title and subject
+        const heading = f.title || f.subject ? { title: (f.title as string) || this.state.title, subject: (f.subject as UiSubject) ?? this.state.subject } : {}
+        this.set({ ...this.state, ...heading, tree, rev: Number(f.rev) })
         const actions = f.actions as UiAction[] | undefined
         if (actions?.length) this.onActions?.(actions)
       }),
@@ -90,8 +102,8 @@ export class UiSession {
         if (f.session !== this.id) return
         const error = { message: String(f.message), errorCode: f.errorCode as string | undefined, handler: f.handler as string | undefined }
         logger.With('session', this.id, 'errorCode', error.errorCode).warn('%s', error.message)
-        if (error.errorCode === 'session_not_open') {
-          this.open() // the server lost it (a restart): open it again
+        if (error.errorCode === 'session_not_open' || error.errorCode === 'page_changed') {
+          this.open() // the server lost it (a restart), or its app was upgraded: open it again
           return
         }
         this.set({ ...this.state, error, status: this.state.tree ? this.state.status : 'closed' })

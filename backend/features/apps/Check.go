@@ -113,6 +113,9 @@ func (c *check) info() {
 				c.add("frame", fmt.Sprintf("there is no prefab %q", id), "make it first, or leave the frame empty for the default")
 			} else {
 				c.owned("frame", "the prefab "+id, p.Owner)
+				if _, ok := p.Slots[FrameSlot]; !ok {
+					c.add("frame", fmt.Sprintf("the prefab %s has no %s slot for the pages", id, FrameSlot), "declare a page slot with prefab.setInterface, where the current page goes")
+				}
 			}
 		}
 	}

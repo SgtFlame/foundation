@@ -61,9 +61,17 @@ type Runner struct{ Deps func() Deps }
 
 // graphFor is the graph a handle runs: its published version, or in a dry
 // page (the Prefab Editor's Canvas, forge 04c) its draft.
+// An installed app's page runs the copy its app version made (forge 05d).
 func graphFor(d Deps, h *ui.Handle, id string) (cognition.Graph, bool) {
 	if h.Dry() {
 		return d.Engine.Draft(h.ServiceArgs, id)
+	}
+	if pinned := h.Page().Graph; pinned != nil {
+		if g, ok := pinned(id); ok {
+			if g, ok := g.(cognition.Graph); ok {
+				return g, true
+			}
+		}
 	}
 	return d.Engine.Graph(h.ServiceArgs, id)
 }
@@ -520,6 +528,21 @@ func Contribute(reg *extensions.Registry) {
 				params = map[string]string{"id": id}
 			}
 			h.OpenEditor(c.Kind, id, str(in, "name", id), c.HelpText, params)
+			return nil
+		})
+	effect(315, "ui.navigate", "Navigate", "Goes to a route of the app: in its own tab, the page at that route replaces the current one, and Back returns to it; elsewhere the app's tab opens there", "Navigate to /task/ with the row's id appended",
+		`{"type":"object","properties":{"route":{"type":"string","title":"Route","description":"A path of the app, e.g. /mine; used when the input is unconnected"}}}`,
+		[]cognition.Pin{{ID: "route", Name: "Route", Type: "string", Optional: true, Description: "The path, with its params filled (/task/123); the config's when unconnected"}},
+		func(h Host, x *cognition.Exec, in cognition.Values) error {
+			var c struct{ Route string }
+			if err := x.Config(&c); err != nil {
+				return err
+			}
+			route := str(in, "route", c.Route)
+			if route == "" || route[0] != '/' {
+				return fmt.Errorf("%q is not a route: a route starts with /", route)
+			}
+			h.Do(ui.Action{Type: "navigate", Page: route})
 			return nil
 		})
 	effect(320, "ui.confirm", "Confirm", "Asks the user to confirm; their answer runs another handler graph with {confirmed}", "Confirm \"Reset the counter?\" then hello-onResetConfirmed",

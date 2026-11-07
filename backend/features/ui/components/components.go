@@ -34,6 +34,7 @@ const (
 	sx       = `"sx":{"type":"object","description":"MUI system styles, e.g. {\"p\": 2}"}`
 	label    = `"label":{"type":"string","description":"The visible label"}`
 	disabled = `"disabled":{"type":"boolean"}`
+	grow     = `"grow":{"type":"boolean","description":"Take the rest of the row or column it is in, scrolling what does not fit (a frame's page beside its navigation)"}`
 	value    = `"value":{"description":"The current value; bind it to local.<path> to keep typing in the browser"}`
 	change   = "The value changed: payload {value}. Sent on every change, so bind value to local state and send it on submit instead where typing should not round-trip"
 )
@@ -41,13 +42,13 @@ const (
 var specs = []spec{
 	// Layout
 	{id: "mui.stack", title: "Stack", category: "Layout", description: "Lays out its children in a row or a column with even spacing.",
-		props:    `"direction":{"type":"string","enum":["row","column"]},"spacing":{"type":"number"},"alignItems":{"type":"string"},"justifyContent":{"type":"string"},"wrap":{"type":"boolean"},` + sx,
+		props:    `"direction":{"type":"string","enum":["row","column"]},"spacing":{"type":"number"},"alignItems":{"type":"string"},"justifyContent":{"type":"string"},"wrap":{"type":"boolean"},` + grow + `,"fill":{"type":"boolean","description":"Fill the height it is given, as a page's outermost stack does"},` + sx,
 		children: true, example: `{"type":"mui.stack","key":"s","props":{"direction":"row","spacing":1},"children":[]}`},
 	{id: "mui.grid", title: "Grid", category: "Layout", description: "A responsive 12-column grid; each child's props.size (1-12) is its width.",
 		props: `"spacing":{"type":"number"},"columns":{"type":"integer"},` + sx, children: true,
 		example: `{"type":"mui.grid","key":"g","props":{"spacing":2},"children":[]}`},
 	{id: "mui.box", title: "Box", category: "Layout", description: "A plain container for spacing and styling its children.",
-		props: sx, children: true, example: `{"type":"mui.box","key":"b","props":{"sx":{"p":2}}}`},
+		props: grow + "," + sx, children: true, example: `{"type":"mui.box","key":"b","props":{"sx":{"p":2}}}`},
 	{id: "mui.card", title: "Card", category: "Layout", description: "A raised surface grouping related content, with an optional title and subtitle.",
 		props:    `"title":{"type":"string"},"subtitle":{"type":"string"},"variant":{"type":"string","enum":["elevation","outlined"]},` + sx,
 		children: true, slots: []string{"actions"}, example: `{"type":"mui.card","key":"c","props":{"title":"Counter"},"children":[]}`},

@@ -165,3 +165,60 @@ func newID() string {
 	_, _ = rand.Read(b[:])
 	return hex.EncodeToString(b[:])
 }
+
+// ApplyPatch applies a patch to a tree as the browser does (for Go
+// tests), changing it in place; it returns the root, a new one when the
+// root was replaced.
+func ApplyPatch(root *Node, p Patch) *Node {
+	switch p.Op {
+	case "replace":
+		if len(p.Path) == 0 {
+			return p.Node
+		}
+		parent := root.At(p.Path[:len(p.Path)-1])
+		for i, c := range parent.Children {
+			if c.Key == p.Path[len(p.Path)-1] {
+				parent.Children[i] = p.Node
+			}
+		}
+	case "remove":
+		parent := root.At(p.Path[:len(p.Path)-1])
+		for i, c := range parent.Children {
+			if c.Key == p.Path[len(p.Path)-1] {
+				parent.Children = append(parent.Children[:i], parent.Children[i+1:]...)
+				break
+			}
+		}
+	case "insert":
+		parent := root.At(p.Path)
+		parent.Children = append(parent.Children, nil)
+		copy(parent.Children[p.Index+1:], parent.Children[p.Index:])
+		parent.Children[p.Index] = p.Node
+	case "move":
+		parent := root.At(p.Path)
+		var n *Node
+		for i, c := range parent.Children {
+			if c.Key == p.Key {
+				n = c
+				parent.Children = append(parent.Children[:i], parent.Children[i+1:]...)
+				break
+			}
+		}
+		parent.Children = append(parent.Children, nil)
+		copy(parent.Children[p.Index+1:], parent.Children[p.Index:])
+		parent.Children[p.Index] = n
+	case "props":
+		n := root.At(p.Path)
+		if n.Props == nil {
+			n.Props = map[string]any{}
+		}
+		for k, v := range p.Props {
+			if v == nil {
+				delete(n.Props, k)
+			} else {
+				n.Props[k] = v
+			}
+		}
+	}
+	return root
+}

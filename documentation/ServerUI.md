@@ -80,7 +80,7 @@ Client actions (`ui.Action`) that are built: `toast`, `openEditor`, `rename`, `c
     - **Workbench**: it reports the page's subject, and performs the client actions.
     - **Sessions**: they are shared by id across remounts, and close (forgetting their record when the tab was closed) a moment after the last unmount.
   - `AppEditorObject.ts`: kind `app:<appId>:<kind>`, with id, name, help text, params and the session id.
-  - `editorKinds.ts`: once there is a session, it loads `GET /ui/editor-kinds`. It then contributes a restorable `workbench.editor` per kind (`AppHost` on the kind's page) and an **Apps** command per app opening its main tab. `useInstalledApps()` and `openApp()` serve Forge's Applications editor.
+  - `editorKinds.ts`: once there is a session, it loads `GET /ui/editor-kinds`. It then contributes a restorable `workbench.editor` per kind (`AppHost` on the kind's page) and an **Apps** command per app opening its main tab. `useInstalledApps()` and `openApp()` serve Forge's Applications editor. Since slice 34 it follows the live `ui.editorKinds` query, with installed manifest apps too ([Apps.md › Built in slice 34](Apps.md#built-in-slice-34)).
 - **`src/services/Ui.ts`**: the REST client.
 - **`vite.ts`**: the dev proxy routes `live` (with WebSocket) and `ui`.
 

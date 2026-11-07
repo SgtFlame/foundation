@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,12 +24,41 @@ var Pages = extensions.NewPoint[Page]("ui.page", "Server-rendered pages: a rende
 // top-level workbench tab, keyed by an id.
 var EditorKinds = extensions.NewPoint[EditorKind]("ui.editorKind", "Application pages that open as their own top-level workbench tab")
 
+// AppSources is the ui.appSource point: where apps installed by manifest
+// come from (forge 05d), beside those contributed in Go.
+var AppSources = extensions.NewPoint[AppSource]("ui.appSource", "Applications installed per tenant, whose pages and editor kinds ui resolves when asked")
+
+// AppSource gives a tenant's installed apps, their editor kinds and their
+// pages (apps/installs for manifest apps).
+type AppSource struct {
+	extensions.Descriptor
+	// Apps are the apps installed in the principal's tenant and their
+	// editor kinds.
+	Apps func(args features.ServiceArgs) ([]App, []EditorKind)
+	// Page resolves a page id ("<appId>/<page>"): mine is false when the
+	// id is not one of its apps'; err says why an app of its has no such
+	// page now (uninstalled, or the page removed by an upgrade).
+	Page func(args features.ServiceArgs, id string) (page Page, mine bool, err error)
+	// Changed tells when the tenant's apps change, until ctx ends.
+	Changed func(ctx context.Context, tenant uint64) <-chan struct{}
+}
+
 // App is one application. Its Descriptor's ID is the app id, e.g. "hello".
 type App struct {
 	extensions.Descriptor
 	Title       string
 	Description string
 	Icon        string // a Material icon name, e.g. "waving_hand"
+	// Reach is what a user needs to use it, any one of them; none is
+	// everyone who may read the UI. The Apps section shows it by them.
+	Reach []Reach
+}
+
+// Reach is an action on a resource below the tenant ("app:tasks/entity:task"),
+// or on the tenant when Resource is empty.
+type Reach struct {
+	Action   string `json:"action"`
+	Resource string `json:"resource,omitempty"`
 }
 
 // EditorKind is one kind of top-level tab. Its Descriptor's ID is
@@ -55,11 +85,13 @@ type QueryRef struct {
 	Bind   map[string]string
 }
 
-// Subject is what a page's tab reports to the workbench context.
+// Subject is what a page's tab reports to the workbench context. Object,
+// when set, is the presence object ("<type>.<id>") its viewers are in.
 type Subject struct {
-	Type  string `json:"type"`
-	ID    string `json:"id"`
-	Label string `json:"label"`
+	Type   string `json:"type"`
+	ID     string `json:"id"`
+	Label  string `json:"label"`
+	Object string `json:"object,omitempty"`
 }
 
 // Page is one page. Its Descriptor's ID is "<appId>/<page>".
@@ -87,8 +119,68 @@ type Page struct {
 	Handlers map[string]func(h *Handle) error
 	// Dry runs its handlers and logic as dry runs (forge 04c): graphs in
 	// their drafts, and commands shown as dryRun actions, never sent.
-	Dry    bool
+	Dry bool
+
+	// An installed app's page (forge 05d):
+	// Reach replaces Action: opening needs any one of them.
+	Reach []Reach
+	// Pins are the prefab versions it renders, nested instances too: an
+	// instance naming no version renders the pinned one.
+	Pins map[string]int
+	// Graph is a graph its prefabs name, as its app version copied it
+	// (a cognition.Graph); found is false for one it did not copy.
+	Graph func(id string) (graph any, found bool)
+	// AppCommands and AppQueries are the app's own commands and queries,
+	// by the name the app uses → their name on the live core
+	// (task.reassign → tasks.task.reassign).
+	AppCommands map[string]string
+	AppQueries  map[string]string
+	// Heading is the tab's title and subject as the page's data has them,
+	// sent again when they change; nil keeps Title and Subject.
+	Heading func(r *Render) (string, *Subject)
+	// Navigate goes to a route of the app (the Navigate node, a frame's
+	// navigate event); nil sends the browser a navigate action instead.
+	Navigate func(h *Handle, route string) error
+	// Stale reports that the app was upgraded since the session opened:
+	// its next event reopens it (ui_page_changed).
+	Stale func() bool
+	// Framed is drawn in its app's frame, which shows its title and
+	// presence: the tab shows no header of its own.
+	Framed bool
+
 	prefab string // a PrefabPage's prefab: it has no tree overlay
+}
+
+// AppPage is a page whose root is the prefab instance build returns (an
+// app's frame around its current page, forge 05d): its props, events
+// (handled by the page's Handlers), slots and pinned version are the
+// node's. Set the Descriptor, App and Title.
+func AppPage(build func(r *Render) *Node) Page {
+	return Page{prefab: "-", Render: func(r *Render) *Node {
+		n := build(r)
+		if n == nil {
+			return nil
+		}
+		e := &evaluator{s: r.s}
+		return e.instance(r, &scope{}, n, nil, "")
+	}}
+}
+
+// Command is a command type as the live core knows it: an app's own
+// commands are scoped by the app.
+func (p Page) Command(typ string) string {
+	if live, ok := p.AppCommands[typ]; ok {
+		return live
+	}
+	return typ
+}
+
+// Query is a query name as the live core knows it.
+func (p Page) Query(name string) string {
+	if live, ok := p.AppQueries[name]; ok {
+		return live
+	}
+	return name
 }
 
 // Commander decides commands for handlers (the live bus).
@@ -192,7 +284,7 @@ func (h *Handle) Raise(event string, payload map[string]any) error {
 		return fmt.Errorf("%s declares no event %q", inst.prefab.Name, event)
 	}
 	o, ok := inst.on[event]
-	if !ok || inst.parent == nil || h.gone != nil {
+	if !ok || h.gone != nil {
 		return nil
 	}
 	if h.depth >= maxRaise {
@@ -203,6 +295,18 @@ func (h *Handle) Raise(event string, payload map[string]any) error {
 		all = map[string]any{}
 	}
 	maps.Copy(all, payload)
+	if inst.parent == nil {
+		// The page's own instances (an app's frame and its page, forge
+		// 05d) raise to the page's handlers; others' go nowhere
+		fn := h.s.page.Handlers[o.Handler]
+		if fn == nil {
+			return nil
+		}
+		up := &Handle{ServiceArgs: h.ServiceArgs, Payload: all, Params: h.Params, s: h.s, request: h.request, depth: h.depth + 1}
+		err := fn(up)
+		h.actions = append(h.actions, up.actions...)
+		return err
+	}
 	up := &Handle{ServiceArgs: h.ServiceArgs, Payload: all, Params: h.Params, s: h.s, request: h.request, inst: inst.parent, depth: h.depth + 1}
 	err := h.s.runInstanceHandler(up, o.Handler)
 	h.actions = append(h.actions, up.actions...)
@@ -224,7 +328,7 @@ func (h *Handle) Subscribe(path, query string, params any) error {
 		return fmt.Errorf("Subscribe needs a state path and a query")
 	}
 	held := inst.kp + "#sub:" + path
-	ref := QueryRef{Query: query, Params: params}
+	ref := QueryRef{Query: h.s.page.Query(query), Params: params}
 	if q := h.s.queries[held]; q != nil && q.ref.Query == query && string(h.s.boundParams(ref)) == string(q.params) {
 		return nil
 	}
@@ -251,6 +355,7 @@ func (h *Handle) String(name string) string {
 // through the page's queries like anyone else's. A dry page's is not sent
 // but shown, as a dryRun action.
 func (h *Handle) Command(typ, target string, args any) ([]live.Problem, *features.ServiceResponse) {
+	typ = h.s.page.Command(typ)
 	raw, _ := json.Marshal(args)
 	if h.s.page.Dry {
 		h.Do(Action{Type: "dryRun", Name: typ, ID: target, Params: raw})
@@ -267,7 +372,7 @@ func (h *Handle) Query(query string, params any) (any, *features.ServiceResponse
 		return nil, h.Fail(http.StatusServiceUnavailable, Log.Code("no_queries").New("there are no queries"))
 	}
 	raw, _ := json.Marshal(params)
-	data, _, fail := h.s.o.Subs.Once(h.ServiceArgs, query, raw)
+	data, _, fail := h.s.o.Subs.Once(h.ServiceArgs, h.s.page.Query(query), raw)
 	return data, fail
 }
 
@@ -275,8 +380,17 @@ func (h *Handle) Query(query string, params any) (any, *features.ServiceResponse
 // drafts.
 func (h *Handle) Dry() bool { return h.s.page.Dry }
 
-// Do adds a client action.
-func (h *Handle) Do(a Action) { h.actions = append(h.actions, a) }
+// Do adds a client action. A navigate action on an app's page goes to
+// the route in the page itself (forge 05d).
+func (h *Handle) Do(a Action) {
+	if a.Type == "navigate" && h.s.page.Navigate != nil {
+		if err := h.s.page.Navigate(&Handle{ServiceArgs: h.ServiceArgs, Params: h.Params, s: h.s, request: h.request}, a.Page); err != nil {
+			h.Toast("error", err.Error())
+		}
+		return
+	}
+	h.actions = append(h.actions, a)
+}
 
 // Toast shows a message.
 func (h *Handle) Toast(severity, message string) {
@@ -338,4 +452,22 @@ func (r *Render) Region(key string, fn func(r *Render) *Node) *Node {
 	}
 	r.s.pending[n] = &region{fn: fn, deps: inner.deps}
 	return n
+}
+
+// Instance is a mounted prefab instance's data, for a heading: its props
+// under "props" and each query it declares by name. Nil when none is
+// mounted at that key path.
+func (r *Render) Instance(kp string) map[string]any {
+	inst := r.s.instances[kp]
+	if inst == nil {
+		return nil
+	}
+	out := map[string]any{"props": inst.props}
+	for name, held := range inst.queries {
+		r.deps["query:"+held] = true
+		if q := r.s.queries[held]; q != nil {
+			out[name] = q.data
+		}
+	}
+	return out
 }

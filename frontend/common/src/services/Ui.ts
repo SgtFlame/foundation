@@ -30,11 +30,19 @@ export interface ComponentsResponse extends ResponseStatus {
   components: ComponentInfo[]
 }
 
+// What a user needs to use an app: an action on a resource below the
+// tenant ("app:tasks/entity:task"), or on the tenant when it has none
+export interface AppReach {
+  action: string
+  resource?: string
+}
+
 export interface AppInfo {
   id: string
   title: string
   description: string
   icon?: string
+  reach: AppReach[] // any one of them; none: everyone who may read the UI
 }
 
 // A kind of top-level app tab; id is "app:<appId>:<kind>"

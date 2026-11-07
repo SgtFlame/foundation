@@ -86,62 +86,12 @@ func TestDiffByKey(t *testing.T) {
 	// Apply them the way the browser does and compare
 	got := old.Clone()
 	for _, p := range patches {
-		apply(got, p)
+		got = ApplyPatch(got, p)
 	}
 	if !equalJSON(got, next) {
 		a, _ := json.Marshal(got)
 		b, _ := json.Marshal(next)
 		t.Fatalf("patches %+v gave %s, want %s", patches, a, b)
-	}
-}
-
-func apply(root *Node, p Patch) {
-	switch p.Op {
-	case "replace":
-		parent := root.At(p.Path[:len(p.Path)-1])
-		for i, c := range parent.Children {
-			if c.Key == p.Path[len(p.Path)-1] {
-				parent.Children[i] = p.Node
-			}
-		}
-	case "remove":
-		parent := root.At(p.Path[:len(p.Path)-1])
-		for i, c := range parent.Children {
-			if c.Key == p.Path[len(p.Path)-1] {
-				parent.Children = append(parent.Children[:i], parent.Children[i+1:]...)
-				break
-			}
-		}
-	case "insert":
-		parent := root.At(p.Path)
-		parent.Children = append(parent.Children, nil)
-		copy(parent.Children[p.Index+1:], parent.Children[p.Index:])
-		parent.Children[p.Index] = p.Node
-	case "move":
-		parent := root.At(p.Path)
-		var n *Node
-		for i, c := range parent.Children {
-			if c.Key == p.Key {
-				n = c
-				parent.Children = append(parent.Children[:i], parent.Children[i+1:]...)
-				break
-			}
-		}
-		parent.Children = append(parent.Children, nil)
-		copy(parent.Children[p.Index+1:], parent.Children[p.Index:])
-		parent.Children[p.Index] = n
-	case "props":
-		n := root.At(p.Path)
-		if n.Props == nil {
-			n.Props = map[string]any{}
-		}
-		for k, v := range p.Props {
-			if v == nil {
-				delete(n.Props, k)
-			} else {
-				n.Props[k] = v
-			}
-		}
 	}
 }
 

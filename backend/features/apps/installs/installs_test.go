@@ -48,6 +48,7 @@ type fixture struct {
 	subs    *subscribe.Subscriptions
 	p       *project.Projections
 	db      *gorm.DB
+	eng     *engine.Engine
 	n       atomic.Int64
 }
 
@@ -87,7 +88,7 @@ func setup(t *testing.T) *fixture {
 	t.Cleanup(p.Close)
 	eng := engine.New(gdb, reg, nil)
 	eng.SetSource(drafts.Source{Store: p})
-	f := &fixture{t: t, reg: reg, install: &installDep, data: &dataDeps, bus: bus.New(p), subs: subscribe.New(p, reg), p: p, db: gdb}
+	f := &fixture{t: t, reg: reg, install: &installDep, data: &dataDeps, bus: bus.New(p), subs: subscribe.New(p, reg), p: p, db: gdb, eng: eng}
 	nodeDeps = livenodes.Deps{Engine: eng, Bus: f.bus, Subscriptions: f.subs, Store: p}
 	draftDeps = drafts.Deps{Engine: eng, Projections: p}
 	dataDeps = data.Deps{Projections: p, Bus: f.bus}
@@ -429,7 +430,8 @@ func TestPublishInstallUpgradeUninstall(t *testing.T) {
 	}
 	f.refused("app.upgrade", "tasks", map[string]any{}, "target", "not installed")
 	f.lifecycle("app.install", "tasks", map[string]any{"version": 2})
-	f.ok("tasks.task.reassign", "t1", map[string]any{"assignee": "fay"})
+	res = f.ok("tasks.task.reassign", "t1", map[string]any{"assignee": "fay"})
+	f.wait(data.Projector, "task.t1", res.Seq) // read once folded
 	if got := f.record("t1")["assignee"]; got != "fay-v2" {
 		t.Errorf("after installing version 2 again: %v", got)
 	}

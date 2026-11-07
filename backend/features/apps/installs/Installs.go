@@ -214,6 +214,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	}
 	contributeQueries(reg, deps)
 	contributeSettings(reg, deps)
+	contributePages(reg, deps)
 }
 
 // fold is the apps.install projector's fold.
