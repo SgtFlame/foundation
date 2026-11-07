@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +33,7 @@ import (
 	uicomponents "github.com/SgtFlame/foundation/backend/features/ui/components"
 	"github.com/SgtFlame/foundation/backend/features/ui/hello"
 	uinodes "github.com/SgtFlame/foundation/backend/features/ui/nodes"
+	"github.com/SgtFlame/foundation/backend/features/ui/prefabs"
 	"github.com/SgtFlame/foundation/backend/features/ui/rest/uihandlers"
 	"github.com/SgtFlame/foundation/backend/features/ui/services/uiservice"
 	uiimpl "github.com/SgtFlame/foundation/backend/features/ui/services/uiservice/impl"
@@ -121,11 +123,14 @@ func newStack(t *testing.T) *stack {
 	entities.Contribute(reg, func() entities.Deps { return entityDeps })
 	data.Contribute(reg, func() data.Deps { return recordDeps })
 	recordsnodes.Contribute(reg, func() data.Deps { return recordDeps })
+	// Task row and Task list
+	var prefabDeps prefabs.Deps
+	prefabs.Contribute(reg, func() prefabs.Deps { return prefabDeps })
 	gdb, err := db.Open(db.WithPath(filepath.Join(t.TempDir(), "test.db")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Migrate(gdb, cognition.Models()...); err != nil {
+	if err := db.Migrate(gdb, slices.Concat(cognition.Models(), ui.Models())...); err != nil {
 		t.Fatal(err)
 	}
 	srv := natsd.StartTest(t)
@@ -146,6 +151,7 @@ func newStack(t *testing.T) *stack {
 		}
 		return out
 	}}
+	prefabDeps = prefabs.Deps{Projections: p, DB: gdb}
 	entityDeps = entities.Deps{Projections: p, OnPublish: func(args features.ServiceArgs) error { return data.Follow(args, recordDeps) }}
 	b.Resolve = livenodes.CommandFor(func() livenodes.Deps { return liveDeps })
 	subs.Resolve = livenodes.QueryFor(func() livenodes.Deps { return liveDeps })
@@ -332,7 +338,7 @@ func TestTheGraphsAreValid(t *testing.T) {
 			t.Errorf("%s: %+v", b.ID, res.Problems)
 		}
 	}
-	if n != 20 {
-		t.Errorf("%d graphs, want 20", n)
+	if n != 23 {
+		t.Errorf("%d graphs, want 23", n)
 	}
 }

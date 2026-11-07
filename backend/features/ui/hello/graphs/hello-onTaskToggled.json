@@ -1,0 +1,97 @@
+{
+  "id": "hello-onTaskToggled",
+  "name": "On task toggled",
+  "description": "A Task row raised toggled: sends task.toggle for its task, which flips done as the command is decided.",
+  "kind": "ui.handler",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "ui.onEvent",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "id",
+            "type": "string",
+            "description": "The task's id"
+          },
+          {
+            "id": "done",
+            "type": "bool",
+            "description": "What the row expected done to become"
+          }
+        ]
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 300,
+        "y": 0
+      },
+      "config": {
+        "command": "task.toggle"
+      }
+    },
+    {
+      "id": "toast",
+      "type": "ui.toast",
+      "position": {
+        "x": 600,
+        "y": 0
+      },
+      "config": {
+        "severity": "error"
+      },
+      "title": "Toast the refusal"
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "send",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "toast",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "toast",
+        "pin": "message"
+      }
+    }
+  ]
+}

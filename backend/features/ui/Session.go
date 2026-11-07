@@ -173,12 +173,17 @@ func Open(args features.ServiceArgs, id string, page Page, params json.RawMessag
 		}
 		s.changed = nil
 	}
+	// Held under the lock: a query held first may already be delivering
+	// its snapshot, which reads the held queries
+	s.mu.Lock()
 	for name, ref := range refs {
 		if fail := s.hold(name, ref); fail != nil {
+			s.mu.Unlock()
 			cancel()
 			return nil, fail
 		}
 	}
+	s.mu.Unlock()
 	deadline := time.After(ready)
 	wait := func(qs []*heldQuery) {
 		for _, q := range qs {

@@ -427,7 +427,7 @@ Forge's part 3i ([forge 03i-TaskList.md](../../forge/documentation/plans/03i-Tas
 ### Decisions
 Gaps found while reading the plan, asked before building ([forge 03i › TODO](../../forge/documentation/plans/03i-TaskList.md#todo), questions 1-4):
 - **Hello seeds *Task*.** The first time a tenant opens the task list, Hello defines and publishes *Task* (owner `app:hello`, fields `title`, `done`, `due`, `assignee`; indexes `by_due` and `by_done_due`) as the tenant's service principal. The Data Designer edits it like any other type afterwards.
-- **The list is its own top-level tab**, `app:hello:tasks`, opened from *Open task list* on Hello's main page.
+- **The list is its own top-level tab**, `app:hello:tasks`, opened from *Open task list* on Hello's main page. Since slice 28 its page is the *Task list* prefab rather than a Go render function with a table ([ServerUI.md › Built in slice 28](ServerUI.md#built-in-slice-28)).
 - **Rows bind `records.find` directly**, with `where` and `sort` bound to view state, so rows arrive as list changes. The "N open" count is a `data.query` graph over the *Aggregate* node.
 - **The chat acceptance runs through a real model** (Gemini), as well as through the same commands in a Go test. Columns come from *Task*'s published fields, so a published new field is a column at once.
 

@@ -573,6 +573,18 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-3).
     - **Pending, carried forward**: undo of one's own changes (forge 06-AIAuthoring); `GET /ui/components` still lists only primitives (the editor reads published prefabs from `prefab.list`).
 
+28. **The Task list demo** (Forge iteration 4, part 4d, [forge 04d-TaskListPrefabs.md](../../forge/documentation/plans/04d-TaskListPrefabs.md)). *Built* ([ServerUI.md](ServerUI.md#built-in-slice-28)).
+    - **Built**:
+      - Hello's task page as `ui.PrefabPage("taskList")`: *Task row* (checkbox, title to rename, due chip, assignee, `actions` slot; raises `toggled` and `renamed`) and *Task list* (heading and count, add form, *Show*, *Sort by* and direction, *Clear done*, a repeat of *Task row* over `records.find`, an empty state), seeded by `prefab.*` commands on first open (`hello/prefabs.go`); the Go render function and the table are gone;
+      - Hello's graphs `taskRow-onToggle`, `taskRow-onRename`, `hello-onTaskToggled` and `hello-onTaskRenamed`; `hello-onEditTask` removed;
+      - prefabs may use built-in graphs (`graphKind` in `ui/prefabs`);
+      - a prefab page takes only the params its prefab declares;
+      - an input given a value by the server can be typed in (`useValue`);
+      - fixes: `ui.Open` holds its queries under the session's lock (a data race), and seeding reads a just-made draft again.
+    - **Blockers**: none. Forge 04d questions 1 (seeded by commands on first open) and 2 (overlays for Go pages only), and 3 (*Sort by* and a direction toggle) and 4 (everything the Go page had, the title renamed in its row), found while reading the plan against the Go page, were asked before building and answered.
+    - **Decisions to review after seeing it**: in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-4).
+    - **Pending, carried forward**: both prefabs built by hand in the Prefab Editor (the demo ran on the seeded ones, with the chip colour changed by hand); clearing the add form after adding; a record scan missing a record rewritten during it ([plans/Backlog.md](plans/Backlog.md)).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -607,3 +619,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 25. Prefab drafts (Forge 4a) | forge 04 question 3 (answered before) and 04a 1 (access), 2 (per-prop merge), 3 (KV drafts, SQLite versions) and 4 (refuse breaking changes unless allowed), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-1), to review after seeing |
 | 26. Template evaluator (Forge 4b) | forge 04 question 2 (answered before) and 04b 1 (`ui.PrefabPage`), 2 (`@n` pins), 3 (*Raise event*), 4 (200 queries per session), 5 (`=` expressions), 6 (local state per instance) and 7 (what logic runs can do), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-2), to review after seeing |
 | 27. Prefab Editor's design page (Forge 4c) | forge 04c 1 (a dry preview session over the draft), 2 (shared preview data) and 3 (no undo), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-3), to review after seeing |
+| 28. Task list demo (Forge 4d) | forge 04d 1 (seeded by commands on first open), 2 (overlays for Go pages), and gaps 3 (*Sort by* and a direction toggle) and 4 (everything carries over, rename in the row), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-4), to review after seeing |

@@ -1,7 +1,7 @@
 {
   "id": "hello-onSortTasks",
   "name": "On sort tasks",
-  "description": "Sorts the tasks by the column clicked: sets the view state the task query's sort is bound to.",
+  "description": "Sorts the tasks by a field and direction (Task list's Sort by and direction controls): sets the state the task query's sort is bound to, and the sort the controls show.",
   "kind": "ui.handler",
   "version": 1,
   "owner": "app:hello",
@@ -18,7 +18,7 @@
           {
             "id": "field",
             "type": "string",
-            "description": "The column's field"
+            "description": "The field to sort by"
           },
           {
             "id": "direction",

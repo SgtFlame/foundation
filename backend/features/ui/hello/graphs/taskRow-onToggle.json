@@ -1,0 +1,123 @@
+{
+  "id": "taskRow-onToggle",
+  "name": "On toggle",
+  "description": "Task row's checkbox was clicked: raises toggled with the task's id and the done it should become.",
+  "kind": "ui.handler",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "ui.onEvent",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "id",
+      "type": "ui.getProp",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "config": {
+        "path": "task._id"
+      },
+      "title": "Task id"
+    },
+    {
+      "id": "done",
+      "type": "ui.getProp",
+      "position": {
+        "x": 300,
+        "y": 350
+      },
+      "config": {
+        "path": "task.done"
+      },
+      "title": "Done now"
+    },
+    {
+      "id": "flip",
+      "type": "data.expression",
+      "position": {
+        "x": 600,
+        "y": 350
+      },
+      "config": {
+        "expr": "!(done ?? false)",
+        "type": "bool"
+      },
+      "title": "Flip it"
+    },
+    {
+      "id": "raise",
+      "type": "ui.raiseEvent",
+      "position": {
+        "x": 900,
+        "y": 0
+      },
+      "config": {
+        "event": "toggled",
+        "inputs": [
+          {
+            "id": "id",
+            "type": "string",
+            "description": "The task's id"
+          },
+          {
+            "id": "done",
+            "type": "bool",
+            "description": "Whether it becomes done"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "raise",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "raise",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "done",
+        "pin": "value"
+      },
+      "to": {
+        "node": "flip",
+        "pin": "done"
+      }
+    },
+    {
+      "from": {
+        "node": "flip",
+        "pin": "value"
+      },
+      "to": {
+        "node": "raise",
+        "pin": "done"
+      }
+    }
+  ]
+}

@@ -25,6 +25,8 @@ import WavingHandIcon from '@mui/icons-material/WavingHand'
 import ChecklistIcon from '@mui/icons-material/Checklist'
 import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import AppsIcon from '@mui/icons-material/Apps'
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
 import type { SvgIconProps } from '@mui/material'
 import { createElement, type ComponentType } from 'react'
 
@@ -55,6 +57,8 @@ export const icons: Record<string, ComponentType<SvgIconProps>> = {
   checklist: ChecklistIcon,
   account_tree: AccountTreeIcon,
   apps: AppsIcon,
+  arrow_upward: ArrowUpwardIcon,
+  arrow_downward: ArrowDownwardIcon,
 }
 
 // An icon by name, as a component for places that take one (the Editors view)

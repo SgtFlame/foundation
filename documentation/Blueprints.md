@@ -101,3 +101,8 @@ For the Hello task list (forge 03i, [Records.md › Built in slice 23](Records.m
   - the handlers `hello-onOpenTasks`, `-onAddTask` (a title is needed; *Assign to me* uses *Current user*), `-onEditTask` (done sends `task.toggle`, other fields `record.update`), `-onFilterTasks` and `-onSortTasks` (they set the view state the rows query is bound to) and `-onClearDone`;
   - the command graphs `cmd-task-toggle` (*Update record* with the opposite of the task's `done`, so two toggles at once both count) and `cmd-task-clearDone` (*Query* the done tasks, then *For each* *Delete record*, up to 50, one batch);
   - the query graph `qry-hello-openTasks` (*Aggregate* count where not done → `{open, label}`).
+
+## Changed in slice 28
+For the Hello task page as the *Task list* prefab (forge 04d, [ServerUI.md › Built in slice 28](ServerUI.md#built-in-slice-28)):
+- **A prefab may use built-in graphs**: its graphs and its `data.query` queries are checked against drafts, published graphs and built-ins.
+- **Hello's task graphs**: `hello-onEditTask` is gone with the table; new are *Task row*'s `taskRow-onToggle` (*Get prop* the task's id and `done`, *Raise event* `toggled` with the opposite) and `taskRow-onRename` (*Raise event* `renamed` when the trimmed title is not empty and differs), and *Task list*'s `hello-onTaskToggled` (*Send command* `task.toggle`) and `hello-onTaskRenamed` (*Send command* `record.update` of the title). `hello-onAddTask`, `-onFilterTasks`, `-onSortTasks` and `-onClearDone` are *Task list*'s handlers unchanged, setting its instance's state. 23 Hello graphs in all.

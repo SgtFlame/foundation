@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/cognition/drafts"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
@@ -133,7 +134,8 @@ func (c *decision) env() ui.PrefabEnv {
 	}
 }
 
-// graphKind is a graph's kind, from its draft or its published version.
+// graphKind is a graph's kind, from its draft, its published version or
+// the built-in graph of that id (an app's graphs, such as Hello's).
 func (c *decision) graphKind(id string) (string, bool) {
 	if !live.ValidToken(id) {
 		return "", false
@@ -145,6 +147,10 @@ func (c *decision) graphKind(id string) (string, bool) {
 	var g struct{ Kind string }
 	if raw, ok := c.get(drafts.PublishedProjector, drafts.TargetType+"."+id); ok && json.Unmarshal(raw, &g) == nil {
 		return g.Kind, true
+	}
+	built := cognition.Graphs.All(c.reg)
+	if i := slices.IndexFunc(built, func(b cognition.BuiltIn) bool { return b.ID == id }); i >= 0 {
+		return built[i].Graph.Kind, true
 	}
 	return "", false
 }

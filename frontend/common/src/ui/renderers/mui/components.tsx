@@ -156,11 +156,18 @@ export function MuiBadge(p: P) {
 }
 
 // An input's value: controlled by its binding when it has one, otherwise
-// held here from the server's value
+// held here, starting from the server's value and following it when it
+// changes (a prefab's prop, read at render), so it can still be typed in
 function useValue<T>(p: P, initial: T): [T, (v: T) => void] {
-  const [own, setOwn] = useState<T>(initial)
+  const server = p.props.value as T | undefined
+  const [own, setOwn] = useState<T>(server ?? initial)
+  const [seen, setSeen] = useState(server)
+  if (server !== seen) {
+    setSeen(server)
+    setOwn(server ?? initial)
+  }
   const bound = p.node.bind?.value !== undefined
-  const value = bound ? ((p.props.value as T) ?? initial) : (p.props.value !== undefined ? (p.props.value as T) : own)
+  const value = bound ? ((p.props.value as T) ?? initial) : own
   return [
     value,
     (v: T) => {

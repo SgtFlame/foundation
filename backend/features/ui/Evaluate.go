@@ -76,15 +76,17 @@ type scope struct {
 // evaluator expands one session's prefab instances.
 type evaluator struct {
 	s       *Session
-	draft   string // the prefab whose draft a preview evaluates, not its published version
-	samples bool   // the root takes its preview data as props
-	design  bool   // the draft's nodes are tagged with their key paths (Node.Src)
+	draft   string         // the prefab whose draft a preview evaluates, not its published version
+	samples bool           // the root takes its preview data as props
+	design  bool           // the draft's nodes are tagged with their key paths (Node.Src)
+	params  map[string]any // the page's params, which the root takes as props it declares
 }
 
 // PrefabPage is a page drawn from a published prefab (forge 04b question
 // 1): its template, queries and handlers are the prefab's. props are its
-// props; the page's params, an object, add to them. Set the Descriptor,
-// App and Title.
+// props; the page's params, an object, add those the prefab declares (a
+// tab's params always hold its id, which a prefab need not take). Set the
+// Descriptor, App and Title.
 func PrefabPage(prefab string, props map[string]any) Page {
 	return Page{Description: "The prefab " + prefab, prefab: prefab, Render: func(r *Render) *Node {
 		e := &evaluator{s: r.s}
@@ -98,10 +100,7 @@ func (e *evaluator) root(r *Render, prefab string, props map[string]any) *Node {
 	if all == nil {
 		all = map[string]any{}
 	}
-	var params map[string]any
-	if json.Unmarshal(r.s.params, &params) == nil {
-		maps.Copy(all, params)
-	}
+	_ = json.Unmarshal(r.s.params, &e.params)
 	n := &Node{Type: PrefabPrefix + prefab, Key: "root", Props: all}
 	return e.instance(r, &scope{}, n, nil, "")
 }
@@ -552,6 +551,17 @@ func (e *evaluator) mount(r *Render, outer *scope, kp, id string, version int, d
 	}
 	if e.samples && outer.inst == nil && len(props) == 0 {
 		props = maps.Clone(def.Preview.Props)
+	}
+	// The page's params, for the root's props it declares and was not given
+	if outer.inst == nil && len(e.params) > 0 {
+		props = maps.Clone(props)
+		for k, v := range e.params {
+			if _, declared := def.Props[k]; declared {
+				if _, given := props[k]; !given {
+					props[k] = v
+				}
+			}
+		}
 	}
 	// Its props: what was given, then the defaults; required ones present
 	full := map[string]any{}
