@@ -42,8 +42,10 @@ func overlayKey(projector, key string) string { return projector + "|" + key }
 
 // Transact decides ops one after another, each against the state the ops
 // before it left, and commits all their events as one atomic batch in
-// r's request (forge 06b: an undo is one request, committed atomically).
-// Every op must be in one area. With dryRun nothing is committed: the
+// r's request (forge 06b: an undo is one request, committed atomically;
+// forge 06e: forge.apply's batch). Every op must be in one area; an op
+// with no target, of a command that makes its own, gets a new one, which
+// its Decided names. With dryRun nothing is committed: the
 // result says what each op would do, or which refused.
 func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 	if r.ID == "" {
@@ -79,14 +81,23 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 		} else if cmd.Area != area {
 			return at(live.Problem{Message: fmt.Sprintf("%s is in the %s area, not %s: a transaction is in one area", op.Command, cmd.Area, area)})
 		}
-		if !live.ValidToken(op.Target) {
-			return at(live.Problem{Path: "target", Message: fmt.Sprintf("%q is not a valid target id", op.Target)})
-		}
 		args := op.Args
 		if args == nil {
 			args = json.RawMessage(`{}`)
 		}
 		ops[i].Args = args
+		// A command that makes its target names it when the op does not
+		// (forge 06e: a batch creates an entity type and adds to it)
+		if op.Target == "" && cmd.NewTarget != nil {
+			ops[i].Target = cmd.NewTarget()
+		}
+		if ops[i].Target == "" && cmd.NewTargetFor != nil {
+			ops[i].Target = cmd.NewTargetFor(r.ServiceArgs, args)
+		}
+		op = ops[i]
+		if !live.ValidToken(op.Target) {
+			return at(live.Problem{Path: "target", Message: fmt.Sprintf("%q is not a valid target id", op.Target), Fix: "use letters, digits, '-' and '_' only"})
+		}
 		tg, problem := cmd.TargetFor(op.Target, args)
 		if problem != nil {
 			return at(*problem)
@@ -243,7 +254,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 			return out
 		}
 		if len(all) > project.MaxBatch {
-			return TransactResult{Result: rejected(live.Problem{Message: fmt.Sprintf("an undo commits at most %d events, not %d", project.MaxBatch, len(all)), Fix: "undo it in parts"})}
+			return TransactResult{Result: rejected(live.Problem{Code: "batch_too_large", Message: fmt.Sprintf("a transaction commits at most %d events, not %d", project.MaxBatch, len(all)), Fix: "split it into smaller batches"}), Ops: decided}
 		}
 		// Build the batch: each op's first event carries it, and each
 		// target's first event expects it as it was read

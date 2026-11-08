@@ -705,6 +705,15 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Blockers**: none. Forge 06d questions 1 (both sets of tools everywhere, the user's choice), 2 (descriptions optional), 3 (an empty `connectors` area) and 4 (node examples and tags derived, a gap found while reading) were asked before building.
     - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-9).
     - **Pending, carried forward**: `forge.check`'s warning for a missing part description (forge 6e); which read tools the Builder gets (forge 6g).
+41. **Applying, checking and previewing** (Forge iteration 6, part 6e, [forge 06e-ApplyCheckPreview.md](../../forge/documentation/plans/06e-ApplyCheckPreview.md)). *Built* ([Apps.md](Apps.md#built-in-slice-41)).
+    - **Built**:
+      - `bus.Transact` makes new targets; `tools.Tool.Asks` decides per call whether a tool asks; `authz.WithAs` decides checks by a role in the context;
+      - `manifests.DraftDocument`, `CheckDraft` and `Lint`: a draft checked as it would be exported, with warnings;
+      - in `apps/tools`: `forge.apply` (one atomic batch per call, others' changes since `after`), `forge.changes`, `forge.check`, `forge.preview` (the draft run as a manifest role, summarized) and `forge.undo`; `forge.app` gives `after`;
+      - Forge's `apply_test.go` over the starter library and the Tasks sample, and `authz`'s `TestAs`.
+    - **Blockers**: none. Forge 06e questions 1 (`bus.Transact`), 2 (apply over a stale view, reporting changes) and 3 (a manifest role, on the draft run's records), and iteration question 2 (drafts change without asking), were asked before building.
+    - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-10).
+    - **Pending, carried forward**: the Builder mode and its prompt (forge 6g), which shows these tools to a model.
 
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
@@ -753,3 +762,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 38. The operation log (Forge 6a) | forge 06-AIAuthoring 5 (a slice per part, from 38) and 06a 1 (client request ids), 2 (inverse ops in `Decide`), 3 (definitions only) and 4 (the client-named app for unowned parts), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-7), to review after seeing |
 | 39. Undo and redo by request (Forge 6b) | forge 06b 1 (items), 2 (conflicts refuse, `force` the rest), 3 (no limit), 4 (the editor's scope, the chat's requests included), 5 (stacks on the server), 6 (undo after publishing) and 7 (definitions only), answered; 8 (Undo and Redo on a chat round, the user's addition) built on its proposal | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-8), Undo and Redo in each editor with two authors, the chat round's preview |
 | 40. The catalog and read tools (Forge 6d) | forge 06d 1 (both sets of read tools everywhere, the user's choice), 2 (descriptions optional), 3 (`connectors` empty) and 4 (node examples and tags derived, a gap found while reading), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-9), once a model uses the tools |
+| 41. Applying, checking and previewing (Forge 6e) | forge 06-AIAuthoring 2 (drafts change without asking) and 06e 1 (`bus.Transact`), 2 (apply over a stale view, reporting changes) and 3 (a manifest role on the draft run's records), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-10), once the Builder uses the tools |

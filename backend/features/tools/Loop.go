@@ -241,7 +241,7 @@ func (l Loop) call(args RunArgs, step, n int, c chatservice.ToolCall, byWire map
 	}
 
 	rec.Approval = ApprovalAuto
-	if tool.Effect.Asks() {
+	if tool.AsksFor(c.Args) {
 		switch {
 		case args.Allowed[tool.ID]:
 			rec.Approval = ApprovalAlways

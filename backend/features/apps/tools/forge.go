@@ -9,9 +9,11 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features/apps"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
+	"github.com/SgtFlame/foundation/backend/features/apps/ops"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	"github.com/SgtFlame/foundation/backend/features/live/presence"
 	"github.com/SgtFlame/foundation/backend/features/live/subscribe"
 	"github.com/SgtFlame/foundation/backend/features/records"
@@ -22,7 +24,8 @@ import (
 // ForgeDeps are what the forge.* tools read, made after the registry.
 type ForgeDeps struct {
 	Subscriptions *subscribe.Subscriptions
-	Store         live.Store // the projections, for an app's problems
+	Store         ops.Store // the projections, for an app's problems
+	Bus           *bus.Bus  // forge.apply's and forge.undo's commands (forge 06e)
 }
 
 // Catalog areas (forge 06d): what forge.catalog searches.
@@ -261,7 +264,7 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "forge.app", Source: "apps"}, Title: "Read an app", Effect: tools.EffectRead,
-		Description: "Reads an application's draft: its manifest (pages with their titles and descriptions, nav, editor kinds, entity types, commands, queries, roles, settings, triggers), its rev, and a summary of each part (the prefabs, graphs and entity types it names or owns: name, description, kind, rev, published version, missing); its current problems, each at a path with a fix; who else has it open; and the position (stream → sequence) it was read at. Read a part in full with forge.read.",
+		Description: "Reads an application's draft: its manifest (pages with their titles and descriptions, nav, editor kinds, entity types, commands, queries, roles, settings, triggers), its rev, and a summary of each part (the prefabs, graphs and entity types it names or owns: name, description, kind, rev, published version, missing); its current problems, each at a path with a fix; who else has it open; the position (stream → sequence) it was read at, and after, the sequence of the app's last op, to pass to forge.apply and forge.changes. Read a part in full with forge.read.",
 		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string","description":"The app's id (app.list)"}},"required":["appId"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
 			a, err := tools.Decode[struct{ AppID string }](call)
@@ -294,8 +297,20 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 					}
 				}
 			}
+			content := map[string]any{"app": v, "problems": problems, "here": here, "position": pos}
+			// The app's last op, for forge.apply's and forge.changes' after
+			// (forge 06e): the position holds only what the query read
+			if store := deps().Store; store != nil {
+				if entries, err := ops.Entries(call.ServiceArgs, store, a.AppID); err == nil {
+					var after uint64
+					if len(entries) > 0 {
+						after = entries[len(entries)-1].Seq
+					}
+					content["after"] = after
+				}
+			}
 			summary := fmt.Sprintf("Read the app %s: %d parts, %d problems", v.Manifest.Name, len(v.Parts), len(problems))
-			return tools.Result{Content: map[string]any{"app": v, "problems": problems, "here": here, "position": pos}, Summary: summary}, nil
+			return tools.Result{Content: content, Summary: summary}, nil
 		},
 	})
 

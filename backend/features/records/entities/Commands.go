@@ -48,10 +48,16 @@ type decision struct {
 
 func (c *decision) entity() *records.EntityType { return &c.draft.Entity }
 
-// known reports whether an entity type exists in the tenant.
+// known reports whether an entity type exists in the tenant: read through
+// the decision when it can, so a type made earlier in the same transaction
+// counts (forge 06e: a batch making two related types).
 func (c *decision) known(id string) bool {
 	if !live.ValidToken(id) {
 		return false
+	}
+	if c.Read != nil {
+		v, err := c.Read(DraftProjector, live.Target{Area: live.AreaDefinitions, Type: TargetType, ID: id})
+		return err == nil && v != nil
 	}
 	_, ok, err := c.deps.Projections.Get(c.Context(), c.Principal.TenantID, DraftProjector, TargetType+"."+id)
 	return err == nil && ok
@@ -116,9 +122,29 @@ func (c *decision) prepare(f *records.Field, path string) []live.Problem {
 func (c *decision) field(id string) (records.Field, int, []live.Problem) {
 	f, i, ok := c.entity().FieldByID(id)
 	if !ok {
-		return f, i, problem("args.field", fmt.Sprintf("there is no field %q", id), "describe the entity type with entity.describe for its fields' ids")
+		return f, i, problem("args.field", fmt.Sprintf("there is no field %q", id), fieldsFix(*c.entity(), id))
 	}
 	return f, i, nil
+}
+
+// fieldsFix names the fields an entity type has, for a model that named
+// one it does not (forge 06e): the one whose name is the id it gave
+// first, then every field's id and name.
+func fieldsFix(e records.EntityType, id string) string {
+	var ids []string
+	for _, f := range e.Fields {
+		if f.Hidden {
+			continue
+		}
+		if strings.EqualFold(f.Name, id) || strings.EqualFold(slug(f.Name), id) {
+			return fmt.Sprintf("the field named %s has the id %q: name fields by id", f.Name, f.ID)
+		}
+		ids = append(ids, fmt.Sprintf("%q (%s)", f.ID, f.Name))
+	}
+	if len(ids) == 0 {
+		return "the type has no fields yet: add one with entity.addField"
+	}
+	return "the type has " + strings.Join(ids, ", ")
 }
 
 const optionSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},"color":{"type":"string"}},"required":["id","name"]}`

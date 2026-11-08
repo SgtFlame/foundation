@@ -65,9 +65,22 @@ type Tool struct {
 	// Wait is how long a client tool's result is waited for: 0 is the tools
 	// section's clientTimeoutSeconds, WaitForUser until the round is stopped.
 	Wait time.Duration
+	// Asks, when set, decides per call whether it asks first, in place of
+	// its effect: forge.apply asks only for a batch that publishes,
+	// installs or writes records (forge 06 question 2).
+	Asks func(args json.RawMessage) bool
 	// Run runs a server tool. An error's text goes to the model and the
 	// user, so it names nothing private (a service's Common.Message is safe).
 	Run func(call Call) (Result, error)
+}
+
+// AsksFor reports whether a call with these arguments needs the user's
+// approval.
+func (t Tool) AsksFor(args json.RawMessage) bool {
+	if t.Asks != nil {
+		return t.Asks(args)
+	}
+	return t.Effect.Asks()
 }
 
 // Client reports whether the tool runs in the browser.

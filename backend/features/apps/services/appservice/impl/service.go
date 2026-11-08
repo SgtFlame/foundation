@@ -3,21 +3,18 @@ package impl
 import (
 	"context"
 	"encoding/json"
-	"slices"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/apps"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	"github.com/SgtFlame/foundation/backend/features/authz"
-	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/cognition/drafts"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	"github.com/SgtFlame/foundation/backend/features/live/subscribe"
 	"github.com/SgtFlame/foundation/backend/features/records/entities"
-	"github.com/SgtFlame/foundation/backend/features/ui"
 	"github.com/SgtFlame/foundation/backend/features/ui/prefabs"
 	"gorm.io/gorm"
 )
@@ -46,24 +43,7 @@ func check(args features.ServiceArgs, action, resource string) *features.Service
 }
 
 // env is this server's primitives, which documents are checked against.
-func env(reg *extensions.Registry) apps.DocumentEnv {
-	return apps.DocumentEnv{
-		Catalog: ui.Catalog(reg),
-		Node: func(typ string) bool {
-			return slices.ContainsFunc(cognition.Nodes.All(reg), func(n cognition.NodeType) bool { return n.ID == typ })
-		},
-		Builtin: func(id string) (cognition.Graph, bool) {
-			all := cognition.Graphs.All(reg)
-			if i := slices.IndexFunc(all, func(b cognition.BuiltIn) bool { return b.ID == id }); i >= 0 {
-				return all[i].Graph, true
-			}
-			return cognition.Graph{}, false
-		},
-		Query: func(name string) bool {
-			return slices.ContainsFunc(live.Queries.All(reg), func(q live.Query) bool { return q.ID == name })
-		},
-	}
-}
+func env(reg *extensions.Registry) apps.DocumentEnv { return apps.DocumentEnvOf(reg) }
 
 // kinds are where each part type lives.
 var kinds = map[string]struct{ target, draft, published string }{

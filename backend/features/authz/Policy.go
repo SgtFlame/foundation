@@ -229,8 +229,15 @@ func (r Role) CrossesFences() bool {
 // with none for it, or any other role, such as the tenant's Owner), and
 // otherwise rules are the rules of every role giving it, any of which
 // allows a row. Service principals, and checks before a policy is
-// installed, are not restricted. The rules' language is the caller's.
+// installed, are not restricted. The rules' language is the caller's. A
+// context made WithAs gives its role's rule where it covers the action.
 func RowRules(ctx context.Context, p features.Principal, action, resource, key string) (rules []string, restricted bool) {
+	if as, _ := asFor(ctx, p, action, resource); as != nil {
+		if rule := as.Rules[key]; rule != "" {
+			return []string{rule}, true
+		}
+		return nil, false
+	}
 	pol := installed.Load()
 	if pol == nil || p.Kind != features.PrincipalUser {
 		return nil, false

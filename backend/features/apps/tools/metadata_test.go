@@ -58,6 +58,7 @@ func everything(t *testing.T) *extensions.Registry {
 	ops.Contribute(reg)
 	ops.ContributeUndo(reg, func() ops.Deps { return ops.Deps{} })
 	apptools.ContributeForge(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })
+	apptools.ContributeApply(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })
 	return reg
 }
 
