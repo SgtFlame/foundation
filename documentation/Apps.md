@@ -617,3 +617,47 @@ Decided while building:
 - The preview's user (decision 9): a *Member* preview shows the author's own rows; a chosen user may be wanted.
 - The warnings' heuristics (decision 7): reachability by ids named in parts' JSON, and a page reached by its route's text.
 - What the summarized tree keeps (decision 10), once a model reads it.
+
+## Built in slice 42
+Forge's part 6f ([forge 06f-SandboxTests.md](../../forge/documentation/plans/06f-SandboxTests.md)): **testing blueprints in a sandbox**. `forge.test {graph, inputs?, event?, as?}` runs a graph's draft once against the app's records with the run's own writes over them, and says what it would do: its outputs, the events its commands would commit, each command it decided with its problems, a trace of the nodes run, and the node it failed on with its inputs. Nothing reaches the stream or the projections, and the sandbox is dropped when the run ends.
+
+### Decisions
+Answered before building (2026-11-08), each on its proposal: forge 06f question 1, the sandbox **starts from the app's records** (the draft run's, which are the app's real records), and `inputs.records: [{entity, id?, values}]` seeds more for the run; 2, nodes with an **external effect are stubbed**: they give a sample output and are listed in the trace.
+
+Decided while building:
+1. **The sandbox is a dry run of the bus** (`live/bus/dry.go`). `bus.Overlay` holds projected values as events that are not committed yet leave them, by projector and key, folding each event through the projectors that keep its target (those keyed by target; their `Keep` is not run). `bus.Dry` decides commands as `Execute` does (resolution, authz, the args' schema, `Decide` with `Decision.Read`) against the projections with the overlay over them, folds each command's events into it, and keeps the events and a `DryCommand` per command (`{command, target, args, events, problems, error}`) in memory. A dry run waits for nothing, so it reads each target as projected now. Its writes have `_seq` 0, since no sequence is ever given to them.
+2. **The context carries the dry run** (`bus.WithDry`, `bus.DryOf`). *Send command* sends to it (`busSender`), `uinodes.TestHost.Command` decides in it (so a handler continues by *OK* or *Rejected* as it would for real), *Read projection* reads through it, and the record nodes use `data.Deps.For(args)`, which swaps the projections for the **records' sandbox** (`records/data/Sandbox.go`: `Get`, `Watch` and `WaitFor` through the dry run). The sandbox's writes are not in the indexes, so its queries scan, up to the `records` section's `scanLimit`. *Run query*, live queries through the subscriptions, *Search records*, and the followers (rollups, recomputes, the search index) still read the real data.
+3. **A command graph reads its own writes, for real too.** `livenodes.DecideObserved` wraps `Decision.Read` so it reads through an overlay of the events the graph's nodes have decided so far: a graph that creates a record and then updates it reads the record as created. The bus now checks a target's expected sequence on its **first event in a batch only**, so a later event on the same target is no longer refused as a conflict. Before this slice, such a graph could not be committed.
+4. **External nodes.** `cognition.NodeType.External` marks a node that reaches outside the tenant's data, and `Sample` holds the outputs its stub gives. `engine.RunArgs.Stub` runs External nodes as stubs that give their sample (each data output left out gives nothing) and leave by their first exec output, including in the graphs a run calls. `Result.Stubbed` lists them. Marked so far: *Agent* (`llm.agent`), *Match context* and *Update memory* (model calls), and *Upload file* (the object store; its sample is a file reference with id `sample`, which a record command then refuses as not uploaded). Mail and webhooks get the mark when iteration 7 adds them.
+5. **Each kind runs as its runtime runs it.**
+   - `command`: `livenodes.CommandOf` builds the command from the draft's spec, decided by the draft itself, and `Dry.Decide` sends it to `inputs.target`, or to a new id.
+   - `data.query`: run with a `QueryHost`, `inputs.params` given as the event's fields and as `params`; `result` is its output.
+   - `server.action`: run with no host, so *Send command* goes to the dry run as the user.
+   - `ui.handler` and `prefab.logic`: run with the kind's test host, from the On event's fields with `state` and `props`. The host's report (view-state changes, actions, raised events, subscriptions) comes back as `report`.
+   - Other kinds (`mode`, `agent`, `function`, `app.trigger`) are refused with a pointer to `bp.test`.
+6. **An app's graph runs as its draft run does.** `Dry.Names` maps the manifest's command types to `draft.<appId>.<type>`, so a handler that sends `task.reassign` decides the draft's command graph.
+7. **Seeds** are made by `record.create` in the dry run as the user, before `as` applies, and are left out of the result's events and commands; `seeded` lists their ids. **`as`** names a role of the app that owns the graph, applied through `roleArgs` (shared with `forge.preview`, and `AsRole` underneath it).
+8. **The trace.** `engine.RunArgs.Steps` keeps the run's steps in its `Result`, whether or not the trace is stored. `forge.test` gives the first 50, each with its node, type, title, loop context, inputs, outputs, exec pin, error and `stubbed`. A value over 800 bytes is cut to `{$cut, preview}`. `failed` is the last step with an error, with its inputs, else the run's failed node. A failed run's trace is stored as any failing run's is (`TraceFailures`), so it shows in the graph's Log Viewer.
+9. **The tool** is `write` and never asks (forge iteration question 2), and needs `cognition.execute` on the graph, as `bp.test` does. It reads the graph's draft once the drafts projection has settled, else its published or built-in version. `ForgeDeps` gains `Engine`; `ContributeTest` is wired after `ContributeApply` in both `serve.go`s.
+
+### Backend
+- `live/bus/dry.go`: `Overlay`, `NewOverlay`, `Dry`, `DryCommand`, `WithDry`, `DryOf`. `live/bus/bus.go`: a target's expected sequence on its first event in a batch.
+- `live/nodes`: `DecideObserved`, `Observer`, `CommandOf`; *Send command* and *Read projection* in a dry run. `ui/nodes`: `TestHost` decides in a dry run.
+- `records/data/Sandbox.go`: the sandbox, `Deps.For`; `Find` scans in it. `records/nodes`: every node reads through `Deps.For`.
+- `cognition`: `NodeType.External`, `Sample`; `engine.RunArgs.Stub`, `Steps`; `Result.Steps`, `Stubbed`.
+- `apps/tools/test.go`: `ContributeTest`, `Test`, `TestArgs`, `TestResult`, `TestEvent`, `TraceStep`, `TestFailure`; `roleArgs` in `apply.go`.
+
+### Verification of slice 42
+- Forge's `go test ./features/starter` (`sandbox_test.go`, over the seeded starter library and the Tasks sample):
+  - **`TestForgeTestReassign`**: `forge.test` of `cmd-tasks-task-reassign` on a real task returns one `updated` event on it with the new assignee, one decided command and a trace in which *Update record* got the assignee. The `rec` stream's last sequence and the task's projected record are unchanged. The *Task detail* handler `tasks-onReassign` decides `draft.tasks.task.reassign` with one event and a *Reassigned* toast in its report. As *Member*, the row rule refuses the command.
+  - **`TestForgeTestSeesItsOwnWrites`**: a command graph that creates two notes and renames the first gives `created`, `created`, `updated` with no problems, and the stream does not move. Published and sent for real, the same graph commits, and the note reads *renamed*.
+  - **`TestForgeTestFailure`**: a query graph whose expression fails on `"many"` names the node `boom` with its inputs `{count: "many"}`; with `"41"`, its result is 42.
+  - **`TestForgeTestStubsExternalNodes`**: a server action with *Upload file* (the test stack has no file store) runs, the node stubbed and marked in the trace, the output the sample.
+  - **`TestForgeTestRunsApart`**: two runs at once, each seeding six notes, see only their own seeds and the one real note; afterwards, a run sees only the real note.
+  - Also run with `-race`.
+- Foundation's tests pass but one: `kb/services/collabservice/impl` `TestRoomSeedRelaySaveHandover` fails with or without this slice's changes. `live/bus` also passes with `-race`. `apps/ops` `TestReplayRebuildsAnApp` read tenant 3's projections without waiting for them, and failed every time with this slice's timing. It now settles them first. All of Forge's tests pass, and both `serve` commands vet. No browser walk: the slice adds no UI. 6g's Builder mode is where it shows.
+
+### Decisions to review after seeing it
+- What the trace keeps (decision 8), once a model reads it: 50 steps, values cut at 800 bytes.
+- What a sandbox does not reach (decision 2): live queries, search and the followers read the real data. A rollup or a search over the run's own writes is not seen.
+- The stubs' samples (decision 4): a stubbed upload's reference is refused by a record command, which a model may misread.

@@ -182,7 +182,13 @@ type RunArgs struct {
 	Host    any              // what its nodes act on (cognition.Exec.Host)
 	Trace   string           // TraceAll or TraceFailures
 	Limits  *Limits          // tighter limits than the cognition section's, for a kind
-	depth   int              // how deep in Call graph
+	// Stub runs External nodes as stubs that give their Sample (forge 06f:
+	// a sandboxed run), in the graphs it calls too.
+	Stub bool
+	// Steps keeps the run's steps in its Result, for a caller that reports
+	// them whether or not the trace is stored.
+	Steps bool
+	depth int // how deep in Call graph
 }
 
 // Limits narrow a run's limits; zero keeps the section's.
@@ -198,6 +204,8 @@ type Result struct {
 	Traced     bool             // whether the run's trace was kept
 	Outputs    cognition.Values // what Return nodes returned; empty when none ran
 	FailedNode string           // the node a failed run failed on
+	Steps      []cognition.Step // with RunArgs.Steps: what each node was given and gave
+	Stubbed    []string         // with RunArgs.Stub: the External nodes stubbed, by node id
 }
 
 // Untraced is how many runs of a graph in the principal's tenant were not
@@ -273,11 +281,18 @@ func (e *Engine) Run(args RunArgs) (Result, error) {
 	err := r.from(event)
 	r.finish(err)
 
+	kept := func(res Result) Result {
+		res.Stubbed = r.stubbed
+		if args.Steps {
+			res.Steps = r.steps
+		}
+		return res
+	}
 	if !traceAll && err == nil {
 		e.countMu.Lock()
 		e.untraced[untracedKey(args.ServiceArgs, g.ID)]++
 		e.countMu.Unlock()
-		return Result{RunID: r.record.ID, Outputs: r.result}, nil
+		return kept(Result{RunID: r.record.ID, Outputs: r.result}), nil
 	}
 	if dbErr := e.db.WithContext(persist).Transaction(func(tx *gorm.DB) error {
 		if len(r.steps) > 0 {
@@ -290,7 +305,7 @@ func (e *Engine) Run(args RunArgs) (Result, error) {
 		log.With("runId", r.record.ID).Error(persist, dbErr, "cannot store the trace of run %d", r.record.ID)
 	}
 	e.purges.Go(func() { e.purge(persist, settings) })
-	return Result{RunID: r.record.ID, Traced: true, Outputs: r.result, FailedNode: r.record.FailedNode}, err
+	return kept(Result{RunID: r.record.ID, Traced: true, Outputs: r.result, FailedNode: r.record.FailedNode}), err
 }
 
 // call runs another graph from its On call event, for Call graph.
@@ -299,7 +314,7 @@ func (e *Engine) call(parent *run, graphID string, inputs cognition.Values) (cog
 		return nil, log.Code("call_depth").Errorf("graphs called graphs more than %d deep", parent.settings.MaxCallDepth)
 	}
 	args := RunArgs{ServiceArgs: parent.args.ServiceArgs, GraphID: graphID, Event: cognition.EventCall, Inputs: inputs,
-		Trigger: "graph:" + strconv.FormatUint(parent.record.ID, 10), Host: parent.args.Host, Trace: parent.args.Trace, depth: parent.args.depth + 1}
+		Trigger: "graph:" + strconv.FormatUint(parent.record.ID, 10), Host: parent.args.Host, Trace: parent.args.Trace, Stub: parent.args.Stub, depth: parent.args.depth + 1}
 	res, err := e.Run(args)
 	return res.Outputs, err
 }

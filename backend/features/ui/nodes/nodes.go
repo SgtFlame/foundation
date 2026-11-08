@@ -15,6 +15,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	"github.com/SgtFlame/foundation/backend/features/live/presence"
 	"github.com/SgtFlame/foundation/backend/features/ui"
 )
@@ -149,6 +150,10 @@ type TestHost struct {
 	Sent    []map[string]any `json:"commands"`
 	Raised  []map[string]any `json:"raised"`
 	Subs    []map[string]any `json:"subscriptions"`
+	// dry, when set, decides the commands in a sandbox (forge 06f), so
+	// the handler continues by OK or Rejected as it would for real
+	dry  *bus.Dry
+	args features.ServiceArgs
 }
 
 func (t *TestHost) State(path string) any { return getPath(t.state, path) }
@@ -164,6 +169,14 @@ func (t *TestHost) OpenEditor(kind, id, name, helpText string, params any) {
 }
 func (t *TestHost) Command(typ, target string, args any) ([]live.Problem, *features.ServiceResponse) {
 	t.Sent = append(t.Sent, map[string]any{"command": typ, "target": target, "args": args})
+	if t.dry == nil {
+		return nil, nil
+	}
+	raw, _ := json.Marshal(args)
+	res := t.dry.Execute(bus.Request{ServiceArgs: t.args, Type: typ, Target: target, Args: raw})
+	if res.Common.Code >= 300 {
+		return res.Problems, &res.Common
+	}
 	return nil, nil
 }
 func (t *TestHost) Prop(path string) any  { return getPath(t.props, path) }
@@ -269,7 +282,7 @@ func str(in cognition.Values, pin, fallback string) string {
 
 // Contribute registers the kinds and nodes.
 func Contribute(reg *extensions.Registry) {
-	testHost := func(_ features.ServiceArgs, _ cognition.Graph, inputs cognition.Values) (any, func() any) {
+	testHost := func(args features.ServiceArgs, _ cognition.Graph, inputs cognition.Values) (any, func() any) {
 		state, _ := inputs["state"].(map[string]any)
 		props, _ := inputs["props"].(map[string]any)
 		payload, _ := inputs["payload"].(map[string]any)
@@ -286,7 +299,7 @@ func Contribute(reg *extensions.Registry) {
 			state = map[string]any{}
 		}
 		h := &TestHost{state: state, payload: payload, props: props, Changes: map[string]any{}, Actions: []ui.Action{}, Sent: []map[string]any{},
-			Raised: []map[string]any{}, Subs: []map[string]any{}}
+			Raised: []map[string]any{}, Subs: []map[string]any{}, dry: bus.DryOf(args.Context()), args: args}
 		return h, func() any { return h }
 	}
 	cognition.Kinds.Register(reg, cognition.Kind{

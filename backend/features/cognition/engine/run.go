@@ -29,6 +29,7 @@ type run struct {
 	vars    cognition.Values
 	steps   []cognition.Step
 	result  cognition.Values
+	stubbed []string // External nodes run as stubs (RunArgs.Stub)
 }
 
 // memo is a node's key for its outputs: an exec node keeps its latest
@@ -204,7 +205,10 @@ func (r *run) call(id string, in cognition.Values) (string, error) {
 	var out cognition.Values
 	var pin string
 	var err error
-	if t.Run != nil {
+	switch {
+	case r.args.Stub && t.External:
+		out, pin = r.stub(id, t)
+	case t.Run != nil:
 		out, pin, err = t.Run(r.exec(id, node), in)
 	}
 	if err == nil && r.args.Context().Err() != nil {
@@ -229,6 +233,22 @@ func (r *run) call(id string, in cognition.Values) (string, error) {
 	}
 	r.values[key], r.done[key] = out, true
 	return pin, nil
+}
+
+// stub is what an External node gives in a sandboxed run: its Sample, by
+// output pin, leaving by its first exec output.
+func (r *run) stub(id string, t cognition.NodeType) (cognition.Values, string) {
+	r.stubbed = append(r.stubbed, id)
+	out, pin := cognition.Values{}, ""
+	for _, p := range r.res.Pins[id].Out {
+		switch {
+		case p.Exec && pin == "":
+			pin = p.ID
+		case !p.Exec:
+			out[p.ID] = t.Sample[p.ID]
+		}
+	}
+	return out, pin
 }
 
 // fail marks the run failed on a node, once, and returns err.

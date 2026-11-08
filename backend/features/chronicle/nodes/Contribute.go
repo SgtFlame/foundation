@@ -129,6 +129,7 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 		Example:     "Match context choosing up to Entries candidates for the reply",
 		Title:       "Match context",
 		Effects:     true,
+		External:    true, // a model call
 		Description: "Stage 1: a fast model call chooses the candidates the reply needs; the checked entries are always kept",
 		Pins: cognition.Pins{
 			In: []cognition.Pin{
@@ -198,6 +199,7 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 		Example:     "Update memory after On reply when Chronicle settings' Update is on",
 		Title:       "Update memory",
 		Effects:     true,
+		External:    true, // a model call
 		Description: "The memory update: rewrites the summaries of the used entries the round adds facts to, and proposes new entries",
 		Config:      json.RawMessage(`{"type": "object", "properties": {"maxProposals": {"type": "integer", "title": "Proposals", "min": 0, "max": 10, "description": "New entries proposed at most"}}}`),
 		Pins: cognition.Pins{

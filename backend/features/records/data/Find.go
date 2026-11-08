@@ -594,6 +594,9 @@ func (p *planned) run(args features.ServiceArgs, d Deps) (Result, error) {
 // page and one more; otherwise every match. Result has no records yet.
 func (p *planned) read(args features.ServiceArgs, d Deps) (Result, []row, error) {
 	limit := d.settings(args).ScanLimit
+	if _, ok := d.Projections.(*sandbox); ok {
+		return p.scan(args, d, limit)
+	}
 	// An ordered walk: an index in the sort's order, the filter's path
 	// through it or, without one, the whole index
 	pt := p.choose(p.filter.conds())

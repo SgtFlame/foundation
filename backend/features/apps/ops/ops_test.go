@@ -688,6 +688,14 @@ func TestReplayRebuildsAnApp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Read tenant 3 once every definition projection has folded the replay
+	for _, pr := range live.Projectors.All(f.p.Registry()) {
+		if pr.Area == live.AreaDefinitions {
+			if err := f.p.Settle(context.Background(), 3, pr.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	if want := len(f.entries(ada, "tasks")); n != want {
 		t.Errorf("replayed %d ops of %d", n, want)
 	}

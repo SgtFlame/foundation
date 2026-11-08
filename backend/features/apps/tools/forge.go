@@ -11,6 +11,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	"github.com/SgtFlame/foundation/backend/features/apps/ops"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
+	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
@@ -26,6 +27,8 @@ type ForgeDeps struct {
 	Subscriptions *subscribe.Subscriptions
 	Store         ops.Store // the projections, for an app's problems
 	Bus           *bus.Bus  // forge.apply's and forge.undo's commands (forge 06e)
+	// Engine runs the graphs forge.test tests (forge 06f).
+	Engine *engine.Engine
 }
 
 // Catalog areas (forge 06d): what forge.catalog searches.

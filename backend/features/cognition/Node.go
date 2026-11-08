@@ -77,6 +77,13 @@ type NodeType struct {
 	// Effects is set on nodes with side effects (model calls, commands,
 	// writes), which pure kinds such as data.query refuse.
 	Effects bool
+	// External is set on nodes that reach outside the tenant's data: a
+	// model, a tool, the object store, mail. A sandboxed run (forge.test,
+	// forge 06f) does not run them: it gives their Sample and lists them.
+	External bool
+	// Sample is what a stubbed External node gives, by output pin; a data
+	// output left out gives nothing.
+	Sample Values
 	// Volatile pure nodes are evaluated every time they are pulled, not
 	// once per execution context, e.g. Get variable.
 	Volatile bool

@@ -387,11 +387,6 @@ func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstre
 			e.Batch = &live.Batch{Index: i + 1, Count: len(events)}
 		}
 		raw, _ := json.Marshal(e)
-		seq, ok := read[t.Key()]
-		if !ok {
-			seq = b.lastSeq(ctx, stream, tenant, t)
-			read[t.Key()] = seq
-		}
 		m := nats.NewMsg(t.Subject(tenant, ne.Type))
 		m.Data = raw
 		msgID := r.ID
@@ -400,8 +395,18 @@ func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstre
 		}
 		m.Header.Set(jetstream.MsgIDHeader, msgID)
 		m.Header.Set(jetstream.ExpectedStreamHeader, streamName)
-		m.Header.Set(jetstream.ExpectedLastSubjSeqHeader, strconv.FormatUint(seq, 10))
-		m.Header.Set(jetstream.ExpectedLastSubjSeqSubjHeader, t.Subjects(tenant))
+		// A target's first event expects it as it was read; a later one
+		// on it in the batch follows that one (forge 06f: a command graph
+		// that creates a record and then updates it)
+		if !slices.Contains(evTargets[:i], t) {
+			seq, ok := read[t.Key()]
+			if !ok {
+				seq = b.lastSeq(ctx, stream, tenant, t)
+				read[t.Key()] = seq
+			}
+			m.Header.Set(jetstream.ExpectedLastSubjSeqHeader, strconv.FormatUint(seq, 10))
+			m.Header.Set(jetstream.ExpectedLastSubjSeqSubjHeader, t.Subjects(tenant))
+		}
 		msgs[i] = m
 	}
 	if len(msgs) == 1 {

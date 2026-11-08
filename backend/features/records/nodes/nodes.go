@@ -157,7 +157,7 @@ func contributeWrites(reg *extensions.Registry, deps func() data.Deps) {
 				a["entity"] = c["entity"]
 				raw, _ := json.Marshal(a)
 				id, _ := cognition.Get[string](in, "id")
-				events, id, problems := data.Write(d, deps(), w.command, id, raw)
+				events, id, problems := data.Write(d, deps().For(x.ServiceArgs), w.command, id, raw)
 				if problems != nil {
 					// Refused as Reject is: nothing commits, and the run ends
 					h.Problems = append(h.Problems, problems...)
@@ -260,7 +260,7 @@ func contributeReads(reg *extensions.Registry, deps func() data.Deps) {
 				return nil, "", err
 			}
 			id, _ := cognition.Get[string](in, "id")
-			d := deps()
+			d := deps().For(x.ServiceArgs)
 			if q, ok := x.Host.(*livenodes.QueryHost); ok {
 				q.Reads = append(q.Reads, livenodes.Read{Projector: data.Projector, Key: data.Key(c.Entity, id)},
 					livenodes.Read{Projector: entities.PublishedProjector, Key: entities.TargetType + "." + c.Entity})
@@ -296,7 +296,7 @@ func contributeReads(reg *extensions.Registry, deps func() data.Deps) {
 			if err != nil {
 				return nil, "", err
 			}
-			d := deps()
+			d := deps().For(x.ServiceArgs)
 			watch(x, d, related(x, d, q.Entity, q.Expand)...)
 			res, err := data.Find(x.ServiceArgs, d, q)
 			if err != nil {
@@ -329,7 +329,7 @@ func contributeReads(reg *extensions.Registry, deps func() data.Deps) {
 			if len(a.Aggregates) == 0 {
 				a.Aggregates = []data.Aggregate{{Op: "count"}}
 			}
-			d := deps()
+			d := deps().For(x.ServiceArgs)
 			watch(x, d, a.Entity)
 			s, err := data.Summarize(x.ServiceArgs, d, a)
 			if err != nil {

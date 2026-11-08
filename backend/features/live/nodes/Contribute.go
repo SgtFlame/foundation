@@ -10,6 +10,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/SgtFlame/foundation/backend/features/live/bus"
 )
 
 const source = "live"
@@ -163,7 +164,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			sender, ok := x.Host.(Sender)
 			if !ok {
 				d := deps()
-				if d.Bus == nil {
+				if d.Bus == nil && bus.DryOf(x.Context()) == nil {
 					return nil, "", fmt.Errorf("there is no command bus")
 				}
 				sender = busSender{args: x.ServiceArgs, bus: d.Bus}
@@ -209,7 +210,11 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			if q, ok := x.Host.(*QueryHost); ok {
 				q.Reads = append(q.Reads, Read{Projector: c.Projector, Key: key})
 			}
-			v, ok, err := d.Store.Get(x.Context(), x.Principal.TenantID, c.Projector, key)
+			get := d.Store.Get
+			if dry := bus.DryOf(x.Context()); dry != nil {
+				get = dry.Get // a sandboxed run's own events over the projection (forge 06f)
+			}
+			v, ok, err := get(x.Context(), x.Principal.TenantID, c.Projector, key)
 			if err != nil {
 				return nil, "", err
 			}

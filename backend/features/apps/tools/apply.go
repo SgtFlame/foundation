@@ -322,21 +322,9 @@ func preview(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route,
 		}
 		return nil, fmt.Errorf("%s has no page at %s: its routes are %s", m.Name, route, strings.Join(routes, ", "))
 	}
-	args := call.ServiceArgs
-	if as != "" {
-		i := slices.IndexFunc(m.Roles, func(r apps.Role) bool { return r.ID == as })
-		if i < 0 {
-			var ids []string
-			for _, r := range m.Roles {
-				ids = append(ids, r.ID)
-			}
-			return nil, fmt.Errorf("%s has no role %q: its roles are %s", m.Name, as, strings.Join(ids, ", "))
-		}
-		env := manifests.Env(call.Context(), d.Store, tenant, reg)
-		args.Ctx = authz.WithAs(args.Context(), AsRole(m, m.Roles[i], func(id string) bool {
-			e, ok := env.Entity(id)
-			return ok && e.Owner == apps.Owner(app)
-		}))
+	args, err := roleArgs(call.ServiceArgs, reg, d, m, app, as)
+	if err != nil {
+		return nil, err
 	}
 	// Records need a published entity type: with none, the page's preview data
 	published := false
@@ -392,6 +380,29 @@ func preview(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route,
 		out["as"] = as
 	}
 	return out, nil
+}
+
+// roleArgs are args that decide as one of an app draft's manifest roles
+// in place of the user (forge 06e question 3); args as given when as is
+// empty.
+func roleArgs(args features.ServiceArgs, reg *extensions.Registry, d ForgeDeps, m apps.Manifest, app, as string) (features.ServiceArgs, error) {
+	if as == "" {
+		return args, nil
+	}
+	i := slices.IndexFunc(m.Roles, func(r apps.Role) bool { return r.ID == as })
+	if i < 0 {
+		var ids []string
+		for _, r := range m.Roles {
+			ids = append(ids, r.ID)
+		}
+		return args, fmt.Errorf("%s has no role %q: its roles are %s", m.Name, as, strings.Join(ids, ", "))
+	}
+	env := manifests.Env(args.Context(), d.Store, args.Principal.TenantID, reg)
+	args.Ctx = authz.WithAs(args.Context(), AsRole(m, m.Roles[i], func(id string) bool {
+		e, ok := env.Entity(id)
+		return ok && e.Owner == apps.Owner(app)
+	}))
+	return args, nil
 }
 
 // AsRole is a manifest role as authz decides a preview by it (forge 06e

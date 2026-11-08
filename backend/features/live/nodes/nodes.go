@@ -113,7 +113,13 @@ type busSender struct {
 
 func (b busSender) Command(typ, target string, args any) ([]live.Problem, *features.ServiceResponse) {
 	raw, _ := json.Marshal(args)
-	res := b.bus.Execute(bus.Request{ServiceArgs: b.args, ID: "bp-" + strconv.FormatUint(features.NewTSID(), 10), Type: typ, Target: target, Args: raw})
+	r := bus.Request{ServiceArgs: b.args, ID: "bp-" + strconv.FormatUint(features.NewTSID(), 10), Type: typ, Target: target, Args: raw}
+	var res bus.Result
+	if dry := bus.DryOf(b.args.Context()); dry != nil {
+		res = dry.Execute(r) // a sandboxed run (forge 06f)
+	} else {
+		res = b.bus.Execute(r)
+	}
 	if res.Common.Code >= 300 {
 		return res.Problems, &res.Common
 	}
@@ -223,11 +229,7 @@ func CommandFor(deps func() Deps) func(args features.ServiceArgs, typ string) (l
 		if err != nil || spec.Command != typ {
 			return live.Command{}, false
 		}
-		return live.Command{
-			Descriptor: extensions.Descriptor{ID: typ, Source: "graph:" + id}, Title: spec.Title, Description: spec.Description,
-			Args: spec.Args, Events: spec.Events, Area: live.Area(spec.Area), TargetType: spec.TargetType, Projection: spec.Projection, Action: spec.Action,
-			Decide: func(dec live.Decision) ([]live.NewEvent, []live.Problem) { return Decide(d, dec, typ, id, nil) },
-		}, true
+		return commandOf(d, id, spec, nil, nil), true
 	}
 }
 
@@ -235,14 +237,56 @@ func CommandFor(deps func() Deps) func(args features.ServiceArgs, typ string) (l
 // published graph id names when g is nil (an installed app runs the
 // version it pinned).
 func Decide(d Deps, dec live.Decision, typ, id string, g *cognition.Graph) ([]live.NewEvent, []live.Problem) {
+	return DecideObserved(d, dec, typ, id, g, nil)
+}
+
+// Observer adjusts a command graph's run and hears how it ended, for a
+// test of the graph that reports its trace (forge 06f).
+type Observer struct {
+	Tune   func(args *engine.RunArgs)
+	Result engine.Result
+	Err    error
+}
+
+// DecideObserved is Decide with an observer, which may be nil. The
+// graph's reads see its own writes so far (forge 06f): a record it
+// creates, then updates, is read as created.
+func DecideObserved(d Deps, dec live.Decision, typ, id string, g *cognition.Graph, o *Observer) ([]live.NewEvent, []live.Problem) {
 	var state any
 	if dec.State != nil {
 		_ = json.Unmarshal(dec.State, &state)
 	}
 	host := &CommandHost{Decision: &dec}
-	_, err := d.Engine.Run(engine.RunArgs{ServiceArgs: dec.ServiceArgs, GraphID: id, Graph: g, Event: OnCommand, Trigger: "command:" + typ,
+	if read := dec.Read; read != nil && d.Bus != nil {
+		over, folded := d.Bus.NewOverlay(), 0
+		dec.Read = func(projection string, t live.Target) (json.RawMessage, error) {
+			for ; folded < len(host.Events); folded++ {
+				ne := host.Events[folded]
+				e := live.Event{Type: ne.Type, Target: dec.Target, UserID: dec.Principal.UserID, TenantID: dec.Principal.TenantID, Time: time.Now().UTC()}
+				if ne.Target != nil {
+					e.Target = *ne.Target
+				}
+				e.Data, _ = json.Marshal(ne.Data)
+				if err := over.Apply(e, read); err != nil {
+					return nil, err
+				}
+			}
+			if v, ok := over.Get(projection, t.Key()); ok {
+				return v, nil
+			}
+			return read(projection, t)
+		}
+	}
+	args := engine.RunArgs{ServiceArgs: dec.ServiceArgs, GraphID: id, Graph: g, Event: OnCommand, Trigger: "command:" + typ,
 		Inputs: inputs("args", dec.Args, cognition.Values{"state": state, "target": dec.Target.ID}),
-		Host:   host, Trace: tracing(dec.ServiceArgs, d, id), Limits: commandLimits})
+		Host:   host, Trace: tracing(dec.ServiceArgs, d, id), Limits: commandLimits}
+	if o != nil && o.Tune != nil {
+		o.Tune(&args)
+	}
+	res, err := d.Engine.Run(args)
+	if o != nil {
+		o.Result, o.Err = res, err
+	}
 	if err != nil {
 		return nil, []live.Problem{{Message: "the command graph failed: " + err.Error(), Fix: "see its run in the graph's Log Viewer"}}
 	}
@@ -250,6 +294,30 @@ func Decide(d Deps, dec live.Decision, typ, id string, g *cognition.Graph) ([]li
 		return nil, host.Problems
 	}
 	return host.Events, nil
+}
+
+// CommandOf is the command a command graph defines, decided by g itself,
+// such as a draft under test (forge 06f).
+func CommandOf(d Deps, id string, g *cognition.Graph, o *Observer) (live.Command, error) {
+	if g.Kind != KindCommand {
+		return live.Command{}, fmt.Errorf("%s is a %s graph, not a command graph", id, g.Kind)
+	}
+	spec, err := specOf[CommandSpec](g.Spec)
+	if err != nil {
+		return live.Command{}, fmt.Errorf("%s's spec is not valid: %v", id, err)
+	}
+	return commandOf(d, id, spec, g, o), nil
+}
+
+func commandOf(d Deps, id string, spec CommandSpec, g *cognition.Graph, o *Observer) live.Command {
+	typ := spec.Command
+	return live.Command{
+		Descriptor: extensions.Descriptor{ID: typ, Source: "graph:" + id}, Title: spec.Title, Description: spec.Description,
+		Args: spec.Args, Events: spec.Events, Area: live.Area(spec.Area), TargetType: spec.TargetType, Projection: spec.Projection, Action: spec.Action,
+		Decide: func(dec live.Decision) ([]live.NewEvent, []live.Problem) {
+			return DecideObserved(d, dec, typ, id, g, o)
+		},
+	}
 }
 
 // QueryFor is the query a tenant's published query graph defines, for the
