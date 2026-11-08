@@ -191,15 +191,16 @@ func Contribute(reg *extensions.Registry) {
 			return json.Marshal(g)
 		},
 	})
-	graphCommand := func(id, title, description, args string, events []string, decide func(g Graph, args json.RawMessage) ([]live.NewEvent, []live.Problem)) {
+	graphCommand := func(id, title, description, args, example string, events []string, decide func(g Graph, args json.RawMessage) ([]live.NewEvent, []live.Problem)) {
 		live.Commands.Register(reg, live.Command{
 			Descriptor: extensions.Descriptor{ID: id, Source: "hello"}, Title: title, Description: description, Args: json.RawMessage(args),
-			Events: events, Area: area, TargetType: "graph", Projection: "hello.graph", Action: "hello.write",
+			Examples: []json.RawMessage{json.RawMessage(example)}, Events: events, Area: area, TargetType: "graph", Projection: "hello.graph", Action: "hello.write",
 			Decide: func(d live.Decision) ([]live.NewEvent, []live.Problem) { return decide(graphOf(d.State), d.Args) },
 		})
 	}
 	graphCommand("hello.connect", "Connect two nodes", "Joins an output port of one node of a Hello graph to an input port of another.",
-		`{"type":"object","properties":{"source":{"type":"string"},"sourceHandle":{"type":"string"},"target":{"type":"string"},"targetHandle":{"type":"string"}},"required":["source","target"]}`,
+		`{"type":"object","properties":{"source":{"type":"string","description":"The node the edge leaves"},"sourceHandle":{"type":"string","description":"Its output port"},"target":{"type":"string","description":"The node the edge enters"},"targetHandle":{"type":"string","description":"Its input port"}},"required":["source","target"]}`,
+		`{"source":"a","sourceHandle":"out","target":"b","targetHandle":"in"}`,
 		[]string{"connected"}, func(g Graph, raw json.RawMessage) ([]live.NewEvent, []live.Problem) {
 			var e Edge
 			_ = json.Unmarshal(raw, &e)
@@ -216,7 +217,8 @@ func Contribute(reg *extensions.Registry) {
 			return []live.NewEvent{{Type: "connected", Data: e}}, nil
 		})
 	graphCommand("hello.disconnect", "Disconnect an edge", "Removes one edge of a Hello graph by its id.",
-		`{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}`,
+		`{"type":"object","properties":{"id":{"type":"string","description":"The edge's id"}},"required":["id"]}`,
+		`{"id":"a.out-b.in"}`,
 		[]string{"disconnected"}, func(g Graph, raw json.RawMessage) ([]live.NewEvent, []live.Problem) {
 			var d struct{ ID string }
 			_ = json.Unmarshal(raw, &d)
@@ -226,7 +228,8 @@ func Contribute(reg *extensions.Registry) {
 			return []live.NewEvent{{Type: "disconnected", Data: map[string]string{"id": d.ID}}}, nil
 		})
 	graphCommand("hello.moveNode", "Move a node", "Moves a node of a Hello graph to a position.",
-		`{"type":"object","properties":{"id":{"type":"string"},"position":{"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"}},"required":["x","y"]}},"required":["id","position"]}`,
+		`{"type":"object","properties":{"id":{"type":"string","description":"The node's id"},"position":{"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"}},"required":["x","y"],"description":"Where it goes on the canvas"}},"required":["id","position"]}`,
+		`{"id":"a","position":{"x":120,"y":40}}`,
 		[]string{"nodeMoved"}, func(g Graph, raw json.RawMessage) ([]live.NewEvent, []live.Problem) {
 			var m struct {
 				ID       string

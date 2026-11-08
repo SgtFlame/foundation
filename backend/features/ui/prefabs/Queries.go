@@ -29,14 +29,15 @@ type View struct {
 
 // Summary is one prefab in the prefab.list query.
 type Summary struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Owner       string `json:"owner,omitempty"`
-	Rev         int    `json:"rev"`
-	Published   int    `json:"published"`
-	Changed     bool   `json:"changed"`           // changed since it was published
-	Deleted     bool   `json:"deleted,omitempty"` // hidden until prefab.restore: list it apart
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Owner       string   `json:"owner,omitempty"`
+	Rev         int      `json:"rev"`
+	Published   int      `json:"published"`
+	Changed     bool     `json:"changed"`           // changed since it was published
+	Deleted     bool     `json:"deleted,omitempty"` // hidden until prefab.restore: list it apart
 }
 
 func viewOf(d Draft) View {
@@ -46,7 +47,7 @@ func viewOf(d Draft) View {
 
 func summaryOf(d Draft) Summary {
 	p := d.Prefab
-	return Summary{ID: p.ID, Name: p.Name, Description: p.Description, Owner: p.Owner, Rev: d.Rev, Published: d.Published, Changed: d.Rev != d.PublishedRev, Deleted: d.Deleted}
+	return Summary{ID: p.ID, Name: p.Name, Description: p.Description, Tags: p.Tags, Owner: p.Owner, Rev: d.Rev, Published: d.Published, Changed: d.Rev != d.PublishedRev, Deleted: d.Deleted}
 }
 
 type describeParams struct {
@@ -169,8 +170,8 @@ func contributeQueries(reg *extensions.Registry, deps func() Deps) {
 
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "prefab.list", Source: "ui"}, Title: "Prefabs",
-		Description: "The tenant's prefab library, by key \"prefab.<id>\": {id, name, description, owner, rev, published, changed}. owner narrows it to one app's (app:<appId>) or, as \"tenant\", to the tenant library's (no owner); search keeps those whose name or description holds the text. Who is editing each one is presence on prefab.<id>.",
-		Params:      json.RawMessage(`{"type":"object","properties":{"owner":{"type":"string","description":"app:<appId>, or tenant for the tenant library"},"search":{"type":"string","description":"Text the name or description holds"}}}`),
+		Description: "The tenant's prefab library, by key \"prefab.<id>\": {id, name, description, tags, owner, rev, published, changed}. owner narrows it to one app's (app:<appId>) or, as \"tenant\", to the tenant library's (no owner); search keeps those whose name, description or tags hold the text. Who is editing each one is presence on prefab.<id>.",
+		Params:      json.RawMessage(`{"type":"object","properties":{"owner":{"type":"string","description":"app:<appId>, or tenant for the tenant library"},"search":{"type":"string","description":"Text the name, description or tags hold"}}}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"owner":"app:hello"}`)},
 		Action:      "prefabs.read",
 		Resource:    func(p features.Principal, _ json.RawMessage) string { return ui.PrefabResource(p, "") },
@@ -185,7 +186,7 @@ func contributeQueries(reg *extensions.Registry, deps func() Deps) {
 				case p.Owner != "" && p.Owner != "tenant" && s.Owner != p.Owner:
 					return false
 				}
-				return search == "" || strings.Contains(strings.ToLower(s.Name+"\n"+s.Description), search)
+				return search == "" || strings.Contains(strings.ToLower(s.Name+"\n"+s.Description+"\n"+strings.Join(s.Tags, "\n")), search)
 			}
 			entries, err := f.Store().Watch(f.Context(), f.Args().Principal.TenantID, DraftProjector, TargetType+".*")
 			if err != nil {

@@ -22,6 +22,8 @@ type Prefab struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
+	// Tags are words a search of the catalog finds it by (forge 06d).
+	Tags []string `json:"tags,omitempty"`
 	// Owner is the app the prefab belongs to (app:<appId>); empty puts it
 	// in the tenant's library. Any prefab of the tenant can use any other.
 	Owner   string               `json:"owner,omitempty"`

@@ -55,6 +55,9 @@ type Page struct {
 	Route  string `json:"route"`
 	Prefab string `json:"prefab"`
 	Title  string `json:"title,omitempty"`
+	// Description is what the page shows and who it is for, for a model
+	// (forge 06d).
+	Description string `json:"description,omitempty"`
 }
 
 // NavItem is one entry of the frame's navigation.

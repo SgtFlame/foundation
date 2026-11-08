@@ -536,3 +536,6 @@ Decided while building:
 
 ## Since slice 33
 Forge 05c ([Apps.md › Built in slice 33](Apps.md#built-in-slice-33)): `records.Resource` puts an installed manifest app's own entity types at `tenant:<id>/app:<appId>/entity:<id>` (`records.SetPlacement`, set by `serve.go` to `installs.Placement`), behind the `app` fence on the `record` type. Row rules are per principal: `EntityType.RuleFor(ctx, p, action)` is the type's rule `&&` the `or` of the app roles' rules for the type (`authz.RowRules`); every query, subscription, command, node and tool uses it in place of `Rule`. A new record read or write must call `RuleFor`, never `Rule`.
+
+## Changed in slice 40
+Forge's part 6d ([Apps.md](Apps.md#built-in-slice-40)): every field type has a `title`, `tags` and `examples` (fields as `entity.addField` takes them), checked by `TestFieldTypesMetadata`; `entity.listFieldTypes` and `forge.describe {ref: "field:<type>"}` give them. Every `entity.*` command's fields are described.

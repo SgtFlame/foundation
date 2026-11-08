@@ -438,17 +438,20 @@ func commandSpecs() []spec {
 		{
 			id: "prefab.create", title: "Create a prefab", create: true, events: []string{EventCreated},
 			description: "Makes a new prefab (a reusable component: a tree of components with props, events, slots, state, queries and the graphs behind it). Its id is the target, or made from the name when left out (Task row is taskRow). owner app:<appId> puts it in an app; without one it is in the tenant's library. Then declare its interface with prefab.setInterface and build its tree with prefab.insertNode.",
-			args:        `{"type":"object","properties":{"name":{"type":"string"},"description":{"type":"string","description":"What it shows and when to use it, for a model"},"owner":{"type":"string","description":"app:<appId>, or none for the tenant's library"}},"required":["name"]}`,
-			example:     `{"name":"Task row","description":"One task with a checkbox and its title","owner":"app:hello"}`,
+			args:        `{"type":"object","properties":{"name":{"type":"string","description":"What people call it, e.g. Task row"},"description":{"type":"string","description":"What it shows and when to use it rather than the others, for a model"},"tags":{"type":"array","items":{"type":"string"},"description":"Words forge.catalog finds it by, e.g. [\"list\", \"task\"]"},"owner":{"type":"string","description":"app:<appId>, or none for the tenant's library"}},"required":["name"]}`,
+			example:     `{"name":"Task row","description":"One task with a checkbox and its title","tags":["task","row"],"owner":"app:hello"}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				if c.exists {
 					return nil, problem("target", fmt.Sprintf("there is already a prefab %q", c.Target.ID), "choose another id, or change it with the other prefab.* commands")
 				}
-				a, problems := args[struct{ Name, Description, Owner string }](c)
+				a, problems := args[struct {
+					Name, Description, Owner string
+					Tags                     []string
+				}](c)
 				if problems != nil {
 					return nil, problems
 				}
-				p := ui.Prefab{ID: c.Target.ID, Name: a.Name, Description: a.Description, Owner: a.Owner}
+				p := ui.Prefab{ID: c.Target.ID, Name: a.Name, Description: a.Description, Tags: a.Tags, Owner: a.Owner}
 				normalize(&p)
 				return ev(EventCreated, map[string]any{"prefab": p}), nil
 			},
@@ -481,8 +484,8 @@ func commandSpecs() []spec {
 		},
 		{
 			id: "prefab.setInfo", title: "Describe a prefab", events: []string{EventInfoSet},
-			description: "Sets a prefab's name, description and owner (app:<appId>, or \"\" for the tenant's library).",
-			args:        `{"type":"object","properties":{"name":{"type":"string"},"description":{"type":"string"},"owner":{"type":"string"}}}`,
+			description: "Sets a prefab's name, description, tags and owner (app:<appId>, or \"\" for the tenant's library). Each one given replaces it; one left out stays.",
+			args:        `{"type":"object","properties":{"name":{"type":"string","description":"What people call it"},"description":{"type":"string","description":"What it shows and when to use it rather than the others, for a model"},"tags":{"type":"array","items":{"type":"string"},"description":"Words forge.catalog finds it by"},"owner":{"type":"string","description":"app:<appId>, or \"\" for the tenant's library"}}}`,
 			example:     `{"description":"One task with a checkbox, its title and its due date"}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				in, problems := args[Info](c)
@@ -508,7 +511,7 @@ func commandSpecs() []spec {
 		{
 			id: "prefab.insertNode", title: "Insert a node", events: []string{EventNodeInserted},
 			description: "Inserts a component node (with its subtree) into a prefab's tree, under the node at parentPath (into its slot when slot is given), at index (the end when left out). With no parentPath it becomes the root of an empty tree. Node paths are keys from the root joined with '/', such as root/row/title; a node without a key gets one from its type (checkbox, checkbox_2), and the result lists every node's path.",
-			args:        `{"type":"object","properties":{"parentPath":{"type":"string"},"slot":{"type":"string","description":"A slot of the parent, such as a card's actions"},"index":{"type":"integer"},"node":` + nodeSchema + `},"required":["node"]}`,
+			args:        `{"type":"object","properties":{"parentPath":{"type":"string","description":"The parent's key path, such as root/row; the root when the template is empty"},"slot":{"type":"string","description":"A slot of the parent, such as a card's actions"},"index":{"type":"integer","description":"Where among the parent's children, from 0; the end when left out"},"node":` + nodeSchema + `},"required":["node"]}`,
 			example:     `{"parentPath":"root","node":{"type":"mui.checkbox","key":"done","bind":{"checked":"props.task.done"},"on":{"change":{"handler":"onToggle"}}}}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				a, problems := args[struct {
@@ -541,7 +544,7 @@ func commandSpecs() []spec {
 		{
 			id: "prefab.updateNode", title: "Change a node", events: []string{EventNodeUpdated},
 			description: "Changes the node at path: each prop, binding and event handler given is set, one given as null is cleared, and one left out stays, so designers changing different props of one node do not overwrite each other. key renames the node, which changes its path and its subtree's. variant picks a prefab instance's variant (null clears it); its own props override the variant's.",
-			args:        `{"type":"object","properties":{"path":{"type":"string"},"props":{"type":"object"},"bind":{"type":"object","description":"prop → path, or null to clear"},"on":{"type":"object","description":"event → {handler, payload?}, or null to clear"},"key":{"type":"string"},"variant":{"type":"string","description":"One of the instanced prefab's variants, or null for none"}},"required":["path"]}`,
+			args:        `{"type":"object","properties":{"path":{"type":"string","description":"A node's key path, such as root/row/title"},"props":{"type":"object","description":"prop → value, merged; null clears one"},"bind":{"type":"object","description":"prop → path, or null to clear"},"on":{"type":"object","description":"event → {handler, payload?}, or null to clear"},"key":{"type":"string","description":"A new key, unique among its siblings"},"variant":{"type":"string","description":"One of the instanced prefab's variants, or null for none"}},"required":["path"]}`,
 			example:     `{"path":"root/title","props":{"variant":"body2"}}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				u, problems := args[Update](c)
@@ -589,7 +592,7 @@ func commandSpecs() []spec {
 		{
 			id: "prefab.moveNode", title: "Move a node", events: []string{EventNodeMoved},
 			description: "Moves the node at path, with its subtree, under the node at parentPath (into its slot when slot is given), at index of that list once it has left its place (the end when left out).",
-			args:        `{"type":"object","properties":{"path":{"type":"string"},"parentPath":{"type":"string"},"slot":{"type":"string"},"index":{"type":"integer"}},"required":["path","parentPath"]}`,
+			args:        `{"type":"object","properties":{"path":{"type":"string","description":"A node's key path, such as root/row/title"},"parentPath":{"type":"string","description":"The new parent's key path"},"slot":{"type":"string","description":"A slot of the new parent; its children when left out"},"index":{"type":"integer","description":"Where among them, from 0; the end when left out"}},"required":["path","parentPath"]}`,
 			example:     `{"path":"root/due","parentPath":"root","index":1}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				a, problems := args[struct {
@@ -622,7 +625,7 @@ func commandSpecs() []spec {
 		{
 			id: "prefab.removeNode", title: "Remove a node", events: []string{EventNodeRemoved},
 			description: "Removes the node at path with its subtree. Removing the root empties the tree.",
-			args:        `{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`,
+			args:        `{"type":"object","properties":{"path":{"type":"string","description":"A node's key path, such as root/row/title"}},"required":["path"]}`,
 			example:     `{"path":"root/due"}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				a, problems := args[struct{ Path string }](c)
@@ -638,7 +641,7 @@ func commandSpecs() []spec {
 		{
 			id: "prefab.wrapNodes", title: "Wrap nodes", events: []string{EventNodesWrapped},
 			description: "Puts sibling nodes, in their order, into a new wrapper node (such as a mui.stack), which takes the first one's place. The wrapper is given without children; its key is made from its type when left out.",
-			args:        `{"type":"object","properties":{"paths":{"type":"array","items":{"type":"string"},"minItems":1},"wrapper":` + nodeSchema + `},"required":["paths","wrapper"]}`,
+			args:        `{"type":"object","properties":{"paths":{"type":"array","items":{"type":"string"},"minItems":1,"description":"The key paths of sibling nodes to wrap"},"wrapper":` + nodeSchema + `},"required":["paths","wrapper"]}`,
 			example:     `{"paths":["root/title","root/due"],"wrapper":{"type":"mui.stack","props":{"direction":"column"}}}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				a, problems := args[Wrap](c)
@@ -673,7 +676,7 @@ func commandSpecs() []spec {
 		{
 			id: "prefab.unwrapNode", title: "Unwrap a node", events: []string{EventNodeUnwrapped},
 			description: "Replaces the node at path with its children, in its place. The root can be unwrapped when it has one child.",
-			args:        `{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`,
+			args:        `{"type":"object","properties":{"path":{"type":"string","description":"A node's key path, such as root/row/title"}},"required":["path"]}`,
 			example:     `{"path":"root/texts"}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				a, problems := args[struct{ Path string }](c)
@@ -696,7 +699,7 @@ func commandSpecs() []spec {
 		{
 			id: "prefab.attachGraph", title: "Attach a graph", events: []string{EventGraphAttached},
 			description: "Attaches a graph to a prefab under a name its tree's handlers use (on: {change: {handler: \"onToggle\"}}): a ui.handler graph for an event, or a prefab.logic graph for its lifecycle. Make the graph first with bp.create.",
-			args:        `{"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"string","description":"The graph's id"}},"required":["name","graph"]}`,
+			args:        `{"type":"object","properties":{"name":{"type":"string","description":"The name the template's handlers use, such as onToggle"},"graph":{"type":"string","description":"The graph's id"}},"required":["name","graph"]}`,
 			example:     `{"name":"onToggle","graph":"taskRow-onToggle"}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				a, problems := args[struct{ Name, Graph string }](c)
@@ -712,7 +715,7 @@ func commandSpecs() []spec {
 		{
 			id: "prefab.detachGraph", title: "Detach a graph", events: []string{EventGraphDetached},
 			description: "Detaches a graph from a prefab; the graph itself stays. A handler in the tree still naming it must be changed first.",
-			args:        `{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}`,
+			args:        `{"type":"object","properties":{"name":{"type":"string","description":"The name the graph is attached under"}},"required":["name"]}`,
 			example:     `{"name":"logic"}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				a, problems := args[struct{ Name string }](c)
@@ -728,7 +731,7 @@ func commandSpecs() []spec {
 		{
 			id: "prefab.setPreview", title: "Set preview data", events: []string{EventPreviewSet},
 			description: "Sets the sample props the Prefab Editor renders a prefab with. They are part of the draft, not of its interface.",
-			args:        `{"type":"object","properties":{"props":{"type":"object"}},"required":["props"]}`,
+			args:        `{"type":"object","properties":{"props":{"type":"object","description":"Sample props the Prefab Editor and prefab.preview render it with, replacing the old"}},"required":["props"]}`,
 			example:     `{"props":{"task":{"_id":"1","title":"Water the plants","done":false}}}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				a, problems := args[struct{ Props map[string]any }](c)

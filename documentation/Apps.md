@@ -540,3 +540,42 @@ Forge's part 6c, the editors' **Activity** tabs ([forge Activity.md](../../forge
 In the browser, `OpEntry.summary` and `OpRequest.summary` in `src/services/Apps.ts`, and `UndoConflictDialog` takes any `{conflict, dismiss, force, busy}` (an Activity tab's *Undo request* as well as `useUndo`'s).
 
 Verified by `go test ./features/apps/ops` (**`TestTheLogByScope`**: one prefab's ops, the manifest's and the app's, with their summaries) and Forge's walk in [Activity.md](../../forge/documentation/Activity.md#verification).
+
+## Built in slice 40
+Forge's part 6d ([forge 06d-CatalogMetadata.md](../../forge/documentation/plans/06d-CatalogMetadata.md)): **the catalog, metadata and the read tools**. Every catalog item (UI primitive, node type, field type, prefab) carries a title, a description for a model, examples as JSON and tags; every command documents each of its fields and has an example its schema accepts; an app's pages gain a description, and `app.describe` gives each part's. Four read tools give a chat one view of what it builds with and of an app: `forge.catalog`, `forge.describe`, `forge.app` and `forge.read`.
+
+### Decisions
+Answered before building, in [forge 06d-CatalogMetadata.md](../../forge/documentation/plans/06d-CatalogMetadata.md#todo): the `forge.*` tools sit **beside** the existing read tools, for every chat (question 1, the user's choice over the proposal of giving the Builder only the `forge.*` ones); part descriptions are optional, `forge.check` (6e) to warn of a missing one (2); the `connectors` area is accepted and empty (3); node types keep their prose example and gain a JSON one derived from their config schema's defaults, hand-written where a config has required fields, and tags derived from their category, source and kinds (4, a gap found while reading the plan).
+
+Decided while building:
+1. **Refs.** A catalog item is named `component:<id>`, `node:<type>`, `field:<type>` or `prefab:<id>` (`component:prefab.<id>` also names the prefab); a part `prefab:<id>`, `graph:<id>` or `entity:<id>`. `forge.catalog` gives each item's ref, and `forge.app`'s parts name theirs by type and id.
+2. **The catalog's prefabs are the published ones** (not deleted), the starter library's among them, as `ui.listComponents` lists them: only a published prefab can be used in a tree. An app's drafts are read through `forge.app` and `forge.read`. `forge.describe` of a prefab describes its last published version (its draft if never published), as a component (`ui.PrefabComponent`: props schema, events, slots, examples from its preview data and variants) with its variants, owner and version.
+3. **Search** keeps the items holding every word (in ref, title, category, description or tags), scored two per word in the title and one per word in the tags, then by area and ref; items carry their description's first sentence. `area` is optional.
+4. **`forge.app`** is `app.describe` with the manifest's problems (`apps.CheckManifest` against `manifests.Env`, so the tool takes the projections, `ForgeDeps.Store`), the other users present in `app.<id>` (the caller's own connections left out) and the position (stream → sequence) the read was at. Parts carry their `description` (`manifests.Part.Description`).
+5. **`forge.read`** reads a part's draft with its rev and position: `prefab.describe`, `cognition.graph` or `entity.describe`.
+6. **Prefab tags** are a field of the definition (`ui.Prefab.Tags`), set by `prefab.create` and `prefab.setInfo` (undone with the rest of the info), listed and searched by `prefab.list`, and added to the owner in the component's tags.
+7. **Field types' examples** are fields as `entity.addField` takes them; a formula's names `quantity` and `price` and a rollup's `lines`, fields of the entity type it would be in (the test puts them there).
+8. **A field's description is checked one level down**: every top-level property of every non-internal command's args. Shared schema pieces given a description in place use `described()` (`cognition/drafts`); an app list's remove command takes its key's schema from the list's props (`List.keyProp`).
+
+### Backend
+- `apps/tools/forge.go`: `ContributeForge(reg, func() ForgeDeps)` (`forge.catalog`, `forge.describe`, `forge.app`, `forge.read`), `ForgeDeps{Subscriptions, Store}`, `Item`, `Areas`; wired in `serve.go` after `apptools.ContributeTransfer`, its deps set with the live tools'.
+- `apps`: `Page.Description`; `apps/manifests`: the page's `description` in the list props, every list field described, `Part.Description`.
+- `cognition`: `NodeType.Examples` and `Tags`, `ExamplesOf`, `TagsOf`, `ConfigExample`, `ConfigDefaults`, `ConfigRequired` (`Meta.go`); `bp.listNodeTypes` searches tags and `bp.describeNodeType` gives `examples` and `tags`.
+- `records`: `FieldType.Title`, `Tags` and `Examples`.
+- `ui`: `Prefab.Tags`; every primitive tagged; `prefab.list`'s summaries carry tags.
+- Every command's fields described, and `hello.connect|disconnect|moveNode` given examples.
+
+### Browser
+- Types only: `tags` on `Prefab` and `PrefabSummary` (`src/services/Prefabs.ts`), `description` on `AppPage` and `AppPart` (`src/services/Apps.ts`).
+
+### Verification of slice 40
+- `go test ./features/apps/tools` (`metadata_test.go`, over a registry with every feature's contributions): **`TestMetadata`**: every component has a title, description, category, tags and example; every node type passes `MetaProblems`, has tags, and its JSON example is `{type, config}` with each required config field and a config its pins accept; every command describes each field and has an example `tools.CheckArgs` accepts. It found 26 untagged primitives, 123 undocumented fields, three commands without examples and 18 node types needing examples before passing. **`TestCatalog`**: the areas, the empty `connectors`, ranking (`money` finds the field type first), describing a component, node type and field type, and refusing unknown refs and areas.
+- `go test ./features/records` (**`TestFieldTypesMetadata`**: every field type's example passes `records.Check` in an entity type), and `go test ./features/apps/ops` (`TestEveryOpUndoes` now sets and undoes a prefab's tags).
+- Forge's `go test ./features/starter` (**`TestForgeTools`**, over the seeded starter library and Tasks sample): `forge.catalog {area: "prefabs", search: "table"}` finds *Record table* first; `forge.describe` gives its props and an example that `ui.Preview` renders without problems; `forge.app` on Tasks gives three pages, its parts with descriptions, no problems, Alice (not the caller) as present, and its position; `forge.read` reads `prefab:taskCard`, `graph:cmd-tasks-task-reassign` and `entity:tasksTask` with their revs and positions.
+- The touched packages' tests pass (`cognition/...`, `records`, `records/entities`, `records/nodes`, `ui/...`, `apps/...`, `live/...`), as do all of Forge's `starter` tests; both `serve` binaries build with `backend/scripts/build.sh`, and `common`'s `yarn build` passes. No browser walk: the slice adds no UI.
+
+### Decisions to review after seeing it
+- Search's scoring and first-sentence descriptions (decision 3), once a model has used them.
+- Only published prefabs in the catalog (decision 2).
+- The derived node tags (category, source, kinds), which are coarse; hand-written `Tags` can be added per type.
+- Whether the general chat should keep both sets of read tools (question 1), once 6g's Builder mode exists.

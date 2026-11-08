@@ -70,6 +70,7 @@ export interface Prefab {
   id: string
   name: string
   description?: string
+  tags?: string[] // words forge.catalog finds it by
   owner?: string // app:<appId>; none is the tenant's library
   props: Record<string, PropDecl>
   state: Record<string, StateDecl>
@@ -100,6 +101,7 @@ export interface PrefabSummary {
   id: string
   name: string
   description?: string
+  tags?: string[]
   owner?: string
   rev: number
   published: number

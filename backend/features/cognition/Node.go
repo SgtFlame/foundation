@@ -64,6 +64,13 @@ type NodeType struct {
 	// Example is how the node is used, for a model and the Palette, e.g.
 	// "Branch on Is admin? to show the admin tools only to admins".
 	Example string
+	// Examples are minimal correct uses as JSON, {type, config}, for a
+	// model (forge 06d); empty derives one from the config schema's
+	// defaults (ExamplesOf). A config with required fields needs one.
+	Examples []json.RawMessage
+	// Tags are added to those derived from its category, source and kinds
+	// (TagsOf).
+	Tags []string
 	// Kinds are the graph kinds it may be used in; empty allows every kind
 	// (cognition.Kind.Allows).
 	Kinds []string

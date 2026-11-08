@@ -240,7 +240,17 @@ func node(reg *extensions.Registry, order int, t cognition.NodeType) {
 	if t.Kinds == nil {
 		t.Kinds = []string{KindHandler, KindPrefab}
 	}
+	if config, ok := configExamples[t.ID]; ok {
+		t.Examples = cognition.ConfigExample(t.ID, config)
+	}
 	cognition.Nodes.Register(reg, t)
+}
+
+// configExamples are the configs of the examples of the effect nodes
+// whose configs need values (cognition.NodeType.Examples).
+var configExamples = map[string]string{
+	"ui.openEditor": `{"kind":"task"}`,
+	"ui.confirm":    `{"message":"Reset the counter?","handler":"hello-onResetConfirmed"}`,
 }
 
 func then(in ...cognition.Pin) cognition.Pins {
@@ -320,6 +330,7 @@ func Contribute(reg *extensions.Registry) {
 		Descriptor: extensions.Descriptor{ID: "ui.getState"}, Title: "Get state", Volatile: true,
 		Description: "Reads the session's view state at a path",
 		Example:     "Get state tab, to know which sub-tab is showing",
+		Examples:    cognition.ConfigExample("ui.getState", `{"path":"tab"}`),
 		Config:      pathSchema,
 		Pins:        cognition.Pins{Out: []cognition.Pin{cognition.DataPin("value", "Value", cognition.Any, "The state's value")}},
 		Run: func(x *cognition.Exec, _ cognition.Values) (cognition.Values, string, error) {
@@ -338,6 +349,7 @@ func Contribute(reg *extensions.Registry) {
 		Descriptor: extensions.Descriptor{ID: "ui.setState"}, Title: "Set state",
 		Description: "Changes the session's view state at a path; what reads it is drawn again for this user",
 		Example:     "Set state greeting to \"Hello, \" + name",
+		Examples:    cognition.ConfigExample("ui.setState", `{"path":"greeting"}`),
 		Config:      pathSchema,
 		Pins:        then(cognition.Pin{ID: "value", Name: "Value", Type: cognition.Any, Optional: true, Description: "The new value"}),
 		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
@@ -397,6 +409,7 @@ func Contribute(reg *extensions.Registry) {
 		Descriptor: extensions.Descriptor{ID: "ui.getQuery"}, Title: "Get query data", Volatile: true,
 		Description: "Reads the data of a query the prefab declares, as the instance holds it now",
 		Example:     "Get query data openTasks, to count them",
+		Examples:    cognition.ConfigExample("ui.getQuery", `{"query":"openTasks"}`),
 		Config:      json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","title":"Query","description":"The name the prefab declares it under"}},"required":["query"]}`),
 		Pins:        cognition.Pins{Out: []cognition.Pin{cognition.DataPin("value", "Value", cognition.Any, "The query's data")}},
 		Run: func(x *cognition.Exec, _ cognition.Values) (cognition.Values, string, error) {
@@ -415,6 +428,7 @@ func Contribute(reg *extensions.Registry) {
 		Descriptor: extensions.Descriptor{ID: "ui.raiseEvent"}, Title: "Raise event", Effects: true,
 		Description: "Raises one of the prefab's declared events with a payload: the handler the instance's user maps it to runs at once, in the user's scope (as a React component calls its onX prop). Not the command graphs' Emit event.",
 		Example:     "Raise event toggled with the task's id and its new done",
+		Examples:    cognition.ConfigExample("ui.raiseEvent", `{"event":"toggled","inputs":[{"id":"id","type":"string"},{"id":"done","type":"bool"}]}`),
 		Config: json.RawMessage(`{"type":"object","properties":{"event":{"type":"string","title":"Event","description":"One of the prefab's declared events"},"inputs":{"type":"array","title":"Payload fields","items":{"type":"object","properties":{
   "id":{"type":"string","title":"ID"},"name":{"type":"string","title":"Name"},"type":{"type":"string","title":"Type"},"description":{"type":"string","title":"Description"}}}}},"required":["event"]}`),
 		PinsFor: func(config json.RawMessage) (cognition.Pins, error) {
@@ -469,6 +483,7 @@ func Contribute(reg *extensions.Registry) {
 		Descriptor: extensions.Descriptor{ID: "ui.subscribe"}, Title: "Subscribe to records", Effects: true, Kinds: []string{KindPrefab},
 		Description: "Keeps a query's data (records.find by default) at a path of the instance's state while it is mounted: the state follows every change, and the subscription ends with the instance. Subscribing the same path again with other params replaces it.",
 		Example:     "Subscribe to records into tasks, with {entity: task, where: {done: false}}",
+		Examples:    cognition.ConfigExample("ui.subscribe", `{"path":"tasks"}`),
 		Config:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","title":"State path","description":"Where the data is kept, e.g. tasks"},"query":{"type":"string","title":"Query","description":"records.find when empty"}},"required":["path"]}`),
 		Pins:        then(cognition.DataPin("params", "Params", "json", "The query's params, e.g. {entity, where, sort}")),
 		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {

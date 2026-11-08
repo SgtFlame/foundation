@@ -697,6 +697,15 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-8) and Forge's [PrefabEditor.md](../../forge/documentation/PrefabEditor.md#built-in-slice-39).
     - **Pending, carried forward**: undoing another author's request from a view (the Activity tab, forge 6c); `forge.undo` on `ops.undo` (forge 6e); hiding a deleted app's parts in the server's queries.
 
+40. **The catalog, metadata and the read tools** (Forge iteration 6, part 6d, [forge 06d-CatalogMetadata.md](../../forge/documentation/plans/06d-CatalogMetadata.md)). *Built* ([Apps.md](Apps.md#built-in-slice-40), [Cognition.md](Cognition.md#changed-in-slice-40), [Records.md](Records.md#changed-in-slice-40), [ServerUI.md](ServerUI.md#changed-in-slice-40)).
+    - **Built**:
+      - metadata on every catalog item: node types' JSON examples and tags, field types' titles, tags and examples, prefab tags, every primitive tagged; every command's fields described, with an example; pages' and parts' descriptions;
+      - in `apps/tools`: `forge.catalog`, `forge.describe`, `forge.app` (with problems, presence and position) and `forge.read`, beside the existing read tools;
+      - tests over every registered item (`TestMetadata`, `TestFieldTypesMetadata`) and, in Forge, over the starter library and the Tasks sample (`TestForgeTools`); the starter prefabs tagged.
+    - **Blockers**: none. Forge 06d questions 1 (both sets of tools everywhere, the user's choice), 2 (descriptions optional), 3 (an empty `connectors` area) and 4 (node examples and tags derived, a gap found while reading) were asked before building.
+    - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-9).
+    - **Pending, carried forward**: `forge.check`'s warning for a missing part description (forge 6e); which read tools the Builder gets (forge 6g).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -743,3 +752,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 37. The Tasks app (Forge 5g) | forge 05g 1 (Tasks owns its type) and 2 (built by ops; the steps by hand in the browser), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-6) and forge TasksApp.md, the demo with two users of different roles |
 | 38. The operation log (Forge 6a) | forge 06-AIAuthoring 5 (a slice per part, from 38) and 06a 1 (client request ids), 2 (inverse ops in `Decide`), 3 (definitions only) and 4 (the client-named app for unowned parts), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-7), to review after seeing |
 | 39. Undo and redo by request (Forge 6b) | forge 06b 1 (items), 2 (conflicts refuse, `force` the rest), 3 (no limit), 4 (the editor's scope, the chat's requests included), 5 (stacks on the server), 6 (undo after publishing) and 7 (definitions only), answered; 8 (Undo and Redo on a chat round, the user's addition) built on its proposal | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-8), Undo and Redo in each editor with two authors, the chat round's preview |
+| 40. The catalog and read tools (Forge 6d) | forge 06d 1 (both sets of read tools everywhere, the user's choice), 2 (descriptions optional), 3 (`connectors` empty) and 4 (node examples and tags derived, a gap found while reading), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-9), once a model uses the tools |

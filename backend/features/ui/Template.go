@@ -212,8 +212,9 @@ func PrefabComponent(p Prefab) Component {
 		ex, _ := json.Marshal(map[string]any{"type": c.ID, "key": p.ID, "variant": v, "props": p.Preview.Props})
 		c.Examples = append(c.Examples, ex)
 	}
+	c.Tags = slices.Clone(p.Tags)
 	if p.Owner != "" {
-		c.Tags = []string{p.Owner}
+		c.Tags = append(c.Tags, p.Owner)
 	}
 	return c
 }

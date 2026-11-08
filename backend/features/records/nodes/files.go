@@ -22,6 +22,7 @@ func contributeFiles(reg *extensions.Registry, deps func() data.Deps) {
 		Kinds:       []string{livenodes.KindAction, uinodes.KindHandler},
 		Description: "Keeps a file for an entity type's file fields and gives the reference to set on a record (with Send command record.update, or Update record in the command graph it sends). The content is text, or base64 when the encoding says so; the records section's maxFileMB bounds it. Not in command graphs, which may be decided more than once.",
 		Example:     "Upload file for task named notes.txt from the form's text, then Send command record.update {set: {attachment: file}}",
+		Examples:    cognition.ConfigExample("records.uploadFile", `{"entity":"task","encoding":"text"}`),
 		Config:      json.RawMessage(`{"type":"object","properties":{` + entityConfig + `,"encoding":{"type":"string","enum":["text","base64"],"title":"Encoding","description":"How the content input is given; text when left out"}},"required":["entity"]}`),
 		Pins: cognition.Pins{
 			In: []cognition.Pin{cognition.ExecPin(cognition.Then, ""),
@@ -57,6 +58,7 @@ func contributeFiles(reg *extensions.Registry, deps func() data.Deps) {
 		Descriptor: extensions.Descriptor{ID: "records.fileUrl"}, Title: "File URL",
 		Description: "The URL a record's file is served at, for a link, an image or a download. It serves the file to whoever can read the record (its row rule included) and to no one else.",
 		Example:     "File URL of task's attachment for the selected row, bound to an image's src",
+		Examples:    cognition.ConfigExample("records.fileUrl", `{"entity":"task","field":"attachment"}`),
 		Config:      json.RawMessage(`{"type":"object","properties":{` + entityConfig + `,"field":{"type":"string","title":"Field","description":"The file field's id"}},"required":["entity","field"]}`),
 		Pins: cognition.Pins{
 			In: []cognition.Pin{cognition.DataPin("id", "ID", "string", "The record's id"),

@@ -364,7 +364,7 @@ func steps() []step {
 		s("prefab.detachGraph", "row", m{"name": "onClick"}),
 		s("prefab.setPreview", "row", m{"props": m{"title": "Water the plants"}}),
 		s("prefab.setVariants", "row", m{"variants": m{"loud": m{"props": m{"title": "LOUD"}}}}),
-		s("prefab.setInfo", "row", m{"description": "One row", "name": "A row"}),
+		s("prefab.setInfo", "row", m{"description": "One row", "name": "A row", "tags": []string{"row", "list"}}),
 		s("prefab.import", "row", m{"prefab": m{"name": "Row", "owner": own, "template": m{"type": "mui.text", "key": "root"}}}),
 		s("prefab.import", "card", m{"prefab": m{"name": "Card", "template": m{"type": "mui.text", "key": "root"}}}),
 		s("prefab.publish", "row", m{"rev": 0}),

@@ -65,11 +65,13 @@ const (
 	EventRestored      = "restored"      // {}
 )
 
-// Info changes a prefab's name, description and owner; nil leaves them.
+// Info changes a prefab's name, description, tags and owner; nil leaves
+// them.
 type Info struct {
-	Name        *string `json:"name,omitempty"`
-	Description *string `json:"description,omitempty"`
-	Owner       *string `json:"owner,omitempty"`
+	Name        *string   `json:"name,omitempty"`
+	Description *string   `json:"description,omitempty"`
+	Tags        *[]string `json:"tags,omitempty"`
+	Owner       *string   `json:"owner,omitempty"`
 }
 
 // Interface replaces the sections it gives; nil leaves them.
@@ -164,6 +166,9 @@ func Apply(d *Draft, e live.Event) error {
 			}
 			if in.Description != nil {
 				p.Description = *in.Description
+			}
+			if in.Tags != nil {
+				p.Tags = *in.Tags
 			}
 			if in.Owner != nil {
 				p.Owner = *in.Owner

@@ -389,6 +389,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var chronicleToolDeps chronicletools.Deps
 		var agentDeps toolsnodes.Deps
 		var liveToolDeps livetools.Deps
+		var forgeToolDeps apptools.ForgeDeps
 		var draftDeps drafts.Deps
 		var entityDeps entities.Deps
 		var prefabDeps prefabs.Deps
@@ -480,6 +481,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		ops.ContributeUndo(registry, func() ops.Deps { return opsDeps }) // ops.undo, ops.redo and ops.stack (forge 06b)
 		apptools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		apptools.ContributeTransfer(registry, func() appservice.Service { return appService })
+		apptools.ContributeForge(registry, func() apptools.ForgeDeps { return forgeToolDeps }) // forge.catalog|describe|app|read (forge 06d)
 		presence.Contribute(registry, func() *presence.Presence { return livePresence })
 		uitools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
@@ -700,6 +702,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		liveBus.Resolve = installs.CommandFor(func() installs.Deps { return installDeps }, livenodes.CommandFor(func() livenodes.Deps { return liveNodeDeps }))
 		subscriptions.Resolve = installs.QueryFor(func() installs.Deps { return installDeps }, livenodes.QueryFor(func() livenodes.Deps { return liveNodeDeps }))
 		liveToolDeps = livetools.Deps{Bus: liveBus, Subscriptions: subscriptions}
+		forgeToolDeps = apptools.ForgeDeps{Subscriptions: subscriptions, Store: projections}
 		liveSubscriptions = subscriptions
 		recordEmbedder = embedService
 		recordFiles := recordsfiles.New(nats.JS())

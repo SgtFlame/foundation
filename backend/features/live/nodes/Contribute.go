@@ -95,6 +95,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Descriptor: extensions.Descriptor{ID: "live.emit"}, Title: "Emit event", Kinds: []string{KindCommand},
 		Description: "Decides one event for the command to commit; the target's projector folds it into the new state",
 		Example:     "Emit event incremented with data {by: 1}",
+		Examples:    cognition.ConfigExample("live.emit", `{"event":"incremented"}`),
 		Config:      json.RawMessage(`{"type":"object","properties":{"event":{"type":"string","title":"Event","description":"The event's type, one of the spec's events"}},"required":["event"]}`),
 		Pins: cognition.Pins{
 			In:  []cognition.Pin{cognition.ExecPin(cognition.Then, ""), {ID: "data", Name: "Data", Type: cognition.Any, Optional: true, Description: "The event's data"}},
@@ -140,6 +141,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Descriptor: extensions.Descriptor{ID: "live.sendCommand"}, Title: "Send command", Effects: true,
 		Description: "Sends a command to change data, as the user (in a handler) or the run's principal, and continues by OK or Rejected. Everyone's queries over the target change once its events are projected.",
 		Example:     "Send command hello.increment to target main with args {by: 1}, and Toast its message when Rejected",
+		Examples:    cognition.ConfigExample("live.sendCommand", `{"command":"hello.increment","target":"main"}`),
 		Config: json.RawMessage(`{"type":"object","properties":{"command":{"type":"string","title":"Command","description":"The command type, e.g. hello.increment (live.listCommands)"},
 			"target":{"type":"string","title":"Target","description":"The object's id when the Target input is unconnected"}},"required":["command"]}`),
 		Pins: cognition.Pins{
@@ -188,6 +190,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Descriptor: extensions.Descriptor{ID: "live.readProjection"}, Title: "Read projection", Category: "Data",
 		Description: "Reads one value of a projection by its key (\"<type>.<id>\"); a query graph runs again when it changes",
 		Example:     "Read projection hello.counter at counter.main, giving {value}",
+		Examples:    cognition.ConfigExample("live.readProjection", `{"projector":"hello.counter"}`),
 		Config:      json.RawMessage(`{"type":"object","properties":{"projector":{"type":"string","title":"Projector","description":"e.g. hello.counter"}},"required":["projector"]}`),
 		Pins: cognition.Pins{
 			In:  []cognition.Pin{cognition.DataPin("key", "Key", "string", "The key, \"<type>.<id>\"")},
@@ -224,6 +227,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Descriptor: extensions.Descriptor{ID: "live.runQuery"}, Title: "Run query", Category: "Data", Volatile: true,
 		Description: "Reads a query's result once, now (live.listQueries). For data a page displays, bind the query instead: bindings stay live.",
 		Example:     "Run query hello.graph with {id: main} to check a node exists before connecting",
+		Examples:    cognition.ConfigExample("live.runQuery", `{"query":"hello.graph"}`),
 		Config:      json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","title":"Query"}},"required":["query"]}`),
 		Pins: cognition.Pins{
 			In:  []cognition.Pin{{ID: "params", Name: "Params", Type: cognition.Any, Optional: true, Description: "The query's params, an object"}},

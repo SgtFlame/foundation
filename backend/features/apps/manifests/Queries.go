@@ -38,18 +38,21 @@ type View struct {
 // Part is a prefab, graph or entity type the manifest names or the app
 // owns (forge 05a question 2).
 type Part struct {
-	Type      string `json:"type"` // prefab, graph or entity
-	ID        string `json:"id"`
-	Name      string `json:"name,omitempty"`
-	Kind      string `json:"kind,omitempty"` // a graph's kind
-	Owner     string `json:"owner,omitempty"`
-	Rev       int    `json:"rev,omitempty"`
-	Published int    `json:"published,omitempty"`
-	Changed   bool   `json:"changed,omitempty"` // changed since it was published
-	Named     bool   `json:"named"`             // the manifest names it
-	Owned     bool   `json:"owned"`             // its owner is this app
-	Builtin   bool   `json:"builtin,omitempty"` // a built-in graph, with no draft
-	Missing   bool   `json:"missing,omitempty"` // named, but not there
+	Type string `json:"type"` // prefab, graph or entity
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+	// Description is the part's own, so a model understands the app
+	// without reading each part (forge 06d).
+	Description string `json:"description,omitempty"`
+	Kind        string `json:"kind,omitempty"` // a graph's kind
+	Owner       string `json:"owner,omitempty"`
+	Rev         int    `json:"rev,omitempty"`
+	Published   int    `json:"published,omitempty"`
+	Changed     bool   `json:"changed,omitempty"` // changed since it was published
+	Named       bool   `json:"named"`             // the manifest names it
+	Owned       bool   `json:"owned"`             // its owner is this app
+	Builtin     bool   `json:"builtin,omitempty"` // a built-in graph, with no draft
+	Missing     bool   `json:"missing,omitempty"` // named, but not there
 }
 
 // Summary is one app in the app.list query.
@@ -109,11 +112,11 @@ func partOf(typ string, raw json.RawMessage) (Part, bool) {
 		return Part{}, false
 	}
 	def := map[string]json.RawMessage{"prefab": d.Prefab, "graph": d.Graph, "entity": d.Entity}[typ]
-	var x struct{ ID, Name, Kind, Owner string }
+	var x struct{ ID, Name, Description, Kind, Owner string }
 	if json.Unmarshal(def, &x) != nil || x.ID == "" {
 		return Part{}, false
 	}
-	return Part{Type: typ, ID: x.ID, Name: x.Name, Kind: x.Kind, Owner: x.Owner, Rev: d.Rev, Published: d.Published, Changed: d.Rev != d.PublishedRev}, true
+	return Part{Type: typ, ID: x.ID, Name: x.Name, Description: x.Description, Kind: x.Kind, Owner: x.Owner, Rev: d.Rev, Published: d.Published, Changed: d.Rev != d.PublishedRev}, true
 }
 
 // partsOf are an app's parts: those it names and those it owns.
@@ -129,7 +132,7 @@ func partsOf(m apps.Manifest, known map[string]map[string]Part, builtins map[str
 			case ok:
 			case typ == "graph" && builtins[id].ID != "":
 				b := builtins[id]
-				p = Part{Type: typ, ID: id, Name: b.Graph.Name, Kind: b.Graph.Kind, Owner: b.Graph.Owner, Builtin: true}
+				p = Part{Type: typ, ID: id, Name: b.Graph.Name, Description: b.Graph.Description, Kind: b.Graph.Kind, Owner: b.Graph.Owner, Builtin: true}
 			default:
 				p = Part{Type: typ, ID: id, Missing: true}
 			}
@@ -167,7 +170,7 @@ type watched struct {
 func contributeQueries(reg *extensions.Registry, deps func() Deps) {
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "app.describe", Source: "apps"}, Title: "An app",
-		Description: "An app's draft as it is edited: {manifest: {id, name, icon, description, home, frame, pages, nav, editorKinds, entities, commands, queries, roles, settings, triggers, requires}, rev, parts}. parts are the prefabs, graphs and entity types the manifest names or the app owns (owner app:<appId>), each {type, id, name, kind, owner, rev, published, changed, named, owned, missing}. Changes with every app.* command and with every change to a part.",
+		Description: "An app's draft as it is edited: {manifest: {id, name, icon, description, home, frame, pages, nav, editorKinds, entities, commands, queries, roles, settings, triggers, requires}, rev, parts}. parts are the prefabs, graphs and entity types the manifest names or the app owns (owner app:<appId>), each {type, id, name, description, kind, owner, rev, published, changed, named, owned, missing}. Changes with every app.* command and with every change to a part.",
 		Params:      json.RawMessage(`{"type":"object","properties":{"id":{"type":"string","description":"The app's id"}},"required":["id"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"id":"tasks"}`)},
 		Action:      "app.read",

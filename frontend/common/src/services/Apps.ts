@@ -15,6 +15,7 @@ export interface AppPage {
   route: string // /mine, or /task/:id: its params become the prefab's props
   prefab: string
   title?: string
+  description?: string // what the page shows and who it is for, for a model
 }
 
 export interface AppNavItem {
@@ -97,6 +98,7 @@ export interface AppPart {
   type: 'prefab' | 'graph' | 'entity'
   id: string
   name?: string
+  description?: string
   kind?: string // a graph's kind
   owner?: string
   rev?: number

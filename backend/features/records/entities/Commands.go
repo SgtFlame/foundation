@@ -125,13 +125,13 @@ const optionSchema = `{"type":"object","properties":{"id":{"type":"string"},"nam
 
 // fieldProps are a field's properties, as entity.addField and
 // entity.updateField take them.
-const fieldProps = `"name":{"type":"string"},"type":{"type":"string","description":"A field type (entity.listFieldTypes)"},"description":{"type":"string"},"required":{"type":"boolean"},"default":{},` +
+const fieldProps = `"name":{"type":"string","description":"What people call it, unique in the entity type"},"type":{"type":"string","description":"A field type (entity.listFieldTypes, forge.catalog fields)"},"description":{"type":"string","description":"What it holds, for a model"},"required":{"type":"boolean","description":"A record must have a value"},"default":{"description":"A new record's value when none is given"},` +
 	`"options":{"type":"array","items":` + optionSchema + `,"description":"enum, multiEnum"},` +
 	`"relation":{"type":"object","properties":{"entity":{"type":"string"},"many":{"type":"boolean"},"inverse":{"type":"string"}},"required":["entity"],"description":"relation: the entity type it points to; \"user\" is the tenant's users"},` +
 	`"scale":{"type":"integer","description":"decimal, money"},"currency":{"type":"string","description":"money"},` +
 	`"items":{"type":"object","description":"list: what each item is, {type, …}"},"fields":{"type":"array","items":{"type":"object"},"description":"object: nested fields"},` +
-	`"schema":{"type":"object","description":"json"},"formula":{"type":"string"},` +
-	`"rollup":{"type":"object","properties":{"relation":{"type":"string"},"field":{"type":"string"},"aggregate":{"type":"string"}},"required":["relation","aggregate"]}`
+	`"schema":{"type":"object","description":"json"},"formula":{"type":"string","description":"formula: an expression over the fields above it by id, e.g. quantity * price"},` +
+	`"rollup":{"type":"object","properties":{"relation":{"type":"string"},"field":{"type":"string"},"aggregate":{"type":"string"}},"required":["relation","aggregate"],"description":"rollup: {relation: a relation field's id, field: the related field, aggregate: count|sum|min|max|avg}"}`
 
 const fieldSchema = `{"type":"object","properties":{"id":{"type":"string","description":"Its id; made from the name when left out"},` + fieldProps + `},"required":["name","type"]}`
 
@@ -236,7 +236,7 @@ func commandSpecs() []spec {
 		{
 			id: "entity.create", title: "Create an entity type", create: true, events: []string{EventCreated},
 			description: "Makes a new entity type (a schema for records, such as Task) with the target as its id, and its fields. A field's id is made from its name when left out; records keep values by field id, so a rename never touches them. The title field is the first text field unless given.",
-			args:        `{"type":"object","properties":{"name":{"type":"string"},"description":{"type":"string","description":"What a record of it is, for a model"},"owner":{"type":"string","description":"app:<appId>, or tenant for a type apps share"},"titleField":{"type":"string"},"fields":{"type":"array","items":` + fieldSchema + `}},"required":["name"]}`,
+			args:        `{"type":"object","properties":{"name":{"type":"string","description":"What people call it, e.g. Task"},"description":{"type":"string","description":"What a record of it is, for a model"},"owner":{"type":"string","description":"app:<appId>, or tenant for a type apps share"},"titleField":{"type":"string","description":"The field shown as a record's title, by id"},"fields":{"type":"array","items":` + fieldSchema + `,"description":"Its fields, as entity.addField takes them"}},"required":["name"]}`,
 			example:     `{"name":"Task","owner":"app:hello","fields":[{"name":"title","type":"text","required":true},{"name":"done","type":"bool"},{"name":"due","type":"date"},{"name":"assignee","type":"relation","relation":{"entity":"user"}}]}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				if c.exists {
@@ -316,7 +316,7 @@ func commandSpecs() []spec {
 		{
 			id: "entity.setInfo", title: "Describe an entity type", events: []string{EventInfoSet},
 			description: "Sets an entity type's name, description, owner and title field (the field shown as a record's title).",
-			args:        `{"type":"object","properties":{"name":{"type":"string"},"description":{"type":"string"},"owner":{"type":"string"},"titleField":{"type":"string","description":"A field's id"}}}`,
+			args:        `{"type":"object","properties":{"name":{"type":"string","description":"What people call it"},"description":{"type":"string","description":"What a record of it is, for a model"},"owner":{"type":"string","description":"app:<appId>, or tenant for a type apps share"},"titleField":{"type":"string","description":"A field's id"}}}`,
 			example:     `{"description":"Something to do, with a due date and an assignee"}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				in, problems := args[Info](c)
@@ -439,7 +439,7 @@ func commandSpecs() []spec {
 		{
 			id: "entity.addIndex", title: "Add an index", events: []string{EventIndexAdded},
 			description: "Declares an index over fields, in order, so queries that filter or sort by them are fast; unique makes no two records share its values. Its id is by_<fields> when left out.",
-			args:        `{"type":"object","properties":{"id":{"type":"string"},"fields":{"type":"array","items":{"type":"string"},"description":"Field ids, in order"},"unique":{"type":"boolean"}},"required":["fields"]}`,
+			args:        `{"type":"object","properties":{"id":{"type":"string","description":"The index's id; made from its fields when left out"},"fields":{"type":"array","items":{"type":"string"},"description":"Field ids, in order"},"unique":{"type":"boolean","description":"No two records may have the same values"}},"required":["fields"]}`,
 			example:     `{"fields":["done","due"]}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				x, problems := args[records.Index](c)
@@ -473,7 +473,7 @@ func commandSpecs() []spec {
 		{
 			id: "entity.setAccess", title: "Set an entity type's row rules", events: []string{EventAccessSet},
 			description: "Sets the row rules of an entity type: an expression over record and principal per action (read, create, update, delete), such as record.assignee == principal.user; empty for no rule. They replace the rules there were.",
-			args:        `{"type":"object","properties":{"access":{"type":"object","properties":{"read":{"type":"string"},"create":{"type":"string"},"update":{"type":"string"},"delete":{"type":"string"}}}},"required":["access"]}`,
+			args:        `{"type":"object","properties":{"access":{"type":"object","description":"A row rule per action, over record and principal, e.g. record.assignee == principal.user; empty allows every record","properties":{"read":{"type":"string"},"create":{"type":"string"},"update":{"type":"string"},"delete":{"type":"string"}}}},"required":["access"]}`,
 			example:     `{"access":{"update":"record.assignee == principal.user"}}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				a, problems := args[struct{ Access records.Access }](c)

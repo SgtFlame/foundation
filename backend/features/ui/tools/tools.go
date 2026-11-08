@@ -58,12 +58,13 @@ func Contribute(reg *extensions.Registry, subs func() *subscribe.Subscriptions) 
 					raw, _ := json.Marshal(data)
 					var byKey map[string]struct {
 						ID, Name, Description, Owner string
+						Tags                         []string
 						Published                    int
 					}
 					_ = json.Unmarshal(raw, &byKey)
 					for _, p := range byKey {
 						if p.Published > 0 {
-							list = append(list, map[string]any{"id": ui.PrefabPrefix + p.ID, "title": p.Name, "category": "Prefabs", "description": p.Description, "tags": []string{p.Owner}})
+							list = append(list, map[string]any{"id": ui.PrefabPrefix + p.ID, "title": p.Name, "category": "Prefabs", "description": p.Description, "tags": append(p.Tags, p.Owner)})
 						}
 					}
 				}

@@ -419,3 +419,6 @@ Made while building:
 ### Decisions to review after seeing it
 - Variants as a node field, presets under the instance's props, and a dropped variant leaving out the preview values it presets.
 - Whether `prefab.preview`'s problems are enough to fix layout without a screenshot (forge 04 question 2): not yet seen, since the model never reached a preview.
+
+## Changed in slice 40
+Forge's part 6d ([Apps.md](Apps.md#built-in-slice-40)): every primitive has tags (checked by `apps/tools`' `TestMetadata`). A prefab has `tags` (`ui.Prefab.Tags`), set by `prefab.create` and `prefab.setInfo`, kept on `prefab.list`'s summaries and searched by it, and added to the owner in its component's tags. Every `prefab.*` command's fields are described.

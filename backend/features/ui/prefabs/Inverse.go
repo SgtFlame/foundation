@@ -61,6 +61,13 @@ func (c *decision) undo(command string, events []live.NewEvent) {
 			if d.Description != nil {
 				in.Description = &before.Description
 			}
+			if d.Tags != nil {
+				tags := before.Tags
+				if tags == nil {
+					tags = []string{}
+				}
+				in.Tags = &tags
+			}
 			if d.Owner != nil {
 				in.Owner = &before.Owner
 				if app == "" {

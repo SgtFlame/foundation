@@ -55,6 +55,7 @@ func Contribute(reg *extensions.Registry, deps func() data.Deps) {
 		Descriptor: extensions.Descriptor{ID: "records.onChanged"}, Title: "On record changed", Category: "Events", Event: true, Kinds: []string{livenodes.KindTrigger},
 		Description: "Starts a trigger when a record of an entity type is created, changed or deleted (runs come with forge 07-Email)",
 		Example:     "On record changed for task, when done turns true, to email the task's creator",
+		Examples:    cognition.ConfigExample("records.onChanged", `{"entity":"task","events":["updated"]}`),
 		Config:      json.RawMessage(`{"type":"object","properties":{` + entityConfig + `,"events":{"type":"array","title":"Events","items":{"type":"string","enum":["created","updated","deleted"]},"description":"The changes it starts on; every one when empty"}},"required":["entity"]}`),
 		Pins: cognition.Pins{Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""),
 			cognition.DataPin("record", "Record", "json", "The record after the change; nothing once deleted"),
@@ -124,14 +125,16 @@ func contributeWrites(reg *extensions.Registry, deps func() data.Deps) {
 	}
 	for i, w := range writes {
 		w := w
-		required := `"entity"`
+		required, example := `"entity"`, `{"entity":"task"}`
 		if w.config != "" {
 			required += `,"field"`
+			example = `{"entity":"task","field":"tags"}`
 		}
 		node(reg, 600+i*10, cognition.NodeType{
 			Descriptor: extensions.Descriptor{ID: w.id}, Title: w.title, Kinds: []string{livenodes.KindCommand},
 			Description: w.description + " Checked as " + w.command + " is, and refused with the command's problems.",
 			Example:     w.example,
+			Examples:    cognition.ConfigExample(w.id, example),
 			Config:      json.RawMessage(`{"type":"object","properties":{` + entityConfig + w.config + `},"required":[` + required + `]}`),
 			Pins: cognition.Pins{
 				In:  append([]cognition.Pin{cognition.ExecPin(cognition.Then, "")}, w.in...),
@@ -244,6 +247,7 @@ func contributeReads(reg *extensions.Registry, deps func() data.Deps) {
 		Descriptor: extensions.Descriptor{ID: "records.get"}, Title: "Get record", Volatile: true,
 		Description: "Reads one record by id, as records.get gives it (nothing when there is none or a row rule hides it); a query graph runs again when it changes",
 		Example:     "Get record task at the event's id, to check it is not done",
+		Examples:    cognition.ConfigExample("records.get", `{"entity":"task"}`),
 		Config:      json.RawMessage(`{"type":"object","properties":{` + entityConfig + `},"required":["entity"]}`),
 		Pins: cognition.Pins{
 			In: []cognition.Pin{cognition.DataPin("id", "ID", "string", "The record's id")},

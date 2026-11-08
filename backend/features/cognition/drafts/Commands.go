@@ -176,7 +176,13 @@ func place(g cognition.Graph) cognition.Position {
 const pinRef = `{"type":"object","properties":{"node":{"type":"string","description":"The node's id"},"pin":{"type":"string","description":"The pin's id"}},"required":["node","pin"]}`
 const position = `{"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"}},"required":["x","y"]}`
 const nodeSchema = `{"type":"object","properties":{"id":{"type":"string"},"type":{"type":"string"},"title":{"type":"string"},"position":` + position + `,"config":{"type":"object"}},"required":["id","type"]}`
-const edgeSchema = `{"type":"object","properties":{"from":` + pinRef + `,"to":` + pinRef + `},"required":["from","to"]}`
+var edgeSchema = `{"type":"object","properties":{"from":` + described(pinRef, "The output it starts at") + `,"to":` + described(pinRef, "The input it ends at") + `},"required":["from","to"]}`
+
+// described is a schema given a description, for a model (forge 06d).
+func described(schema, description string) string {
+	d, _ := json.Marshal(description)
+	return `{"description":` + string(d) + `,` + schema[1:]
+}
 
 type spec struct {
 	id, title, description, args, example string
@@ -270,7 +276,7 @@ func commandSpecs() []spec {
 		{
 			id: "bp.create", title: "Create a graph", create: true, events: []string{EventCreated},
 			description: "Makes a new Cognition graph (a blueprint) with the target as its id: of a kind (bp.listKinds), with its name, or as a copy of another graph (from). A kind with one event starts with that event node.",
-			args:        `{"type":"object","properties":{"kind":{"type":"string","description":"The graph kind, e.g. ui.handler"},"name":{"type":"string"},"description":{"type":"string"},"owner":{"type":"string","description":"What it belongs to, e.g. app:hello"},"spec":{"type":"object","description":"What the kind needs beyond the nodes (bp.listKinds)"},"from":{"type":"string","description":"A graph to copy"}}}`,
+			args:        `{"type":"object","properties":{"kind":{"type":"string","description":"The graph kind, e.g. ui.handler"},"name":{"type":"string","description":"What people call it, e.g. Reassign a task"},"description":{"type":"string","description":"What it does and when it runs, for a model"},"owner":{"type":"string","description":"What it belongs to, e.g. app:hello"},"spec":{"type":"object","description":"What the kind needs beyond the nodes (bp.listKinds)"},"from":{"type":"string","description":"A graph to copy"}}}`,
 			example:     `{"kind":"ui.handler","name":"Reset the counter","owner":"app:hello"}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				if c.exists {
@@ -352,7 +358,7 @@ func commandSpecs() []spec {
 		{
 			id: "bp.addNode", title: "Add a node", events: []string{EventNodeAdded},
 			description: "Adds a node of a type (bp.listNodeTypes) to a graph's draft, with its config; without a position it is placed right of the others. Returns the graph's problems, such as inputs still to connect.",
-			args:        `{"type":"object","properties":{"type":{"type":"string"},"id":{"type":"string","description":"Its id; one is chosen when left out"},"title":{"type":"string"},"config":{"type":"object"},"position":` + position + `},"required":["type"]}`,
+			args:        `{"type":"object","properties":{"type":{"type":"string","description":"The node type, e.g. flow.branch (forge.catalog nodes, bp.listNodeTypes)"},"id":{"type":"string","description":"Its id; one is chosen when left out"},"title":{"type":"string","description":"Its title on the canvas; the type's when left out"},"config":{"type":"object","description":"Its config, as the type's config schema describes"},"position":` + described(position, "Where it is on the canvas") + `},"required":["type"]}`,
 			example:     `{"type":"ui.toast","config":{"severity":"success","message":"Counter reset"}}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				a, problems := decode2[struct {
@@ -385,7 +391,7 @@ func commandSpecs() []spec {
 		{
 			id: "bp.setConfig", title: "Configure a node", events: []string{EventNodeChanged},
 			description: "Sets a node's config (replacing it) and title; its pins may change with its config, and edges to pins it no longer has become problems.",
-			args:        `{"type":"object","properties":{"node":{"type":"string"},"config":{"type":"object"},"title":{"type":"string"}},"required":["node"]}`,
+			args:        `{"type":"object","properties":{"node":{"type":"string","description":"The node's id"},"config":{"type":"object","description":"Its whole new config, as the type's config schema describes"},"title":{"type":"string","description":"Its new title on the canvas"}},"required":["node"]}`,
 			example:     `{"node":"n3","config":{"message":"Counter reset"}}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				a, problems := decode2[NodeChange](c)
@@ -410,7 +416,7 @@ func commandSpecs() []spec {
 		{
 			id: "bp.moveNodes", title: "Move nodes", events: []string{EventNodesMoved},
 			description: "Moves nodes of a graph's draft on the canvas.",
-			args:        `{"type":"object","properties":{"moves":{"type":"array","items":{"type":"object","properties":{"node":{"type":"string"},"position":` + position + `},"required":["node","position"]}}},"required":["moves"]}`,
+			args:        `{"type":"object","properties":{"moves":{"type":"array","description":"Each node's new position","items":{"type":"object","properties":{"node":{"type":"string"},"position":` + position + `},"required":["node","position"]}}},"required":["moves"]}`,
 			example:     `{"moves":[{"node":"n3","position":{"x":640,"y":0}}]}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				a, problems := decode2[struct{ Moves []Move }](c)
@@ -427,7 +433,7 @@ func commandSpecs() []spec {
 		{
 			id: "bp.connect", title: "Connect two pins", events: []string{EventConnected, EventDisconnected},
 			description: "Joins an output pin to an input pin. A data input takes one edge and an exec output leads to one node, so an edge already there is replaced. Pins must both be exec or both data, of the same type, any, or a type that converts (shown on the edge).",
-			args:        `{"type":"object","properties":{"from":` + pinRef + `,"to":` + pinRef + `},"required":["from","to"]}`,
+			args:        `{"type":"object","properties":{"from":` + described(pinRef, "The output it starts at") + `,"to":` + described(pinRef, "The input it ends at") + `},"required":["from","to"]}`,
 			example:     `{"from":{"node":"event","pin":"then"},"to":{"node":"n2","pin":"then"}}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				e, problems := decode2[cognition.Edge](c)
@@ -490,7 +496,7 @@ func commandSpecs() []spec {
 		{
 			id: "bp.remove", title: "Remove nodes and edges", events: []string{EventRemoved},
 			description: "Removes nodes, with every edge to them, and edges.",
-			args:        `{"type":"object","properties":{"nodes":{"type":"array","items":{"type":"string"}},"edges":{"type":"array","items":` + edgeSchema + `}}}`,
+			args:        `{"type":"object","properties":{"nodes":{"type":"array","items":{"type":"string"},"description":"The ids of the nodes to remove, with their edges"},"edges":{"type":"array","items":` + edgeSchema + `,"description":"Edges to remove"}}}`,
 			example:     `{"nodes":["n3"]}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				r, problems := decode2[Removal](c)
@@ -508,7 +514,7 @@ func commandSpecs() []spec {
 		{
 			id: "bp.paste", title: "Paste nodes", events: []string{EventPasted},
 			description: "Adds nodes and the edges between them at once, as copied from this or another graph; the nodes' ids must be new to the graph. Undoing a removal pastes what was removed.",
-			args:        `{"type":"object","properties":{"nodes":{"type":"array","items":` + nodeSchema + `},"edges":{"type":"array","items":` + edgeSchema + `}},"required":["nodes"]}`,
+			args:        `{"type":"object","properties":{"nodes":{"type":"array","items":` + nodeSchema + `,"description":"The nodes to add; ids already taken get new ones"},"edges":{"type":"array","items":` + edgeSchema + `,"description":"Edges between the pasted nodes"}},"required":["nodes"]}`,
 			example:     `{"nodes":[{"id":"n7","type":"ui.toast","position":{"x":0,"y":200},"config":{"message":"Hi"}}],"edges":[]}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				f, problems := decode2[Fragment](c)
@@ -541,7 +547,7 @@ func commandSpecs() []spec {
 		{
 			id: "bp.addVariable", title: "Add a variable", events: []string{EventVariableSet},
 			description: "Adds a variable to a graph (or changes the one with this id): per-run state, read by Get variable and written by Set variable.",
-			args:        `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},"type":{"type":"string"},"default":{},"description":{"type":"string"}},"required":["name","type"]}`,
+			args:        `{"type":"object","properties":{"id":{"type":"string","description":"Its id; made from the name when left out"},"name":{"type":"string","description":"What the Get and Set variable nodes show"},"type":{"type":"string","description":"A data type, such as string, number or json"},"default":{"description":"Its value when a run starts"},"description":{"type":"string","description":"What it holds, for a model"}},"required":["name","type"]}`,
 			example:     `{"name":"Attempts","type":"number","default":0}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				v, problems := decode2[cognition.Variable](c)
@@ -560,7 +566,7 @@ func commandSpecs() []spec {
 		{
 			id: "bp.removeVariable", title: "Remove a variable", events: []string{EventVariableRemoved},
 			description: "Removes a graph's variable; the Get and Set variable nodes that use it stay, reading nothing.",
-			args:        `{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}`,
+			args:        `{"type":"object","properties":{"id":{"type":"string","description":"The variable's id"}},"required":["id"]}`,
 			example:     `{"id":"attempts"}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				v, problems := decode2[struct{ ID string }](c)
@@ -576,7 +582,7 @@ func commandSpecs() []spec {
 		{
 			id: "bp.setInfo", title: "Describe a graph", events: []string{EventInfoSet},
 			description: "Sets a graph's name, description, owner and spec (what its kind needs, e.g. a command graph's command type; bp.listKinds).",
-			args:        `{"type":"object","properties":{"name":{"type":"string"},"description":{"type":"string"},"owner":{"type":"string"},"spec":{"type":"object"}}}`,
+			args:        `{"type":"object","properties":{"name":{"type":"string","description":"What people call it"},"description":{"type":"string","description":"What it does and when it runs, for a model"},"owner":{"type":"string","description":"What it belongs to, e.g. app:hello"},"spec":{"type":"object","description":"What the kind needs beyond the nodes (bp.listKinds); replaces the spec"}}}`,
 			example:     `{"description":"Sets the counter to zero"}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				in, problems := decode2[Info](c)

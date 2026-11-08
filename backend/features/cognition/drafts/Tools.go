@@ -100,22 +100,24 @@ func draftOrBuiltIn(args features.ServiceArgs, deps Deps, id string) (cognition.
 
 // NodeTypeInfo is a node type as the catalog tools describe it.
 type NodeTypeInfo struct {
-	ID          string          `json:"id"`
-	Title       string          `json:"title"`
-	Category    string          `json:"category"`
-	Description string          `json:"description"`
-	Example     string          `json:"example"`
-	Event       bool            `json:"event,omitempty"`
-	Effects     bool            `json:"effects,omitempty"`
-	Pins        *cognition.Pins `json:"pins,omitempty"`   // the fixed pins; with a config they may differ
-	Config      json.RawMessage `json:"config,omitempty"` // the config's schema
+	ID          string            `json:"id"`
+	Title       string            `json:"title"`
+	Category    string            `json:"category"`
+	Description string            `json:"description"`
+	Example     string            `json:"example"`
+	Examples    []json.RawMessage `json:"examples,omitempty"` // {type, config} as JSON
+	Tags        []string          `json:"tags"`
+	Event       bool              `json:"event,omitempty"`
+	Effects     bool              `json:"effects,omitempty"`
+	Pins        *cognition.Pins   `json:"pins,omitempty"`   // the fixed pins; with a config they may differ
+	Config      json.RawMessage   `json:"config,omitempty"` // the config's schema
 }
 
 func infoOf(t cognition.NodeType, full bool) NodeTypeInfo {
-	i := NodeTypeInfo{ID: t.ID, Title: t.Title, Category: t.Category, Description: t.Description, Example: t.Example, Event: t.Event, Effects: t.Effects}
+	i := NodeTypeInfo{ID: t.ID, Title: t.Title, Category: t.Category, Description: t.Description, Example: t.Example, Tags: cognition.TagsOf(t), Event: t.Event, Effects: t.Effects}
 	if full {
 		pins := t.Pins
-		i.Pins, i.Config = &pins, t.Config
+		i.Pins, i.Config, i.Examples = &pins, t.Config, cognition.ExamplesOf(t)
 	}
 	return i
 }
@@ -177,7 +179,7 @@ func contributeTools(reg *extensions.Registry, deps func() Deps) {
 
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "bp.listNodeTypes", Source: "cognition"}, Title: "List node types", Effect: tools.EffectNone,
-		Description: "Lists the node types a graph can hold: those a kind allows, matching a search over their titles, categories and descriptions. Describe one with bp.describeNodeType for its pins and config.",
+		Description: "Lists the node types a graph can hold: those a kind allows, matching a search over their titles, categories, descriptions and tags. Describe one with bp.describeNodeType for its pins and config.",
 		Input:       json.RawMessage(`{"type":"object","properties":{"kind":{"type":"string","description":"Only types a graph of this kind allows"},"search":{"type":"string"}}}`),
 		Run: func(call tools.Call) (tools.Result, error) {
 			a, err := tools.Decode[struct{ Kind, Search string }](call)
@@ -195,7 +197,7 @@ func contributeTools(reg *extensions.Registry, deps func() Deps) {
 				if hasKind && !k.Allows(t) {
 					continue
 				}
-				if search != "" && !strings.Contains(strings.ToLower(t.ID+" "+t.Title+" "+t.Category+" "+t.Description), search) {
+				if search != "" && !strings.Contains(strings.ToLower(t.ID+" "+t.Title+" "+t.Category+" "+t.Description+" "+strings.Join(cognition.TagsOf(t), " ")), search) {
 					continue
 				}
 				out = append(out, infoOf(t, false))
@@ -206,7 +208,7 @@ func contributeTools(reg *extensions.Registry, deps func() Deps) {
 
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "bp.describeNodeType", Source: "cognition"}, Title: "Describe a node type", Effect: tools.EffectNone,
-		Description: "Describes one node type: what it does, an example, its pins (id, type, description) and its config's schema. Pins of nodes whose pins follow their config are given for the empty config.",
+		Description: "Describes one node type: what it does, an example in words and as JSON ({type, config}), its tags, its pins (id, type, description) and its config's schema. Pins of nodes whose pins follow their config are given for the empty config.",
 		Input:       json.RawMessage(`{"type":"object","properties":{"type":{"type":"string"}},"required":["type"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
 			a, err := tools.Decode[struct{ Type string }](call)

@@ -128,6 +128,7 @@ func contributeSettings(reg *extensions.Registry, deps func() Deps) {
 		Descriptor: extensions.Descriptor{ID: "apps.setting", Source: "apps", Order: 570}, Title: "App setting", Category: "Data",
 		Description: "Reads an installed app's settings as the run's user sees them: the app's defaults, under the tenant's, under the user's own (the section app.<appId>). With a key, the one setting; without, them all.",
 		Example:     "App setting tasks / defaultDueDays, added to Now for a new task's due date",
+		Examples:    cognition.ConfigExample("apps.setting", `{"app":"tasks","key":"defaultDueDays"}`),
 		Config:      json.RawMessage(`{"type":"object","properties":{"app":{"type":"string","description":"The app's id"},"key":{"type":"string","description":"A setting's key, dotted for a nested one; empty for every setting"}},"required":["app"]}`),
 		Pins: cognition.Pins{Out: []cognition.Pin{
 			cognition.DataPin("value", "Value", "json", "The setting's value (every setting without a key); null when the app is not installed")}},

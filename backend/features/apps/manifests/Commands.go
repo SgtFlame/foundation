@@ -321,7 +321,7 @@ func commandSpecs() []spec {
 		{
 			id: "app.create", title: "Create an app", create: true, events: []string{EventCreated},
 			description: "Makes a new application: a manifest of pages (routes to prefabs), navigation, editor kinds, entity types, commands, queries, roles, settings and triggers. Its id is the target, or made from the name when left out (My tasks is myTasks). Its parts (prefabs, graphs, entity types) are made with their own commands with owner app:<appId>, then named in the manifest with app.addPage, app.addEntity, app.addCommand and the rest.",
-			args:        `{"type":"object","properties":{"name":{"type":"string"},"icon":{"type":"string","description":"A Material icon name, such as checklist"},"description":{"type":"string","description":"What the app is for, for a model"}},"required":["name"]}`,
+			args:        `{"type":"object","properties":{"name":{"type":"string","description":"What people call it, e.g. Tasks"},"icon":{"type":"string","description":"A Material icon name, such as checklist"},"description":{"type":"string","description":"What the app is for, for a model"}},"required":["name"]}`,
 			example:     `{"name":"Tasks","icon":"checklist","description":"Tasks assigned to people, with due dates"}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				if c.exists {
@@ -369,7 +369,7 @@ func commandSpecs() []spec {
 		{
 			id: "app.setInfo", title: "Describe an app", events: []string{EventInfoSet},
 			description: "Sets an app's name, icon, description, home (the route it opens on; empty for its first page's), frame (prefab.<id> wrapping every page; empty for the default navigation rail and header) and requires (replaced whole).",
-			args:        `{"type":"object","properties":{"name":{"type":"string"},"icon":{"type":"string"},"description":{"type":"string"},"home":{"type":"string"},"frame":{"type":"string"},` + requiresSchema + `}}`,
+			args:        `{"type":"object","properties":{"name":{"type":"string","description":"What people call it"},"icon":{"type":"string","description":"A Material icon name, such as checklist"},"description":{"type":"string","description":"What the app is for, for a model"},"home":{"type":"string","description":"The route the app opens on, such as /mine; its first page's when empty"},"frame":{"type":"string","description":"The prefab around every page, prefab.<id>; the starter App frame when empty"},` + requiresSchema + `}}`,
 			example:     `{"home":"/mine","requires":{"primitives":["mui"]}}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				in, problems := args[Info](c)
@@ -388,7 +388,7 @@ func commandSpecs() []spec {
 		{
 			id: "app.setNav", title: "Set an app's navigation", events: []string{EventNavSet},
 			description: "Sets the navigation its frame shows, replacing it whole: items {title, route, icon?} in order, each route a page's without params.",
-			args:        `{"type":"object","properties":{"nav":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"route":{"type":"string"},"icon":{"type":"string"}},"required":["title","route"]}}},"required":["nav"]}`,
+			args:        `{"type":"object","properties":{"nav":{"type":"array","description":"The whole navigation, in order: each entry {title, route, icon?} goes to one of the app's pages","items":{"type":"object","properties":{"title":{"type":"string"},"route":{"type":"string"},"icon":{"type":"string"}},"required":["title","route"]}}},"required":["nav"]}`,
 			example:     `{"nav":[{"title":"My tasks","route":"/mine","icon":"person"},{"title":"All tasks","route":"/all","icon":"list"}]}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				a, problems := args[struct{ Nav []apps.NavItem }](c)
@@ -407,7 +407,7 @@ func commandSpecs() []spec {
 		{
 			id: "app.setSettingsSchema", title: "Set an app's settings", events: []string{EventSettingsSet},
 			description: "Sets the app's settings, replacing them: a JSON Schema object (with title and description per property) and the defaults. Once the app is installed they are the configuration section app.<appId>, set per tenant and per user.",
-			args:        `{"type":"object","properties":{"schema":{"type":"object","description":"A JSON Schema with type object"},"defaults":{"type":"object"}},"required":["schema"]}`,
+			args:        `{"type":"object","properties":{"schema":{"type":"object","description":"A JSON Schema with type object"},"defaults":{"type":"object","description":"Each setting's value until a tenant changes it, by key"}},"required":["schema"]}`,
 			example:     `{"schema":{"type":"object","properties":{"defaultDueDays":{"type":"integer","title":"Default due in N days","minimum":0}}},"defaults":{"defaultDueDays":7}}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				a, problems := args[apps.Settings](c)
@@ -489,7 +489,7 @@ func listSpecs(l List) []spec {
 	add := spec{
 		id: "app.add" + t, title: "Add a " + l.Title, events: []string{l.Added()},
 		description: fmt.Sprintf("Adds a %s to the app: %s. Each %s is named by its %s; index puts it there (the end when left out).", l.Title, l.Describe, l.Title, keyArg),
-		args:        `{"type":"object","properties":{` + l.Props + `,"index":{"type":"integer"}},"required":` + string(reqJSON) + `}`,
+		args:        `{"type":"object","properties":{` + l.Props + `,"index":{"type":"integer","description":"Where it goes in the list, from 0; the end when left out"}},"required":` + string(reqJSON) + `}`,
 		example:     l.Example,
 		decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 			a, problems := args[map[string]any](c)
@@ -515,7 +515,7 @@ func listSpecs(l List) []spec {
 	remove := spec{
 		id: "app.remove" + t, title: "Remove a " + l.Title, events: []string{l.Removed()},
 		description: fmt.Sprintf("Removes a %s from the app, by its %s. Its parts (prefabs, graphs, entity types) stay; what names it must be changed first.", l.Title, keyArg),
-		args:        `{"type":"object","properties":{"` + keyArg + `":{"type":"string"}},"required":["` + keyArg + `"]}`,
+		args:        `{"type":"object","properties":{"` + keyArg + `":` + l.keyProp(keyArg) + `},"required":["` + keyArg + `"]}`,
 		example:     `{"` + keyArg + `":` + mustKey(l.Example, keyArg) + `}`,
 		decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 			a, problems := args[map[string]any](c)

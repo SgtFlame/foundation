@@ -116,32 +116,32 @@ type List struct {
 // Lists are the manifest's keyed lists.
 var Lists = []List{
 	{Item: "page", Field: "pages", Key: "route", Title: "page", Required: []string{"prefab"},
-		Props:    `"route":{"type":"string","description":"/mine, or /task/:id: its params become the prefab's props"},"prefab":{"type":"string","description":"The prefab's id"},"title":{"type":"string"}`,
-		Example:  `{"route":"/mine","prefab":"myTasks","title":"My tasks"}`,
+		Props:    `"route":{"type":"string","description":"/mine, or /task/:id: its params become the prefab's props"},"prefab":{"type":"string","description":"The prefab's id"},"title":{"type":"string","description":"The page's title, in its header and tab"},"description":{"type":"string","description":"What the page shows and who it is for, for a model"}`,
+		Example:  `{"route":"/mine","prefab":"myTasks","title":"My tasks","description":"The open tasks assigned to the user"}`,
 		Update:   `{"route":"/mine","title":"Mine"}`,
 		Describe: "a route to a prefab; the route's params become the prefab's props. Renaming a route (rename) renames it in the navigation, home and editor kinds too"},
 	{Item: "editorKind", Field: "editorKinds", Key: "kind", Title: "editor kind", Required: []string{"page", "title"},
-		Props:    `"kind":{"type":"string"},"page":{"type":"string","description":"A page's route"},"title":{"type":"string","description":"A template over the page's data, such as {record.title}"},"icon":{"type":"string"},"subject":{"type":"object","description":"What the chat's workbench context says the tab shows: {type, label}, label a template"}`,
+		Props:    `"kind":{"type":"string","description":"The kind's name, unique in the app, such as task"},"page":{"type":"string","description":"A page's route"},"title":{"type":"string","description":"A template over the page's data, such as {record.title}"},"icon":{"type":"string","description":"A Material icon name"},"subject":{"type":"object","description":"What the chat's workbench context says the tab shows: {type, label}, label a template"}`,
 		Example:  `{"kind":"task","page":"/task/:id","title":"{record.title}","subject":{"type":"task","label":"{record.title}"}}`,
 		Update:   `{"kind":"task","icon":"checklist"}`,
 		Describe: "a page that opens as its own top-level workbench tab"},
 	{Item: "command", Field: "commands", Key: "type", Title: "command", Required: []string{"graph"},
-		Props:    `"type":{"type":"string","description":"A dotted name, such as task.reassign"},"graph":{"type":"string","description":"The command graph that decides it"},"action":{"type":"string","description":"The action a role needs to send it, such as entity:task.update"},"title":{"type":"string"},"description":{"type":"string","description":"What it does, for a model"}`,
+		Props:    `"type":{"type":"string","description":"A dotted name, such as task.reassign"},"graph":{"type":"string","description":"The command graph that decides it"},"action":{"type":"string","description":"The action a role needs to send it, such as entity:task.update"},"title":{"type":"string","description":"What people call it"},"description":{"type":"string","description":"What it does, for a model"}`,
 		Example:  `{"type":"task.reassign","graph":"tasks-reassign","action":"entity:task.update"}`,
 		Update:   `{"type":"task.reassign","action":"entity:task.reassign"}`,
 		Describe: "one of the app's own commands, beyond the record.* ones every entity type has"},
 	{Item: "query", Field: "queries", Key: "name", Title: "query", Required: []string{"graph"},
-		Props:    `"name":{"type":"string"},"graph":{"type":"string","description":"The data.query graph that answers it"},"description":{"type":"string"}`,
+		Props:    `"name":{"type":"string","description":"The name pages bind to, as query:<name>"},"graph":{"type":"string","description":"The data.query graph that answers it"},"description":{"type":"string","description":"What it returns, for a model"}`,
 		Example:  `{"name":"myTasks","graph":"tasks-myTasks"}`,
 		Update:   `{"name":"myTasks","description":"The open tasks assigned to me"}`,
 		Describe: "a named data.query graph pages bind to"},
 	{Item: "role", Field: "roles", Key: "id", Title: "role", Required: []string{"actions"},
-		Props:    `"id":{"type":"string"},"title":{"type":"string"},"description":{"type":"string"},"actions":{"type":"array","items":{"type":"string"},"description":"entity:<id>.<read|create|update|delete|*> on the app's own entity types, such as entity:task.read or entity:task.*"},"rowRules":{"type":"object","description":"entity type → a rule over record and principal, such as record.assignee == principal.user, that every record the role reads or changes must pass; null clears one"},"installer":{"type":"boolean","description":"Whoever installs the app gets this role; the first role when none is marked"}`,
+		Props:    `"id":{"type":"string","description":"The role's id, unique in the app, such as member"},"title":{"type":"string","description":"What people call it, such as Member"},"description":{"type":"string","description":"Who it is for and what it may do"},"actions":{"type":"array","items":{"type":"string"},"description":"entity:<id>.<read|create|update|delete|*> on the app's own entity types, such as entity:task.read or entity:task.*"},"rowRules":{"type":"object","description":"entity type → a rule over record and principal, such as record.assignee == principal.user, that every record the role reads or changes must pass; null clears one"},"installer":{"type":"boolean","description":"Whoever installs the app gets this role; the first role when none is marked"}`,
 		Example:  `{"id":"member","title":"Member","actions":["entity:task.read","entity:task.create"],"rowRules":{"task":"record.assignee == principal.user"}}`,
 		Update:   `{"id":"member","rowRules":{"task":"record.assignee == principal.user || record.public"}}`,
 		Describe: "a role, made a custom role in each tenant the app is installed in"},
 	{Item: "trigger", Field: "triggers", Key: "id", Title: "trigger",
-		Props:    `"id":{"type":"string"},"title":{"type":"string"},"description":{"type":"string"},"config":{"type":"object"}`,
+		Props:    `"id":{"type":"string","description":"The trigger's id, unique in the app"},"title":{"type":"string","description":"What people call it"},"description":{"type":"string","description":"When it fires, for a model"},"config":{"type":"object","description":"Its settings, defined with triggers in forge iteration 11"}`,
 		Example:  `{"id":"taskDone","title":"A task is done"}`,
 		Update:   `{"id":"taskDone","description":"Fires when a task is marked done"}`,
 		Describe: "a trigger, declared now and run once triggers are built (forge iteration 11)"},
@@ -158,6 +158,16 @@ func ListOf(item string) (List, bool) {
 		return List{}, false
 	}
 	return Lists[i], true
+}
+
+// keyProp is the schema of a list's key argument, from its Props.
+func (l List) keyProp(key string) string {
+	var props map[string]json.RawMessage
+	_ = json.Unmarshal([]byte("{"+l.Props+"}"), &props)
+	if p, ok := props[key]; ok {
+		return string(p)
+	}
+	return `{"type":"string"}`
 }
 
 // Event names of a list.
