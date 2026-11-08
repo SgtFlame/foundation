@@ -92,6 +92,7 @@ export interface PrefabView {
   changed: boolean
   updatedBy?: string
   updatedAt?: string
+  deleted?: boolean // hidden until prefab.restore (forge 06b)
 }
 
 // One prefab in the prefab.list query, keyed by prefab.<id>
@@ -103,6 +104,7 @@ export interface PrefabSummary {
   rev: number
   published: number
   changed: boolean
+  deleted?: boolean // hidden until prefab.restore: list it apart
 }
 
 export interface VersionInfo {

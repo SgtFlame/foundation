@@ -5,6 +5,7 @@ import MarkdownText from '../markdown/MarkdownText.tsx'
 import FeedbackButtons from './FeedbackButtons.tsx'
 import { formatCost, formatTokens, type ChatLevel } from './levels.ts'
 import RoundSources from './RoundSources.tsx'
+import RoundUndo, { changedSomething } from './RoundUndo.tsx'
 import ToolCallCard, { type ToolAnswer } from './ToolCallCard.tsx'
 import type { ChatRound } from './useChatStream.ts'
 import type { ChatClientToolContribution } from '../../editors/chat/points.ts'
@@ -137,6 +138,7 @@ function RoundView({ round, levels, onOpenSegment, onFeedback, onAnswerTool, cli
               {judgeable && onFeedback && <FeedbackButtons value={round.feedback} onChange={(f) => onFeedback(round, f)} />}
             </Stack>
           )}
+          {changedSomething(round) && <RoundUndo round={round} />}
           <Typography className="round-footer" variant="caption" color="text.secondary" sx={{ opacity: 0, transition: 'opacity 120ms' }}>
             {footer(round, levels)}
           </Typography>

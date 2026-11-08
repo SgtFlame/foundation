@@ -394,6 +394,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var prefabDeps prefabs.Deps
 		var appDeps manifests.Deps
 		var installDeps installs.Deps
+		var opsDeps ops.Deps
 		var appService appservice.Service
 		var recordService recordservice.Service
 		var liveSubscriptions *subscribe.Subscriptions
@@ -475,7 +476,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// records they name
 		manifests.Contribute(registry, func() manifests.Deps { return appDeps })
 		installs.Contribute(registry, func() installs.Deps { return installDeps })
-		ops.Contribute(registry) // the operation log: ops.log and ops.list
+		ops.Contribute(registry)                                         // the operation log: ops.log and ops.list
+		ops.ContributeUndo(registry, func() ops.Deps { return opsDeps }) // ops.undo, ops.redo and ops.stack (forge 06b)
 		apptools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		apptools.ContributeTransfer(registry, func() appservice.Service { return appService })
 		presence.Contribute(registry, func() *presence.Presence { return livePresence })
@@ -724,6 +726,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		prefabDeps = prefabs.Deps{Projections: projections, DB: gdb}
 		appDeps = manifests.Deps{Projections: projections, DB: gdb}
 		installDeps = installs.Deps{Projections: projections, DB: gdb, Nodes: liveNodeDeps, Roles: policy, Config: configService}
+		opsDeps = ops.Deps{Bus: liveBus, Store: projections}
 		appService = appimpl.CreateService(appimpl.WithDeps(func() appimpl.Deps {
 			return appimpl.Deps{Projections: projections, DB: gdb, Bus: liveBus, Subscriptions: subscriptions, Registry: registry}
 		}))

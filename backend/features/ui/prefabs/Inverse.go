@@ -26,7 +26,13 @@ func (c *decision) undo(command string, events []live.NewEvent) {
 		return
 	case "prefab.create":
 		a, _ := args[struct{ Owner string }](c)
-		c.NoUndo(appOf(a.Owner), "a new prefab cannot be deleted yet")
+		c.Undo(appOf(a.Owner), op("prefab.delete", map[string]any{}))
+		return
+	case "prefab.delete":
+		c.Undo(app, op("prefab.restore", map[string]any{}))
+		return
+	case "prefab.restore":
+		c.Undo(app, op("prefab.delete", map[string]any{}))
 		return
 	case "prefab.import":
 		if !c.exists {
@@ -35,7 +41,7 @@ func (c *decision) undo(command string, events []live.NewEvent) {
 			if a.Prefab != nil {
 				owner = a.Prefab.Owner
 			}
-			c.NoUndo(appOf(owner), "a new prefab cannot be deleted yet")
+			c.Undo(appOf(owner), op("prefab.delete", map[string]any{}))
 			return
 		}
 		p := *before

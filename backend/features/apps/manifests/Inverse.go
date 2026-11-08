@@ -21,8 +21,11 @@ func (c *decision) undo(command string, events []live.NewEvent) {
 	case "app.publish":
 		c.NoUndo(id, "a published version stays; publish again to replace it")
 		return
-	case "app.create":
-		c.NoUndo(id, "a new app cannot be deleted yet")
+	case "app.create", "app.restore":
+		c.Undo(id, op("app.delete", map[string]any{}))
+		return
+	case "app.delete":
+		c.Undo(id, op("app.restore", map[string]any{}))
 		return
 	}
 	var ops []live.Op

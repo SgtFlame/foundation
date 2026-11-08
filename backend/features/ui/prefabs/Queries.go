@@ -24,6 +24,7 @@ type View struct {
 	Changed      bool      `json:"changed"` // the draft has changed since it was published
 	UpdatedBy    uint64    `json:"updatedBy,string,omitempty"`
 	UpdatedAt    time.Time `json:"updatedAt,omitzero"`
+	Deleted      bool      `json:"deleted,omitempty"` // hidden until prefab.restore
 }
 
 // Summary is one prefab in the prefab.list query.
@@ -34,17 +35,18 @@ type Summary struct {
 	Owner       string `json:"owner,omitempty"`
 	Rev         int    `json:"rev"`
 	Published   int    `json:"published"`
-	Changed     bool   `json:"changed"` // changed since it was published
+	Changed     bool   `json:"changed"`           // changed since it was published
+	Deleted     bool   `json:"deleted,omitempty"` // hidden until prefab.restore: list it apart
 }
 
 func viewOf(d Draft) View {
 	return View{Prefab: d.Prefab, Rev: d.Rev, Published: d.Published, PublishedRev: d.PublishedRev,
-		Changed: d.Rev != d.PublishedRev, UpdatedBy: d.UpdatedBy, UpdatedAt: d.UpdatedAt}
+		Changed: d.Rev != d.PublishedRev, UpdatedBy: d.UpdatedBy, UpdatedAt: d.UpdatedAt, Deleted: d.Deleted}
 }
 
 func summaryOf(d Draft) Summary {
 	p := d.Prefab
-	return Summary{ID: p.ID, Name: p.Name, Description: p.Description, Owner: p.Owner, Rev: d.Rev, Published: d.Published, Changed: d.Rev != d.PublishedRev}
+	return Summary{ID: p.ID, Name: p.Name, Description: p.Description, Owner: p.Owner, Rev: d.Rev, Published: d.Published, Changed: d.Rev != d.PublishedRev, Deleted: d.Deleted}
 }
 
 type describeParams struct {

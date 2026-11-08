@@ -24,6 +24,7 @@ const TargetType = "graph"
 const (
 	DraftProjector     = "cognition.graph"     // each graph's draft
 	PublishedProjector = "cognition.published" // each graph's published version
+	TrashProjector     = "cognition.trash"     // each deleted graph's draft and published version, until restored
 )
 
 // Draft is the cognition.graph projection's value: a graph as it is being
@@ -53,8 +54,17 @@ const (
 	EventVariableRemoved = "variableRemoved"
 	EventInfoSet         = "infoSet"
 	EventPublished       = "published"
-	EventDeleted         = "deleted"
+	EventDeleted         = "deleted"  // Trash: what bp.restore brings back
+	EventRestored        = "restored" // Trash
 )
+
+// Trash is a deleted graph as its deleted event keeps it: its draft and
+// its published version (nil when it had none), which bp.restore brings
+// back (forge 06b).
+type Trash struct {
+	Draft     Draft            `json:"draft"`
+	Published *cognition.Graph `json:"published,omitempty"`
+}
 
 // Move is one node's new position.
 type Move struct {
@@ -212,6 +222,14 @@ func Apply(d *Draft, e live.Event) error {
 			return err
 		}
 		d.Published, d.PublishedRev, g.Version = p.Version, d.Rev+1, p.Version
+	case EventRestored:
+		t, err := decode[Trash](e.Data)
+		if err != nil {
+			return err
+		}
+		rev := max(d.Rev, t.Draft.Rev)
+		*d = t.Draft
+		d.Rev = rev
 	default:
 		return fmt.Errorf("unknown event %s", e.Type)
 	}
@@ -260,6 +278,28 @@ func foldPublished(f live.Fold) (json.RawMessage, error) {
 		p.Graph.ID, p.Graph.Version = f.Event.Target.ID, p.Version
 		return json.Marshal(p.Graph)
 	case EventDeleted:
+		return nil, nil
+	case EventRestored:
+		t, err := decode[Trash](f.Event.Data)
+		if err != nil || t.Published == nil {
+			return nil, err
+		}
+		return json.Marshal(t.Published)
+	}
+	return f.State, nil
+}
+
+// foldTrash is the cognition.trash projector's fold: a deleted graph's
+// draft and published version, until it is restored or made again.
+func foldTrash(f live.Fold) (json.RawMessage, error) {
+	switch f.Event.Type {
+	case EventDeleted:
+		var t Trash
+		if err := json.Unmarshal(f.Event.Data, &t); err != nil || t.Draft.Graph.ID == "" {
+			return nil, err // deleted before slice 39 kept it
+		}
+		return f.Event.Data, nil
+	case EventRestored, EventCreated:
 		return nil, nil
 	}
 	return f.State, nil

@@ -156,7 +156,7 @@ Cognition's editing pass, built for forge 02-Blueprints ([BuildHistory.md](Build
 
 **The Cognition Editor** (`src/editors/cognition/`) edits drafts. `GraphEditor` (in `CognitionEditor.tsx`) is the editor without its workbench object, which Forge's Blueprint Editor reuses with tabs of its own (`extraTabs`).
 - **Editing** (`editing.ts`, `useDraft`): the draft is the `cognition.graph` query. Each gesture is one or more `bp.*` commands, applied over the query's data at once until it reflects them (`applyOp`, which mirrors the server's fold).
-- **Undo and redo** are this user's own stack of inverse commands (`inverse`, computed from the draft before the gesture), so each person undoes only their changes. A refused command shows in a toast.
+- **Undo and redo** are this user's own stack of inverse commands (`inverse`, computed from the draft before the gesture), so each person undoes only their changes. A refused command shows in a toast. (Replaced in slice 39 by undo by request, below.)
 - **The canvas** (`GraphCanvas.tsx`):
   - drag (sent on drop), connect (incompatible pins refuse the drop; a converting edge shows `from→to`), multi-select, Delete, Ctrl+C/V (the clipboard and an in-page copy; pasted nodes get new ids), Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, and dropping from the Palette or Variables;
   - comment frames are resizable boxes behind the nodes, and reroutes are dots;
@@ -183,9 +183,12 @@ Cognition's editing pass, built for forge 02-Blueprints ([BuildHistory.md](Build
 
 ### Decisions to review after seeing it
 1. The Palette and Variables are tabs of the editor, not side views, so they follow the open graph's kind.
-2. Undo is client-side, a stack of inverse commands per editor. An inverse that no longer applies (another author removed the node) is refused, and the entry is dropped.
+2. Undo is client-side, a stack of inverse commands per editor. An inverse that no longer applies (another author removed the node) is refused, and the entry is dropped. *Replaced in slice 39*: undo is by request from the operation log (see *Changed in slice 39* below).
 3. Positions stay in the browser while a node is dragged and are sent once, on drop.
 4. A node's config is edited as JSON with *Apply*, not through the schema form.
 5. Only the last published version is kept in KV; older versions are in the event stream. There is no version picker or diff yet.
 6. Call graph refuses pure kinds (it has `Effects`), even when the callee is pure.
 7. A failed run of a draft under test is traced like any other, in the graph's Log Viewer.
+
+## Changed in slice 39
+Undo by request (forge 06b, [Apps.md › Built in slice 39](Apps.md#built-in-slice-39)) replaced the editor's client-side undo: `useDraft` sends a gesture's commands as one request (`live.gesture`), and *Undo* and *Redo* in the toolbar (and Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y on the canvas) are `useUndo('graph:<id>')`, the caller's own requests on the graph from the operation log, so an undo survives a reload, reaches a change made in another of the user's windows, and leaves others' changes; a change someone else made since to the same node or edge refuses it, naming them, with *Undo the rest*. `inverse` in `editing.ts` is gone. `bp.restore` brings back a deleted graph, its draft and published version kept by the `cognition.trash` projection, so `bp.delete` (and the undo of `bp.create`) is undoable.

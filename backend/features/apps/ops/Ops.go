@@ -51,7 +51,9 @@ type Entry struct {
 	// there are none.
 	Inverse      []live.Op `json:"inverse"`
 	Irreversible string    `json:"irreversible,omitempty"`
-	Time         time.Time `json:"time"`
+	// Undoes is the request this op's request undoes (forge 06b).
+	Undoes string    `json:"undoes,omitempty"`
+	Time   time.Time `json:"time"`
 }
 
 // Request is one request's ops, oldest first.
@@ -85,13 +87,17 @@ func keyOf(e live.Event) string {
 func fold(f live.Fold) (json.RawMessage, error) {
 	e := f.Event
 	seq := e.Seq
-	if e.Batch != nil {
+	switch {
+	case e.Op.Events > 0:
+		// One of several ops in a batch (an undo's): its own events end it
+		seq = e.Seq + uint64(e.Op.Events) - 1
+	case e.Batch != nil:
 		_, seq = e.Batch.Range(e.Seq)
 	}
 	return json.Marshal(Entry{
 		Seq: seq, Decided: e.Op.Decided, Command: e.Op.Command, TargetType: e.Target.Type, Target: e.Op.Target, Args: e.Op.Args,
 		App: e.Op.App, Request: e.RequestID, CommandID: e.CommandID, Principal: e.UserID, Actor: e.Actor,
-		Inverse: e.Op.Inverse, Irreversible: e.Op.Irreversible, Time: e.Time,
+		Inverse: e.Op.Inverse, Irreversible: e.Op.Irreversible, Undoes: e.Op.Undoes, Time: e.Time,
 	})
 }
 
@@ -118,7 +124,7 @@ func (p Params) pattern() string {
 func Contribute(reg *extensions.Registry) {
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: Projector, Source: "apps"}, Title: "The operation log",
-		Description: "Every definition command as an op, keyed <app>.<sequence> (_ for none): {seq, decided, command, targetType, target, args, app, request, commandId, principal, actor, inverse, irreversible, time}",
+		Description: "Every definition command as an op, keyed <app>.<sequence> (_ for none): {seq, decided, command, targetType, target, args, app, request, commandId, principal, actor, inverse, irreversible, undoes, time}",
 		Area:        live.AreaDefinitions, Fold: fold, KeyOf: keyOf,
 	})
 	live.Queries.Register(reg, live.Query{

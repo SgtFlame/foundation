@@ -199,6 +199,11 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Description: "Each Cognition graph's last published version, the one that runs",
 		Area:        live.AreaDefinitions, Types: []string{TargetType}, Fold: foldPublished,
 	})
+	live.Projectors.Register(reg, live.Projector{
+		Descriptor: extensions.Descriptor{ID: TrashProjector, Source: "cognition"}, Title: "Deleted Cognition graphs",
+		Description: "Each deleted graph's draft and published version, which bp.restore brings back: {draft, published}",
+		Area:        live.AreaDefinitions, Types: []string{TargetType}, Fold: foldTrash,
+	})
 
 	for _, s := range commandSpecs() {
 		s := s
@@ -629,14 +634,38 @@ func commandSpecs() []spec {
 		},
 		{
 			id: "bp.delete", title: "Delete a graph", events: []string{EventDeleted},
-			description: "Deletes a graph's draft and published versions; an editable built-in returns to its built-in version.",
+			description: "Deletes a graph's draft and published version, which stop running; bp.restore brings them back. An editable built-in returns to its built-in version.",
 			args:        `{"type":"object","properties":{}}`,
 			example:     `{}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
 				if len(c.prefix) > 0 {
 					return nil, nil // nothing of the tenant's to delete
 				}
-				return ev(EventDeleted, map[string]any{}), nil
+				t := Trash{Draft: c.draft}
+				if raw, err := c.Read(PublishedProjector, c.Target); err == nil && raw != nil {
+					var g cognition.Graph
+					if json.Unmarshal(raw, &g) == nil {
+						t.Published = &g
+					}
+				}
+				return ev(EventDeleted, t), nil
+			},
+		},
+		{
+			id: "bp.restore", title: "Restore a graph", create: true, events: []string{EventRestored},
+			description: "Brings back a deleted graph: its draft and the version it had published, which runs again.",
+			args:        `{"type":"object","properties":{}}`,
+			example:     `{}`,
+			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+				if c.exists {
+					return nil, problem("target", fmt.Sprintf("the graph %q is not deleted", c.Target.ID), "")
+				}
+				raw, err := c.Read(TrashProjector, c.Target)
+				var t Trash
+				if err != nil || raw == nil || json.Unmarshal(raw, &t) != nil {
+					return nil, problem("target", fmt.Sprintf("there is no deleted graph %q to restore", c.Target.ID), "")
+				}
+				return ev(EventRestored, t), nil
 			},
 		},
 	}

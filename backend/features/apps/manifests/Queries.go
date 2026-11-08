@@ -31,6 +31,7 @@ type View struct {
 	CreatedBy    uint64    `json:"createdBy,string,omitempty"`
 	UpdatedBy    uint64    `json:"updatedBy,string,omitempty"`
 	UpdatedAt    time.Time `json:"updatedAt,omitzero"`
+	Deleted      bool      `json:"deleted,omitempty"` // hidden with its own parts until app.restore
 	Parts        []Part    `json:"parts"`
 }
 
@@ -60,11 +61,12 @@ type Summary struct {
 	Rev         int       `json:"rev"`
 	Pages       int       `json:"pages"`
 	UpdatedAt   time.Time `json:"updatedAt,omitzero"`
+	Deleted     bool      `json:"deleted,omitempty"` // hidden until app.restore: list it apart
 }
 
 func summaryOf(d Draft) Summary {
 	m := d.Manifest
-	return Summary{ID: m.ID, Name: m.Name, Icon: m.Icon, Description: m.Description, Rev: d.Rev, Pages: len(m.Pages), UpdatedAt: d.UpdatedAt}
+	return Summary{ID: m.ID, Name: m.Name, Icon: m.Icon, Description: m.Description, Rev: d.Rev, Pages: len(m.Pages), UpdatedAt: d.UpdatedAt, Deleted: d.Deleted}
 }
 
 // named are the parts a manifest names, by type.
@@ -213,7 +215,7 @@ func contributeQueries(reg *extensions.Registry, deps func() Deps) {
 			pos := live.Position{}
 			last := ""
 			view := func() View {
-				return View{Manifest: d.Manifest, Rev: d.Rev, Published: d.Published, PublishedRev: d.PublishedRev, Changed: d.Rev != d.PublishedRev, CreatedBy: d.CreatedBy, UpdatedBy: d.UpdatedBy, UpdatedAt: d.UpdatedAt, Parts: partsOf(d.Manifest, known, builtins)}
+				return View{Manifest: d.Manifest, Rev: d.Rev, Published: d.Published, PublishedRev: d.PublishedRev, Changed: d.Rev != d.PublishedRev, CreatedBy: d.CreatedBy, UpdatedBy: d.UpdatedBy, UpdatedAt: d.UpdatedAt, Deleted: d.Deleted, Parts: partsOf(d.Manifest, known, builtins)}
 			}
 			for {
 				var w watched

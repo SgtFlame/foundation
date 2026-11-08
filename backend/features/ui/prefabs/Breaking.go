@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 
+	"github.com/SgtFlame/foundation/backend/features/apps"
 	"github.com/SgtFlame/foundation/backend/features/ui"
 )
 
@@ -117,4 +119,56 @@ func (c *decision) usedBy(changes []Break) []Break {
 		}
 	}
 	return slices.DeleteFunc(changes, func(b Break) bool { return len(b.UsedBy) == 0 })
+}
+
+// appVersions is the projection of published app versions
+// (apps/manifests' VersionProjector), read here to find the apps using a
+// prefab before it is deleted.
+const appVersions = "apps.version"
+
+// users are the published prefabs whose last version renders the target
+// prefab, and the apps whose last published version pins it, named for a
+// refused prefab.delete (forge 06b).
+func (c *decision) users() []string {
+	ctx, cancel := context.WithCancel(c.Context())
+	defer cancel()
+	var out []string
+	if entries, err := c.deps.Projections.Watch(ctx, c.Principal.TenantID, PublishedProjector, TargetType+".*"); err == nil {
+		for e := range entries {
+			if e == nil {
+				break
+			}
+			var p ui.Prefab
+			if e.Deleted || json.Unmarshal(e.Value.Value, &p) != nil || p.ID == c.Target.ID {
+				continue
+			}
+			for _, used := range ui.PrefabsUsed(p.Template) {
+				if used == c.Target.ID {
+					out = append(out, "the prefab "+p.ID)
+					break
+				}
+			}
+		}
+	}
+	last := map[string]apps.Version{}
+	if entries, err := c.deps.Projections.Watch(ctx, c.Principal.TenantID, appVersions, ">"); err == nil {
+		for e := range entries {
+			if e == nil {
+				break
+			}
+			var v apps.Version
+			if e.Deleted || json.Unmarshal(e.Value.Value, &v) != nil {
+				continue
+			}
+			if v.Version > last[v.App].Version {
+				last[v.App] = v
+			}
+		}
+	}
+	for _, app := range slices.Sorted(maps.Keys(last)) {
+		if _, ok := last[app].Prefabs[c.Target.ID]; ok {
+			out = append(out, "the app "+app)
+		}
+	}
+	return out
 }

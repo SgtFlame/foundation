@@ -81,8 +81,13 @@ func get(ctx context.Context, store live.Store, tenant uint64, projector, key st
 // prefabs, graphs and entity types, drafted or published, and the
 // primitives.
 func Env(ctx context.Context, store live.Store, tenant uint64, reg *extensions.Registry) apps.Env {
+	return envFrom(func(projector, key string) (json.RawMessage, bool) { return get(ctx, store, tenant, projector, key) }, reg)
+}
+
+// envFrom is an Env reading the projections through get.
+func envFrom(get func(projector, key string) (json.RawMessage, bool), reg *extensions.Registry) apps.Env {
 	read := func(projector, key string, v any) bool {
-		raw, ok := get(ctx, store, tenant, projector, key)
+		raw, ok := get(projector, key)
 		return ok && json.Unmarshal(raw, v) == nil
 	}
 	return apps.Env{
@@ -117,8 +122,18 @@ func Env(ctx context.Context, store live.Store, tenant uint64, reg *extensions.R
 	}
 }
 
+// env reads the parts through the decision, so a part this process
+// changed just before (a prefab made in the same gesture) is read as
+// changed, and an undo's parts as its earlier ops left them.
 func (c *decision) env() apps.Env {
-	return Env(c.Context(), c.deps.Projections, c.Principal.TenantID, c.reg)
+	if c.Read == nil {
+		return Env(c.Context(), c.deps.Projections, c.Principal.TenantID, c.reg)
+	}
+	return envFrom(func(projector, key string) (json.RawMessage, bool) {
+		typ, id, _ := strings.Cut(key, ".")
+		v, err := c.Read(projector, live.Target{Area: live.AreaDefinitions, Type: typ, ID: id})
+		return v, err == nil && v != nil
+	}, c.reg)
 }
 
 // slug is an app's id made from its name: "My tasks" is myTasks.
@@ -156,6 +171,13 @@ func newID(base string, taken func(string) bool) string {
 	}
 	return id
 }
+
+// The install projection and target type (apps/installs, which imports
+// this package), read before an app is deleted.
+const (
+	installProjector = "apps.install"
+	installType      = "appInstall"
+)
 
 type spec struct {
 	id, title, description, args, example string
@@ -199,6 +221,9 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				}
 				if !c.exists && !s.create {
 					return nil, problem("target", fmt.Sprintf("there is no app %q", d.Target.ID), "make it first with app.create {name}")
+				}
+				if c.draft.Deleted && s.id != "app.restore" {
+					return nil, problem("target", fmt.Sprintf("the app %q is deleted", d.Target.ID), "bring it back with app.restore first")
 				}
 				events, problems := s.decide(c)
 				if problems != nil || len(events) == 0 {
@@ -313,6 +338,32 @@ func commandSpecs() []spec {
 				m := apps.Manifest{ID: c.Target.ID, Name: a.Name, Icon: a.Icon, Description: a.Description}
 				apps.Normalize(&m)
 				return ev(EventCreated, map[string]any{"manifest": m}), nil
+			},
+		},
+		{
+			id: "app.delete", title: "Delete an app", events: []string{EventDeleted},
+			description: "Deletes an app: it is hidden with its own parts, not erased, and app.restore brings it back. Refused while the app is installed: uninstall it first.",
+			args:        `{"type":"object","properties":{}}`,
+			example:     `{}`,
+			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+				raw, err := c.Read(installProjector, live.Target{Area: live.AreaDefinitions, Type: installType, ID: c.Target.ID})
+				var in apps.Install
+				if err == nil && raw != nil && json.Unmarshal(raw, &in) == nil && in.Installed() {
+					return nil, problem("target", fmt.Sprintf("the app %q is installed", c.Target.ID), "uninstall it first with app.uninstall")
+				}
+				return ev(EventDeleted, map[string]any{}), nil
+			},
+		},
+		{
+			id: "app.restore", title: "Restore an app", events: []string{EventRestored},
+			description: "Brings back a deleted app with its own parts, as it was.",
+			args:        `{"type":"object","properties":{}}`,
+			example:     `{}`,
+			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+				if !c.draft.Deleted {
+					return nil, problem("target", fmt.Sprintf("the app %q is not deleted", c.Target.ID), "")
+				}
+				return ev(EventRestored, map[string]any{}), nil
 			},
 		},
 		{

@@ -685,6 +685,18 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-7).
     - **Pending, carried forward**: undo and redo by request in every editor (forge 6b), restorable deletes for prefabs, graphs and apps, after which making a prefab or app is undoable.
 
+39. **Undo and redo by request** (Forge iteration 6, part 6b, [forge 06b-UndoByRequest.md](../../forge/documentation/plans/06b-UndoByRequest.md)). *Built* ([Apps.md](Apps.md#built-in-slice-39), [Live.md](Live.md#changed-in-slice-39), [Cognition.md](Cognition.md#changed-in-slice-39)).
+    - **Built**:
+      - in `live`: `bus.Transact`, several commands decided in turn over an overlay of the projections and committed as one atomic batch; `LoggedOp.Undoes` and `Events`;
+      - in `apps/ops`: `ops.undo` and `ops.redo` (calls and tools, with conflicts, `force` and `dryRun`), the `ops.stack` and `ops.status` queries, items and conflicts;
+      - restorable deletes: `bp.restore` (the `cognition.trash` projection), `prefab.delete`/`prefab.restore`, `app.delete`/`app.restore`, and the inverses of making parts;
+      - in the browser: `live.gesture`, `live.settled`, `useUndo`, the Undo and Redo buttons with the conflict dialog, the Cognition Editor moved onto them, and *Undo changes*/*Redo changes* on a chat round, previewed;
+      - in Forge: Undo and Redo in the Prefab Editor, the Applications editor and the Data Designer, gestures as requests, *Delete* and *Restore* in the app list and the Prefabs library.
+    - **Blockers**: none. Forge 06b questions 1 to 7 were asked before building and answered with their proposals; the user added Undo and Redo on a chat round with a preview (question 8), built in this slice.
+    - **★ review pending**: Undo and Redo in each editor with two authors, deleted parts shown apart, and the chat round's Undo and Redo (forge 6b).
+    - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-8) and Forge's [PrefabEditor.md](../../forge/documentation/PrefabEditor.md#built-in-slice-39).
+    - **Pending, carried forward**: undoing another author's request from a view (the Activity tab, forge 6c); `forge.undo` on `ops.undo` (forge 6e); hiding a deleted app's parts in the server's queries.
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -730,3 +742,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 36. Draft runs (Forge 5f) | forge 05-Applications 1 (run drafts, answered before) and 05f 1 (no undo), 2 (parts in their editors) and 3 (a live draft tab; entity types published alone), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-5), the Applications editor with two authors |
 | 37. The Tasks app (Forge 5g) | forge 05g 1 (Tasks owns its type) and 2 (built by ops; the steps by hand in the browser), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-6) and forge TasksApp.md, the demo with two users of different roles |
 | 38. The operation log (Forge 6a) | forge 06-AIAuthoring 5 (a slice per part, from 38) and 06a 1 (client request ids), 2 (inverse ops in `Decide`), 3 (definitions only) and 4 (the client-named app for unowned parts), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-7), to review after seeing |
+| 39. Undo and redo by request (Forge 6b) | forge 06b 1 (items), 2 (conflicts refuse, `force` the rest), 3 (no limit), 4 (the editor's scope, the chat's requests included), 5 (stacks on the server), 6 (undo after publishing) and 7 (definitions only), answered; 8 (Undo and Redo on a chat round, the user's addition) built on its proposal | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-8), Undo and Redo in each editor with two authors, the chat round's preview |

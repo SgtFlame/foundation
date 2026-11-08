@@ -1,11 +1,12 @@
 // Editing a graph's draft over the live core (documentation/Cognition.md ›
 // Built in slice 14): the draft is the cognition.graph query, every gesture
 // is one or more bp.* commands, shown at once by applying them over the
-// query's data until it reflects them, and undone by this user's own stack
-// of inverse commands, so each person undoes only their changes.
+// query's data until it reflects them. A gesture's commands are one
+// request, which Undo reverses from the operation log (forge 06b), so each
+// person undoes only their changes, after a reload and in any window.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CommandRejected, live, useCommand, useQuery, type PendingCommand } from '../../live/index.ts'
+import { CommandRejected, live, useCommand, useQuery, useUndo, type PendingCommand, type UndoState } from '../../live/index.ts'
 import type { Edge, GraphNode, GraphView, NodeType, Pins, Variable } from '../../services/Cognition.ts'
 import type { ServiceError } from '../../services/http/client.ts'
 
@@ -85,69 +86,6 @@ export function applyOp(view: GraphView, op: Op, nodeTypes: Map<string, NodeType
   return view
 }
 
-// The commands that undo op, from the draft as it is before op
-export function inverse(view: GraphView, op: Op): Op[] {
-  const g = view.graph
-  const a = op.args
-  switch (op.command) {
-    case 'bp.moveNodes': {
-      const moves = (a.moves as { node: string }[]).flatMap((m) => {
-        const n = g.nodes.find((x) => x.id === m.node)
-        return n ? [{ node: n.id, position: n.position }] : []
-      })
-      return [{ command: 'bp.moveNodes', args: { moves } }]
-    }
-    case 'bp.addNode':
-      return a.id ? [{ command: 'bp.remove', args: { nodes: [a.id] } }] : []
-    case 'bp.setConfig': {
-      const n = g.nodes.find((x) => x.id === a.node)
-      if (!n) return []
-      return [{ command: 'bp.setConfig', args: { node: n.id, ...(a.config !== undefined ? { config: n.config ?? {} } : {}), ...(a.title !== undefined ? { title: n.title ?? '' } : {}) } }]
-    }
-    case 'bp.connect': {
-      const e = a as unknown as Edge
-      if (g.edges.some((x) => sameEdge(x, e))) return []
-      return [{ command: 'bp.disconnect', args: { ...e } }, ...replacedBy(view, e).map((r) => ({ command: 'bp.connect', args: { ...r } }))]
-    }
-    case 'bp.disconnect':
-      return [{ command: 'bp.connect', args: { ...a } }]
-    case 'bp.remove': {
-      const ids = new Set((a.nodes as string[] | undefined) ?? [])
-      const nodes = g.nodes.filter((n) => ids.has(n.id))
-      const removed = (a.edges as Edge[] | undefined) ?? []
-      const edges = g.edges.filter((x) => ids.has(x.from.node) || ids.has(x.to.node))
-      const loose = removed.filter((r) => g.edges.some((x) => sameEdge(x, r)) && !edges.some((x) => sameEdge(x, r)))
-      const out: Op[] = []
-      if (nodes.length) out.push({ command: 'bp.paste', args: { nodes, edges } })
-      for (const e of loose) out.push({ command: 'bp.connect', args: { ...e } })
-      return out
-    }
-    case 'bp.paste': {
-      const nodes = (a.nodes as GraphNode[]).map((n) => n.id)
-      return [{ command: 'bp.remove', args: { nodes } }]
-    }
-    case 'bp.addVariable': {
-      const old = (g.variables ?? []).find((x) => x.id === a.id)
-      return [old ? { command: 'bp.addVariable', args: { ...old } } : { command: 'bp.removeVariable', args: { id: a.id } }]
-    }
-    case 'bp.removeVariable': {
-      const old = (g.variables ?? []).find((x) => x.id === a.id)
-      return old ? [{ command: 'bp.addVariable', args: { ...old } }] : []
-    }
-    case 'bp.setInfo': {
-      const back: Record<string, unknown> = {}
-      for (const k of Object.keys(a)) back[k] = (g as unknown as Record<string, unknown>)[k] ?? (k === 'spec' ? {} : '')
-      return [{ command: 'bp.setInfo', args: back }]
-    }
-  }
-  return []
-}
-
-interface Entry {
-  redo: Op[]
-  undo: Op[]
-}
-
 export interface DraftEditing {
   view?: GraphView // the draft with this user's pending commands applied
   loading: boolean
@@ -160,6 +98,7 @@ export interface DraftEditing {
   redo(): void
   canUndo: boolean
   canRedo: boolean
+  undoState: UndoState // the toolbar's buttons and conflicts
   // The last command refused, for the editor to show
   rejection?: string
   clearRejection(): void
@@ -174,7 +113,7 @@ function message(err: unknown): string {
 export function useDraft(graphId: string, nodeTypes: Map<string, NodeType> | undefined): DraftEditing {
   const q = useQuery<GraphView>('cognition.graph', { id: graphId })
   const commands = useCommand()
-  const [stacks, setStacks] = useState<{ graphId: string; done: Entry[]; undone: Entry[] }>({ graphId, done: [], undone: [] })
+  const undoState = useUndo(`graph:${graphId}`)
   const [rejection, setRejection] = useState<string>()
   const types = useMemo(() => nodeTypes ?? new Map<string, NodeType>(), [nodeTypes])
 
@@ -190,39 +129,15 @@ export function useDraft(graphId: string, nodeTypes: Map<string, NodeType> | und
     viewRef.current = view
   }, [view])
 
-  const run = useCallback(
+  const apply = useCallback(
     (ops: Op[]) => {
-      for (const op of ops) commands.send(op.command, graphId, op.args).catch((err: unknown) => setRejection(message(err)))
+      if (!viewRef.current || ops.length === 0) return
+      live.gesture(() => {
+        for (const op of ops) commands.send(op.command, graphId, op.args).catch((err: unknown) => setRejection(message(err)))
+      })
     },
     [commands, graphId],
   )
-  const apply = useCallback(
-    (ops: Op[]) => {
-      let v = viewRef.current
-      if (!v || ops.length === 0) return
-      const undo: Op[] = []
-      for (const op of ops) {
-        undo.unshift(...inverse(v, op))
-        v = applyOp(v, op, types)
-      }
-      setStacks((s) => ({ graphId, done: [...(s.graphId === graphId ? s.done : []), { redo: ops, undo }].slice(-200), undone: [] }))
-      run(ops)
-    },
-    [graphId, run, types],
-  )
-  const current = useMemo(() => (stacks.graphId === graphId ? stacks : { graphId, done: [], undone: [] }), [stacks, graphId])
-  const undo = useCallback(() => {
-    const e = current.done.at(-1)
-    if (!e) return
-    setStacks({ graphId, done: current.done.slice(0, -1), undone: [...current.undone, e] })
-    run(e.undo)
-  }, [current, graphId, run])
-  const redo = useCallback(() => {
-    const e = current.undone.at(-1)
-    if (!e) return
-    setStacks({ graphId, done: [...current.done, e], undone: current.undone.slice(0, -1) })
-    run(e.redo)
-  }, [current, graphId, run])
   const send = useCallback(
     async (command: string, args: Record<string, unknown>) => {
       try {
@@ -241,10 +156,11 @@ export function useDraft(graphId: string, nodeTypes: Map<string, NodeType> | und
     error: q.error,
     apply,
     send,
-    undo,
-    redo,
-    canUndo: current.done.length > 0,
-    canRedo: current.undone.length > 0,
+    undo: () => void undoState.undo(),
+    redo: () => void undoState.redo(),
+    canUndo: undoState.canUndo,
+    canRedo: undoState.canRedo,
+    undoState,
     rejection,
     clearRejection: () => setRejection(undefined),
   }

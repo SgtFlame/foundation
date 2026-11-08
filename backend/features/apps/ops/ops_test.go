@@ -76,6 +76,8 @@ func setup(t *testing.T) *fixture {
 	ui.ContributeOverlays(reg)
 	ui.Pages.Register(reg, ui.Page{Descriptor: extensions.Descriptor{ID: "demo/main", Source: "test"}, App: "demo", Title: "Demo"})
 	ops.Contribute(reg)
+	var undoDeps ops.Deps
+	ops.ContributeUndo(reg, func() ops.Deps { return undoDeps })
 	gdb, err := db.Open(db.WithPath(filepath.Join(t.TempDir(), "test.db")))
 	if err != nil {
 		t.Fatal(err)
@@ -89,6 +91,7 @@ func setup(t *testing.T) *fixture {
 	eng := engine.New(gdb, reg, nil)
 	eng.SetSource(drafts.Source{Store: p})
 	f := &fixture{t: t, reg: reg, bus: bus.New(p), subs: subscribe.New(p, reg), p: p}
+	undoDeps = ops.Deps{Bus: f.bus, Store: p}
 	nodeDeps = livenodes.Deps{Engine: eng, Bus: f.bus, Subscriptions: f.subs, Store: p}
 	draftDeps = drafts.Deps{Engine: eng, Projections: p}
 	dataDeps = data.Deps{Projections: p, Bus: f.bus}
@@ -214,6 +217,9 @@ func (f *fixture) state(command, target string, seq uint64) string {
 	case prefabs.DraftProjector:
 		var d prefabs.Draft
 		_ = json.Unmarshal(v.Value, &d)
+		if d.Deleted {
+			return "null" // a deleted prefab is gone as far as anyone sees
+		}
 		out = []any{d.Prefab, d.Published}
 	case entities.DraftProjector:
 		var d entities.Draft
@@ -228,6 +234,9 @@ func (f *fixture) state(command, target string, seq uint64) string {
 	case manifests.DraftProjector:
 		var d manifests.Draft
 		_ = json.Unmarshal(v.Value, &d)
+		if d.Deleted {
+			return "null"
+		}
 		out = []any{d.Manifest, d.Seed, d.Published}
 	default:
 		var o ui.Overlay
@@ -330,6 +339,7 @@ func steps() []step {
 		s("bp.create", "tasks-onClick", m{"kind": "ui.handler", "name": "On click", "owner": own}),
 		s("bp.publish", "tasks-onClick", m{"rev": 0}),
 		s("bp.delete", "echo", m{}),
+		s("bp.restore", "echo", m{}),
 		// Prefabs
 		s("prefab.create", "row", m{"name": "Row", "owner": own}),
 		s("prefab.setInterface", "row", m{"props": m{"title": m{"type": "string"}}, "events": m{"clicked": m{"description": "Clicked"}}}),
@@ -358,6 +368,8 @@ func steps() []step {
 		s("prefab.import", "row", m{"prefab": m{"name": "Row", "owner": own, "template": m{"type": "mui.text", "key": "root"}}}),
 		s("prefab.import", "card", m{"prefab": m{"name": "Card", "template": m{"type": "mui.text", "key": "root"}}}),
 		s("prefab.publish", "row", m{"rev": 0}),
+		s("prefab.delete", "card", m{}),
+		s("prefab.restore", "card", m{}),
 		// Apps
 		s("app.setInfo", "tasks", m{"description": "Tasks for people", "frame": ""}),
 		s("app.setNav", "tasks", m{"nav": []m{{"title": "All tasks", "route": "/all"}}}),
@@ -386,6 +398,8 @@ func steps() []step {
 		s("app.removeEntity", "tasks", m{"entity": "note"}),
 		s("app.setManifest", "tasks", m{"manifest": m{"name": "Tasks", "pages": []m{{"route": "/row", "prefab": "row"}}, "entities": []string{"task"}}}),
 		s("app.create", "", m{"name": "Notes"}),
+		s("app.delete", "notes", m{}),
+		s("app.restore", "notes", m{}),
 		// Page overlays
 		s("ui.insertNode", "demo-main", m{"parent": "root", "node": m{"type": "mui.text", "key": "hi", "props": m{"text": "Hi"}}}),
 		s("ui.removeNode", "demo-main", m{"key": "hi"}),
@@ -443,7 +457,7 @@ func TestEveryOpUndoes(t *testing.T) {
 		var redo []live.Op
 		for _, u := range slices.Backward(undo) {
 			if u.Irreversible != "" {
-				redo = nil // a new part's undo deletes it, for good until forge 06b
+				redo = nil
 				break
 			}
 			redo = append(redo, u.Inverse...)
@@ -466,11 +480,12 @@ func TestEveryOpUndoes(t *testing.T) {
 	}
 }
 
-// irreversible are the commands no op undoes: publishing, creating parts
-// that have no delete yet (forge 06b), deleting graphs, and installs.
+// irreversible are the commands no op undoes: publishing and installs.
+// Making and deleting parts are undone by their restorable deletes (forge
+// 06b).
 func irreversible(command string) bool {
-	return slices.Contains([]string{"bp.publish", "bp.delete", "prefab.publish", "prefab.create", "entity.publish", "app.publish", "app.create",
-		"app.install", "app.upgrade", "app.uninstall"}, command) || command == "prefab.import" // a new one
+	return slices.Contains([]string{"bp.publish", "prefab.publish", "entity.publish", "app.publish",
+		"app.install", "app.upgrade", "app.uninstall"}, command)
 }
 
 func mustJSON(v any) string {
@@ -559,6 +574,7 @@ func TestTheLogByAppRequestAndPrincipal(t *testing.T) {
 	f.parts(ada, "parts")
 	f.manifest(bob, "manifest")
 	f.send(ada, "crm", "", "prefab.create", "crmCard", m{"name": "CRM card", "owner": "app:crm"})
+	f.entries(ada, "") // the log has folded them all, so later changes are only the third request's
 
 	all := f.open(ada, ops.Params{App: "tasks"})
 	l := all.until(t, "both requests", func(l ops.Log) bool { return len(l.Requests) == 2 && len(l.Requests[0].Ops)+len(l.Requests[1].Ops) == 18 })
@@ -578,7 +594,7 @@ func TestTheLogByAppRequestAndPrincipal(t *testing.T) {
 			t.Errorf("an op of the manifest: %s", mustJSON(e))
 		}
 	}
-	if first := manifest.Ops[0]; first.Command != "app.create" || first.Target != "tasks" || first.Irreversible == "" {
+	if first := manifest.Ops[0]; first.Command != "app.create" || first.Target != "tasks" || mustJSON(first.Inverse) != `[{"command":"app.delete","target":"tasks","args":{}}]` {
 		t.Errorf("the first op is %s", mustJSON(first))
 	}
 	if add := manifest.Ops[1]; add.Command != "app.addEntity" || mustJSON(add.Inverse) != `[{"command":"app.removeEntity","target":"tasks","args":{"entity":"task"}}]` {

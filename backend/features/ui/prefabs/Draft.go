@@ -39,6 +39,9 @@ type Draft struct {
 	PublishedRev int       `json:"publishedRev"`
 	UpdatedBy    uint64    `json:"updatedBy,string"`
 	UpdatedAt    time.Time `json:"updatedAt"`
+	// Deleted hides the prefab until prefab.restore (forge 06b): its
+	// published versions keep rendering, and it refuses other changes.
+	Deleted bool `json:"deleted,omitempty"`
 }
 
 // Events a prefab's commands commit.
@@ -58,6 +61,8 @@ const (
 	EventPreviewSet    = "previewSet"    // {props}
 	EventVariantsSet   = "variantsSet"   // {variants}
 	EventPublished     = "published"     // Publication
+	EventDeleted       = "deleted"       // {}
+	EventRestored      = "restored"      // {}
 )
 
 // Info changes a prefab's name, description and owner; nil leaves them.
@@ -244,6 +249,8 @@ func Apply(d *Draft, e live.Event) error {
 		if pub, err = decode[Publication](e.Data); err == nil {
 			d.Published, d.PublishedRev, p.Version = pub.Version, d.Rev+1, pub.Version
 		}
+	case EventDeleted, EventRestored:
+		d.Deleted = e.Type == EventDeleted
 	default:
 		return fmt.Errorf("unknown event %s", e.Type)
 	}

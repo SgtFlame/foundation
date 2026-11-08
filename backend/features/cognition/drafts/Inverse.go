@@ -18,6 +18,16 @@ func (c *decision) undo(command string, events []live.NewEvent) {
 	if c.Op == nil {
 		return
 	}
+	switch command {
+	case "bp.delete":
+		c.Undo(appOf(c.draft.Graph.Owner), live.OpOf("bp.restore", c.Target.ID, map[string]any{}))
+		return
+	case "bp.restore":
+		if t, ok := events[0].Data.(Trash); ok {
+			c.Undo(appOf(t.Draft.Graph.Owner), live.OpOf("bp.delete", c.Target.ID, map[string]any{}))
+		}
+		return
+	}
 	// The events apply to a copy, since they change nodes in place
 	var after Draft
 	raw, _ := json.Marshal(c.draft)
@@ -37,9 +47,6 @@ func (c *decision) undo(command string, events []live.NewEvent) {
 	switch {
 	case command == "bp.publish":
 		c.NoUndo(app, "a published version stays; publish the draft again to replace it")
-		return
-	case command == "bp.delete":
-		c.NoUndo(app, "a deleted graph cannot be brought back yet")
 		return
 	case !c.exists || len(c.prefix) > 0:
 		// A new graph, or the tenant's first change to an editable built-in:

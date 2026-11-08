@@ -46,9 +46,9 @@ const catchUp = 2 * time.Second
 // Request is one command as sent.
 type Request struct {
 	features.ServiceArgs
-	ID        string // the idempotency key
-	Type      string
-	Target    string // the target's id; its area and type come from the command
+	ID     string // the idempotency key
+	Type   string
+	Target string // the target's id; its area and type come from the command
 	// RequestID groups the commands of one gesture or chat round; a
 	// command sent without one is its own request (forge 06a question 1).
 	RequestID string
@@ -57,7 +57,10 @@ type Request struct {
 	App string
 	// Actor is who sends the command for the principal: the chat.
 	Actor string
-	Args  json.RawMessage
+	// Undoes is the request this request undoes (forge 06b), logged on
+	// each of its ops.
+	Undoes string
+	Args   json.RawMessage
 }
 
 // Result is a commit's sequence, or the problems that rejected it.
@@ -235,7 +238,7 @@ func (b *Bus) Execute(r Request) Result {
 		var op *live.LoggedOp
 		if d.Op != nil {
 			op = &live.LoggedOp{Command: r.Type, Target: tg.ID, Args: r.Args, App: cmp.Or(d.Op.App, r.App),
-				Inverse: d.Op.Inverse, Irreversible: d.Op.Irreversible, Decided: state.Seq}
+				Inverse: d.Op.Inverse, Irreversible: d.Op.Irreversible, Decided: state.Seq, Undoes: r.Undoes}
 			if op.Inverse == nil {
 				op.Inverse = []live.Op{}
 			}

@@ -202,3 +202,9 @@ For the operation log ([Apps.md › Built in slice 38](Apps.md#built-in-slice-38
 - **Requests and actors.** `bus.Request.RequestID` defaults to the command id; `Request.App` is the app the request was made for (refused unless an id); `Request.Actor`, and `Event.Actor`, is who sent it for the principal (`chat`). The command frame takes `app` and `actor`, and the ack names its `request`. Command tools log under the chat round (`round-<id>`) or Cognition run (`run-<id>`).
 - **`Projector.KeyOf`** keys an event other than by its target, or skips it with `""`.
 
+
+## Changed in slice 39
+For undo by request ([Apps.md › Built in slice 39](Apps.md#built-in-slice-39), forge 06b):
+- **Transactions of several commands.** `bus.Transact(r, ops, dryRun)` decides ops one after another, each against the state the ones before it left (an overlay of the area's projections, folded by their own `Fold`s), and commits every event as one atomic batch in `r`'s request, or nothing; a conflict decides the whole again. With `dryRun` it only decides. Each op's first event carries its `LoggedOp` with `Events`, the number of events it committed, and each target's first event in the batch carries the expected sequence. Undo is its one user.
+- **`LoggedOp.Undoes`** and **`bus.Request.Undoes`**: the request an undo undoes, on each of its ops.
+- **In the browser**: `live.gesture(fn)` sends the commands `fn` sends before it returns as one request; `live.settled()` resolves once every command in flight is acknowledged; `useCommand`'s `send` takes `CommandOptions`; `useUndo(scope)` and `undoKeys` (`src/live/useUndo.ts`).

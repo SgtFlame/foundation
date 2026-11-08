@@ -41,6 +41,9 @@ type Draft struct {
 	CreatedBy uint64    `json:"createdBy,string"`
 	UpdatedBy uint64    `json:"updatedBy,string"`
 	UpdatedAt time.Time `json:"updatedAt"`
+	// Deleted hides the app, with its own parts, until app.restore (forge
+	// 06b); it refuses other changes.
+	Deleted bool `json:"deleted,omitempty"`
 }
 
 // Events an app's commands commit, beside each list's added, updated and
@@ -53,6 +56,8 @@ const (
 	EventPublished   = "published"   // Published; the version itself is an event on its own target
 	EventManifestSet = "manifestSet" // {manifest}: the whole manifest replaced
 	EventSeedSet     = "seedSet"     // {seed}
+	EventDeleted     = "deleted"     // {}
+	EventRestored    = "restored"    // {}
 )
 
 // VersionTargetType is a published version's target type on the def
@@ -371,6 +376,8 @@ func Apply(d *Draft, e live.Event) error {
 			}
 			d.Versions = append(d.Versions, VersionSummary{Version: p.Version, Rev: p.Rev, PublishedBy: e.UserID, PublishedAt: e.Time})
 		}
+	case EventDeleted, EventRestored:
+		d.Deleted = e.Type == EventDeleted
 	case EventSettingsSet:
 		var in struct{ Settings apps.Settings }
 		if in, err = decode[struct{ Settings apps.Settings }](e.Data); err == nil {

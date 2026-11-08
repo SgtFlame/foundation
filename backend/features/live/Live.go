@@ -160,6 +160,12 @@ type LoggedOp struct {
 	Irreversible string `json:"irreversible,omitempty"`
 	// Decided is the target's sequence its state was read at.
 	Decided uint64 `json:"decided"`
+	// Undoes is the request this op's request undoes (forge 06b): its
+	// ops are that request's inverses. A redo undoes an undo.
+	Undoes string `json:"undoes,omitempty"`
+	// Events is how many events the op committed, when it shares an
+	// atomic batch with other ops (an undo's); 0 when the batch is its own.
+	Events int `json:"events,omitempty"`
 }
 
 // Logged reports whether a command is an op of the operation log: every

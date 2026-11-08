@@ -127,6 +127,8 @@ export class LiveConnection {
   private readonly statusListeners = new Set<() => void>()
   private readonly channels = new Map<number, (payload: Uint8Array) => void>()
   private nextChannel = 1
+  private readonly inFlight = new Set<Promise<unknown>>()
+  private gestureRequest?: string
 
   // Opens the socket on first use
   private start() {
@@ -181,11 +183,37 @@ export class LiveConnection {
   // waits, and it is resent until acknowledged.
   command(command: string, target: string, args?: unknown, options?: CommandOptions): Promise<Ack> {
     const id = newId('c')
-    const frame: Frame = { type: 'command', id, command, target, args, request: options?.request, app: options?.app, trace: newTraceId() }
-    return new Promise<Ack>((resolve, reject) => {
+    const request = options?.request ?? this.gestureRequest
+    const frame: Frame = { type: 'command', id, command, target, args, request, app: options?.app, trace: newTraceId() }
+    const p = new Promise<Ack>((resolve, reject) => {
       this.commands.set(id, { frame, resolve, reject })
       this.send(frame)
     })
+    this.inFlight.add(p)
+    const done = () => this.inFlight.delete(p)
+    p.then(done, done)
+    return p
+  }
+
+  // Runs fn as one gesture (forge 06b): every command it sends, before it
+  // returns, is one request, which one Undo reverses. A gesture inside
+  // another joins it. Commands sent after an await are not in it: pass
+  // the request it gives fn in their options.
+  gesture<T>(fn: (request: string) => T): T {
+    if (this.gestureRequest) return fn(this.gestureRequest)
+    const request = newId('g-')
+    this.gestureRequest = request
+    try {
+      return fn(request)
+    } finally {
+      this.gestureRequest = undefined
+    }
+  }
+
+  // Resolves once every command sent so far is acknowledged or refused, so
+  // an undo reaches them
+  async settled(): Promise<void> {
+    await Promise.allSettled([...this.inFlight])
   }
 
   // Opens a query; the handlers get its snapshot and changes until the

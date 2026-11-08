@@ -118,6 +118,7 @@ export interface AppView {
   createdBy?: string
   updatedBy?: string
   updatedAt?: string
+  deleted?: boolean // hidden with its own parts until app.restore (forge 06b)
   parts: AppPart[]
 }
 
@@ -130,6 +131,7 @@ export interface AppSummary {
   rev: number
   pages: number
   updatedAt?: string
+  deleted?: boolean // hidden until app.restore: list it apart
 }
 
 // useQuery<AppVersions>('app.versions', { id }): the app's published versions
@@ -260,6 +262,7 @@ export interface OpEntry extends Op {
   actor?: string // who sent it for the principal: chat, agent
   inverse: Op[] // the ops that undo it, in order
   irreversible?: string // why none do
+  undoes?: string // the request its request undoes (forge 06b)
   time: string
 }
 
@@ -275,6 +278,73 @@ export interface OpRequest {
 
 export interface OpLog {
   requests: OpRequest[]
+}
+
+// Undo and redo (forge 06b). A scope is what an editor's undo reaches:
+// app:<id>, app:<id>/manifest, prefab:<id>, graph:<id> or entity:<id>.
+// useQuery<UndoStack>('ops.stack', {scope}) is the caller's own requests
+// in it, newest first; the ops.undo and ops.redo calls end with one
+// result event, an UndoResult
+export interface UndoItem {
+  request: string
+  summary: string // for a redo, what it brings back
+  actor?: string
+  time: string
+  ops: number
+}
+
+export interface UndoStack {
+  undo: UndoItem[]
+  redo: UndoItem[]
+}
+
+export interface UndoArgs {
+  scope?: string
+  request?: string // any request in the log; for a redo, an undo or the request it undid
+  force?: boolean // undo the rest, leaving what others changed since
+  dryRun?: boolean // say what it would do, without doing it
+}
+
+// useQuery<RequestStatus>('ops.status', {request}): what a request changed
+// and whether it is undone now (the chat's round-<roundId>)
+export interface RequestStatus {
+  request: string
+  ops: number
+  undoable: number // the ops with an inverse
+  undone: boolean
+  undoneBy?: string // the undo that undid it
+}
+
+// One thing an op changes: a prefab node, a manifest item, a field…
+export interface UndoItemRef {
+  target: string // <targetType>:<id>
+  kind?: string // node, page, role, field, info…; none for the whole target
+  key?: string
+}
+
+export interface UndoConflict {
+  item: UndoItemRef
+  command: string // the later change
+  request: string
+  principal: string
+  actor?: string
+  time: string
+}
+
+export interface UndoResult {
+  // done; preview (dryRun); conflicts (refused: force undoes the rest);
+  // nothing (nothing to undo)
+  status: 'done' | 'preview' | 'conflicts' | 'nothing'
+  request: string // the request undone
+  undoes?: string
+  app?: string
+  summary: string
+  ops: Op[] // the inverses sent, in order
+  changes: string[] // each op taken back, in words, newest first
+  conflicts: UndoConflict[]
+  skipped: { command: string; target: string; why: string }[]
+  sent?: string // the undo's own request, when done
+  seq?: number
 }
 
 // Export, check and import resolve their refusals too (a check that

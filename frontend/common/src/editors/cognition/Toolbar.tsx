@@ -19,14 +19,13 @@ import {
   TextField,
   Tooltip,
 } from '@mui/material'
-import UndoIcon from '@mui/icons-material/Undo'
-import RedoIcon from '@mui/icons-material/Redo'
 import DeleteIcon from '@mui/icons-material/Delete'
 import FactCheckIcon from '@mui/icons-material/FactCheck'
 import PublishIcon from '@mui/icons-material/Publish'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DownloadIcon from '@mui/icons-material/Download'
 import { live, PresenceAvatars } from '../../live/index.ts'
+import { UndoButtons } from '../../components/undo/UndoButtons.tsx'
 import { titleOf, useCognition } from './cognitionState.ts'
 import { graphIdFrom } from './editing.ts'
 
@@ -66,7 +65,7 @@ function DuplicateDialog({ open, onClose }: { open: boolean; onClose: () => void
   )
 }
 
-// The Logic Editor's toolbar: undo and redo (this user's own changes),
+// The Logic Editor's toolbar: undo and redo (this user's own requests),
 // delete, Validate (the problems), Publish, Duplicate, Export, and who else
 // is here
 function Toolbar({ onDelete, canDelete }: { onDelete: () => void; canDelete: boolean }) {
@@ -88,20 +87,7 @@ function Toolbar({ onDelete, canDelete }: { onDelete: () => void; canDelete: boo
 
   return (
     <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5, px: 1, py: 0.5, borderBottom: 1, borderColor: 'divider', flexWrap: 'wrap' }}>
-      <Tooltip title="Undo your last change (Ctrl+Z)">
-        <span>
-          <IconButton size="small" aria-label="Undo" onClick={editing.undo} disabled={readOnly || !editing.canUndo}>
-            <UndoIcon fontSize="small" />
-          </IconButton>
-        </span>
-      </Tooltip>
-      <Tooltip title="Redo (Ctrl+Shift+Z)">
-        <span>
-          <IconButton size="small" aria-label="Redo" onClick={editing.redo} disabled={readOnly || !editing.canRedo}>
-            <RedoIcon fontSize="small" />
-          </IconButton>
-        </span>
-      </Tooltip>
+      <UndoButtons state={editing.undoState} disabled={readOnly} />
       <Tooltip title="Delete the selection (Delete)">
         <span>
           <IconButton size="small" aria-label="Delete" onClick={onDelete} disabled={readOnly || !canDelete}>

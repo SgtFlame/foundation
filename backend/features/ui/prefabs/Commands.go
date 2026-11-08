@@ -305,6 +305,9 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				if !c.exists && !s.create {
 					return nil, problem("target", fmt.Sprintf("there is no prefab %q", d.Target.ID), "make it first with prefab.create {name}")
 				}
+				if c.draft.Deleted && s.id != "prefab.restore" {
+					return nil, problem("target", fmt.Sprintf("the prefab %q is deleted", d.Target.ID), "bring it back with prefab.restore first")
+				}
 				events, problems := s.decide(c)
 				if problems != nil || len(events) == 0 {
 					return nil, problems
@@ -758,6 +761,30 @@ func commandSpecs() []spec {
 					return nil, nil
 				}
 				return ev(EventVariantsSet, map[string]any{"variants": a.Variants}), nil
+			},
+		},
+		{
+			id: "prefab.delete", title: "Delete a prefab", events: []string{EventDeleted},
+			description: "Deletes a prefab: it is hidden, not erased, and prefab.restore brings it back. Its published versions keep rendering where they are pinned. Refused while a published prefab or the last published version of an app uses it.",
+			args:        `{"type":"object","properties":{}}`,
+			example:     `{}`,
+			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+				if uses := c.users(); len(uses) > 0 {
+					return nil, problem("target", fmt.Sprintf("the prefab %q is used by %s", c.Target.ID, strings.Join(uses, ", ")), "remove it from those first, and publish them")
+				}
+				return ev(EventDeleted, map[string]any{}), nil
+			},
+		},
+		{
+			id: "prefab.restore", title: "Restore a prefab", events: []string{EventRestored},
+			description: "Brings back a deleted prefab as it was.",
+			args:        `{"type":"object","properties":{}}`,
+			example:     `{}`,
+			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+				if !c.draft.Deleted {
+					return nil, problem("target", fmt.Sprintf("the prefab %q is not deleted", c.Target.ID), "")
+				}
+				return ev(EventRestored, map[string]any{}), nil
 			},
 		},
 		{
