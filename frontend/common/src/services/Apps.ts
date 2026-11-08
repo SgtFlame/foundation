@@ -240,6 +240,43 @@ export interface ImportAppResponse extends ResponseStatus {
   problems: Problem[]
 }
 
+// The operation log (forge 06a): useQuery<OpLog>('ops.list', {app?,
+// request?, principal?, after?}), requests newest first, each a list
+// change as its ops arrive
+export interface Op {
+  command: string
+  target: string
+  args?: unknown
+}
+
+export interface OpEntry extends Op {
+  seq: number // the sequence it committed at
+  decided: number // its target's sequence when it was decided
+  targetType: string
+  app?: string
+  request: string
+  commandId: string
+  principal: string
+  actor?: string // who sent it for the principal: chat, agent
+  inverse: Op[] // the ops that undo it, in order
+  irreversible?: string // why none do
+  time: string
+}
+
+export interface OpRequest {
+  id: string
+  app?: string
+  principal: string
+  actor?: string
+  seq: number
+  time: string
+  ops: OpEntry[]
+}
+
+export interface OpLog {
+  requests: OpRequest[]
+}
+
 // Export, check and import resolve their refusals too (a check that
 // fails, a duplicate to decide: 409 and 422 carry problems and the plan),
 // and throw ServiceError on any other failure.

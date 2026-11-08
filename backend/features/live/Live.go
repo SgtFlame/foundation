@@ -101,11 +101,16 @@ type Event struct {
 	CommandID string          `json:"commandId"`
 	RequestID string          `json:"requestId,omitempty"`
 	UserID    uint64          `json:"userId,string,omitempty"`
-	TenantID  uint64          `json:"tenantId,string"`
-	Time      time.Time       `json:"time"`
+	// Actor is who sent the command for the user, beside them: the chat.
+	Actor    string    `json:"actor,omitempty"`
+	TenantID uint64    `json:"tenantId,string"`
+	Time     time.Time `json:"time"`
 	// Batch is set on each event of a commit of several: they were
 	// committed together, as one atomic batch.
 	Batch *Batch `json:"batch,omitempty"`
+	// Op is set on the first event of a definition command: the command as
+	// an op of the operation log, with its inverse.
+	Op *LoggedOp `json:"op,omitempty"`
 	// Set when read back from the stream.
 	Stream string `json:"-"`
 	Seq    uint64 `json:"-"`
@@ -124,6 +129,42 @@ func (b Batch) Range(seq uint64) (first, last uint64) {
 	first = seq - uint64(b.Index-1)
 	return first, first + uint64(b.Count) - 1
 }
+
+// Op is one command as the operation log keeps it and undo sends it: its
+// type, its target's id and its arguments.
+type Op struct {
+	Command string          `json:"command"`
+	Target  string          `json:"target"`
+	Args    json.RawMessage `json:"args,omitempty"`
+}
+
+// OpInfo is what a definition command's Decide says about the op it
+// decides (forge 06a): the ops that undo it, read from the state it decided
+// against, or why it cannot be undone by ops; and the app its target
+// belongs to.
+type OpInfo struct {
+	Inverse      []Op
+	Irreversible string // set when no ops undo it: publish, install, import
+	App          string // the target's app as decided, "" for a library part
+}
+
+// LoggedOp is an op as its first event carries it.
+type LoggedOp struct {
+	Command string          `json:"command"`
+	Target  string          `json:"target"`
+	Args    json.RawMessage `json:"args,omitempty"`
+	// App is the target's app when decided, else the app the client named
+	// the request for (forge 06a question 4); "" for neither.
+	App          string `json:"app,omitempty"`
+	Inverse      []Op   `json:"inverse"`
+	Irreversible string `json:"irreversible,omitempty"`
+	// Decided is the target's sequence its state was read at.
+	Decided uint64 `json:"decided"`
+}
+
+// Logged reports whether a command is an op of the operation log: every
+// definition command is (forge 06a question 3).
+func (c Command) Logged() bool { return c.Area == AreaDefinitions }
 
 // NewEvent is what a command's Decide returns.
 type NewEvent struct {
@@ -156,6 +197,29 @@ type Decision struct {
 	// none), for a command whose events change it: the commit then expects
 	// it unchanged since, as it does the command's own target.
 	Read func(projection string, t Target) (json.RawMessage, error)
+	// Op is set for a definition command: Decide fills it with the
+	// command's inverse and its target's app.
+	Op *OpInfo
+}
+
+// Undo sets the op's inverse, when the decision is logged.
+func (d Decision) Undo(app string, ops ...Op) {
+	if d.Op != nil {
+		d.Op.App, d.Op.Inverse = app, ops
+	}
+}
+
+// NoUndo marks the op as one no op undoes, when the decision is logged.
+func (d Decision) NoUndo(app, why string) {
+	if d.Op != nil {
+		d.Op.App, d.Op.Irreversible = app, why
+	}
+}
+
+// OpOf is an op of command on target with args given as a Go value.
+func OpOf(command, target string, args any) Op {
+	raw, _ := json.Marshal(args)
+	return Op{Command: command, Target: target, Args: raw}
 }
 
 // Command is one command type. Its Descriptor's ID is the type, e.g.

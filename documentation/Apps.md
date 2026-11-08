@@ -424,3 +424,60 @@ Forge's part 5g ([forge 05g-TasksApp.md](../../forge/documentation/plans/05g-Tas
 
 ### Decisions to review after seeing it
 - Decision 1: whether `apps.CheckManifest` should refuse an editor kind whose subject type is not one of the app's entity types when its page has an `:id`.
+
+## Built in slice 38
+Forge's part 6a ([forge 06a-OperationLog.md](../../forge/documentation/plans/06a-OperationLog.md)), the first part of iteration 6: the **operation log**. Every definition command is an **op**: its first event carries its arguments, the request it belongs to, who sent it, the actor beside them and the ops that undo it. The `ops.log` projection keeps one entry per op, `ops.list` reads them by app, request and principal, and `ops.Replay` sends an app's ops into another tenant. Undo ([forge 06b](../../forge/documentation/plans/06b-UndoByRequest.md)) and the chat's view of others' changes ([forge 06e](../../forge/documentation/plans/06e-ApplyCheckPreview.md)) are built on it.
+
+### Decisions
+Answered before building, in [forge 06a-OperationLog.md](../../forge/documentation/plans/06a-OperationLog.md#todo), each as proposed:
+- **Request ids are set by the client** (question 1). A command carries `request`, and one sent without one is its own request (its command id). The chat's tools set it per round, so the model never does.
+- **Inverse ops, computed when the op is decided** (question 2), from the state it was decided against. Undo is an ordinary request, and other authors' later changes to other items stay.
+- **Definitions only** (question 3): every command on the `def` stream (`live.Command.Logged()`). Record commands are data and are not on the log.
+- **An op on a part no app owns is logged under the app its request was made for** (question 4): the command's `app`, else none.
+
+Decided while building:
+1. **The op rides on its first event** (`live.Event.Op`, a `live.LoggedOp`): `{command, target, args, app, inverse, irreversible, decided}`. The log is a projection over the `def` stream, not a stream of its own. `live.Projector.KeyOf` lets a projector key an event other than by its target, and `ops.log` keys each op `<app>.<sequence of its first event>` (`_` for no app), so an app's ops are one key pattern.
+2. **One app per op.** It is the target's app as decided: the owner `app:<appId>` of a graph, prefab or entity type (as the command leaves it, else as it found it), the app itself for `app.*` and installs, and the page's app for an overlay. Only when the target has none does the client's `app` count. An app's own parts and the parts its authors change for it are then one `ops.list {app}`.
+3. **How each family inverts:**
+   - **Graphs** (`cognition/drafts/Inverse.go`) by the difference between the draft before and after the events, one function for every `bp.*` command: `bp.remove` for what was added, `bp.paste` for removed nodes and edges, `bp.setConfig` per changed node, `bp.moveNodes`, the variables and `bp.setInfo`. The Graph Editor's client-side `inverse` (`editing.ts`) does the same per command and can move onto the log in 6b.
+   - **Prefabs** (`ui/prefabs/Inverse.go`) per command, by key path: an insert is removed; a removed node comes back with its subtree at its parent, slot and index; an update sets back only the props, bindings, handlers, key and variant it changed (`null` for those it added); a move moves back; an unwrap is wrapped again. A wrap is an unwrap, and when the wrapped siblings were not side by side, each then goes to the end of its list and back to its old index, lowest first, which no later move shifts.
+   - **Entity types** (`records/entities/Inverse.go`) per command: a field update is undone by a patch that sets every property the field had and clears those it gained; a removed field is restored and a restored one removed; the title field an added field took is set back before the field is removed.
+   - **Apps** (`apps/manifests/Inverse.go`) per command: a removed list item comes back at its index (`app.add<Item> {…, index}`), an update is undone by the merge patch that takes the item back (`unmerge`: keys it gained are `null`, changed ones set back object by object) with `rename` to its old key, which the home, navigation and editor kinds follow again.
+   - **Page overlays** (`ui.insertNode` ↔ `ui.removeNode`).
+4. **What no op undoes is marked, with why** (`irreversible`): publishing (`bp.publish`, `prefab.publish`, `entity.publish`, `app.publish`), installs (`app.install`, `app.upgrade`, `app.uninstall`), `bp.delete`, and making a prefab or app (`prefab.create`, a new `prefab.import`, `app.create`), which have no delete until 6b's restorable deletes. A new graph is undone by `bp.delete` and a new entity type by `entity.delete` (hidden, its records kept), as is the tenant's first change to an editable built-in graph.
+5. **Undoing a new field hides it**, as `entity.removeField` does: fields are never deleted, so the type shows as it did, with a hidden field more.
+6. **Redo is undoing the undo**: the undo's own ops are logged with their inverses, which give the change again (`entity.delete` after `entity.create` is undone by `entity.restore`). 6b needs nothing more to redo.
+7. **The chat's request and actor.** A command tool's command is logged under `round-<roundId>` with the actor `chat`, or `run-<runId>` with `agent` in a Cognition run, else the tool call alone. Forge 6g may name the actor the Builder.
+8. **`ops.list`** (`app.read` on the app, or on the tenant's apps without one) gives `{requests: [{id, app, principal, actor, seq, time, ops: [entry]}]}`, newest request first; a new op is a list change on `requests`: `insert` at 0 for a new request, `move` to 0 with the request's new value for one that grew. Each op is also checked on its own: an app's needs `app.read` on that app, a library part's the part's read action (`cognition.read`, `prefabs.read`, `records.read`).
+9. **Replay is a Go function**, `ops.Replay(from, store, app, into, bus)`, for tests rather than a tool. Each op goes into the other tenant under its own command type, target and args, in the request `replay-<request>`. Before an op that reads other parts' published versions (`app.publish`, `app.install`, `app.upgrade`) it waits until every definition projection has folded the stream, since those were changed by the op just before.
+10. **A prefab command reads other parts through its decision** (`Decision.Read`), which waits for this process's last commit on them. The cycle check read another prefab's draft straight from the store and, under the log's extra projector, sometimes saw it a commit behind.
+11. **The bus refuses an `app` that is not an id**, and the ack says which request the command was logged under (`request`).
+
+### Backend
+- `live`: `Op`, `OpInfo`, `LoggedOp`, `Decision.Op` with `Decision.Undo(app, ops…)` and `Decision.NoUndo(app, why)`, `OpOf`, `Command.Logged`, `Event.Actor`, `Event.Op`, `Projector.KeyOf` (honoured by `live/project`'s fold).
+- `live/bus`: `Request.App`, `Request.Actor`, `RequestID` defaulting to the command id, `Result.RequestID`; a logged command's decision gets an `OpInfo`, and `commit` puts the op on the first event.
+- `live/services/liveservice`: the command frame's `app` and `actor`, the ack's `request`. `live/tools`: `requestOf`, `actorOf`.
+- Each family's `undo`, called by its `Decide` after the command's events are checked: `cognition/drafts/Inverse.go`, `ui/prefabs/Inverse.go`, `records/entities/Inverse.go`, `apps/manifests/Inverse.go`, `apps/installs` (all irreversible), `ui/Overlay.go`.
+- **`apps/ops`** (`ops.Contribute`, wired in `serve.go` after `installs.Contribute`): the `ops.log` projector, `ops.Entry`, `ops.Request`, `ops.Log`, the `ops.list` query, `ops.Entries` and `ops.Replay`.
+
+### Browser
+- `live.command(command, target, args, {request?, app?})` (`CommandOptions`); the ack carries `request`.
+- `OpEntry`, `OpRequest` and `OpLog` in `src/services/Apps.ts`, for `useQuery<OpLog>('ops.list', params)`.
+- Forge's Applications editor sends its commands with `{app}`, and Forge's starter seed sends a whole seed run as one request, `seed-<run>`.
+
+### Verification of slice 38
+- `go test ./features/apps/ops` (`ops_test.go`):
+  - **`TestEveryOpUndoes`**: 93 steps run every logged command against the states the steps before it left (the Tasks parts and manifest, then entity types, graphs, prefabs, apps and an overlay). For each, the log's last op is the step's; its inverse, sent, restores the target's definition exactly (leaving out revs, times, authors and the order of a graph's nodes, edges and variables and of an entity type's indexes); undoing the undo gives the step's state again. Irreversible ops must be the listed ones, and every logged command must be run by a step.
+  - **`TestTheLogByAppRequestAndPrincipal`**: the Tasks parts (request `parts`, Ada) and manifest (request `manifest`, Bob) list by app newest first, by request and by principal; the tenant library's *Page header*, made for Tasks, is in Tasks' log, and CRM's prefab only in CRM's. A third request, sent as the chat would (`round-7`, actor `chat`), arrives at a subscriber as an `insert` and then a `move`; a command without a request is its own.
+  - **`TestReplayRebuildsAnApp`**: the published Tasks app replayed into tenant 3 gives the same drafts of its manifest and parts.
+  - Five runs in a row pass.
+- Forge's `TestTasksAppReplay` (`features/starter/tasks_test.go`): the Tasks sample's 41 ops, seeded in one request, replayed into a tenant that has only the starter library, give an export identical to the original's (38 KB) but for who published it and when.
+- `backend/scripts/build.sh --test ./features/...` passes but for `kb/services/collabservice/impl`'s `TestRoomSeedRelaySaveHandover`, which failed once under the full run's load, passes alone and does not use the live core. Forge's tests pass, and both `serve` binaries build. `common`'s `yarn build`, and `frontend/example`'s and Forge Axiom's `yarn build && yarn lint`, pass.
+- Against Forge's `serve` over the live socket: `app.create` in request `gesture-1`, then a library prefab and `app.setInfo` in `round-9` with `app: contacts` and actor `chat`, arrive in `ops.list {app: contacts}` as an `insert` per request and a `move` as `round-9` grows, the prefab under Contacts, `app.setInfo`'s inverse `{icon: ""}`; each ack names its request, and `app: "not valid!"` is refused.
+
+### Decisions to review after seeing it
+- One app per op (decision 2), and the client's `app` counting only for parts no app owns.
+- `ops.list` reads an app's whole log, or the tenant's, and filters by request and principal: fine at today's sizes; an index by request or principal can come when logs grow.
+- The actors `chat` and `agent` (decision 7).
+- Undoing a new field hides it (decision 5); making a prefab or app is irreversible until 6b.
+- Graphs inverted by difference (decision 3), prefabs, entity types and apps per command.

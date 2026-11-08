@@ -204,7 +204,11 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				if problems != nil || len(events) == 0 {
 					return nil, problems
 				}
-				return events, c.check(events)
+				if problems := c.check(events); len(problems) > 0 {
+					return nil, problems
+				}
+				c.undo(s.id, events)
+				return events, nil
 			},
 			Report: func(args features.ServiceArgs, t live.Target, seq uint64) any {
 				if s.id == "app.publish" {

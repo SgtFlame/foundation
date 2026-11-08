@@ -20,6 +20,9 @@ type Projector struct {
 	// Fold is the key's next value after the event, from its current one
 	// (nil when there is none). A nil result deletes the key.
 	Fold func(f Fold) (json.RawMessage, error)
+	// KeyOf, when set, is the key an event folds into in place of its
+	// target's; "" skips the event. The operation log keys by op.
+	KeyOf func(e Event) string
 	// Keep, when set, keeps keys outside the projection in step with each
 	// value, in the same fold: it runs after Fold and before the value is
 	// written, given the keys it kept for the old value, and returns the

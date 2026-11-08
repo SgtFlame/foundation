@@ -200,6 +200,8 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				if err := Follow(c.ServiceArgs, c.deps); err != nil {
 					return nil, problem("", "the install cannot be kept: "+err.Error(), "")
 				}
+				// Installing changes the tenant, its roles and records, not a draft
+				d.NoUndo(d.Target.ID, "installs are changed by app.install, app.upgrade and app.uninstall, not undone")
 				return events, nil
 			},
 			Report: func(args features.ServiceArgs, t live.Target, seq uint64) any {

@@ -330,6 +330,11 @@ func (p *Projections) fold(pr live.Projector, kv jetstream.KeyValue, msg jetstre
 	byKey := map[string]*change{}
 	for _, e := range events {
 		key := e.Target.Key()
+		if pr.KeyOf != nil {
+			if key = pr.KeyOf(e); key == "" {
+				continue
+			}
+		}
 		c := byKey[key]
 		if c == nil {
 			old, rev, err := getRev(ctx, kv, key)

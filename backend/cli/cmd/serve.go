@@ -28,6 +28,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/apps"
 	"github.com/SgtFlame/foundation/backend/features/apps/installs"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
+	"github.com/SgtFlame/foundation/backend/features/apps/ops"
 	apphandlers "github.com/SgtFlame/foundation/backend/features/apps/rest/apphandlers"
 	"github.com/SgtFlame/foundation/backend/features/apps/services/appservice"
 	appimpl "github.com/SgtFlame/foundation/backend/features/apps/services/appservice/impl"
@@ -474,6 +475,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// records they name
 		manifests.Contribute(registry, func() manifests.Deps { return appDeps })
 		installs.Contribute(registry, func() installs.Deps { return installDeps })
+		ops.Contribute(registry) // the operation log: ops.log and ops.list
 		apptools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		apptools.ContributeTransfer(registry, func() appservice.Service { return appService })
 		presence.Contribute(registry, func() *presence.Presence { return livePresence })

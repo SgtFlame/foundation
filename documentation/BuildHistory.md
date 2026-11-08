@@ -675,6 +675,16 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **★ review pending**: the demo with two users of different roles (forge 5g).
     - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-6) and [forge TasksApp.md](../../forge/documentation/TasksApp.md#decisions-to-review-after-seeing-it).
 
+38. **The operation log** (Forge iteration 6, part 6a, [forge 06a-OperationLog.md](../../forge/documentation/plans/06a-OperationLog.md)). *Built* ([Apps.md](Apps.md#built-in-slice-38), [Live.md](Live.md#changed-in-slice-38)).
+    - **Built**:
+      - in `live`: every definition command an op (`Command.Logged`), its inverse or why it has none filled by `Decide` (`Decision.Op`, `Undo`, `NoUndo`) and carried on its first event (`Event.Op`), `Event.Actor`, `Projector.KeyOf`; the bus's `request` (defaulting to the command id), `app` and `actor`, on the command frame and in the ack; command tools logged per chat round or Cognition run;
+      - inverses for every `bp.*` (by difference), `prefab.*`, `entity.*` and `app.*` command and the page overlays, installs and publishing marked irreversible;
+      - `apps/ops`: the `ops.log` projection keyed by app and sequence, the `ops.list` query grouped by request with list changes, `ops.Entries` and `ops.Replay`;
+      - the browser's `CommandOptions` and `OpLog` types; in Forge, the Applications editor naming its app and the seed as one request.
+    - **Blockers**: none. Forge 06a questions 1 (client request ids), 2 (inverse ops in `Decide`), 3 (definitions only) and 4 (the client-named app for unowned parts) were asked before building and answered with their proposals.
+    - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-7).
+    - **Pending, carried forward**: undo and redo by request in every editor (forge 6b), restorable deletes for prefabs, graphs and apps, after which making a prefab or app is undoable.
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -719,3 +729,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 35. Export and import (Forge 5e) | forge 05-Applications 3 (opt-in seed data) and 05e 1 (the app's id; parts keep theirs) and 2 (tenant parts copied, duplicates asked about), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-4), the export document read as a person would |
 | 36. Draft runs (Forge 5f) | forge 05-Applications 1 (run drafts, answered before) and 05f 1 (no undo), 2 (parts in their editors) and 3 (a live draft tab; entity types published alone), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-5), the Applications editor with two authors |
 | 37. The Tasks app (Forge 5g) | forge 05g 1 (Tasks owns its type) and 2 (built by ops; the steps by hand in the browser), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-6) and forge TasksApp.md, the demo with two users of different roles |
+| 38. The operation log (Forge 6a) | forge 06-AIAuthoring 5 (a slice per part, from 38) and 06a 1 (client request ids), 2 (inverse ops in `Decide`), 3 (definitions only) and 4 (the client-named app for unowned parts), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-7), to review after seeing |

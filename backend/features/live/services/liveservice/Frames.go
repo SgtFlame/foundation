@@ -22,8 +22,12 @@ type CommandFrame struct {
 	Command string          `json:"command"`
 	Target  string          `json:"target"`
 	Args    json.RawMessage `json:"args,omitempty"`
-	Request string          `json:"request,omitempty"`
-	Trace   string          `json:"trace,omitempty"`
+	// Request groups the commands of one gesture; App is the app it was
+	// made for, and Actor who sends it for the user (forge 06a).
+	Request string `json:"request,omitempty"`
+	App     string `json:"app,omitempty"`
+	Actor   string `json:"actor,omitempty"`
+	Trace   string `json:"trace,omitempty"`
 }
 
 // AckFrame ← a committed command.
@@ -34,6 +38,7 @@ type AckFrame struct {
 	Target    string `json:"target,omitempty"` // the target's id, when the command made it
 	Seq       uint64 `json:"seq"`
 	Duplicate bool   `json:"duplicate,omitempty"`
+	Request   string `json:"request,omitempty"` // the request it was logged under
 }
 
 // RejectedFrame ← a command that committed nothing.

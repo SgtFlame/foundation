@@ -74,6 +74,12 @@ func get(ctx context.Context, store live.Store, tenant uint64, projector, key st
 }
 
 func (c *decision) get(projector, key string) (json.RawMessage, bool) {
+	// Through the decision, so a part this process changed just before
+	// is read as changed
+	if typ, id, ok := strings.Cut(key, "."); ok && c.Read != nil {
+		v, err := c.Read(projector, live.Target{Area: live.AreaDefinitions, Type: typ, ID: id})
+		return v, err == nil && v != nil
+	}
 	return get(c.Context(), c.deps.Projections, c.Principal.TenantID, projector, key)
 }
 
@@ -303,7 +309,11 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				if problems != nil || len(events) == 0 {
 					return nil, problems
 				}
-				return events, c.check(events)
+				if problems := c.check(events); len(problems) > 0 {
+					return nil, problems
+				}
+				c.undo(s.id, events)
+				return events, nil
 			},
 			Report: func(args features.ServiceArgs, t live.Target, seq uint64) any { return report(args, deps(), t.ID, seq) },
 		}

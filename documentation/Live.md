@@ -195,3 +195,10 @@ For autoNumber fields ([Records.md](Records.md#built-in-slice-24)):
 ## Changed in slice 25
 For prefabs ([ServerUI.md › Built in slice 25](ServerUI.md#built-in-slice-25)):
 - **`Command.NewTargetFor(args, cmdArgs)`** makes a target's id from the arguments for a command sent without one, as `prefab.create` makes `taskRow` from *Task row*. `NewTarget`, which takes none, is tried first. The command's tool then describes its target as optional, made from the name.
+
+## Changed in slice 38
+For the operation log ([Apps.md › Built in slice 38](Apps.md#built-in-slice-38), forge 06a):
+- **Every definition command is an op.** `Command.Logged()` is true on the `def` area; the bus gives such a decision a `Decision.Op`, which `Decide` fills with `d.Undo(app, ops…)` (the ops that undo it, read from the state it decided against) or `d.NoUndo(app, why)`. The first event of the commit carries it as `Event.Op` (`LoggedOp`), with the command, its args, its app and the sequence its target was read at. A new definition command must set one or the other.
+- **Requests and actors.** `bus.Request.RequestID` defaults to the command id; `Request.App` is the app the request was made for (refused unless an id); `Request.Actor`, and `Event.Actor`, is who sent it for the principal (`chat`). The command frame takes `app` and `actor`, and the ack names its `request`. Command tools log under the chat round (`round-<id>`) or Cognition run (`run-<id>`).
+- **`Projector.KeyOf`** keys an event other than by its target, or skips it with `""`.
+

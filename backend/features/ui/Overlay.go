@@ -36,6 +36,12 @@ type Overlay struct {
 	Inserts []Insert `json:"inserts"`
 }
 
+// overlayApp is the app of an overlay's page: hello-main is hello's.
+func overlayApp(id string) string {
+	app, _, _ := strings.Cut(id, "-")
+	return app
+}
+
 // OverlayID is the overlay target id of a page.
 func OverlayID(page string) string { return strings.ReplaceAll(page, "/", "-") }
 
@@ -103,6 +109,7 @@ func ContributeOverlays(reg *extensions.Registry) {
 			if slices.ContainsFunc(overlayOf(d.State).Inserts, func(x Insert) bool { return x.Node.Key == in.Node.Key }) {
 				return nil, []live.Problem{{Path: "args.node.key", Message: fmt.Sprintf("the page already has an added node %q", in.Node.Key), Fix: "remove it with ui.removeNode, or choose another key"}}
 			}
+			d.Undo(overlayApp(d.Target.ID), live.OpOf("ui.removeNode", d.Target.ID, map[string]any{"key": in.Node.Key}))
 			return []live.NewEvent{{Type: "inserted", Data: in}}, nil
 		},
 	})
@@ -115,9 +122,12 @@ func ContributeOverlays(reg *extensions.Registry) {
 		Decide: func(d live.Decision) ([]live.NewEvent, []live.Problem) {
 			var r struct{ Key string }
 			_ = json.Unmarshal(d.Args, &r)
-			if !slices.ContainsFunc(overlayOf(d.State).Inserts, func(x Insert) bool { return x.Node.Key == r.Key }) {
+			inserts := overlayOf(d.State).Inserts
+			i := slices.IndexFunc(inserts, func(x Insert) bool { return x.Node.Key == r.Key })
+			if i < 0 {
 				return nil, nil
 			}
+			d.Undo(overlayApp(d.Target.ID), live.OpOf("ui.insertNode", d.Target.ID, inserts[i]))
 			return []live.NewEvent{{Type: "removed", Data: r}}, nil
 		},
 	})

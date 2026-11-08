@@ -268,11 +268,11 @@ func (c *conn) execute(ctx context.Context, f liveservice.CommandFrame) any {
 	if c.svc.bus == nil {
 		return liveservice.RejectedFrame{Type: "rejected", ID: f.ID, Code: http.StatusServiceUnavailable, Message: "commands are not available"}
 	}
-	res := c.svc.bus.Execute(bus.Request{ServiceArgs: c.traced(ctx, f.Trace), ID: f.ID, Type: f.Command, Target: f.Target, RequestID: f.Request, Args: f.Args})
+	res := c.svc.bus.Execute(bus.Request{ServiceArgs: c.traced(ctx, f.Trace), ID: f.ID, Type: f.Command, Target: f.Target, RequestID: f.Request, App: f.App, Actor: f.Actor, Args: f.Args})
 	if res.Common.Code >= 300 {
 		return liveservice.RejectedFrame{Type: "rejected", ID: f.ID, Code: res.Common.Code, Message: res.Common.Message, ErrorCode: res.Common.ErrorCode, Problems: res.Problems}
 	}
-	return liveservice.AckFrame{Type: "ack", ID: f.ID, Stream: res.Stream, Target: targetIfMade(f.Target, res.Target), Seq: res.Seq, Duplicate: res.Duplicate}
+	return liveservice.AckFrame{Type: "ack", ID: f.ID, Stream: res.Stream, Target: targetIfMade(f.Target, res.Target), Seq: res.Seq, Duplicate: res.Duplicate, Request: res.RequestID}
 }
 
 // targetIfMade is the target's id when the command made it.

@@ -7,6 +7,7 @@
 package bus
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -48,8 +49,15 @@ type Request struct {
 	ID        string // the idempotency key
 	Type      string
 	Target    string // the target's id; its area and type come from the command
-	RequestID string // groups the commands of one gesture or chat round
-	Args      json.RawMessage
+	// RequestID groups the commands of one gesture or chat round; a
+	// command sent without one is its own request (forge 06a question 1).
+	RequestID string
+	// App is the app the request was made for, which a definition command
+	// on a part no app owns is logged under (forge 06a question 4).
+	App string
+	// Actor is who sends the command for the principal: the chat.
+	Actor string
+	Args  json.RawMessage
 }
 
 // Result is a commit's sequence, or the problems that rejected it.
@@ -59,6 +67,7 @@ type Result struct {
 	Target    string // the target's id, made by the command when the request had none
 	Seq       uint64 // the last event's sequence; the state's when nothing was committed
 	Duplicate bool   // the command was committed before, under the same id
+	RequestID string // the request it was logged under
 	Problems  []live.Problem
 }
 
@@ -135,6 +144,12 @@ func (b *Bus) Execute(r Request) Result {
 	if r.ID == "" {
 		return rejected(live.Problem{Path: "id", Message: "a command needs an id", Fix: "send a new unique id with every command"})
 	}
+	if r.RequestID == "" {
+		r.RequestID = r.ID
+	}
+	if r.App != "" && !live.ValidToken(r.App) {
+		return rejected(live.Problem{Path: "app", Message: fmt.Sprintf("%q is not a valid app id", r.App)})
+	}
 	if r.Target == "" && cmd.NewTarget != nil {
 		r.Target = cmd.NewTarget()
 	}
@@ -207,14 +222,25 @@ func (b *Bus) Execute(r Request) Result {
 			}
 			return v.Value, nil
 		}
+		if cmd.Logged() {
+			d.Op = &live.OpInfo{}
+		}
 		events, problems := cmd.Decide(d)
 		if len(problems) > 0 {
 			return rejected(problems...)
 		}
 		if len(events) == 0 {
-			return Result{Common: features.OK(), Stream: streamName, Target: tg.ID, Seq: state.Seq}
+			return Result{Common: features.OK(), Stream: streamName, Target: tg.ID, Seq: state.Seq, RequestID: r.RequestID}
 		}
-		res, conflict, err := b.commit(r, cmd, tg, stream, read, events)
+		var op *live.LoggedOp
+		if d.Op != nil {
+			op = &live.LoggedOp{Command: r.Type, Target: tg.ID, Args: r.Args, App: cmp.Or(d.Op.App, r.App),
+				Inverse: d.Op.Inverse, Irreversible: d.Op.Irreversible, Decided: state.Seq}
+			if op.Inverse == nil {
+				op.Inverse = []live.Op{}
+			}
+		}
+		res, conflict, err := b.commit(r, cmd, tg, stream, read, events, op)
 		if conflict {
 			// Someone committed since: decide again once projected
 			var keys []string
@@ -326,11 +352,11 @@ func problemOf(err error) (live.Problem, bool) {
 // expected as the stream has it now. One event is published alone, and
 // several as one atomic batch: every check passes and all are stored, or
 // none is.
-func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstream.Stream, read map[string]uint64, events []live.NewEvent) (Result, bool, error) {
+func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstream.Stream, read map[string]uint64, events []live.NewEvent, op *live.LoggedOp) (Result, bool, error) {
 	ctx := r.Context()
 	tenant := r.Principal.TenantID
 	streamName := stream.CachedInfo().Config.Name
-	res := Result{Common: features.OK(), Stream: streamName, Target: tg.ID}
+	res := Result{Common: features.OK(), Stream: streamName, Target: tg.ID, RequestID: r.RequestID}
 	if len(events) > project.MaxBatch {
 		return res, false, badTarget{live.Problem{Message: fmt.Sprintf("a command commits at most %d events, not %d", project.MaxBatch, len(events)), Fix: "split the change into several commands"}}
 	}
@@ -350,7 +376,10 @@ func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstre
 		if err != nil {
 			return res, false, err
 		}
-		e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: r.ID, RequestID: r.RequestID, UserID: r.Principal.UserID, TenantID: tenant, Time: now}
+		e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: r.ID, RequestID: r.RequestID, UserID: r.Principal.UserID, Actor: r.Actor, TenantID: tenant, Time: now}
+		if i == 0 {
+			e.Op = op
+		}
 		if len(events) > 1 {
 			e.Batch = &live.Batch{Index: i + 1, Count: len(events)}
 		}

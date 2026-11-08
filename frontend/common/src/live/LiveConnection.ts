@@ -28,6 +28,15 @@ export interface Ack {
   target?: string // the target's id, when the command made it (sent without one)
   seq: number
   duplicate?: boolean
+  request?: string // the request the operation log keeps it under
+}
+
+// What a command is sent for (forge 06a): request groups the commands of
+// one gesture or chat round (each is its own when left out), and app is
+// the app it was made for, which logs an op on a part no app owns under it
+export interface CommandOptions {
+  request?: string
+  app?: string
 }
 
 // A change to a query's result: replace, upsert or remove a key, or reached
@@ -170,9 +179,9 @@ export class LiveConnection {
   // Sends a command; resolves with its ack once committed (or when there
   // was nothing to commit), rejects with CommandRejected. While offline it
   // waits, and it is resent until acknowledged.
-  command(command: string, target: string, args?: unknown, request?: string): Promise<Ack> {
+  command(command: string, target: string, args?: unknown, options?: CommandOptions): Promise<Ack> {
     const id = newId('c')
-    const frame: Frame = { type: 'command', id, command, target, args, request, trace: newTraceId() }
+    const frame: Frame = { type: 'command', id, command, target, args, request: options?.request, app: options?.app, trace: newTraceId() }
     return new Promise<Ack>((resolve, reject) => {
       this.commands.set(id, { frame, resolve, reject })
       this.send(frame)

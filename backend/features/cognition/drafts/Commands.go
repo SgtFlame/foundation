@@ -220,7 +220,9 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				if problems != nil || len(events) == 0 {
 					return nil, problems
 				}
-				return append(c.prefix, events...), nil
+				events = append(c.prefix, events...)
+				c.undo(s.id, events)
+				return events, nil
 			},
 			Report: func(args features.ServiceArgs, t live.Target, seq uint64) any { return report(args, deps(), t.ID, seq) },
 		})

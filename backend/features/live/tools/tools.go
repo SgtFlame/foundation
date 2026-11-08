@@ -87,7 +87,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			if err != nil {
 				return tools.Result{}, err
 			}
-			res := deps().Bus.Execute(bus.Request{ServiceArgs: call.ServiceArgs, ID: commandID(call), Type: args.Command, Target: args.Target, RequestID: call.ID, Args: args.Args})
+			res := deps().Bus.Execute(bus.Request{ServiceArgs: call.ServiceArgs, ID: commandID(call), Type: args.Command, Target: args.Target, RequestID: requestOf(call), Actor: actorOf(call), Args: args.Args})
 			if res.Common.Code >= 300 {
 				return tools.Result{Content: map[string]any{"problems": res.Problems}}, fmt.Errorf("%s", res.Common.Message)
 			}
@@ -125,7 +125,7 @@ func commandTool(c live.Command, deps func() Deps) tools.Tool {
 				misplaced := slices.Sorted(maps.Keys(top))
 				return tools.Result{}, fmt.Errorf("%s belong inside args: call %s with {target, args: {%s, ...}}", strings.Join(misplaced, ", "), c.ID, strings.Join(misplaced, ", "))
 			}
-			res := deps().Bus.Execute(bus.Request{ServiceArgs: call.ServiceArgs, ID: commandID(call), Type: c.ID, Target: args.Target, RequestID: call.ID, Args: args.Args})
+			res := deps().Bus.Execute(bus.Request{ServiceArgs: call.ServiceArgs, ID: commandID(call), Type: c.ID, Target: args.Target, RequestID: requestOf(call), Actor: actorOf(call), Args: args.Args})
 			if res.Common.Code >= 300 {
 				return tools.Result{Content: map[string]any{"problems": res.Problems}}, fmt.Errorf("%s", res.Common.Message)
 			}
@@ -140,6 +140,31 @@ func commandTool(c live.Command, deps func() Deps) tools.Tool {
 }
 
 // commandID is a tool call's command id: a call is made once, so a new id.
+// requestOf is the request a tool's command is logged under: its chat
+// round, or its Cognition run, so undo takes back a whole round (forge 06a
+// question 1); else the call alone.
+func requestOf(call tools.Call) string {
+	switch {
+	case call.Meta.RoundID != 0:
+		return fmt.Sprintf("round-%d", call.Meta.RoundID)
+	case call.Meta.RunID != 0:
+		return fmt.Sprintf("run-%d", call.Meta.RunID)
+	}
+	return call.ID
+}
+
+// actorOf is who sends a tool's command for the user: the chat in a round,
+// an agent in a Cognition run.
+func actorOf(call tools.Call) string {
+	switch {
+	case call.Meta.RoundID != 0:
+		return "chat"
+	case call.Meta.RunID != 0:
+		return "agent"
+	}
+	return ""
+}
+
 func commandID(call tools.Call) string {
 	return fmt.Sprintf("tool-%d", features.NewTSID())
 }
