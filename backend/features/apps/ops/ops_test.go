@@ -577,7 +577,9 @@ func TestTheLogByAppRequestAndPrincipal(t *testing.T) {
 	f.entries(ada, "") // the log has folded them all, so later changes are only the third request's
 
 	all := f.open(ada, ops.Params{App: "tasks"})
-	l := all.until(t, "both requests", func(l ops.Log) bool { return len(l.Requests) == 2 && len(l.Requests[0].Ops)+len(l.Requests[1].Ops) == 18 })
+	l := all.until(t, "both requests", func(l ops.Log) bool {
+		return len(l.Requests) == 2 && len(l.Requests[0].Ops)+len(l.Requests[1].Ops) == 18
+	})
 	if got := requests(l); !slices.Equal(got, []string{"manifest", "parts"}) {
 		t.Fatalf("the requests are %v, newest first", got)
 	}
@@ -635,6 +637,32 @@ func TestTheLogByAppRequestAndPrincipal(t *testing.T) {
 	res := f.ok("app.updateTrigger", "tasks", m{"id": "taskDone", "description": "Fires when a task is done"})
 	if e := f.entries(ada, "tasks"); e[len(e)-1].Request == "" || e[len(e)-1].Request != e[len(e)-1].CommandID || res.RequestID != e[len(e)-1].Request {
 		t.Errorf("a command without a request is logged under %q", e[len(e)-1].Request)
+	}
+}
+
+// TestTheLogByScope reads the log as an editor's Activity tab does (forge
+// 06c): one prefab's ops, the manifest's, each request and op summarized.
+func TestTheLogByScope(t *testing.T) {
+	f := setup(t)
+	f.parts(ada, "parts")
+	f.manifest(as(2, 1), "manifest")
+	f.entries(ada, "")
+
+	detail := f.open(ada, ops.Params{Scope: "prefab:taskDetail"}).until(t, "taskDetail's", func(l ops.Log) bool { return len(l.Requests) == 1 && len(l.Requests[0].Ops) == 2 })
+	r := detail.Requests[0]
+	if r.ID != "parts" || r.Ops[0].Command != "prefab.create" || r.Ops[1].Command != "prefab.setInterface" {
+		t.Errorf("taskDetail's log: %s", mustJSON(detail))
+	}
+	if !strings.Contains(r.Summary, "taskDetail") || !strings.HasSuffix(r.Summary, "and 1 more change") || !strings.Contains(r.Ops[1].Summary, "taskDetail") {
+		t.Errorf("the summaries: %q, %q", r.Summary, r.Ops[1].Summary)
+	}
+	manifest := f.open(ada, ops.Params{Scope: "app:tasks/manifest"}).until(t, "the manifest's", func(l ops.Log) bool { return len(l.Requests) == 1 && len(l.Requests[0].Ops) == 10 })
+	if manifest.Requests[0].ID != "manifest" || !strings.Contains(manifest.Requests[0].Ops[2].Summary, "/mine") {
+		t.Errorf("the manifest's log: %s", mustJSON(manifest))
+	}
+	whole := f.open(ada, ops.Params{Scope: "app:tasks"}).until(t, "the app's", func(l ops.Log) bool { return len(l.Requests) == 2 })
+	if got := requests(whole); !slices.Equal(got, []string{"manifest", "parts"}) {
+		t.Errorf("the app's requests: %v", got)
 	}
 }
 

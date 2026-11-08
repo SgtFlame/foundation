@@ -531,3 +531,12 @@ Decided while building:
 - `ops.stack` and `ops.status` reading the tenant's whole log on every change: fine at today's sizes, as `ops.list` (slice 38).
 - Undoing another author's request checked only by each inverse's own action (decision 8).
 - The summaries' wording (decision 3).
+
+## Changed with forge 6c
+Forge's part 6c, the editors' **Activity** tabs ([forge Activity.md](../../forge/documentation/Activity.md)), is built in Forge; it needed two additions to `ops.list`:
+- **`scope`**: an undo scope (`app:<id>`, `app:<id>/manifest`, `prefab:<id>`, `graph:<id>`, `entity:<id>`, read by `ParseScope`) keeps the ops in it (`Scope.Has`), as `app` keeps an app's. A request appears with only its ops in the scope. `app:<id>` and `app:<id>/manifest` are checked as `app.read` on the app, as `app` is.
+- **Summaries**: each request and op in the result has `summary`, in the words of the undo stacks (`describe`, `summarize`: `Add a page (tasks /mine) and 1 more change`). They are made when the query groups the ops, not kept in the `ops.log` projection; `storeTitles` names commands by the store's registry. A scoped request's summary counts only its ops in the scope.
+
+In the browser, `OpEntry.summary` and `OpRequest.summary` in `src/services/Apps.ts`, and `UndoConflictDialog` takes any `{conflict, dismiss, force, busy}` (an Activity tab's *Undo request* as well as `useUndo`'s).
+
+Verified by `go test ./features/apps/ops` (**`TestTheLogByScope`**: one prefab's ops, the manifest's and the app's, with their summaries) and Forge's walk in [Activity.md](../../forge/documentation/Activity.md#verification).

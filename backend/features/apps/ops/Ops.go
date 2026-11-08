@@ -54,6 +54,8 @@ type Entry struct {
 	// Undoes is the request this op's request undoes (forge 06b).
 	Undoes string    `json:"undoes,omitempty"`
 	Time   time.Time `json:"time"`
+	// Summary is the op in a few words, given by ops.list (forge 06c)
+	Summary string `json:"summary,omitempty"`
 }
 
 // Request is one request's ops, oldest first.
@@ -65,6 +67,8 @@ type Request struct {
 	Seq       uint64    `json:"seq"`  // its last op's
 	Time      time.Time `json:"time"` // its last op's
 	Ops       []Entry   `json:"ops"`
+	// Summary is the request in a few words, given by ops.list (forge 06c)
+	Summary string `json:"summary,omitempty"`
 }
 
 // Log is the ops.list query's result: requests, newest first.
@@ -107,15 +111,22 @@ type Params struct {
 	Request   string `json:"request,omitempty"`
 	Principal uint64 `json:"principal,string,omitempty"`
 	After     uint64 `json:"after,omitempty"` // only ops committed after this sequence
+	// Scope keeps the ops in an undo scope (forge 06c): an editor's
+	// Activity tab on one prefab, graph or entity type
+	Scope string `json:"scope,omitempty"`
+	scope *Scope
 }
 
 func (p Params) keeps(e Entry) bool {
-	return (p.Request == "" || e.Request == p.Request) && (p.Principal == 0 || e.Principal == p.Principal) && e.Seq > p.After
+	return (p.Request == "" || e.Request == p.Request) && (p.Principal == 0 || e.Principal == p.Principal) && e.Seq > p.After && (p.scope == nil || p.scope.Has(e))
 }
 
 func (p Params) pattern() string {
-	if p.App != "" {
+	switch {
+	case p.App != "":
 		return p.App + ".*"
+	case p.scope != nil && p.scope.Kind == "app":
+		return p.scope.ID + ".*"
 	}
 	return ">"
 }
@@ -129,13 +140,16 @@ func Contribute(reg *extensions.Registry) {
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "ops.list", Source: "apps"}, Title: "The operation log",
-		Description: "The ops that changed definitions (graphs, prefabs, entity types, apps), grouped by request, newest request first: {requests: [{id, app, principal, actor, seq, time, ops: [{seq, command, targetType, target, args, app, request, principal, actor, inverse, irreversible, time}]}]}. app keeps one app's ops (its own parts' and those made while building it), request one request's, principal one user's, after those committed after a sequence. Each new op arrives as a change.",
-		Params:      json.RawMessage(`{"type":"object","properties":{"app":{"type":"string"},"request":{"type":"string"},"principal":{"type":"string","description":"A user's id"},"after":{"type":"integer","description":"A stream sequence"}}}`),
+		Description: "The ops that changed definitions (graphs, prefabs, entity types, apps), grouped by request, newest request first: {requests: [{id, app, principal, actor, seq, time, summary, ops: [{seq, command, targetType, target, args, app, request, principal, actor, inverse, irreversible, undoes, time, summary}]}]}. app keeps one app's ops (its own parts' and those made while building it), scope those in an undo scope (app:<id>, app:<id>/manifest, prefab:<id>, graph:<id>, entity:<id>), request one request's, principal one user's, after those committed after a sequence. Each new op arrives as a change.",
+		Params:      json.RawMessage(`{"type":"object","properties":{"app":{"type":"string"},"scope":{"type":"string","description":"app:<id>, app:<id>/manifest, prefab:<id>, graph:<id> or entity:<id>"},"request":{"type":"string"},"principal":{"type":"string","description":"A user's id"},"after":{"type":"integer","description":"A stream sequence"}}}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"app":"tasks"}`)},
 		Action:      "app.read",
 		Resource: func(p features.Principal, params json.RawMessage) string {
 			var q Params
 			_ = json.Unmarshal(params, &q)
+			if s, err := ParseScope(q.Scope); q.App == "" && err == nil && (s.Kind == "app" || s.Kind == "manifest") {
+				q.App = s.ID
+			}
 			return apps.Resource(p, q.App)
 		},
 		Run: run,
@@ -150,6 +164,14 @@ func run(f live.Feed) error {
 	if q.App != "" && !live.ValidToken(q.App) {
 		return log.Code("invalid_params").Errorf("%q is not an app id", q.App)
 	}
+	if q.Scope != "" {
+		scope, err := ParseScope(q.Scope)
+		if err != nil {
+			return log.Code("invalid_params").Wrap(err)
+		}
+		q.scope = &scope
+	}
+	title := storeTitles(f.Store())
 	entries, err := f.Store().Watch(f.Context(), f.Args().Principal.TenantID, Projector, q.pattern())
 	if err != nil {
 		return err
@@ -162,7 +184,7 @@ func run(f live.Feed) error {
 	for e := range entries {
 		if e == nil {
 			started = true
-			l = group(all)
+			l = group(all, title)
 			f.Snapshot(l, pos)
 			continue
 		}
@@ -179,25 +201,29 @@ func run(f live.Feed) error {
 			continue
 		}
 		var delta live.Delta
-		l, delta = add(l, x)
+		l, delta = add(l, x, title)
 		f.Change(delta, pos)
 	}
 	return nil
 }
 
-// group is entries grouped by request, newest request first.
-func group(entries []Entry) Log {
+// group is entries grouped by request, newest request first, summarized
+// when title is given.
+func group(entries []Entry, title Titles) Log {
 	slices.SortFunc(entries, func(a, b Entry) int { return cmp.Compare(a.Seq, b.Seq) })
 	l := Log{Requests: []Request{}}
 	for _, e := range entries {
-		l, _ = add(l, e)
+		l, _ = add(l, e, title)
 	}
 	return l
 }
 
 // add puts an entry into its request, which becomes the newest, and gives
 // the change that does it.
-func add(l Log, e Entry) (Log, live.Delta) {
+func add(l Log, e Entry, title Titles) (Log, live.Delta) {
+	if title != nil {
+		e.Summary = describe(e, title)
+	}
 	zero := 0
 	i := slices.IndexFunc(l.Requests, func(r Request) bool { return r.ID == e.Request })
 	var r Request
@@ -215,6 +241,9 @@ func add(l Log, e Entry) (Log, live.Delta) {
 	}
 	if e.Seq >= r.Seq {
 		r.Seq, r.Time = e.Seq, e.Time
+	}
+	if title != nil {
+		r.Summary = summarize(r, title)
 	}
 	l.Requests = slices.Insert(l.Requests, 0, r)
 	raw, _ := json.Marshal(r)

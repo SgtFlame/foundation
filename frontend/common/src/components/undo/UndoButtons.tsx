@@ -101,7 +101,8 @@ export function UndoPlan({ result }: { result: UndoResult }) {
 }
 
 // The dialog of a refused undo: what others changed, with Undo the rest
-export function UndoConflictDialog({ state }: { state: UndoState }) {
+// (an editor's Undo, or an Activity tab's Undo request)
+export function UndoConflictDialog({ state }: { state: Pick<UndoState, 'conflict' | 'dismiss' | 'force' | 'busy'> }) {
   const c = state.conflict
   return (
     <Dialog open={!!c} onClose={state.dismiss} maxWidth="sm" fullWidth>

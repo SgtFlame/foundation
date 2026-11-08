@@ -243,8 +243,9 @@ export interface ImportAppResponse extends ResponseStatus {
 }
 
 // The operation log (forge 06a): useQuery<OpLog>('ops.list', {app?,
-// request?, principal?, after?}), requests newest first, each a list
-// change as its ops arrive
+// scope?, request?, principal?, after?}), requests newest first, each a
+// list change as its ops arrive; scope is an undo scope (an editor's
+// Activity tab, forge 06c)
 export interface Op {
   command: string
   target: string
@@ -264,6 +265,7 @@ export interface OpEntry extends Op {
   irreversible?: string // why none do
   undoes?: string // the request its request undoes (forge 06b)
   time: string
+  summary?: string // the op in a few words: Add a page (tasks /mine)
 }
 
 export interface OpRequest {
@@ -274,6 +276,7 @@ export interface OpRequest {
   seq: number
   time: string
   ops: OpEntry[]
+  summary?: string // its first op's and how many more
 }
 
 export interface OpLog {

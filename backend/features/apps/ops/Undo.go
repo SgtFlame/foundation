@@ -79,7 +79,7 @@ type Stack struct {
 // Requests are entries grouped by request, oldest first, each with its
 // ops oldest first.
 func Requests(entries []Entry) []Request {
-	l := group(entries)
+	l := group(entries, nil)
 	slices.Reverse(l.Requests)
 	return l.Requests
 }
@@ -385,6 +385,15 @@ func titles(reg *extensions.Registry) Titles {
 	return func(command string) string { return cmp.Or(known[command], command) }
 }
 
+// storeTitles names commands by the titles registered with a query's
+// store, or by their types when it has no registry.
+func storeTitles(store live.Store) Titles {
+	if s, ok := store.(interface{ Registry() *extensions.Registry }); ok {
+		return titles(s.Registry())
+	}
+	return func(c string) string { return c }
+}
+
 // StackParams are ops.stack's parameters.
 type StackParams struct {
 	Scope string `json:"scope"`
@@ -404,12 +413,7 @@ func runStack(f live.Feed) error {
 	if err != nil {
 		return err
 	}
-	var title Titles
-	if s, ok := f.Store().(interface{ Registry() *extensions.Registry }); ok {
-		title = titles(s.Registry())
-	} else {
-		title = func(c string) string { return c }
-	}
+	title := storeTitles(f.Store())
 	var list []Entry
 	pos := live.Position{}
 	started := false
