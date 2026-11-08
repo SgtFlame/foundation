@@ -139,3 +139,15 @@ type Tool struct {
 9. **The cards sit above the reply text**, not between each step's text.
 10. **`workbench.open` opens in Chat's tab set**, hiding the chat, as a citation click does.
 11. **The Agent node leaves out writes** unless they are listed, and then denies them.
+
+## Changed in slice 43
+For Forge's Builder mode ([ChatCompletion.md › Built in slice 43](ChatCompletion.md#built-in-slice-43), forge 06g), closing the Backlog's *too few tool steps for building* and *no retry when the provider is busy*:
+- **A busy provider is tried again.** `tools.Loop` tries a model call again, up to the `tools` section's `retries` (3), waiting `RetryWait(n)` (2, 4, 8… seconds) between tries, when its response's error code is `providers.BusyCode` (`provider_busy`): Gemini's 503 (overloaded) or 429 (rate), marked `providers.Error.Busy` by the provider, which keeps their status. A missing or wrong key (also 503) is not busy, and not tried again. A call that already streamed text is not tried again, so no text repeats; failed tries' usage is counted. `RunArgs.OnRetry(try, wait, status)` hears each retry (chat sends it as the `retry` event).
+- **Steps per round in a mode**: a round in a `conversation.Mode` takes its `MaxSteps` (Forge's Builder: the `builder` section's, 60); the `tools` section's 8 apply to other rounds.
+- **`Tool.Timeout`** replaces the `tools` section's `timeoutSeconds` for one tool: `forge.build` runs a whole agent graph (20 minutes).
+- **The Agent node's steps**: its config's `maxSteps` and an optional `maxSteps` input pin (a positive number wins) replace the `tools` section's; the Builder agent graph wires the `builder` section's.
+- Tests: `TestLoopRetriesABusyProviderInALongRound` (a round of 30 tool calls finishes, a 503 on two calls in its middle tried again; past the retries the round ends with the 503), and the Gemini provider's `TestWrapMarksBusy`.
+
+### Decisions to review after seeing it
+- **Three retries, 2, 4 and 8 seconds**, the same for 429 and 503, without reading Gemini's suggested delay. On a free key a 429 may need longer.
+- **A failed round's tool calls are still not carried into the next** (the Backlog's other half): "go on" after a failure starts without them.

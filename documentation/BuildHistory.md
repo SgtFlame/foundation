@@ -724,6 +724,17 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Blockers**: none. Forge 06f questions 1 (the app's records, with seeds) and 2 (external nodes stubbed with a sample) were asked before building.
     - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-11).
     - **Pending, carried forward**: live queries, search and followers in the sandbox; the Builder mode (forge 6g), which shows the tool to a model.
+43. **The Builder mode** (Forge iteration 6, part 6g, [forge 06g-BuilderMode.md](../../forge/documentation/plans/06g-BuilderMode.md)). *Built* ([ChatCompletion.md](ChatCompletion.md#built-in-slice-43), [Tools.md](Tools.md#changed-in-slice-43), [Live.md](Live.md#changed-in-slice-43), [Apps.md](Apps.md#changed-in-slice-43), [WorkbenchContext.md](WorkbenchContext.md#changed-in-slice-43), [AIChatEmbed.md](AIChatEmbed.md#changed-in-slice-43); Forge's half in [forge BuilderMode.md](../../forge/documentation/BuilderMode.md)).
+    - **Built**:
+      - in `conversation`: a context provider's `Mode` (instructions in the system prompt, steps, tools), `Round.Mode`, the `chat.roundEnd` point and the `retry` event;
+      - in `tools`: retrying a busy provider (`retries`, `providers.BusyCode`), `Tool.Timeout`, the Agent node's `maxSteps`; Gemini's 503 and 429 kept and marked busy;
+      - in `live/presence` and `apps/tools`: `Entry.Actor` and `SetAs`, and the Builder put in the app's and each touched part's presence by `forge.apply` in a round, cleared when it ends;
+      - in `workbench`: `tab`, `part`, `node` and `field` in selections, `workbench.subjectOpener` and `workbench:` links, `workbench.open {link}`;
+      - in the browser: the Builder's avatar in `PresenceAvatars`, the mode chip and the retry note on a round, links in replies that open subjects;
+      - Forge's `builder` package (the provider and prompt, the `builder` section, the Builder agent graph, `forge.build`) and the editors' subjects.
+    - **Blockers**: none. Forge 06 question 1 (a context provider with a mode hook; chat modes planned as forge 06i) and 06g questions 1 (presence on the proposal), 2 (the Agent graph now, the user's choice) and 3 (steps configurable in a `builder` section, the user's choice) were asked before building.
+    - **Decisions to review after seeing it**: in [ChatCompletion.md](ChatCompletion.md#decisions-to-review-after-seeing-it-1), [Tools.md](Tools.md#decisions-to-review-after-seeing-it-1), [Apps.md](Apps.md#decisions-to-review-after-seeing-it-12) and forge BuilderMode.md.
+    - **Pending, carried forward**: a failed round's tool calls carried into the next (Backlog); the golden tests and the demo with a real model (forge 6h); chat modes (forge 6i).
 
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
@@ -774,3 +785,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 40. The catalog and read tools (Forge 6d) | forge 06d 1 (both sets of read tools everywhere, the user's choice), 2 (descriptions optional), 3 (`connectors` empty) and 4 (node examples and tags derived, a gap found while reading), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-9), once a model uses the tools |
 | 41. Applying, checking and previewing (Forge 6e) | forge 06-AIAuthoring 2 (drafts change without asking) and 06e 1 (`bus.Transact`), 2 (apply over a stale view, reporting changes) and 3 (a manifest role on the draft run's records), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-10), once the Builder uses the tools |
 | 42. Testing blueprints in a sandbox (Forge 6f) | forge 06f 1 (the app's records, with seeds) and 2 (external nodes stubbed with a sample), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-11), once the Builder uses the tool |
+| 43. The Builder mode (Forge 6g) | forge 06-AIAuthoring 1 (a context provider with a mode hook; chat modes as forge 06i) and 06g 1 (the Builder's presence entry), 2 (an Agent graph now) and 3 (configurable steps), answered | the decisions in [ChatCompletion.md](ChatCompletion.md#decisions-to-review-after-seeing-it-1), [Tools.md](Tools.md#decisions-to-review-after-seeing-it-1) and [Apps.md](Apps.md#decisions-to-review-after-seeing-it-12); watching the editor change as the chat works, with a real model |

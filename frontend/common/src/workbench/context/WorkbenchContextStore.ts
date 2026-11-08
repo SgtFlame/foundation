@@ -12,10 +12,15 @@ export interface SubjectRef {
   summary?: string // one short line: "/projects/Plan.md"
 }
 
-// A line range in a text editor (from 1), or the selected rows
+// A line range in a text editor (from 1), or the selected rows; the Forge
+// editors add where in their subject the user is (forge 06g)
 export interface Selection {
   lines?: [number, number]
   items?: string[]
+  tab?: string // the editor's own tab, e.g. 'pages' in the Applications editor
+  part?: string // the part in hand on that tab, e.g. a page's route
+  node?: string // a prefab node's key path, or a graph node's id
+  field?: string // an entity type's field
 }
 
 export interface EditorEntry {

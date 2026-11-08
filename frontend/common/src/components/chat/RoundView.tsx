@@ -31,11 +31,15 @@ export interface RoundActions {
   onFeedback?: (round: ChatRound, feedback: RoundFeedback | undefined) => void
   onAnswerTool?: (round: ChatRound, callId: string, answer: ToolAnswer) => Promise<void>
   clientTools?: readonly ChatClientToolContribution[] // for their titles and cards
+  onOpenLink?: (href: string) => boolean // a click on a reply's link; true when followed (workbench: links)
 }
+
+// The modes a context provider may put a round in (forge 06g)
+const modeTitles: Record<string, string> = { builder: 'Builder' }
 
 // One round: the user's message, the reply as it streams with its
 // citations, its sources and Context inspector, feedback, and its footer
-function RoundView({ round, levels, onOpenSegment, onFeedback, onAnswerTool, clientTools }: { round: ChatRound; levels: readonly ChatLevel[] } & RoundActions) {
+function RoundView({ round, levels, onOpenSegment, onFeedback, onAnswerTool, clientTools, onOpenLink }: { round: ChatRound; levels: readonly ChatLevel[] } & RoundActions) {
   if (round.note) {
     return (
       <Box sx={{ px: 2, py: 1, color: 'text.secondary', borderLeft: 3, borderColor: 'divider', mx: 2, my: 1 }}>
@@ -62,6 +66,9 @@ function RoundView({ round, levels, onOpenSegment, onFeedback, onAnswerTool, cli
       >
         <Typography variant="body2">{round.text}</Typography>
       </Paper>
+      {round.mode && (
+        <Chip size="small" variant="outlined" color="primary" label={modeTitles[round.mode] ?? round.mode} sx={{ alignSelf: 'flex-start' }} aria-label="Mode" />
+      )}
       {round.toolCalls && round.toolCalls.length > 0 && (
         <Stack spacing={0.5} aria-label="Tool calls">
           {round.toolCalls.map((call) => (
@@ -74,7 +81,7 @@ function RoundView({ round, levels, onOpenSegment, onFeedback, onAnswerTool, cli
           ))}
         </Stack>
       )}
-      {round.reply && <MarkdownText text={round.reply} citations={citations} />}
+      {round.reply && <MarkdownText text={round.reply} citations={citations} onLink={onOpenLink} />}
       {segments.some((s) => s.sourceId === 'chronicle' && s.pinned) && (
         <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }} aria-label="Chronicle entries used">
           <Typography variant="caption" color="text.secondary">
@@ -95,6 +102,11 @@ function RoundView({ round, levels, onOpenSegment, onFeedback, onAnswerTool, cli
           <MarkdownText text={f.summary} />
         </Box>
       ))}
+      {streaming && round.retry && (
+        <Typography variant="caption" color="text.secondary" aria-label="Retrying">
+          The model is busy ({round.retry.status}); trying again in {Math.round(round.retry.waitMs / 1000)} s (try {round.retry.try})…
+        </Typography>
+      )}
       {streaming && !round.reply && !round.toolCalls?.some((c) => c.status === 'awaiting' || c.status === 'client') && (
         <CircularProgress size={16} sx={{ ml: 0.5 }} aria-label="Waiting for the reply" />
       )}

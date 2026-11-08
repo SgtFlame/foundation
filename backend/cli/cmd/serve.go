@@ -408,7 +408,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var conversationLive conversationservice.Service
 		var collabLive collabservice.Service
 		registry := extensions.NewRegistry()
-		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.RoundFollowers, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, authz.ResourceTypes,
+		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, authz.ResourceTypes,
 			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources)
 		// Each feature declares its resource types and their actions
 		authz.Contribute(registry)
@@ -704,7 +704,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		liveBus.Resolve = installs.CommandFor(func() installs.Deps { return installDeps }, livenodes.CommandFor(func() livenodes.Deps { return liveNodeDeps }))
 		subscriptions.Resolve = installs.QueryFor(func() installs.Deps { return installDeps }, livenodes.QueryFor(func() livenodes.Deps { return liveNodeDeps }))
 		liveToolDeps = livetools.Deps{Bus: liveBus, Subscriptions: subscriptions}
-		forgeToolDeps = apptools.ForgeDeps{Subscriptions: subscriptions, Store: projections, Bus: liveBus, Engine: cognitionEngine}
+		forgeToolDeps = apptools.ForgeDeps{Subscriptions: subscriptions, Store: projections, Bus: liveBus, Engine: cognitionEngine, Presence: livePresence}
 		liveSubscriptions = subscriptions
 		recordEmbedder = embedService
 		recordFiles := recordsfiles.New(nats.JS())

@@ -18,34 +18,64 @@ import (
 // give stage 2 a token budget (ContextRetrieval.md).
 const maxContext = 48 << 10
 
-// gather runs every enabled context provider concurrently. A provider that
-// fails is skipped for the round.
-func (s *service) gather(args conversationservice.SendArgs, r *round) []conversation.ContextItem {
+// gather runs every enabled context provider concurrently, and returns
+// their items and the mode the first of them in Order puts the round in. A
+// provider that fails is skipped for the round.
+func (s *service) gather(args conversationservice.SendArgs, r *round) ([]conversation.ContextItem, *conversation.Mode) {
 	providers := conversation.ContextProviders.All(s.registry)
 	results := make([][]conversation.ContextItem, len(providers))
+	modes := make([]*conversation.Mode, len(providers))
 	// The providers' own calls (stage 1, query embeddings) are attributed to the round
 	call := args.ServiceArgs
 	call.Meta = features.Meta{ConversationID: r.conversation.ID, RoundID: r.round.ID, Debug: r.debug}
 	var wg sync.WaitGroup
 	for i, p := range providers {
 		settings := s.settingsOf(args, r, p.ID, p.Defaults)
-		if !enabled(settings) || p.Gather == nil {
+		if !enabled(settings) || (p.Gather == nil && p.Mode == nil) {
 			continue
 		}
-		wg.Go(func() {
-			items, err := p.Gather(conversation.GatherArgs{
-				ServiceArgs: call, ConversationID: r.conversation.ID, Text: r.round.Text, Window: r.history,
-				Workbench: args.Workbench, Settings: settings, ContextWindow: r.model.ContextWindow,
+		ga := conversation.GatherArgs{
+			ServiceArgs: call, ConversationID: r.conversation.ID, Text: r.round.Text, Window: r.history,
+			Workbench: args.Workbench, Settings: settings, ContextWindow: r.model.ContextWindow,
+		}
+		if p.Gather != nil {
+			wg.Go(func() {
+				items, err := p.Gather(ga)
+				if err != nil {
+					log.With("provider", p.ID).Warn(args.Context(), "context provider %s failed, so the round goes without it: %v", p.ID, err)
+					return
+				}
+				results[i] = items
 			})
-			if err != nil {
-				log.With("provider", p.ID).Warn(args.Context(), "context provider %s failed, so the round goes without it: %v", p.ID, err)
-				return
-			}
-			results[i] = items
-		})
+		}
+		if p.Mode != nil {
+			wg.Go(func() {
+				mode, err := p.Mode(ga)
+				if err != nil {
+					log.With("provider", p.ID).Warn(args.Context(), "context provider %s could not give its mode, so the round runs without it: %v", p.ID, err)
+					return
+				}
+				modes[i] = mode
+			})
+		}
 	}
 	wg.Wait()
-	return slices.Concat(results...)
+	var mode *conversation.Mode
+	for _, m := range modes {
+		if m != nil {
+			mode = m
+			break
+		}
+	}
+	return slices.Concat(results...), mode
+}
+
+// withMode is the system prompt with a mode's instructions after it.
+func withMode(system string, mode *conversation.Mode) string {
+	if mode == nil || strings.TrimSpace(mode.Instructions) == "" {
+		return system
+	}
+	return strings.TrimSpace(system) + "\n\n# Mode: " + mode.Title + "\n" + strings.TrimSpace(mode.Instructions)
 }
 
 // settingsOf is a provider's settings for the conversation, else its

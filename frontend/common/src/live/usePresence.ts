@@ -11,6 +11,9 @@ export interface PresentUser {
   userId: string
   name: string
   color: string
+  // Who is there for the user when not them by hand: 'builder', the chat
+  // working for them (forge 06g), set by the server for a round
+  actor?: string
   state?: Record<string, unknown>
   at: string
 }

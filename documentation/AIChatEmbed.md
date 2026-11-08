@@ -167,6 +167,9 @@ Frontend clients: `src/services/Index.ts`, `Embed.ts` and `Chat.ts` (`Chat.strea
 ### Since slice 13
 `POST /ai/chat/stream` is gone: streaming is the `ai.chat.stream` call on the live connection ([Live.md](Live.md)), with the same `delta` and `done` events, a failure ending the call with its status. `Chat.stream` keeps its signature.
 
+### Changed in slice 43
+Gemini's 503 (overloaded) and 429 (rate) are kept with their status and marked `providers.Error.Busy`, so their error code is `providers.BusyCode` (`provider_busy`) and the tool loop tries them again ([Tools.md › Changed in slice 43](Tools.md#changed-in-slice-43)). Before, an upstream 503 was reported as 502. A missing or wrong key stays 503, not busy.
+
 ## Verification
 1. `cd backend && scripts/build.sh` produces `out/cli`. `scripts/build.sh --test` runs every test, including LanceDB's (`lancestore`) and the index service's (with in-memory fakes).
 2. `GEMINI_API_KEY=… scripts/serve.sh`. On startup it migrates the database and queues existing volume files, and `.…md.index.json` sidecars appear.

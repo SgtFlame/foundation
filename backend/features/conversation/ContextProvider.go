@@ -2,6 +2,7 @@ package conversation
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -29,6 +30,36 @@ type ContextProvider struct {
 	// Gather returns the items to add to the prompt. It runs concurrently
 	// with the other providers; an error skips this provider for the round.
 	Gather func(args GatherArgs) ([]ContextItem, error)
+	// Mode, when set, may make the round run in a mode: instructions for
+	// the model, its own steps limit and tools (forge 06g, until chat modes
+	// exist: forge 06i). It runs beside Gather; nil keeps the plain chat.
+	// When several providers give one, the first in Order wins.
+	Mode func(args GatherArgs) (*Mode, error)
+}
+
+// Mode is how a round runs when a provider puts it in one, such as
+// Forge's Builder while a Forge editor is focused.
+type Mode struct {
+	ID    string // stored on the round, e.g. "builder"
+	Title string // shown on the round, e.g. "Builder"
+	// Instructions go in the system prompt, after the chat's own and before
+	// the context. Unlike context items, they are instructions.
+	Instructions string
+	MaxSteps     int      // steps per round in place of the tools section's; 0 keeps it
+	Tools        []string // the tools offered: names, or prefixes ending in "." (forge.); empty offers all
+}
+
+// Offers reports whether the mode offers a tool.
+func (m *Mode) Offers(tool string) bool {
+	if m == nil || len(m.Tools) == 0 {
+		return true
+	}
+	for _, t := range m.Tools {
+		if t == tool || (strings.HasSuffix(t, ".") && strings.HasPrefix(tool, t)) {
+			return true
+		}
+	}
+	return false
 }
 
 // GatherArgs is what a provider sees of the round.
@@ -65,6 +96,21 @@ const DebugID = "debug"
 // DefaultsSection is the configuration section of a provider's defaults.
 func DefaultsSection(id string) string {
 	return "chat.context.defaults." + id
+}
+
+// RoundEnds is the chat.roundEnd point: work done when a round ends,
+// however it ends (done, failed or stopped), such as clearing the
+// presence the round's tools set (forge 06g).
+var RoundEnds = extensions.NewPoint[RoundEnd](
+	"chat.roundEnd",
+	"Work done when a chat round ends, however it ends, such as clearing the presence its tools set",
+)
+
+// RoundEnd runs once per round, after its done event. Its context
+// outlives the browser.
+type RoundEnd struct {
+	extensions.Descriptor
+	End func(args features.ServiceArgs, round Round)
 }
 
 // RoundFollowers is the chat.roundFollower point: work that follows a

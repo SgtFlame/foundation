@@ -33,6 +33,9 @@ type Deps struct {
 type AgentConfig struct {
 	Level string   `json:"level"` // an ai.chat.levels ID; the default level when empty
 	Tools []string `json:"tools"` // the tools it may call; empty allows every server tool that does not ask
+	// MaxSteps is its steps in place of the tools section's (forge 06g:
+	// the Builder agent builds a whole app); 0 keeps the section's
+	MaxSteps int `json:"maxSteps"`
 }
 
 // Contribute registers the Agent node.
@@ -52,6 +55,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				cognition.ExecPin(cognition.Then, ""),
 				cognition.DataPin("prompt", "Prompt", "string", "What to ask"),
 				{ID: "system", Name: "System", Type: "string", Optional: true, Description: "The instructions"},
+				{ID: "maxSteps", Name: "Steps", Type: "number", Optional: true, Description: "How many times it may call tools before it must answer, in place of its config's"},
 			},
 			Out: []cognition.Pin{
 				cognition.ExecPin(cognition.Then, ""),
@@ -74,6 +78,13 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 					return nil, "", tools.Log.Code("bad_agent_config").Wrap(err)
 				}
 			}
+			steps, err := cognition.Get[float64](in, "maxSteps")
+			if err != nil {
+				return nil, "", err
+			}
+			if steps > 0 {
+				cfg.MaxSteps = int(steps)
+			}
 			d := deps()
 			if d.Chat == nil {
 				return nil, "", tools.Log.Code("agent_not_configured").New("the Agent node has no chat service")
@@ -88,6 +99,9 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 						cfg.Level = l.ID
 					}
 				}
+			}
+			if cfg.MaxSteps > 0 {
+				settings.MaxSteps = cfg.MaxSteps
 			}
 			offered := tools.Enabled(tools.Tools.All(d.Registry), nil, settings)
 			// Writes listed by name are offered, and denied, so the trace says why
@@ -121,6 +135,7 @@ const agentSchema = `{
   "type": "object",
   "properties": {
     "level": {"type": "string", "title": "Level", "ref": "ai.chat.levels#levels"},
-    "tools": {"type": "array", "title": "Tools", "description": "The tools it may call, e.g. kb.search; empty allows every tool that does not ask", "items": {"type": "string"}}
+    "tools": {"type": "array", "title": "Tools", "description": "The tools it may call, e.g. kb.search; empty allows every tool that does not ask", "items": {"type": "string"}},
+    "maxSteps": {"type": "integer", "title": "Steps", "min": 1, "max": 200, "description": "How many times it may call tools before it must answer; empty keeps the Tools settings'"}
   }
 }`

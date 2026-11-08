@@ -23,6 +23,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { Box, Paper, Stack, Typography, useTheme } from '@mui/material'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { presentName } from '../../../live/PresenceAvatars.tsx'
 import type { RendererProps } from '../../points.ts'
 import { useUiHost } from '../../UiHostContext.ts'
 
@@ -100,7 +101,7 @@ function Canvas(p: RendererProps) {
     const out = new Map<string, { color: string; name: string }>()
     for (const u of host.others) {
       const sel = (u.state?.selected as string[] | undefined) ?? []
-      for (const id of sel) if (!out.has(id)) out.set(id, { color: u.color, name: u.name })
+      for (const id of sel) if (!out.has(id)) out.set(id, { color: u.color, name: presentName(u) })
     }
     return out
   }, [host.others])

@@ -90,3 +90,16 @@ export const commands = defineExtensionPoint<CommandContribution>(
   'workbench.command',
   'Commands, such as opening an editor; those with a section are listed in the Editors side view',
 )
+
+// Opens a subject of one type in its editor, at a place inside it (forge
+// 06g): the id is the subject type ('app', 'prefab', 'graph', 'entity'),
+// at the link's query, such as { node: 'root/save' }. workbench: links
+// (links.ts) and the workbench.open tool use it.
+export interface SubjectOpenerContribution extends Contribution {
+  open: (registry: EditorRegistry, id: string, at: Record<string, string>) => void | Promise<void>
+}
+
+export const subjectOpeners = defineExtensionPoint<SubjectOpenerContribution>(
+  'workbench.subjectOpener',
+  'Opens a subject type, such as a Forge app or prefab, in its editor from a workbench: link',
+)

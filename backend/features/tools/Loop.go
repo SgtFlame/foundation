@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/ai/providers"
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
@@ -62,6 +64,9 @@ type RunArgs struct {
 	// OnCall hears every change of a call's status, from running (or
 	// awaiting, or client) to how it ended.
 	OnCall func(call ToolCall)
+	// OnRetry hears that a model call the provider refused as busy will be
+	// tried again after wait (try counts from 1).
+	OnRetry func(try int, wait time.Duration, status int)
 	// Cite numbers a result's segments as the round's next citations; nil
 	// leaves them unnumbered.
 	Cite func(segments []retrieval.Scored) []retrieval.Scored
@@ -109,7 +114,7 @@ func (l Loop) Run(args RunArgs) Outcome {
 		if final {
 			req.ToolChoice = chatservice.ToolChoiceNone
 		}
-		resp := l.complete(args, req, len(texts) > 0)
+		resp := l.completeRetrying(args, req, len(texts) > 0, &out)
 		out.Steps++
 		out.Usage = append(out.Usage, resp.Usage)
 		out.Response = resp
@@ -130,6 +135,43 @@ func (l Loop) Run(args RunArgs) Outcome {
 	}
 	out.Reply = strings.Join(texts, "\n\n")
 	return out
+}
+
+// RetryWait is the wait before a busy provider's call is tried again the
+// n-th time (from 1): 2, 4, 8… seconds. Tests shorten it.
+var RetryWait = func(n int) time.Duration { return time.Second << n }
+
+// busy reports whether a failed call is worth trying again: the provider
+// was too busy (503) or the quota's rate was passed (429), not a missing
+// key (also 503).
+func busy(c features.ServiceResponse) bool { return c.ErrorCode == providers.BusyCode }
+
+// completeRetrying makes one model call, trying it again, after a wait,
+// while the provider answers busy and Settings.Retries allows (forge 06g;
+// the Backlog's "no retry when the provider is busy"). A call that had
+// already streamed text is not tried again, so no text is repeated; the
+// failed tries' usage is counted.
+func (l Loop) completeRetrying(args RunArgs, req chatservice.CompleteArgs, said bool, out *Outcome) chatservice.CompleteResponse {
+	ctx := args.Context()
+	for try := 1; ; try++ {
+		resp := l.complete(args, req, said)
+		if !busy(resp.Common) || resp.Message.Content != "" || try > args.Settings.Retries || ctx.Err() != nil {
+			return resp
+		}
+		out.Usage = append(out.Usage, resp.Usage)
+		wait := RetryWait(try)
+		Log.With("status", resp.Common.Code, "try", try).Warn(ctx, "the provider is busy (%d); trying again in %s", resp.Common.Code, wait)
+		if args.OnRetry != nil {
+			args.OnRetry(try, wait, int(resp.Common.Code))
+		}
+		t := time.NewTimer(wait)
+		select {
+		case <-t.C:
+		case <-ctx.Done():
+			t.Stop()
+			return resp
+		}
+	}
 }
 
 // complete makes one model call, streamed when asked. A streamed call
@@ -288,7 +330,11 @@ func (l Loop) call(args RunArgs, step, n int, c chatservice.ToolCall, byWire map
 	}
 	rec.Status = StatusRunning
 	notify()
-	ctx, cancel := context.WithTimeout(args.Context(), args.Settings.Timeout())
+	timeout := args.Settings.Timeout()
+	if tool.Timeout > 0 {
+		timeout = tool.Timeout
+	}
+	ctx, cancel := context.WithTimeout(args.Context(), timeout)
 	defer cancel()
 	sa := args.ServiceArgs
 	sa.Ctx = ctx
@@ -296,7 +342,7 @@ func (l Loop) call(args RunArgs, step, n int, c chatservice.ToolCall, byWire map
 	res, err := run(tool, Call{ServiceArgs: sa, ID: rec.CallID, Name: tool.ID, Args: argsOf(c.Args)})
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
-		return end(StatusTimeout, nil, fmt.Sprintf("The tool did not finish within %s.", args.Settings.Timeout()))
+		return end(StatusTimeout, nil, fmt.Sprintf("The tool did not finish within %s.", timeout))
 	case err != nil:
 		return end(StatusFailed, res.Content, err.Error())
 	}

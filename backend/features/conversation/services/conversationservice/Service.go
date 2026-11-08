@@ -81,6 +81,7 @@ const (
 	EventTool     SendEventKind = "tool"     // ToolCall, each time a call changes status: awaiting and client calls wait for Answer
 	EventFollowed SendEventKind = "followed" // Follower and Followed: what a chat.roundFollower did after the reply
 	EventFailed   SendEventKind = "failed"   // Common: the message was refused before a round was stored
+	EventRetry    SendEventKind = "retry"    // Retry: the provider was busy, and the step is tried again after a wait
 )
 
 type SendEvent struct {
@@ -92,7 +93,15 @@ type SendEvent struct {
 	Follower     string // the chat.roundFollower's ID
 	Followed     *conversation.Followed
 	ToolCall     *tools.ToolCall
+	Retry        *Retry
 	Common       features.ServiceResponse
+}
+
+// Retry is a model call tried again because the provider was busy.
+type Retry struct {
+	Try    int // from 1
+	WaitMs int64
+	Status int // 429 or 503
 }
 
 // SendRequest delivers the round as it happens: started first (or failed,

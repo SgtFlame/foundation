@@ -74,6 +74,7 @@ export interface Round {
   finishReason?: string
   error?: string // the failure's message
   workbench?: unknown // the workbench snapshot sent with the message
+  mode?: string // the mode a context provider put it in, e.g. builder (forge 06g)
   inputTokens: number // includes cachedTokens
   cachedTokens: number
   outputTokens: number // excludes thinkingTokens
@@ -85,6 +86,14 @@ export interface Round {
   segments?: RoundSegment[] // what the round injected, [1] first
   toolCalls?: ToolCall[] // in the order the model made them
   followed?: Followed[] // what the round followers did, as the reply streamed (not stored)
+  retry?: Retry // the last busy provider's retry, as the reply streamed (not stored)
+}
+
+// A model call tried again because the provider was busy (429 or 503)
+export interface Retry {
+  try: number // from 1
+  waitMs: number
+  status: number
 }
 
 export type ToolEffect = 'none' | 'read' | 'write' | 'external' | 'ui'
@@ -196,6 +205,7 @@ export interface SendOptions {
   onDone?: (round: Round) => void // before a title, which can follow
   onTitle?: (conversation: Conversation) => void
   onFollowed?: (followed: Followed) => void // after done and any title
+  onRetry?: (retry: Retry) => void // the provider was busy: the step is tried again after a wait
   signal?: AbortSignal
 }
 
@@ -234,7 +244,7 @@ export const Conversations = {
   // call ends (after the title, when one is generated). A failed reply
   // resolves too, with its status and error; only a refused message throws.
   // Aborting the signal stops the reply.
-  async send(request: SendRequest, { onStarted, onSources, onDelta, onTool, onDone, onTitle, onFollowed, signal }: SendOptions = {}): Promise<Round> {
+  async send(request: SendRequest, { onStarted, onSources, onDelta, onTool, onDone, onTitle, onFollowed, onRetry, signal }: SendOptions = {}): Promise<Round> {
     let done: Round | undefined
     await live.call(
       'conversation.send',
@@ -264,6 +274,9 @@ export const Conversations = {
             break
           case 'followed':
             onFollowed?.(data as Followed)
+            break
+          case 'retry':
+            onRetry?.(data as Retry)
             break
         }
       },

@@ -208,3 +208,8 @@ For undo by request ([Apps.md › Built in slice 39](Apps.md#built-in-slice-39),
 - **Transactions of several commands.** `bus.Transact(r, ops, dryRun)` decides ops one after another, each against the state the ones before it left (an overlay of the area's projections, folded by their own `Fold`s), and commits every event as one atomic batch in `r`'s request, or nothing; a conflict decides the whole again. With `dryRun` it only decides. Each op's first event carries its `LoggedOp` with `Events`, the number of events it committed, and each target's first event in the batch carries the expected sequence. Undo is its one user.
 - **`LoggedOp.Undoes`** and **`bus.Request.Undoes`**: the request an undo undoes, on each of its ops.
 - **In the browser**: `live.gesture(fn)` sends the commands `fn` sends before it returns as one request; `live.settled()` resolves once every command in flight is acknowledged; `useCommand`'s `send` takes `CommandOptions`; `useUndo(scope)` and `undoKeys` (`src/live/useUndo.ts`).
+
+## Changed in slice 43
+For Forge's Builder in presence ([Apps.md › Changed in slice 43](Apps.md#changed-in-slice-43), forge 06g question 1):
+- **`presence.Entry.Actor`**: who is there for the user when not them by hand, `builder` for a chat round. `Presence.SetAs(ctx, principal, object, conn, actor, state)` sets such an entry under the actor's own connection id (`builder-<round>`); `Set` is `SetAs` with no actor.
+- **In the browser**: `PresentUser.actor`; `PresenceAvatars` shows an actor as its own avatar (a robot, outlined in the user's colour, badged with their initials, tooltip *Builder, for Ada*), grouping by user and actor; `presentName(u)` names a connection so, for the editors' own selection markers.

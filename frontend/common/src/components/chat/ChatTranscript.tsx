@@ -56,6 +56,7 @@ function ChatTranscript({
   onFeedback,
   onAnswerTool,
   clientTools,
+  onOpenLink,
 }: RoundActions & {
   threads: readonly ChatThread[]
   more: boolean
@@ -136,7 +137,7 @@ function ChatTranscript({
                   </Stack>
                 )}
                 {row.kind === 'divider' && <ConversationDivider thread={row.thread} current={row.current} onEnd={onNewConversation} />}
-                {row.kind === 'round' && <RoundView round={row.round} levels={levels} onOpenSegment={onOpenSegment} onFeedback={onFeedback} onAnswerTool={onAnswerTool} clientTools={clientTools} />}
+                {row.kind === 'round' && <RoundView round={row.round} levels={levels} onOpenSegment={onOpenSegment} onFeedback={onFeedback} onAnswerTool={onAnswerTool} clientTools={clientTools} onOpenLink={onOpenLink} />}
               </Box>
             )
           })}

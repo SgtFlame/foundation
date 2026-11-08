@@ -43,6 +43,7 @@ type Entry struct {
 	UserID     uint64          `json:"userId,string"`
 	Name       string          `json:"name"`
 	Color      string          `json:"color"`
+	Actor      string          `json:"actor,omitempty"` // who is there for the user, not by hand: the chat's Builder ("builder", forge 06g)
 	State      json.RawMessage `json:"state,omitempty"` // selection, cursor, what it is editing
 	At         time.Time       `json:"at"`
 }
@@ -87,6 +88,13 @@ func ValidObject(object string) bool {
 
 // Set puts (or refreshes) a connection's presence in object.
 func (p *Presence) Set(ctx context.Context, principal features.Principal, object, conn string, state json.RawMessage) error {
+	return p.SetAs(ctx, principal, object, conn, "", state)
+}
+
+// SetAs is Set for an actor working for the principal, such as the chat's
+// Builder: conn is the actor's own (e.g. builder-<round>), never a
+// browser's.
+func (p *Presence) SetAs(ctx context.Context, principal features.Principal, object, conn, actor string, state json.RawMessage) error {
 	if !ValidObject(object) || !live.ValidToken(conn) {
 		return log.Code("invalid_object").Errorf("%q is not an object (<type>.<id>)", object)
 	}
@@ -98,7 +106,7 @@ func (p *Presence) Set(ctx context.Context, principal features.Principal, object
 	if name == "" {
 		name = fmt.Sprintf("User %d", principal.UserID)
 	}
-	raw, _ := json.Marshal(Entry{Connection: conn, UserID: principal.UserID, Name: name, Color: ColorOf(principal.UserID), State: state, At: time.Now().UTC()})
+	raw, _ := json.Marshal(Entry{Connection: conn, UserID: principal.UserID, Name: name, Color: ColorOf(principal.UserID), Actor: actor, State: state, At: time.Now().UTC()})
 	_, err = kv.Put(ctx, object+"."+conn, raw)
 	return log.Wrap(err)
 }

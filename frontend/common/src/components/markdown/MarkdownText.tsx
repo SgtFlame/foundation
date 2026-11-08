@@ -12,15 +12,18 @@ import { citationChips, markCitations, type Citations } from './citations.ts'
 // Read-only markdown rendered by Live Preview's renderer, so code blocks,
 // links and callouts look as they do in the Markdown editor. Text that grows
 // (a streaming reply) is appended rather than replaced. With citations, a
-// valid [n] is a chip that calls onCite(n).
-function MarkdownText({ text, citations }: { text: string; citations?: Citations }) {
+// valid [n] is a chip that calls onCite(n). onLink hears a click on a link
+// first, and returns true when it followed it.
+function MarkdownText({ text, citations, onLink }: { text: string; citations?: Citations; onLink?: (url: string) => boolean }) {
   const theme = useTheme()
   const parent = useRef<HTMLDivElement>(null)
   const [themeCompartment] = useState(() => new Compartment())
   const [view, setView] = useState<EditorView>()
   const cites = useRef(citations)
+  const links = useRef(onLink)
   useEffect(() => {
     cites.current = citations
+    links.current = onLink
   })
 
   useEffect(() => {
@@ -30,7 +33,7 @@ function MarkdownText({ text, citations }: { text: string; citations?: Citations
       state: EditorState.create({
         extensions: [
           markdown({ base: markdownLanguage, codeLanguages: languages, extensions: [WikiLink, Tag] }),
-          livePreview({ revealSelection: false }),
+          livePreview({ revealSelection: false, onLink: (url) => links.current?.(url) ?? false }),
           EditorView.lineWrapping,
           EditorState.readOnly.of(true),
           EditorView.editable.of(false),

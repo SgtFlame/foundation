@@ -138,3 +138,24 @@ Tool calling is in [Tools.md › Built in slice 8](Tools.md#built-in-slice-8). W
 
 ## Since slice 13
 `conversation.send` is a call on the live connection ([Live.md](Live.md)) rather than `POST /conversation/send` with Server-Sent Events. Its events (`started`, `sources`, `delta`, `tool`, `done`, `title`, `followed`) and their data are the same, and a message refused before its round is stored ends the call with its status. `Conversation.send` keeps its signature, and aborting its signal cancels the call, which stops the reply. `POST /conversation/answer` stays REST.
+
+## Built in slice 43
+Forge's Builder mode, part 6g ([forge 06g-BuilderMode.md](../../forge/documentation/plans/06g-BuilderMode.md), [forge BuilderMode.md](../../forge/documentation/BuilderMode.md)), needed chat to run in a mode before chat modes exist, rounds long enough to build, and a round that survives a busy provider. Built in Foundation:
+- **A context provider's mode.** `conversation.ContextProvider.Mode(GatherArgs) (*Mode, error)` runs beside `Gather`; a `conversation.Mode` is `{ID, Title, Instructions, MaxSteps, Tools}`. When providers give one, the first in `Order` wins: its instructions go in the system prompt as `# Mode: <Title>` after the `chat` section's prompt and before the context (so they read as instructions, unlike context items, which are data), `MaxSteps` replaces the `tools` section's steps for the round, and `Tools` (names, or prefixes ending in `.`; `Mode.Offers`) narrows the tools offered. The round stores its mode (`Round.Mode`, DTO `mode`) and the transcript shows it as a chip. Forge's `builder` provider is the only one; Foundation's chat modes, which replace the hook, are [forge 06i-ChatModes.md](../../forge/documentation/plans/06i-ChatModes.md).
+- **`chat.roundEnd`** (`conversation.RoundEnds`, declared in `serve.go`): `RoundEnd{End(args, round)}` runs once a round ends however it ends (done, failed, stopped), after its `done` event, on a context the browser cannot cancel. `apps/tools` clears the Builder's presence with it.
+- **The `retry` event** (`conversationservice.EventRetry`, DTO `SendRetry {try, waitMs, status}`, `Conversation.send`'s `onRetry`): the provider was busy and the step is tried again after a wait (the tool loop's retry, [Tools.md › Changed in slice 43](Tools.md#changed-in-slice-43)). The transcript shows *The model is busy (503); trying again in 2 s (try 1)…* while the round streams.
+- **Links that open subjects.** A reply's `workbench:<type>/<id>?<where>` link opens the subject in its editor on a plain click ([WorkbenchContext.md › Changed in slice 43](WorkbenchContext.md#changed-in-slice-43)): `livePreview({onLink})`, `MarkdownText`'s `onLink`, and `RoundActions.onOpenLink`, which the Chat editor gives.
+
+### Decisions
+1. **A mode hook, not chat modes** (forge 06 question 1, answered 2026-11-08): a context provider can only add data, so it gains `Mode`; the composer has no mode picker, and a round is in a mode only while a provider says so. Chat modes are planned in forge 06i.
+2. **One mode per round**: the first provider in `Order` that gives one; modes do not combine.
+3. **Instructions before the context**: the mode's text follows the system prompt, and the *Tools* section still comes last.
+4. **`chat.roundEnd` beside the followers**: followers run only after a successful reply, and presence must go however the round ends.
+
+### Verification of slice 43
+- Go: `TestSendRunsInAProvidersMode` (the mode's instructions in the system prompt, its tools only, its steps forcing the answer on the third call, `Round.Mode`, `chat.roundEnd` called once with the round).
+- In headless Chromium against Forge's `serve` and a stub Gemini server: the Builder chip on the round, the retry note, a summary's links opening the Prefab Editor and the Data Designer ([forge BuilderMode.md › Verification](../../forge/documentation/BuilderMode.md#verification)).
+
+### Decisions to review after seeing it
+- The mode chip and the retry note in the transcript: their place and wording.
+- A mode chosen per round from the workbench, rather than kept by the conversation (forge 06i question 1).

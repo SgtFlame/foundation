@@ -29,6 +29,9 @@ type ForgeDeps struct {
 	Bus           *bus.Bus  // forge.apply's and forge.undo's commands (forge 06e)
 	// Engine runs the graphs forge.test tests (forge 06f).
 	Engine *engine.Engine
+	// Presence shows a chat round's Builder where forge.apply works (forge
+	// 06g); nil shows nothing.
+	Presence *presence.Presence
 }
 
 // Catalog areas (forge 06d): what forge.catalog searches.

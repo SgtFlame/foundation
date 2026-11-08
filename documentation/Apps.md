@@ -661,3 +661,12 @@ Decided while building:
 - What the trace keeps (decision 8), once a model reads it: 50 steps, values cut at 800 bytes.
 - What a sandbox does not reach (decision 2): live queries, search and the followers read the real data. A rollup or a search over the run's own writes is not seen.
 - The stubs' samples (decision 4): a stubbed upload's reference is refused by a record command, which a model may misread.
+
+## Changed in slice 43
+For Forge's Builder mode ([ChatCompletion.md › Built in slice 43](ChatCompletion.md#built-in-slice-43), [forge BuilderMode.md](../../forge/documentation/BuilderMode.md)):
+- **The Builder in presence** (forge 06g question 1, on its proposal). `forge.apply` in a chat round (`Meta.RoundID`, including an agent run inside one) puts the round's Builder (`presence.SetAs`, actor `builder`, connection `builder-<round>`, the user's name and colour) where each op worked, at the last op's place: always `app.<appId>` as `{tab, part}` (the Applications editor's tab ids: `pages`, `nav`, `kinds`, `data`, `commands`, `queries`, `roles`, `settings`, `blueprints`, `manifest`), and the part's own editor: `prefab.<id>` `{selected: <key path>}`, `graph.<id>` `{selected: [node ids]}`, `records.designer` `{entity, selected: [field]}` (`apptools.WhereOf`). The entries are refreshed every 10 seconds while the round lasts and cleared by the `chat.roundEnd` hook `forge.presence`. `ForgeDeps.Presence` is the store (`serve.go` gives it).
+- Test: Forge's `TestBuilderPresence` (`features/starter/presence_test.go`).
+
+### Decisions to review after seeing it
+- **Presence follows applies only**: while the round reads (forge.app, forge.read) the Builder is not shown, so it appears with its first batch.
+- **A prefab change also puts the Builder on the app's *Pages* tab**, and a graph change on *Blueprints*, whatever page uses them.

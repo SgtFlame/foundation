@@ -102,6 +102,8 @@ export interface GraphEditorProps {
   helpText?: string
   extraTabs?: GraphEditorTab[]
   openGraph?: (graphId: string, name: string) => void
+  // The workbench subject's type: Forge's Blueprint Editor reports 'graph'
+  subjectType?: string
 }
 
 // The Graph Editor: a graph's draft on an editable canvas, edited by
@@ -109,7 +111,7 @@ export interface GraphEditorProps {
 // the Palette and Variables, and the details of what is selected
 // (Cognition.md › Built in slice 14). Forge's Blueprint Editor is this
 // editor with its own tabs.
-export function GraphEditor({ graphId, tabId, name, helpText, extraTabs = [], openGraph }: GraphEditorProps) {
+export function GraphEditor({ graphId, tabId, name, helpText, extraTabs = [], openGraph, subjectType = 'cognition-graph' }: GraphEditorProps) {
   const extraKey = extraTabs.map((t) => t.id).join(',')
   // The layout is made once per set of extra tabs
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,7 +130,12 @@ export function GraphEditor({ graphId, tabId, name, helpText, extraTabs = [], op
   const trace = loaded?.runId === runId ? loaded?.trace : undefined
   const traceError = loaded?.runId === runId ? loaded?.error : undefined
 
-  useWorkbenchSubject(tabId, { type: 'cognition-graph', id: graphId, label: view?.graph.name ?? name ?? graphId, summary: helpText })
+  // The selected node is what "this node" means to the chat (forge 06g)
+  useWorkbenchSubject(
+    tabId,
+    { type: subjectType, id: graphId, label: view?.graph.name ?? name ?? graphId, summary: helpText },
+    { selection: selectedNodes.length ? { node: selectedNodes[0], items: selectedNodes.length > 1 ? selectedNodes : undefined } : undefined },
+  )
 
   useEffect(() => {
     if (!runId) return

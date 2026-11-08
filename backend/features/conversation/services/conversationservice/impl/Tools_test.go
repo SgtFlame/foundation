@@ -9,6 +9,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
+	"github.com/SgtFlame/foundation/backend/features/conversation"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
@@ -143,5 +144,53 @@ func TestSendRejectsWritingClientTools(t *testing.T) {
 		ClientTools: []tools.Tool{{Descriptor: extensions.Descriptor{ID: "bad"}, Effect: tools.EffectWrite, Location: tools.LocationClient}}}))
 	if f := events[conversationservice.EventFailed]; len(f) != 1 || f[0].Common.Code != http.StatusBadRequest {
 		t.Fatalf("events = %+v", events)
+	}
+}
+
+// forge 06g: a provider's mode puts its instructions in the system prompt,
+// narrows the tools and sets the steps; the round ends through the
+// chat.roundEnd hooks
+func TestSendRunsInAProvidersMode(t *testing.T) {
+	find := chatservice.Message{Role: chatservice.RoleAssistant, ToolCalls: []chatservice.ToolCall{{Name: "test_find", Args: json.RawMessage(`{}`)}}}
+	chat := &scriptedChat{script: []chatservice.Message{find, find, {Role: chatservice.RoleAssistant, Content: "built"}}}
+	s, _ := newTestService(t, &fakeChat{})
+	s.chat = chat
+	tools.Tools.Register(s.registry, tools.Tool{
+		Descriptor: extensions.Descriptor{ID: "test.find"}, Effect: tools.EffectRead,
+		Run: func(tools.Call) (tools.Result, error) { return tools.Result{Summary: "found"}, nil },
+	})
+	tools.Tools.Register(s.registry, tools.Tool{Descriptor: extensions.Descriptor{ID: "other.read"}, Effect: tools.EffectRead})
+	conversation.ContextProviders.Register(s.registry, conversation.ContextProvider{
+		Descriptor: extensions.Descriptor{ID: "builder"},
+		Mode: func(args conversation.GatherArgs) (*conversation.Mode, error) {
+			return &conversation.Mode{ID: "builder", Title: "Builder", Instructions: "Follow the procedure.", MaxSteps: 2, Tools: []string{"test."}}, nil
+		},
+	})
+	var ended []uint64
+	conversation.RoundEnds.Register(s.registry, conversation.RoundEnd{
+		Descriptor: extensions.Descriptor{ID: "test"},
+		End:        func(_ features.ServiceArgs, r conversation.Round) { ended = append(ended, r.ID) },
+	})
+	req := s.Send(conversationservice.SendArgs{ServiceArgs: features.ServiceArgs{Principal: features.LocalPrincipal()}, Text: "build it"})
+	var done *conversationservice.SendEvent
+	for e := range req.Events {
+		if e.Kind == conversationservice.EventDone {
+			done = &e
+		}
+	}
+	if done == nil || done.Round.Mode != "builder" || done.Round.Reply != "built" {
+		t.Fatalf("done = %+v", *done.Round)
+	}
+	if len(chat.got) != 3 || !strings.Contains(chat.got[0].System, "# Mode: Builder\nFollow the procedure.") {
+		t.Fatalf("calls = %d, system = %q", len(chat.got), chat.got[0].System)
+	}
+	if n := len(chat.got[0].Tools); n != 1 || chat.got[0].Tools[0].Name != "test_find" {
+		t.Fatalf("tools = %+v", chat.got[0].Tools)
+	}
+	if chat.got[2].ToolChoice != chatservice.ToolChoiceNone {
+		t.Fatalf("the third step was not made to answer: %+v", chat.got[2].ToolChoice)
+	}
+	if len(ended) != 1 || ended[0] != done.Round.ID {
+		t.Fatalf("ended = %v", ended)
 	}
 }

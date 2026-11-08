@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/ai/providers"
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -101,7 +102,7 @@ var (
 	pick = Tool{Descriptor: extensions.Descriptor{ID: "chat.askChoice"}, Effect: EffectUI, Location: LocationClient, Wait: WaitForUser}
 )
 
-func newLoop(t *testing.T, chat *scriptChat) (Loop, RunArgs) {
+func newLoop(t *testing.T, chat chatservice.Service) (Loop, RunArgs) {
 	t.Helper()
 	gdb, err := db.Open(db.WithPath(filepath.Join(t.TempDir(), "test.db")))
 	if err != nil {
@@ -324,5 +325,73 @@ func TestLoopKeepsAFailedToolsContent(t *testing.T) {
 	}
 	if sent, _ := json.Marshal(chat.got[1].Messages); !strings.Contains(string(sent), "card/stack") {
 		t.Errorf("the model did not get the fix: %s", sent)
+	}
+}
+
+// busyChat answers busy (503) on the calls numbered in busyAt (from 1),
+// and passes the others to its script.
+type busyChat struct {
+	*scriptChat
+	n      int
+	busyAt map[int]bool
+}
+
+func (b *busyChat) Complete(args chatservice.CompleteArgs) chatservice.CompleteResponse {
+	b.n++
+	if b.busyAt[b.n] {
+		return chatservice.CompleteResponse{Common: features.ServiceResponse{Code: 503, Message: "the model is overloaded", ErrorCode: providers.BusyCode}}
+	}
+	return b.scriptChat.Complete(args)
+}
+
+func (b *busyChat) Stream(args chatservice.StreamArgs) *chatservice.StreamRequest {
+	resp := b.Complete(args)
+	deltas := make(chan chatservice.Delta, 1)
+	if resp.Message.Content != "" {
+		deltas <- chatservice.Delta{Text: resp.Message.Content}
+	}
+	close(deltas)
+	out := make(chan *chatservice.CompleteResponse, 1)
+	out <- &resp
+	return &chatservice.StreamRequest{Deltas: deltas, Response: out}
+}
+
+// forge 06g: a round of 30 tool calls finishes, and a 503 in its middle
+// is tried again rather than ending it
+func TestLoopRetriesABusyProviderInALongRound(t *testing.T) {
+	saved := RetryWait
+	RetryWait = func(int) time.Duration { return time.Millisecond }
+	defer func() { RetryWait = saved }()
+
+	script := &scriptChat{}
+	for i := range 30 {
+		script.script = append(script.script, calls(callOf("test_echo", `{"text":"`+strings.Repeat("x", i+1)+`"}`)))
+	}
+	script.script = append(script.script, answer("built"))
+	chat := &busyChat{scriptChat: script, busyAt: map[int]bool{15: true, 16: true}}
+	loop, args := newLoop(t, chat)
+	args.Tools = []Tool{echo}
+	args.Settings.MaxSteps = 60
+	args.Settings.Retries = 3
+	args.Stream = true
+	var retries []int
+	args.OnRetry = func(try int, _ time.Duration, status int) { retries = append(retries, try*1000+status) }
+	out := loop.Run(args)
+	if out.Response.Common.Code != 200 || len(out.Calls) != 30 || out.Reply != "built" || out.Steps != 31 {
+		t.Fatalf("outcome = %d calls, %d steps, reply %q, %+v", len(out.Calls), out.Steps, out.Reply, out.Response.Common)
+	}
+	if len(retries) != 2 || retries[0] != 1503 || retries[1] != 2503 {
+		t.Fatalf("retries = %v", retries)
+	}
+
+	// Past the retries, the round ends with the provider's failure
+	script = &scriptChat{script: []chatservice.Message{calls(callOf("test_echo", `{"text":"1"}`)), answer("never")}}
+	chat = &busyChat{scriptChat: script, busyAt: map[int]bool{2: true, 3: true}}
+	loop, args = newLoop(t, chat)
+	args.Tools = []Tool{echo}
+	args.Settings.Retries = 1
+	out = loop.Run(args)
+	if out.Response.Common.Code != 503 || len(out.Calls) != 1 {
+		t.Fatalf("outcome = %+v", out.Response.Common)
 	}
 }

@@ -11,7 +11,7 @@ What is built. Each document describes a feature as it works now, with what was 
 | [Logging.md](Logging.md) | One builder for errors and logs, the request trace, storage in VictoriaLogs, browser log forwarding, the Log Explorer and full logging for one user |
 | [Configuration.md](Configuration.md) | Settings sections declared by features, stored per app, tenant and user scope with secrets, and the generic Settings tab |
 | [Usage.md](Usage.md) | Token and cost recording for every AI call, the opt-in debug capture, and the Dashboard's *Usage & cost* widget |
-| [ChatCompletion.md](ChatCompletion.md) | AgentOS › Chat: conversations and rounds, levels, context providers, citations, feedback, Chronicle memory and the tool loop |
+| [ChatCompletion.md](ChatCompletion.md) | AgentOS › Chat: conversations and rounds, levels, context providers (and the modes they put a round in), citations, feedback, Chronicle memory and the tool loop |
 | [ContextRetrieval.md](ContextRetrieval.md) | The retrieval engine: vector and keyword search over Volumes and Chronicles, fused by RRF and weighted by two dials and by feedback, behind RAG Search |
 | [Chronicle.md](Chronicle.md) | Chronicle memory: entries, stage 1 context matching and the memory update, the Chronicles side view, the entry editor, and sharing |
 | [Cognition.md](Cognition.md) | The Cognition Engine (graphs, kinds, nodes, loops, traced runs, the built-in *Personal* graph, the `Agent` node), drafts edited by several people at once through `bp.*` commands and published, and the Cognition Editor |

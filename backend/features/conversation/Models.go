@@ -39,6 +39,7 @@ type Round struct {
 	FinishReason   string
 	Error          string // the failure's message, safe to show
 	Workbench      string // the workbench snapshot sent with the message, JSON
+	Mode           string // the Mode it ran in (e.g. builder); empty for the plain chat
 	InputTokens    int    // includes CachedTokens
 	CachedTokens   int
 	OutputTokens   int

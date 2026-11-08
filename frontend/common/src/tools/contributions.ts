@@ -6,6 +6,7 @@ import { chatClientTools, chatContextSettings } from '../editors/chat/points.ts'
 import { ChronicleObject } from '../editors/chronicle/ChronicleObject.ts'
 import { openMarkdownAt } from '../editors/markdown/openMarkdown.ts'
 import { extensions } from '../workbench/extensions/index.ts'
+import { openWorkbenchLink } from '../workbench/links.ts'
 import ToolsControl from './ToolsControl.tsx'
 
 extensions.contribute(chatContextSettings, {
@@ -43,7 +44,7 @@ extensions.contribute(chatClientTools, {
   order: 110,
   title: 'Open in the workbench',
   description:
-    'Shows something to the user in their workbench: focuses an open editor tab, opens a Volume file (optionally selecting lines), or opens a Chronicle entry. Give exactly one of tab, path or chronicleId.',
+    'Shows something to the user in their workbench: focuses an open editor tab, opens a Volume file (optionally selecting lines), opens a Chronicle entry, or opens a part at a workbench: link (an app, prefab, blueprint or entity type, e.g. workbench:prefab/contactCard?node=root/save). Give exactly one of tab, path, chronicleId or link.',
   input: {
     type: 'object',
     properties: {
@@ -53,6 +54,7 @@ extensions.contribute(chatClientTools, {
       endLine: { type: 'integer', minimum: 1 },
       chronicleId: { type: 'string', description: 'A Chronicle entry id' },
       title: { type: 'string', description: "The entry's title, for its tab" },
+      link: { type: 'string', description: 'A workbench: link, workbench:<type>/<id>?<where>, as in your summaries' },
     },
   },
   effect: 'ui',
@@ -71,7 +73,11 @@ extensions.contribute(chatClientTools, {
       registry.edit(new ChronicleObject({ id: args.chronicleId, title: typeof args.title === 'string' ? args.title : 'Chronicle' }))
       return { opened: args.chronicleId }
     }
-    throw new Error('give one of tab, path or chronicleId')
+    if (typeof args.link === 'string' && args.link) {
+      if (!(await openWorkbenchLink(registry, args.link))) throw new Error(`nothing here opens ${args.link}`)
+      return { opened: args.link }
+    }
+    throw new Error('give one of tab, path, chronicleId or link')
   },
 })
 

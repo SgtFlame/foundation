@@ -65,6 +65,9 @@ type Tool struct {
 	// Wait is how long a client tool's result is waited for: 0 is the tools
 	// section's clientTimeoutSeconds, WaitForUser until the round is stopped.
 	Wait time.Duration
+	// Timeout is how long a server tool may run, in place of the tools
+	// section's timeoutSeconds: forge.build runs a whole agent graph.
+	Timeout time.Duration
 	// Asks, when set, decides per call whether it asks first, in place of
 	// its effect: forge.apply asks only for a batch that publishes,
 	// installs or writes records (forge 06 question 2).

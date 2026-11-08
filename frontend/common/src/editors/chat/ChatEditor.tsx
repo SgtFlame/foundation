@@ -14,6 +14,7 @@ import { refreshChronicles } from '../../chronicle/chronicleStore.ts'
 import { ChronicleObject } from '../chronicle/ChronicleObject.ts'
 import { openMarkdownAt } from '../markdown/openMarkdown.ts'
 import { useWorkbenchContext } from '../../workbench/context/WorkbenchContext.ts'
+import { openWorkbenchLink, parseWorkbenchLink } from '../../workbench/links.ts'
 import { useContributions } from '../../workbench/extensions/index.ts'
 import type { EditorProps } from '../../workbench/points.ts'
 import type { ChatObject } from './ChatObject.ts'
@@ -121,6 +122,11 @@ function ChatEditor({ tabId, registry }: EditorProps<ChatObject>) {
         onFeedback={(round, feedback) => void chat.setFeedback(round, feedback)}
         onAnswerTool={chat.answerTool}
         clientTools={clientTools}
+        onOpenLink={(href) => {
+          if (!parseWorkbenchLink(href)) return false
+          openWorkbenchLink(registry, href).catch((err: unknown) => log.In('chat').fromError(err).With('href', href).warn('cannot open the link'))
+          return true
+        }}
         onOpenSegment={(segment) => {
           const { entryId, path, startLine, endLine } = segment.location
           if (entryId) {

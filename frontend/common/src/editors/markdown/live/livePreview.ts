@@ -264,7 +264,9 @@ function buildDecorations(view: EditorView, revealSelection: boolean): Decoratio
 
 // revealSelection: false renders every line, for read-only text such as
 // chat replies
-export function livePreview({ revealSelection = true }: { revealSelection?: boolean } = {}) {
+// onLink, when given, hears a plain click on a rendered link first; true
+// means it followed it (the chat's workbench: links, forge 06g)
+export function livePreview({ revealSelection = true, onLink }: { revealSelection?: boolean; onLink?: (url: string) => boolean } = {}) {
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet
@@ -287,15 +289,22 @@ export function livePreview({ revealSelection = true }: { revealSelection?: bool
     {
       decorations: (plugin) => plugin.decorations,
       eventHandlers: {
-        // Ctrl/Cmd-click follows a rendered link
+        // Ctrl/Cmd-click follows a rendered link; onLink may take a plain one
         mousedown(event, view) {
           const link = (event.target as HTMLElement).closest('.cm-lp-link')
-          if (!link || !(event.ctrlKey || event.metaKey)) return false
+          const modified = event.ctrlKey || event.metaKey
+          if (!link || (!modified && !onLink)) return false
           let node = syntaxTree(view.state).resolveInner(view.posAtDOM(link), 1)
           while (node.name !== 'Link' && node.parent) node = node.parent
           const url = node.getChild('URL')
           if (!url) return false
-          window.open(view.state.sliceDoc(url.from, url.to), '_blank', 'noopener')
+          const href = view.state.sliceDoc(url.from, url.to)
+          if (onLink?.(href)) {
+            event.preventDefault()
+            return true
+          }
+          if (!modified) return false
+          window.open(href, '_blank', 'noopener')
           return true
         },
       },

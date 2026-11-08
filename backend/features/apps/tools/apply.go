@@ -4,6 +4,8 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/conversation"
+	"github.com/SgtFlame/foundation/backend/features/live/presence"
 	"maps"
 	"slices"
 	"strings"
@@ -68,6 +70,11 @@ func asks(b *bus.Bus, args json.RawMessage) bool {
 // app (forge 06e): forge.apply, forge.changes, forge.check, forge.preview
 // and forge.undo.
 func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
+	builder := newBuilderPresence(func() *presence.Presence { return deps().Presence })
+	conversation.RoundEnds.Register(reg, conversation.RoundEnd{
+		Descriptor: extensions.Descriptor{ID: "forge.presence", Source: "apps"},
+		End:        func(args features.ServiceArgs, round conversation.Round) { builder.End(args, round.ID) },
+	})
 	mayRead := func(call tools.Call, app string) error {
 		res := apps.Resource(call.Principal, app)
 		return authz.Check(call.Context(), call.Principal, "app.read", res).Err("app.read", res)
@@ -151,6 +158,7 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 				}
 				return tools.Result{Content: map[string]any{"status": "refused", "committed": false, "problems": t.Problems}}, fmt.Errorf("%s", msg)
 			}
+			builder.Touch(call.ServiceArgs, a.AppID, a.Ops)
 			results := []OpResult{}
 			for i, d := range t.Ops {
 				results = append(results, OpResult{Index: i, Command: d.Op.Command, Target: d.Op.Target, Events: d.Events})

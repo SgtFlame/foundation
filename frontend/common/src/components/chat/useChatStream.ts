@@ -176,12 +176,13 @@ export function useChatStream() {
                 .catch((err: unknown) => chatLog.fromError(err).With('tool', call.name).warn('cannot answer tool call %s', call.callId))
             },
             onDone: (round) => {
-              patchRound((r) => ({ ...round, segments: r.segments, toolCalls: r.toolCalls }))
+              patchRound((r) => ({ ...round, segments: r.segments, toolCalls: r.toolCalls, retry: r.retry }))
               setPending(false)
               if (round.status >= 300) chatLog.With('status', round.status).warn('the reply failed: %s', round.error ?? '')
             },
             onTitle: (conversation) => update(key, (t) => ({ ...t, conversation: { ...t.conversation, ...conversation } })),
             onFollowed: (followed) => patchRound((r) => ({ ...r, followed: [...(r.followed ?? []), followed] })),
+            onRetry: (retry) => patchRound((r) => ({ ...r, retry })),
           },
         )
       } catch (err) {

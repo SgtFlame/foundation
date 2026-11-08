@@ -64,6 +64,8 @@ func send(c live.CallRun, e conversationservice.SendEvent) {
 		c.Emit("tool", conversationdto.ToolCallFrom(*e.ToolCall))
 	case conversationservice.EventFollowed:
 		c.Emit("followed", conversationdto.SendFollowed{Follower: e.Follower, Summary: e.Followed.Summary, Data: e.Followed.Data})
+	case conversationservice.EventRetry:
+		c.Emit("retry", conversationdto.SendRetry{Try: e.Retry.Try, WaitMs: e.Retry.WaitMs, Status: e.Retry.Status})
 	case conversationservice.EventFailed:
 		c.Emit("error", chatdto.StreamError{Code: e.Common.Code, Message: e.Common.Message, ErrorCode: e.Common.ErrorCode})
 	}

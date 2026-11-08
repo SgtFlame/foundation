@@ -170,11 +170,19 @@ func (s *service) reply(args conversationservice.SendArgs, r *round, events chan
 	messages = append(messages, chatservice.Message{Role: chatservice.RoleUser, Content: r.round.Text})
 	call := args.ServiceArgs
 	call.Meta = features.Meta{Feature: "chat", Level: r.level.ID, ConversationID: r.conversation.ID, RoundID: r.round.ID, Debug: r.debug}
-	system, cited := prompt(r.chat.SystemPrompt, s.gather(args, r))
+	items, mode := s.gather(args, r)
+	system, cited := prompt(withMode(r.chat.SystemPrompt, mode), items)
 	if r.segments = s.storeSegments(args, r, cited); len(r.segments) > 0 {
 		emit(conversationservice.SendEvent{Kind: conversationservice.EventSources, Segments: r.segments})
 	}
 	offered, toolSettings := s.offered(args, r)
+	if mode != nil {
+		r.round.Mode = mode.ID
+		offered = slices.DeleteFunc(offered, func(t tools.Tool) bool { return !mode.Offers(t.ID) })
+		if mode.MaxSteps > 0 {
+			toolSettings.MaxSteps = mode.MaxSteps
+		}
+	}
 	if len(offered) > 0 {
 		system += toolsPrompt
 	}
@@ -197,6 +205,9 @@ func (s *service) reply(args conversationservice.SendArgs, r *round, events chan
 			emit(conversationservice.SendEvent{Kind: conversationservice.EventTool, ToolCall: &tc})
 		},
 		Cite: c.cite,
+		OnRetry: func(try int, wait time.Duration, status int) {
+			emit(conversationservice.SendEvent{Kind: conversationservice.EventRetry, Retry: &conversationservice.Retry{Try: try, WaitMs: wait.Milliseconds(), Status: status}})
+		},
 	})
 	resp := out.Response
 
@@ -228,6 +239,7 @@ func (s *service) reply(args conversationservice.SendArgs, r *round, events chan
 	}
 	finished := *done
 	emit(conversationservice.SendEvent{Kind: conversationservice.EventDone, Round: &finished})
+	s.end(args, finished)
 
 	if r.conversation.Title == "" && done.Status == http.StatusOK && ctx.Err() == nil {
 		if title := s.title(args.ServiceArgs, r); title != "" {
@@ -241,6 +253,18 @@ func (s *service) reply(args conversationservice.SendArgs, r *round, events chan
 	}
 	if done.Status == http.StatusOK && ctx.Err() == nil {
 		s.follow(args, r, emit)
+	}
+}
+
+// end runs the chat.roundEnd hooks, on a context the browser cannot cancel.
+func (s *service) end(args conversationservice.SendArgs, round conversation.Round) {
+	call := args.ServiceArgs
+	call.Ctx = context.WithoutCancel(args.Context())
+	call.Meta = features.Meta{ConversationID: round.ConversationID, RoundID: round.ID}
+	for _, e := range conversation.RoundEnds.All(s.registry) {
+		if e.End != nil {
+			e.End(call, round)
+		}
 	}
 }
 

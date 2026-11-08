@@ -498,6 +498,9 @@ var log = providers.Log.Tags("gemini")
 // wrap turns a Gemini API error into a providers.Error with a matching status.
 func wrap(err error) error {
 	if apiErr, ok := errors.AsType[genai.APIError](err); ok {
+		if apiErr.Code == http.StatusServiceUnavailable || apiErr.Code == http.StatusTooManyRequests {
+			return &providers.Error{Code: uint16(apiErr.Code), Message: "gemini: " + apiErr.Message, Busy: true}
+		}
 		return &providers.Error{Code: status(apiErr.Code), Message: "gemini: " + apiErr.Message}
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
