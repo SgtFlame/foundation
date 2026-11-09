@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Alert, Stack, Typography } from '@mui/material'
 import ChatComposer from '../../components/chat/ChatComposer.tsx'
 import ChatSettingsPopover from '../../components/chat/ChatSettingsPopover.tsx'
 import ChatTranscript from '../../components/chat/ChatTranscript.tsx'
 import LevelToggle from '../../components/chat/LevelToggle.tsx'
+import ModePicker from '../../components/chat/ModePicker.tsx'
+import { editorBefore, offeredModes, startingMode, useModes } from '../../components/chat/modes.ts'
 import { defaultLevel, useLevels } from '../../components/chat/levels.ts'
 import { useChatStream } from '../../components/chat/useChatStream.ts'
 import { useContextSettings } from '../../components/chat/useContextSettings.ts'
@@ -41,10 +43,24 @@ function ChatEditor({ tabId, registry }: EditorProps<ChatObject>) {
   const clientTools = useContributions(chatClientTools, { surface: 'chat' })
   const { contributions, defaults } = useContextSettings('chat')
   const store = useWorkbenchContext()
+  const modes = useModes()
+  // The editor the user was in decides which modes are offered and the
+  // mode a new conversation starts in (forge 06i)
+  const before = useSyncExternalStore(store.subscribe, () => JSON.stringify(editorBefore(store.getState(), tabId)))
+  const [chosenModes, setChosenModes] = useState<Record<string, string>>({})
   const systemPrompt = useSetting<string>('chat', 'systemPrompt', 'user') ?? ''
   const historyRounds = useSetting<number>('chat', 'historyRounds', 'user') ?? 0
 
   const { current } = chat
+  const editor = useMemo(() => JSON.parse(before) as { kind?: string; subject?: string }, [before])
+  const offered = useMemo(() => offeredModes(modes, editor), [modes, editor])
+  const modeId = chosenModes[current.key] ?? current.conversation?.mode ?? startingMode(modes, editor)?.id
+  const mode = modes.find((m) => m.id === modeId)
+  // The ⚙ shows only the context settings the mode's graph uses
+  const shownSettings = useMemo(
+    () => (mode?.settings?.length ? contributions.filter((c) => mode.settings?.includes(c.id)) : contributions),
+    [contributions, mode],
+  )
   // The conversation's settings over the defaults, for every control shown
   const settings = useMemo(
     () => Object.fromEntries(contributions.map((c) => [c.id, { ...defaults[c.id], ...current.contextSettings[c.id] }])),
@@ -88,6 +104,7 @@ function ChatEditor({ tabId, registry }: EditorProps<ChatObject>) {
   const send = (text: string) => {
     void chat.send(text, {
       level: level?.id,
+      mode: modeId,
       workbench: sendsWorkbench ? store.snapshot('main', tabId) : undefined,
       contextSettings: settings,
       clientTools: settings.tools?.enabled === false ? undefined : clientTools,
@@ -160,8 +177,9 @@ function ChatEditor({ tabId, registry }: EditorProps<ChatObject>) {
         commands={commands}
         tools={
           <>
+            <ModePicker modes={offered} value={mode} onChange={(id) => setChosenModes((m) => ({ ...m, [current.key]: id }))} disabled={chat.pending} />
             <LevelToggle levels={levels} models={models} value={level?.id} onChange={setLevelId} contextTokens={contextTokens} />
-            <ChatSettingsPopover contributions={contributions} values={settings} onChange={chat.setContextSetting} />
+            <ChatSettingsPopover contributions={shownSettings} values={settings} onChange={chat.setContextSetting} />
           </>
         }
       />

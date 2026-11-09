@@ -1,9 +1,10 @@
-// Package chroniclenodes makes Chronicle's pipeline a Cognition graph
+// Package chroniclenodes makes Chronicle's pipeline Cognition nodes
 // (Index.md › seam 3, Cognition.md): each step function of chronicle/steps
-// becomes a node type, and the built-in Personal graph wires them as
-// chroniclecontext ran them in slice 6. The chronicle context provider and
-// round follower now run Personal's two events instead of calling the
-// steps themselves.
+// becomes a node type, its model calls' prompts Go templates in the node's
+// config (forge 06i), and the built-in Personal chat mode is a mode graph
+// running a whole round with them: Chronicle memory, the workbench and
+// Volumes as context, the tools, the streamed reply, the title and the
+// memory update. It is an editable built-in, offered as the default mode.
 package chroniclenodes
 
 import (
@@ -11,8 +12,10 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/chronicle/services/chronicleservice"
 	"github.com/SgtFlame/foundation/backend/features/chronicle/steps"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
@@ -25,11 +28,11 @@ import (
 // PersonalID is the built-in Personal graph's ID.
 const PersonalID = "personal"
 
-// The outputs of Personal's Return nodes.
-const (
-	OutItems   = "items"   // []conversation.ContextItem: the chosen entries, pinned
-	OutChanges = "changes" // chroniclesteps.Changes: what the memory update did
-)
+// Deps are what the nodes run with, once their services exist.
+type Deps struct {
+	Steps   chroniclesteps.Steps
+	Entries chronicleservice.Service // indexes the entries the memory update changed
+}
 
 // The data types Chronicle contributes.
 const (
@@ -46,9 +49,11 @@ const source = "chronicle"
 
 var log = logging.In("chronicle")
 
-// Contribute registers the node types, the data types and the Personal
-// graph. steps returns the step functions once their services exist.
-func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
+// Contribute registers the node types, the data types, the Personal graph
+// and its mode. deps returns the step functions and the entries service
+// once they exist.
+func Contribute(reg *extensions.Registry, deps func() Deps) {
+	steps := func() chroniclesteps.Steps { return deps().Steps }
 	for i, t := range []cognition.DataType{
 		{Descriptor: extensions.Descriptor{ID: TypeEntryRefs}, Color: "#8d6e63", Description: "Chronicle entries, by ID"},
 		{Descriptor: extensions.Descriptor{ID: TypeCandidates}, Color: "#ab47bc", Description: "The entries a round may use: the checked ones and the others stage 1 chooses from"},
@@ -130,7 +135,8 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 		Title:       "Match context",
 		Effects:     true,
 		External:    true, // a model call
-		Description: "Stage 1: a fast model call chooses the candidates the reply needs; the checked entries are always kept",
+		Description: "Stage 1: a fast model call chooses the candidates the reply needs; the checked entries are always kept. Its prompts are Go templates over topK, text, window and candidates.",
+		Config:      json.RawMessage(promptsSchema("topK, text (the message), window (each text, reply) and candidates (each id, type, title, summary, active)")),
 		Pins: cognition.Pins{
 			In: []cognition.Pin{
 				cognition.ExecPin(cognition.Then, ""),
@@ -143,7 +149,10 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 			Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("selection", "Selection", TypeSelection, "The entries chosen, ranked")},
 		},
 		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
-			args := chroniclesteps.MatchIn{ServiceArgs: x.ServiceArgs}
+			args := chroniclesteps.MatchIn{ServiceArgs: x.ServiceArgs, Env: x.Env()}
+			if err := x.Config(&args.Prompts); err != nil {
+				return nil, "", err
+			}
 			match := true
 			if err := errors.Join(into(in, "text", &args.Text), into(in, "window", &args.Window), into(in, "candidates", &args.Candidates), into(in, "topK", &args.TopK), into(in, "match", &match)); err != nil {
 				return nil, "", err
@@ -200,8 +209,8 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 		Title:       "Update memory",
 		Effects:     true,
 		External:    true, // a model call
-		Description: "The memory update: rewrites the summaries of the used entries the round adds facts to, and proposes new entries",
-		Config:      json.RawMessage(`{"type": "object", "properties": {"maxProposals": {"type": "integer", "title": "Proposals", "min": 0, "max": 10, "description": "New entries proposed at most"}}}`),
+		Description: "The memory update: rewrites the summaries of the used entries the round adds facts to, and proposes new entries. Its prompts are Go templates over maxProposals, round, used, types and titles.",
+		Config:      json.RawMessage(promptsSchema("maxProposals, round (text, reply), used (each id, type, title, shortSummary, fullSummary), types (each id, description) and titles", `"maxProposals": {"type": "integer", "title": "Proposals", "min": 0, "max": 10, "description": "New entries proposed at most"}`)),
 		Pins: cognition.Pins{
 			In: []cognition.Pin{
 				cognition.ExecPin(cognition.Then, ""),
@@ -213,13 +222,14 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
 			config := struct {
 				MaxProposals *int `json:"maxProposals"`
+				chroniclesteps.Prompts
 			}{}
 			if len(x.Node.Config) > 0 {
 				if err := json.Unmarshal(x.Node.Config, &config); err != nil {
 					return nil, "", log.Code("bad_node_config").Wrapf(err, "the node's config is not valid")
 				}
 			}
-			args := chroniclesteps.UpdateIn{ServiceArgs: x.ServiceArgs, MaxProposals: 3}
+			args := chroniclesteps.UpdateIn{ServiceArgs: x.ServiceArgs, MaxProposals: 3, Prompts: config.Prompts, Env: x.Env()}
 			if config.MaxProposals != nil {
 				args.MaxProposals = *config.MaxProposals
 			}
@@ -234,11 +244,93 @@ func Contribute(reg *extensions.Registry, steps func() chroniclesteps.Steps) {
 		},
 	})
 
+	node(360, cognition.NodeType{
+		Descriptor:  extensions.Descriptor{ID: "chronicle.changes"},
+		Example:     "Memory changes after Update memory, whose titles a Template turns into Emit followed's summary",
+		Title:       "Memory changes",
+		Effects:     true,
+		Description: "Indexes the entries the memory update changed, so retrieval finds their new summaries, and gives what changed: the titles updated and proposed, and the data the browser's Chronicles control shows",
+		Pins: cognition.Pins{
+			In: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("changes", "Changes", TypeChanges, "What the memory update did")},
+			Out: []cognition.Pin{
+				cognition.ExecPin(cognition.Then, ""),
+				cognition.DataPin("changed", "Changed", "bool", "Whether it updated or proposed any entry"),
+				cognition.DataPin("updated", "Updated", "json", "The titles of the entries updated, without markdown"),
+				cognition.DataPin("proposed", "Proposed", "json", "The titles of the entries proposed, without markdown"),
+				cognition.DataPin("data", "Data", "json", "The entries changed, for Emit followed chronicle"),
+			},
+		},
+		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
+			changes, err := cognition.Get[chroniclesteps.Changes](in, "changes")
+			if err != nil {
+				return nil, "", err
+			}
+			out, ids := Changed(changes)
+			if d := deps(); len(ids) > 0 && d.Entries != nil {
+				if resp := d.Entries.Reindex(chronicleservice.ReindexArgs{ServiceArgs: x.ServiceArgs, EntryIDs: ids}); resp.Common.Code >= 300 {
+					log.Warn(x.Context(), "cannot index the entries the memory update changed: %s", resp.Common.Message)
+				}
+			}
+			updated, proposed := []string{}, []string{}
+			for _, e := range out.Updated {
+				updated = append(updated, plain(e.Title))
+			}
+			for _, e := range out.Proposed {
+				proposed = append(proposed, plain(e.Title))
+			}
+			return cognition.Values{"changed": len(updated)+len(proposed) > 0, "updated": updated, "proposed": proposed, "data": out}, cognition.Then, nil
+		},
+	})
+
 	var g cognition.Graph
 	if err := json.Unmarshal(personal, &g); err != nil {
 		panic("chroniclenodes: personal.json: " + err.Error()) // embedded, so a test catches it
 	}
-	cognition.Graphs.Register(reg, cognition.BuiltIn{Descriptor: extensions.Descriptor{ID: PersonalID, Order: 100, Source: source}, Graph: g})
+	cognition.Graphs.Register(reg, cognition.BuiltIn{Descriptor: extensions.Descriptor{ID: PersonalID, Order: 100, Source: source}, Graph: g, Editable: true})
+	conversation.Modes.Register(reg, conversation.ModeEntry{Descriptor: extensions.Descriptor{ID: PersonalID, Order: 100, Source: source},
+		Label: "Personal", Icon: "🧠", GraphRef: PersonalID, Default: true})
+}
+
+// promptsSchema is the config schema of a node whose model call has
+// system and prompt templates over data, with more properties first.
+func promptsSchema(data string, more ...string) string {
+	props := append(more,
+		`"system": {"type": "string", "title": "Instructions", "format": "multiline", "description": "A Go template over `+data+`; empty uses the default"}`,
+		`"prompt": {"type": "string", "title": "Message", "format": "multiline", "description": "A Go template over `+data+`; empty uses the default"}`)
+	return `{"type": "object", "properties": {` + strings.Join(props, ", ") + `}}`
+}
+
+// Followed is the data of a "followed" event of the chronicle follower,
+// which the browser's Chronicles control reads.
+type Followed struct {
+	Updated  []EntryRef `json:"updated,omitempty"`
+	Proposed []EntryRef `json:"proposed,omitempty"`
+}
+
+// EntryRef names an entry in Followed.
+type EntryRef struct {
+	ID    uint64 `json:"id,string"`
+	Title string `json:"title"`
+}
+
+// Changed is what the memory update did as Followed, with the ids of the
+// entries it updated, which need indexing again.
+func Changed(changes chroniclesteps.Changes) (Followed, []uint64) {
+	var out Followed
+	var ids []uint64
+	for _, e := range changes.Updated {
+		out.Updated = append(out.Updated, EntryRef{ID: e.ID, Title: e.Title})
+		ids = append(ids, e.ID)
+	}
+	for _, e := range changes.Proposed {
+		out.Proposed = append(out.Proposed, EntryRef{ID: e.ID, Title: e.Title})
+	}
+	return out, ids
+}
+
+// plain is a title without the characters markdown would read.
+func plain(title string) string {
+	return strings.NewReplacer("*", "", "_", " ").Replace(title)
 }
 
 // into sets *p to input id, converted as cognition.Get converts it, and

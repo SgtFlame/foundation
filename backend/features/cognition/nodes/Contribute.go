@@ -43,6 +43,7 @@ func Contribute(reg *extensions.Registry) {
 	contributeFlow(reg)
 	contributeData(reg)
 	contributeDataNodes(reg)
+	contributeTemplates(reg)
 }
 
 func contributeConversions(reg *extensions.Registry) {
@@ -77,8 +78,10 @@ func contributeConversions(reg *extensions.Registry) {
 
 func contributeKinds(reg *extensions.Registry) {
 	for i, k := range []cognition.Kind{
-		{Descriptor: extensions.Descriptor{ID: cognition.KindMode}, Title: "Chat mode", Events: []string{"event.userMessage", "event.reply"},
-			Description: "A chat mode: runs on each user message to gather the reply's context, and on each reply to learn from it", Returns: "context items, and memory changes"},
+		{Descriptor: extensions.Descriptor{ID: cognition.KindMode}, Title: "Chat mode", Events: []string{"event.userMessage"},
+			Description: "A chat mode, offered in the composer by the chat.modes settings: runs a whole chat round from On user message, gathering its context, building its prompt and tools with templates, streaming the reply with Stream reply, then naming the conversation and learning from the round",
+			Returns: "nothing: the round's events come from its Stream reply, Say, Set title and Emit followed nodes",
+			Spec:    json.RawMessage(modeSpecSchema)},
 		{Descriptor: extensions.Descriptor{ID: cognition.KindAgent}, Title: "Agent", Events: []string{cognition.EventCall},
 			Description: "A persona with its prompts, tools and level, called from other graphs with Call graph", Returns: "its declared outputs"},
 		{Descriptor: extensions.Descriptor{ID: cognition.KindFunction}, Title: "Function", Events: []string{cognition.EventCall},
@@ -90,6 +93,14 @@ func contributeKinds(reg *extensions.Registry) {
 		cognition.Kinds.Register(reg, k)
 	}
 }
+
+// modeSpecSchema is a mode graph's Spec (cognition.ModeSpec).
+const modeSpecSchema = `{
+  "type": "object",
+  "properties": {
+    "settings": {"type": "array", "items": {"type": "string"}, "description": "The context settings the mode uses, by chat.contextProvider id (chronicle, rag, workbench, tools, debug): the composer's ⚙ shows only these; empty shows them all"}
+  }
+}`
 
 func node(reg *extensions.Registry, order int, t cognition.NodeType) {
 	t.Order, t.Source = order, source

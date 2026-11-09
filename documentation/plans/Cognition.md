@@ -136,9 +136,7 @@ The **Nexus** is the Cognition component where agents collaborate: a shared, str
   - a missing event node.
 
 ### How chat uses it
-- **Modes**: `chat.modes` ([Configuration.md](Configuration.md)) points each mode at a published `mode` graph.
-- **`Send`**: Chronicle's `Send` becomes "run the conversation's mode graph with the `On user message` event". Its SSE events (deltas, entries, sources, usage) come from the graph's `Stream reply` / `Emit …` nodes.
-- **Context settings**: the ChatContextSettingsContributors' values ([ChatCompletion.md](ChatCompletion.md)) are passed as graph inputs. A mode graph declares which ones it uses, and the composer hides the others.
+- **Modes, `Send` and context settings** are built in slice 44 ([Cognition.md › Built in slice 44](../Cognition.md#built-in-slice-44)).
 - **Agents**: an agent is a published `agent` graph with a persona prompt, allowed tools and a level, callable through `Call graph` and selectable as a chat mode.
 
 ### Services and REST
@@ -210,7 +208,6 @@ The **Nexus** is the Cognition component where agents collaborate: a shared, str
 ### Not built yet
 - **The Nexus slice** (slice 9): streams, the `Reconcile` node, the Nexus tab and `nexusservice`, with the `nexus.read`/`nexus.write` tools ([Tools.md](Tools.md)). ★ how streams and reconciliation feel. Needs question 1 first.
 - **Editing passes**: the Prompt Editor and the prompt library (`PromptTemplate`, `promptservice`), with the global helpers of question 4; Debug and Single-step, breakpoints, and editing captured values while paused; `Parallel` and the iteration picker; Replay with pinned LLM outputs. Drafts by commands, publishing, kinds, the Palette, variables, loops, Call graph, conversions, undo, copy and paste, reroutes and comment frames are built ([Cognition.md › Built in slice 14](../Cognition.md#built-in-slice-14)).
-- **`Send` as a mode graph**: `chat.modes`, the `Stream reply` and `Emit …` nodes ([ChatCompletion.md](ChatCompletion.md)).
 - **Engine**: the run token and cost limits (through usage records); blob files for large values; live traces while running (`step`, `paused`, `done` over SSE); running from the editor (`Run`, async; `bp.test` runs a draft once); `Wait for user` (on the tool confirmation mechanism), the rest of the node library, and every tool as a node.
 - **Editor**: `cognition.nodeView` custom node bodies, the toolbar's Run, Debug, Step, Continue and Stop, the version picker with a diff (older versions are only in the event stream), collapse to sub-graph, align and distribute, a schema form for node configs, dragging a comment frame with what it holds, tool calls in the Log Viewer, and a link from a chat round to its runs.
 - **Logging**: each `RunStep` logging a summary record with `trace` = the run ID, so runs show in the Log Explorer ([Logging.md](Logging.md)).

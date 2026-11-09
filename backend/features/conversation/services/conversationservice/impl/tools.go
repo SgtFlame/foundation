@@ -10,14 +10,10 @@ import (
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
-	"github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	"github.com/SgtFlame/foundation/backend/features/tools"
-	"github.com/SgtFlame/foundation/backend/features/tools/settings"
 )
-
-const toolsPrompt = "\n\n# Tools\nYou can call tools to search and read the user's Volumes and Chronicles, to ask them to choose, to open things in their workbench, and to change their files and Chronicles. Every change is shown to the user to approve first, so propose it with the tool rather than asking in words. When a tool's result has passages with a cite such as [5], cite them like the context's passages. Never say something was changed unless a tool's result says so."
 
 // maxClientTools bounds the client tools a message may declare.
 const maxClientTools = 20
@@ -131,20 +127,6 @@ func allowed(r *round) map[string]bool {
 		out[n] = true
 	}
 	return out
-}
-
-// offered is the tools the round may call: none when the conversation's
-// tools setting is off, else the server's and the browser's, less those
-// the tools section turns off.
-func (s *service) offered(args conversationservice.SendArgs, r *round) ([]tools.Tool, toolssettings.Tools) {
-	settings, err := config.Read[toolssettings.Tools](s.config, args.ServiceArgs, toolssettings.ID)
-	if err != nil {
-		settings = toolssettings.Defaults
-	}
-	if !enabled(s.settingsOf(args, r, tools.ContextID, nil)) {
-		return nil, settings
-	}
-	return tools.Enabled(tools.Tools.All(s.registry), args.ClientTools, settings), settings
 }
 
 // checkClientTools rejects client tools the browser may not declare.

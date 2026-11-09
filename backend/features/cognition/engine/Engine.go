@@ -11,7 +11,9 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -182,6 +184,9 @@ type RunArgs struct {
 	Host    any              // what its nodes act on (cognition.Exec.Host)
 	Trace   string           // TraceAll or TraceFailures
 	Limits  *Limits          // tighter limits than the cognition section's, for a kind
+	// Wall, when set, replaces the section's time per run: a chat round
+	// runs as long as its user lets it (forge 06i). Graphs it calls keep it.
+	Wall time.Duration
 	// Stub runs External nodes as stubs that give their Sample (forge 06f:
 	// a sandboxed run), in the graphs it calls too.
 	Stub bool
@@ -261,6 +266,9 @@ func (e *Engine) Run(args RunArgs) (Result, error) {
 		}
 	}
 	wall := time.Duration(settings.MaxWallSeconds) * time.Second
+	if args.Wall > 0 {
+		wall = args.Wall
+	}
 	if l := args.Limits; l != nil && l.MaxWallMs > 0 {
 		wall = min(wall, time.Duration(l.MaxWallMs)*time.Millisecond)
 	}
@@ -314,9 +322,44 @@ func (e *Engine) call(parent *run, graphID string, inputs cognition.Values) (cog
 		return nil, log.Code("call_depth").Errorf("graphs called graphs more than %d deep", parent.settings.MaxCallDepth)
 	}
 	args := RunArgs{ServiceArgs: parent.args.ServiceArgs, GraphID: graphID, Event: cognition.EventCall, Inputs: inputs,
-		Trigger: "graph:" + strconv.FormatUint(parent.record.ID, 10), Host: parent.args.Host, Trace: parent.args.Trace, Stub: parent.args.Stub, depth: parent.args.depth + 1}
+		Trigger: "graph:" + strconv.FormatUint(parent.record.ID, 10), Host: parent.args.Host, Trace: parent.args.Trace, Stub: parent.args.Stub, Wall: parent.args.Wall, depth: parent.args.depth + 1}
 	res, err := e.Run(args)
 	return res.Outputs, err
+}
+
+// setting reads a path of a configuration section for a node: the whole
+// section when path is empty, else the value at the dotted path (array
+// items by index), nil when it is absent.
+func (e *Engine) setting(args features.ServiceArgs, section, path string) (any, error) {
+	if e.config == nil {
+		return nil, log.Code("no_settings").Errorf("settings cannot be read: the engine has no configuration")
+	}
+	raw, err := e.config.Resolved(args, section)
+	if err != nil {
+		return nil, log.Code("setting_not_found").With("section", section).Wrapf(err, "cannot read the settings %s", section)
+	}
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, log.Wrap(err)
+	}
+	if path == "" {
+		return v, nil
+	}
+	for _, key := range strings.Split(path, ".") {
+		switch t := v.(type) {
+		case map[string]any:
+			v = t[key]
+		case []any:
+			i, err := strconv.Atoi(key)
+			if err != nil || i < 0 || i >= len(t) {
+				return nil, nil
+			}
+			v = t[i]
+		default:
+			return nil, nil
+		}
+	}
+	return v, nil
 }
 
 // purge deletes the traces that are neither among their graph's last

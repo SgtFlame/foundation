@@ -19,4 +19,5 @@ func (ch *ConversationHandler) Register(router gin.IRouter, service conversation
 	group.POST("/feedback", ch.Feedback)
 	group.POST("/answer", ch.Answer) // a waiting tool call's approval or client result
 	group.GET("/context-providers", ch.ContextProviders)
+	group.GET("/modes", ch.Modes)
 }

@@ -51,7 +51,9 @@
 }
 
 #root {
-  min-height: 100svh;
+  /* a fixed height, so the workbench's panels scroll inside it rather than
+     growing the page */
+  height: 100svh;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;

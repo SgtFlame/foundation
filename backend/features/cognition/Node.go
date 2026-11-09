@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/cognition/tmpl"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 )
 
@@ -235,6 +236,10 @@ type ExecHooks struct {
 	// Call runs another graph from its On call event and returns its
 	// outputs.
 	Call func(graphID string, inputs Values) (Values, error)
+	// Setting reads a path of a configuration section as the run's
+	// principal sees it ("builder", "maxSteps"); an empty path is the
+	// whole section (forge 06i).
+	Setting func(section, path string) (any, error)
 }
 
 // NewExec is the Exec of a node in run runID; the engine makes them.
@@ -272,6 +277,24 @@ func (x *Exec) Call(graphID string, inputs Values) (Values, error) {
 		return nil, fmt.Errorf("%s needs the engine to call graph %s", x.Node.ID, graphID)
 	}
 	return x.Hooks.Call(graphID, inputs)
+}
+
+// Setting reads a configuration setting (see ExecHooks.Setting).
+func (x *Exec) Setting(section, path string) (any, error) {
+	if x.Hooks.Setting == nil {
+		return nil, fmt.Errorf("%s cannot read settings here", x.Node.ID)
+	}
+	return x.Hooks.Setting(section, path)
+}
+
+// Env is what the templates a node renders reach: the run's settings.
+func (x *Exec) Env() tmpl.Env {
+	return tmpl.Env{Setting: x.Setting}
+}
+
+// Render renders a Go template with data (package tmpl).
+func (x *Exec) Render(text string, data any) (string, error) {
+	return tmpl.Render(text, data, x.Env())
 }
 
 // Config decodes the node's config into v; an empty config leaves v as it is.

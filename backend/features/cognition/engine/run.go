@@ -186,6 +186,9 @@ func (r *run) exec(id string, node cognition.Node) *cognition.Exec {
 		Call: func(graphID string, inputs cognition.Values) (cognition.Values, error) {
 			return r.engine.call(r, graphID, inputs)
 		},
+		Setting: func(section, path string) (any, error) {
+			return r.engine.setting(r.args.ServiceArgs, section, path)
+		},
 	}
 	return x
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/apps/ops"
 	apptools "github.com/SgtFlame/foundation/backend/features/apps/tools"
 	chroniclenodes "github.com/SgtFlame/foundation/backend/features/chronicle/nodes"
-	chroniclesteps "github.com/SgtFlame/foundation/backend/features/chronicle/steps"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/cognition/drafts"
 	cognitionnodes "github.com/SgtFlame/foundation/backend/features/cognition/nodes"
@@ -40,7 +39,7 @@ func everything(t *testing.T) *extensions.Registry {
 		live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components)
 	cognitionnodes.Contribute(reg)
 	conversationnodes.Contribute(reg)
-	chroniclenodes.Contribute(reg, func() chroniclesteps.Steps { return chroniclesteps.Steps{} })
+	chroniclenodes.Contribute(reg, func() chroniclenodes.Deps { return chroniclenodes.Deps{} })
 	toolsnodes.Contribute(reg, func() toolsnodes.Deps { return toolsnodes.Deps{} })
 	if err := uicomponents.Contribute(reg); err != nil {
 		t.Fatal(err)

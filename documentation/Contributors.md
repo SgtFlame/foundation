@@ -136,7 +136,7 @@ The backend points are `config.section`, `chat.contextProvider`, `chat.roundFoll
   - `conversationnodes.Contribute`: the chat events and Chat's types;
   - `chroniclenodes.Contribute`: Chronicle's six nodes, its types and the Personal graph, taking a function that returns the step functions (the late binding again);
   - `cognitionsettings.Contribute`: the `cognition` section.
-- **Frontend**: the Cognition editor contributes `workbench.editor` `cognition`, the `workbench.sideView` **Cognition** (the Explorer) and the `workbench.command` `open-cognition` (AgentOS › Cognition). Every node body is drawn from its type and pins.
+- **Frontend** (in Forge since slice 44): the Cognition editor contributes `workbench.editor` `cognition`, the `workbench.sideView` **Cognition** (the Explorer) and the `workbench.command` `open-cognition` (AgentOS › Cognition). Every node body is drawn from its type and pins.
 
 ## Built in slice 8
 - **Backend**: `tools.tool` (`tools.Tools`, [Tools.md › Built in slice 8](Tools.md#built-in-slice-8)), declared in `serve.go`. A tool is a struct with function fields, like a node type.

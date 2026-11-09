@@ -30,6 +30,7 @@ export interface ChatThread {
 
 export interface SendOptions {
   level?: string
+  mode?: string // a chat.modes id
   workbench?: unknown
   contextSettings?: Record<string, unknown>
   // The chat.clientTool contributions the model may call, and what they run with
@@ -144,7 +145,7 @@ export function useChatStream() {
       try {
         await Conversations.send(
           {
-            conversationId: current.conversation?.id, text, level: options.level, workbench: options.workbench, contextSettings: options.contextSettings,
+            conversationId: current.conversation?.id, text, level: options.level, mode: options.mode, workbench: options.workbench, contextSettings: options.contextSettings,
             clientTools: options.clientTools?.map(declare),
           },
           {

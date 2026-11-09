@@ -14,6 +14,7 @@ export interface Conversation {
   id: string
   created: string // RFC 3339
   title?: string // generated after the first round
+  mode?: string // the chat.modes id its rounds run in (forge 06i)
   lastRoundAt: string
   contextSettings?: Record<string, unknown> // by chat.contextSettings id
 }
@@ -164,6 +165,7 @@ export interface SendRequest {
   conversationId?: string // omitted starts a new conversation
   text: string
   level?: string // the default level when omitted
+  mode?: string // a chat.modes id; the conversation's, else the default, when omitted
   workbench?: unknown // the workbench snapshot
   contextSettings?: Record<string, unknown>
   clientTools?: ClientToolDeclaration[] // the tools the model may call in this browser
@@ -195,6 +197,29 @@ export interface ProviderInfo {
 
 export interface ContextProvidersResponse extends ResponseStatus {
   providers?: ProviderInfo[]
+}
+
+// A chat mode as GET /conversation/modes gives it (forge 06i): each runs a
+// mode graph for every round.
+export interface ModeFocus {
+  kinds?: string[]
+  subjects?: string[]
+}
+
+export interface ChatMode {
+  id: string
+  label: string
+  icon?: string
+  graphRef: string
+  default?: boolean
+  focus?: ModeFocus // offered only while the editor the user was in matches
+  description?: string
+  settings?: string[] // the context settings its graph uses; empty uses them all
+  missing?: boolean // its graph does not exist
+}
+
+export interface ModesResponse extends ResponseStatus {
+  modes: ChatMode[]
 }
 
 export interface SendOptions {
@@ -231,6 +256,11 @@ export const Conversations = {
   // the call is no longer waiting
   async answer(request: AnswerRequest): Promise<ResponseStatus> {
     const response = await http.post<ResponseStatus>('/conversation/answer', request)
+    return response.data
+  },
+
+  async modes(): Promise<ModesResponse> {
+    const response = await http.get<ModesResponse>('/conversation/modes')
     return response.data
   },
 

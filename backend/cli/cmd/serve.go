@@ -385,6 +385,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// once they exist.
 		var retrievalService retrievalservice.Service
 		var chronicleDeps chroniclecontext.Deps
+		var chronicleNodeDeps chroniclenodes.Deps
 		var kbToolDeps kbtools.Deps
 		var chronicleToolDeps chronicletools.Deps
 		var agentDeps toolsnodes.Deps
@@ -408,7 +409,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var conversationLive conversationservice.Service
 		var collabLive collabservice.Service
 		registry := extensions.NewRegistry()
-		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, authz.ResourceTypes,
+		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.Modes, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, authz.ResourceTypes,
 			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources)
 		// Each feature declares its resource types and their actions
 		authz.Contribute(registry)
@@ -439,7 +440,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		cognitionsettings.Contribute(registry)
 		cognitionnodes.Contribute(registry)
 		conversationnodes.Contribute(registry)
-		chroniclenodes.Contribute(registry, func() chroniclesteps.Steps { return chronicleDeps.Steps })
+		chroniclenodes.Contribute(registry, func() chroniclenodes.Deps { return chronicleNodeDeps })
 		toolssettings.Contribute(registry)
 		toolsbuiltin.Contribute(registry)
 		kbtools.Contribute(registry, func() kbtools.Deps { return kbToolDeps })
@@ -642,8 +643,17 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		usageService := usageimpl.CreateService(usageimpl.WithDB(gdb))
 		embedService := embedimpl.CreateService(embedimpl.WithProvider(usage.EmbedProvider(provider, "gemini", recorder)))
 		chatService := chatimpl.CreateService(chatimpl.WithProvider(usage.ChatProvider(provider, "gemini", recorder)), chatimpl.WithConfig(configService))
+		// The Cognition Engine runs the graphs, such as each chat round's
+		// mode graph (Personal, by default)
+		cognitionEngine := engine.New(gdb, registry, configService)
+		for _, g := range cognitionEngine.Graphs() {
+			for _, p := range cognitionEngine.Resolve(g).Problems {
+				log.With("graphId", g.ID, "nodeId", p.NodeID).Warn(ctx, "Cognition graph %s: %s %s", g.ID, p.Severity, p.Message)
+			}
+		}
 		conversationService := conversationimpl.CreateService(
 			conversationimpl.WithDB(gdb), conversationimpl.WithChat(chatService), conversationimpl.WithConfig(configService), conversationimpl.WithRegistry(registry),
+			conversationimpl.WithEngine(cognitionEngine),
 		)
 
 		retrievalService = retrievalimpl.CreateService(
@@ -651,23 +661,14 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		)
 		chronicleService := chronicleimpl.CreateService(chronicleimpl.WithDB(gdb), chronicleimpl.WithStore(entries), chronicleimpl.WithEmbedder(embedService),
 			chronicleimpl.WithUserName(userName))
-		// The Cognition Engine runs the built-in graphs, such as Chronicle's
-		// Personal mode, which the chronicle provider and follower run
-		cognitionEngine := engine.New(gdb, registry, configService)
-		for _, g := range cognitionEngine.Graphs() {
-			for _, p := range cognitionEngine.Resolve(g).Problems {
-				log.With("graphId", g.ID, "nodeId", p.NodeID).Warn(ctx, "Cognition graph %s: %s %s", g.ID, p.Severity, p.Message)
-			}
-		}
 		cognitionService := cognitionimpl.CreateService(cognitionimpl.WithDB(gdb), cognitionimpl.WithEngine(cognitionEngine))
 		kbToolDeps = kbtools.Deps{Root: kbRoot, Retrieval: retrievalService, Volumes: volumeService, Collab: collabService}
 		chronicleToolDeps = chronicletools.Deps{Retrieval: retrievalService, Entries: chronicleService}
 		agentDeps = toolsnodes.Deps{DB: gdb, Chat: chatService, Config: configService, Registry: registry}
 		chronicleDeps = chroniclecontext.Deps{
-			Steps:   chroniclesteps.Steps{DB: gdb, Chat: chatService, Config: configService, Retriever: func() retrievalservice.Service { return retrievalService }},
-			Engine:  cognitionEngine,
-			Entries: chronicleService,
+			Steps: chroniclesteps.Steps{DB: gdb, Chat: chatService, Config: configService, Retriever: func() retrievalservice.Service { return retrievalService }},
 		}
+		chronicleNodeDeps = chroniclenodes.Deps{Steps: chronicleDeps.Steps, Entries: chronicleService}
 		// Entries changed or never embedded (no key yet) are indexed now, and
 		// again whenever the provider settings change
 		reindexEntries := func() {

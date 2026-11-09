@@ -131,7 +131,7 @@ function Workbench() {
 
   return (
     <WorkbenchContextProvider>
-      <main style={{ display: 'flex', flexGrow: 1 }}>
+      <main style={{ display: 'flex', flexGrow: 1, minHeight: 0 }}>
         <SideBar registry={registry} />
         <div style={{ position: 'relative', flexGrow: 1 }}>
           <Layout model={model} factory={factory} />

@@ -10,41 +10,48 @@ import (
 	"unicode/utf8"
 
 	"github.com/SgtFlame/foundation/backend/features"
-	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
 	"github.com/SgtFlame/foundation/backend/features/ai/settings"
+	"github.com/SgtFlame/foundation/backend/features/cognition"
+	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
 	"github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
+	"github.com/SgtFlame/foundation/backend/features/conversation/nodes"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	"github.com/SgtFlame/foundation/backend/features/conversation/settings"
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
-	"github.com/SgtFlame/foundation/backend/features/tools"
 	"gorm.io/gorm"
 )
 
 const (
 	maxText      = 32 << 10 // a message
 	maxWorkbench = 16 << 10 // a workbench snapshot; the browser keeps it near 4 KB
+	// roundWall is how long a round's mode graph may run: a round runs
+	// until its user stops it, and its graph tools may run agents.
+	roundWall = 2 * time.Hour
 )
 
-// round is what Send has resolved and stored before the reply starts.
+// round is what Send has resolved and stored before the mode graph runs.
 type round struct {
 	conversation conversation.Conversation
 	round        conversation.Round
 	chat         conversationsettings.Chat
+	mode         conversationsettings.Mode
 	levels       aisettings.Levels
 	level        aisettings.Level
 	model        aisettings.Model
+	models       aisettings.Models // the catalog, for a reply at another level
 	history      []conversation.Round       // the window: the rounds sent as history, oldest first
 	settings     map[string]json.RawMessage // the context settings, by provider ID
 	segments     []retrieval.RoundSegment   // what the round injected, once stored
 	debug        bool                       // the conversation's Debug setting: log its AI calls in detail
 }
 
-// Send stores the message as a new round and streams the reply in the
-// background. The window (the conversation's last historyRounds rounds) is
-// sent as history; memory comes from the context providers, such as
-// Chronicle's, and the round followers update it after the reply.
+// Send stores the message as a new round and runs the round's mode graph
+// in the background (forge 06i): the graph gathers the context, builds the
+// prompt and tools, streams the reply through the round's host, and
+// follows it up. Send keeps the storage, the stream, approvals and the
+// round's accounting.
 func (s *service) Send(args conversationservice.SendArgs) *conversationservice.SendRequest {
 	events := make(chan conversationservice.SendEvent, 64)
 	r, failed := s.start(args)
@@ -53,11 +60,12 @@ func (s *service) Send(args conversationservice.SendArgs) *conversationservice.S
 		close(events)
 		return &conversationservice.SendRequest{Events: events}
 	}
-	go s.reply(args, r, events)
+	go s.run(args, r, events)
 	return &conversationservice.SendRequest{Events: events}
 }
 
-// start validates the message, resolves its level and stores the round.
+// start validates the message, resolves its mode and level, and stores the
+// round.
 func (s *service) start(args conversationservice.SendArgs) (*round, *features.ServiceResponse) {
 	if failed := check(args.ServiceArgs, "conversation.write", args.ConversationID); failed != nil {
 		return nil, failed
@@ -73,7 +81,7 @@ func (s *service) start(args conversationservice.SendArgs) (*round, *features.Se
 	case len(args.Workbench) > 0 && !json.Valid(args.Workbench):
 		return nil, args.Fail(http.StatusBadRequest, log.Code("bad_workbench").New("the workbench snapshot is not valid JSON"))
 	}
-	if s.chat == nil || s.config == nil {
+	if s.chat == nil || s.config == nil || s.engine == nil {
 		return nil, args.Fail(http.StatusServiceUnavailable, log.Code("chat_not_configured").New("chat is not configured"))
 	}
 	if failed := checkClientTools(args); failed != nil {
@@ -92,11 +100,10 @@ func (s *service) start(args conversationservice.SendArgs) (*round, *features.Se
 	if r.level, ok = r.levels.Find(args.Level); !ok {
 		return nil, args.Fail(http.StatusBadRequest, log.Code("unknown_level").With("level", args.Level).Errorf("there is no chat level %q", args.Level))
 	}
-	models, err := config.Read[aisettings.Models](s.config, args.ServiceArgs, aisettings.ModelsID)
-	if err != nil {
+	if r.models, err = config.Read[aisettings.Models](s.config, args.ServiceArgs, aisettings.ModelsID); err != nil {
 		return nil, args.Fail(http.StatusInternalServerError, log.Wrap(err))
 	}
-	if r.model, ok = models.ByID(r.level.ModelRef); !ok {
+	if r.model, ok = r.models.ByID(r.level.ModelRef); !ok {
 		return nil, args.Fail(http.StatusBadRequest, log.Code("unknown_model").With("level", r.level.ID, "model", r.level.ModelRef).
 			Errorf("level %q uses %q, which is not in the model catalog", r.level.ID, r.level.ModelRef))
 	}
@@ -117,6 +124,10 @@ func (s *service) start(args conversationservice.SendArgs) (*round, *features.Se
 	} else {
 		r.conversation = conversation.Conversation{Tenanted: db.TenantOf(args.Principal), Owned: db.OwnedBy(args.Principal)}
 	}
+	var failed *features.ServiceResponse
+	if r.mode, failed = s.modeOf(args, r.conversation); failed != nil {
+		return nil, failed
+	}
 
 	// The settings sent replace the conversation's, provider by provider
 	r.settings = map[string]json.RawMessage{}
@@ -128,11 +139,12 @@ func (s *service) start(args conversationservice.SendArgs) (*round, *features.Se
 	}
 	stored, _ := json.Marshal(r.settings)
 	r.conversation.ContextSettings = string(stored)
+	r.conversation.Mode = r.mode.ID
 	r.conversation.LastRoundAt = time.Now()
 
 	r.round = conversation.Round{
 		Tenanted: db.TenantOf(args.Principal), Owned: db.OwnedBy(args.Principal),
-		Text: text, Level: r.level.ID, ModelName: r.model.Model, Workbench: string(args.Workbench),
+		Text: text, Level: r.level.ID, ModelName: r.model.Model, Workbench: string(args.Workbench), Mode: r.mode.ID,
 	}
 	err = s.db.WithContext(args.Context()).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(&r.conversation).Error; err != nil {
@@ -147,113 +159,79 @@ func (s *service) start(args conversationservice.SendArgs) (*round, *features.Se
 	return r, nil
 }
 
-// reply streams the reply and completes the round. The round is saved even
-// when the user stops it, so its writes do not use the request's context.
-func (s *service) reply(args conversationservice.SendArgs, r *round, events chan<- conversationservice.SendEvent) {
+// modeOf is the mode a round runs in: the one sent, else the
+// conversation's, else the default of the chat.modes settings.
+func (s *service) modeOf(args conversationservice.SendArgs, c conversation.Conversation) (conversationsettings.Mode, *features.ServiceResponse) {
+	modes, err := config.Read[conversationsettings.Modes](s.config, args.ServiceArgs, conversationsettings.ModesID)
+	if err != nil {
+		return conversationsettings.Mode{}, args.Fail(http.StatusInternalServerError, log.Wrap(err))
+	}
+	if args.Mode != "" {
+		m, ok := modes.Find(args.Mode)
+		if !ok {
+			return m, args.Fail(http.StatusBadRequest, log.Code("unknown_mode").With("mode", args.Mode).Errorf("there is no chat mode %q", args.Mode))
+		}
+		return m, nil
+	}
+	if m, ok := modes.Find(c.Mode); ok {
+		return m, nil
+	}
+	m, ok := modes.Default()
+	if !ok {
+		return m, args.Fail(http.StatusServiceUnavailable, log.Code("no_chat_modes").New("there are no chat modes: add one in Settings › AI › Chat modes"))
+	}
+	return m, nil
+}
+
+// run runs the round's mode graph from On user message, then completes the
+// round if the graph did not: with what it said, else its failure.
+func (s *service) run(args conversationservice.SendArgs, r *round, events chan<- conversationservice.SendEvent) {
 	defer close(events)
 	r.debug = debugging(s.settingsOf(args, r, conversation.DebugID, nil))
-	ctx := args.Context()
-	emit := func(e conversationservice.SendEvent) {
-		select {
-		case events <- e:
-		case <-ctx.Done():
-		}
-	}
+	h := newHost(s, args, r, events)
 	conv, started := r.conversation, r.round
-	emit(conversationservice.SendEvent{Kind: conversationservice.EventStarted, Conversation: &conv, Round: &started})
+	h.emit(conversationservice.SendEvent{Kind: conversationservice.EventStarted, Conversation: &conv, Round: &started})
 
-	start := time.Now()
-	messages := make([]chatservice.Message, 0, 2*len(r.history)+1)
-	for _, h := range r.history {
-		messages = append(messages, chatservice.Message{Role: chatservice.RoleUser, Content: h.Text}, chatservice.Message{Role: chatservice.RoleAssistant, Content: h.Reply})
-	}
-	messages = append(messages, chatservice.Message{Role: chatservice.RoleUser, Content: r.round.Text})
+	// The run outlives the browser: what follows the reply is done even
+	// when nobody is left to tell. The reply itself stops with the browser.
 	call := args.ServiceArgs
+	call.Ctx = context.WithoutCancel(args.Context())
 	call.Meta = features.Meta{Feature: "chat", Level: r.level.ID, ConversationID: r.conversation.ID, RoundID: r.round.ID, Debug: r.debug}
-	items, mode := s.gather(args, r)
-	system, cited := prompt(withMode(r.chat.SystemPrompt, mode), items)
-	if r.segments = s.storeSegments(args, r, cited); len(r.segments) > 0 {
-		emit(conversationservice.SendEvent{Kind: conversationservice.EventSources, Segments: r.segments})
+	all := map[string]json.RawMessage{}
+	for _, p := range conversation.ContextProviders.All(s.registry) {
+		all[p.ID] = s.settingsOf(args, r, p.ID, p.Defaults)
 	}
-	offered, toolSettings := s.offered(args, r)
-	if mode != nil {
-		r.round.Mode = mode.ID
-		offered = slices.DeleteFunc(offered, func(t tools.Tool) bool { return !mode.Offers(t.ID) })
-		if mode.MaxSteps > 0 {
-			toolSettings.MaxSteps = mode.MaxSteps
-		}
-	}
-	if len(offered) > 0 {
-		system += toolsPrompt
-	}
-	// The reply is the tool loop: with no tools, one streamed call
-	c := &citer{s: s, args: args, r: r, emit: emit}
-	out := tools.Loop{DB: s.db, Chat: s.chat}.Run(tools.RunArgs{
-		CompleteArgs: chatservice.CompleteArgs{ServiceArgs: call, Level: r.level.ID, System: system, Messages: messages},
-		Tools:        offered,
-		Settings:     toolSettings,
-		Allowed:      allowed(r),
-		Gate:         gate{s: s, args: args, r: r},
-		Stream:       true,
-		OnDelta: func(text string) {
-			emit(conversationservice.SendEvent{Kind: conversationservice.EventDelta, Text: text})
-		},
-		OnCall: func(tc tools.ToolCall) {
-			if tc.Status == tools.StatusAwaiting || tc.Status == tools.StatusClient {
-				s.expect(args.Principal, tc.RoundID, tc.CallID)
-			}
-			emit(conversationservice.SendEvent{Kind: conversationservice.EventTool, ToolCall: &tc})
-		},
-		Cite: c.cite,
-		OnRetry: func(try int, wait time.Duration, status int) {
-			emit(conversationservice.SendEvent{Kind: conversationservice.EventRetry, Retry: &conversationservice.Retry{Try: try, WaitMs: wait.Milliseconds(), Status: status}})
+	res, err := s.engine.Run(engine.RunArgs{
+		ServiceArgs: call, GraphID: r.mode.GraphRef, Event: conversationnodes.EventUserMessage, Trigger: "chat", Host: h, Wall: roundWall,
+		Inputs: cognition.Values{
+			conversationnodes.PinText: r.round.Text, conversationnodes.PinWindow: r.history, conversationnodes.PinSettings: all,
+			conversationnodes.PinWorkbench: json.RawMessage(orEmpty(args.Workbench)), conversationnodes.PinConversation: r.conversation,
+			conversationnodes.PinTitle: r.conversation.Title, conversationnodes.PinLevel: r.level.ID, conversationnodes.PinRound: r.round,
 		},
 	})
-	resp := out.Response
+	if err != nil {
+		log.With("roundId", r.round.ID, "mode", r.mode.ID, "runId", res.RunID).Warn(call.Context(), "the mode graph %s failed: %v", r.mode.GraphRef, err)
+	}
+	h.finish(err)
+}
 
-	done := &r.round
-	done.LatencyMs = time.Since(start).Milliseconds()
-	done.Reply = out.Reply
-	// Every step is priced as usage.Recorder prices its record
-	var tokens aisettings.Tokens
-	for _, u := range out.Usage {
-		t := aisettings.Tokens{Input: u.InputTokens, Cached: u.CachedTokens, Output: u.OutputTokens, Thinking: u.ThinkingTokens}
-		done.CostMicros += r.model.Pricing.CostMicros(t)
-		tokens.Input, tokens.Cached, tokens.Output, tokens.Thinking = tokens.Input+t.Input, tokens.Cached+t.Cached, tokens.Output+t.Output, tokens.Thinking+t.Thinking
+func orEmpty(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return json.RawMessage(`{}`)
 	}
-	done.InputTokens, done.CachedTokens, done.OutputTokens, done.ThinkingTokens = tokens.Input, tokens.Cached, tokens.Output, tokens.Thinking
-	if done.Currency = r.model.Pricing.Currency; done.Currency == "" {
-		done.Currency = "USD"
-	}
-	switch {
-	case ctx.Err() != nil:
-		done.Status, done.FinishReason = conversation.StatusStopped, "stopped"
-	case resp.Common.Code >= 300:
-		done.Status, done.Error = resp.Common.Code, resp.Common.Message
-	default:
-		done.Status, done.FinishReason, done.ModelName = http.StatusOK, resp.FinishReason, resp.Model
-	}
-	persist := context.WithoutCancel(ctx)
+	return raw
+}
+
+// complete stores the finished round and sends done, then runs the
+// chat.roundEnd hooks.
+func (s *service) complete(args conversationservice.SendArgs, done *conversation.Round, emit func(conversationservice.SendEvent)) {
+	persist := context.WithoutCancel(args.Context())
 	if err := s.db.WithContext(persist).Save(done).Error; err != nil {
 		log.With("roundId", done.ID).Error(persist, err, "cannot store the reply of round %d", done.ID)
 	}
 	finished := *done
 	emit(conversationservice.SendEvent{Kind: conversationservice.EventDone, Round: &finished})
 	s.end(args, finished)
-
-	if r.conversation.Title == "" && done.Status == http.StatusOK && ctx.Err() == nil {
-		if title := s.title(args.ServiceArgs, r); title != "" {
-			r.conversation.Title = title
-			if err := s.db.WithContext(persist).Model(&r.conversation).Update("title", title).Error; err != nil {
-				log.With("conversationId", r.conversation.ID).Error(persist, err, "cannot store the title of conversation %d", r.conversation.ID)
-			}
-			titled := r.conversation
-			emit(conversationservice.SendEvent{Kind: conversationservice.EventTitle, Conversation: &titled})
-		}
-	}
-	if done.Status == http.StatusOK && ctx.Err() == nil {
-		s.follow(args, r, emit)
-	}
 }
 
 // end runs the chat.roundEnd hooks, on a context the browser cannot cancel.
@@ -264,30 +242,6 @@ func (s *service) end(args conversationservice.SendArgs, round conversation.Roun
 	for _, e := range conversation.RoundEnds.All(s.registry) {
 		if e.End != nil {
 			e.End(call, round)
-		}
-	}
-}
-
-// follow runs the round followers, in order, on a context the browser
-// cannot cancel, and reports what each did.
-func (s *service) follow(args conversationservice.SendArgs, r *round, emit func(conversationservice.SendEvent)) {
-	call := args.ServiceArgs
-	call.Ctx = context.WithoutCancel(args.Context())
-	call.Meta = features.Meta{ConversationID: r.conversation.ID, RoundID: r.round.ID, Debug: r.debug}
-	for _, f := range conversation.RoundFollowers.All(s.registry) {
-		if f.Follow == nil {
-			continue
-		}
-		followed, err := f.Follow(conversation.FollowArgs{
-			ServiceArgs: call, Conversation: r.conversation, Round: r.round,
-			Settings: s.settingsOf(args, r, f.ID, nil), Segments: r.segments,
-		})
-		if err != nil {
-			log.With("follower", f.ID, "roundId", r.round.ID).Warn(call.Context(), "round follower %s failed: %v", f.ID, err)
-			continue
-		}
-		if followed != nil {
-			emit(conversationservice.SendEvent{Kind: conversationservice.EventFollowed, Follower: f.ID, Followed: followed})
 		}
 	}
 }
@@ -308,37 +262,6 @@ func (s *service) storeSegments(args conversationservice.SendArgs, r *round, cit
 		log.With("roundId", r.round.ID).Error(persist, err, "cannot store the segments of round %d", r.round.ID)
 	}
 	return segments
-}
-
-const titlePrompt = "You name conversations. Reply with a title of at most six words for the conversation below: no quotes, no punctuation at the end, nothing else."
-
-// title asks the title level for the conversation's title after its first
-// round; the empty string when that fails.
-func (s *service) title(args features.ServiceArgs, r *round) string {
-	level, ok := r.levels.Find(r.chat.TitleLevel)
-	if !ok {
-		level = r.level
-	}
-	call := args
-	call.Meta = features.Meta{Feature: "chat-title", Level: level.ID, ConversationID: r.conversation.ID, Debug: r.debug}
-	resp := s.chat.Complete(chatservice.CompleteArgs{
-		ServiceArgs: call,
-		Level:       level.ID,
-		System:      titlePrompt,
-		Messages:    []chatservice.Message{{Role: chatservice.RoleUser, Content: "User: " + clip(r.round.Text, 2000) + "\n\nAssistant: " + clip(r.round.Reply, 2000)}},
-	})
-	if resp.Common.Code != http.StatusOK {
-		return "" // Fail has logged it
-	}
-	return cleanTitle(resp.Message.Content)
-}
-
-// cleanTitle keeps the first line of a model's title, without the quotes
-// and markdown models add anyway.
-func cleanTitle(s string) string {
-	s, _, _ = strings.Cut(strings.TrimSpace(s), "\n")
-	s = strings.Trim(strings.TrimSpace(s), "\"'`*#. ")
-	return clip(s, 80)
 }
 
 // clip cuts s to at most n bytes, on a rune boundary.

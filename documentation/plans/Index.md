@@ -4,15 +4,15 @@ What is still to build. Each plan holds the design for its remaining work and a 
 
 | Plan | Remaining |
 |---|---|
-| [Cognition.md](Cognition.md) | The Nexus slice (slice 9, skipped: needs question 1, Nexus storage, answered first); the Prompt Editor; debugging, `Parallel` and Replay; the version picker; `Send` as a mode graph; run token and cost limits; background runs (question 3) |
-| [ChatCompletion.md](ChatCompletion.md) | The Markdown Editor's Chat tab and editing documents with the AI; modes; editing a user bubble; chip corrections; sampling overrides; renaming and deleting conversations; three open questions |
+| [Cognition.md](Cognition.md) | The Nexus slice (slice 9, skipped: needs question 1, Nexus storage, answered first); the Prompt Editor; debugging, `Parallel` and Replay; the version picker; run token and cost limits; background runs (question 3) |
+| [ChatCompletion.md](ChatCompletion.md) | The Markdown Editor's Chat tab and editing documents with the AI; agents as modes; editing a user bubble; chip corrections; sampling overrides; renaming and deleting conversations; three open questions |
 | [Chronicle.md](Chronicle.md) | Custom entry types with summarizer graphs; the graph view; editing and deleting rounds; undoing a round's changes; saving checks at once; more sharing |
 | [ContextRetrieval.md](ContextRetrieval.md) | The `rounds` source; the budget and volume-filter controls; the *Flagged segments* widget; citation relocation; questions 1 to 3 to confirm |
 | [Tools.md](Tools.md) | MCP (open question), web tools, tenant policies, rate limits, unattended writes, the Nexus tools, tools as Cognition nodes |
 | [WorkbenchContext.md](WorkbenchContext.md) | The `document` surface, `workbench.subjectDescriber`, `editor.getSelection`, the Assistant mode; questions 1 to 4 and 6 to confirm |
 | [MultiTenant.md](MultiTenant.md) | OIDC; `db.ForTenant`; per-tenant Volumes; purging deleted tenants; sign-in rate limits, invitations and password reset |
 | [RBAC.md](RBAC.md) | Groups; `authz.Filter`; the audit viewer; `PolicyVersion` checks; shares on files and graphs; enforcing `usage.viewAll` and the tool permissions |
-| [Configuration.md](Configuration.md) | Export and import; browser-only `ui.*` sections; custom section editors; the remaining sections (`ai.embed`, `chat.modes`, `index`, `ui.appearance`) |
+| [Configuration.md](Configuration.md) | Export and import; browser-only `ui.*` sections; custom section editors; the remaining sections (`ai.embed`, `index`, `ui.appearance`) |
 | [Usage.md](Usage.md) | Budgets, retention, export, currency (four open questions); more Dashboard widgets and saving its layout |
 | [Logging.md](Logging.md) | Saved queries; `Stats`/`StatsRange` charts; the error toast's link; full logging from the Explorer; alerts |
 | [Secrets.md](Secrets.md) | `--vault-token-file`; re-reading the bundle without a restart; Vault TLS and namespaces; an audit viewer; questions 2, 3, 4 and 6 to confirm |

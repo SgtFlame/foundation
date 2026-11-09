@@ -736,6 +736,19 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [ChatCompletion.md](ChatCompletion.md#decisions-to-review-after-seeing-it-1), [Tools.md](Tools.md#decisions-to-review-after-seeing-it-1), [Apps.md](Apps.md#decisions-to-review-after-seeing-it-12) and forge BuilderMode.md.
     - **Pending, carried forward**: a failed round's tool calls carried into the next (Backlog); the golden tests and the demo with a real model (forge 6h); chat modes (forge 6i).
     - **After slice 43**: Forge's golden tests (part 6h, [forge GoldenTests.md](../../forge/documentation/GoldenTests.md)) are Forge's own, with three hooks here: `chatimpl.New` and `conversationimpl.New` beside the singletons ([AIChatEmbed.md](AIChatEmbed.md#changed-after-slice-43), [ChatCompletion.md](ChatCompletion.md#changed-after-slice-43)), `gemini.WithBaseURL`, and `apptools.PreviewPage` ([Apps.md](Apps.md#changed-after-slice-43)).
+44. **Chat modes** (Forge iteration 6, part 6i, [forge 06i-ChatModes.md](../../forge/documentation/plans/06i-ChatModes.md)). *Built* ([ChatCompletion.md](ChatCompletion.md#built-in-slice-44), [Cognition.md](Cognition.md#built-in-slice-44), [Chronicle.md](Chronicle.md#built-in-slice-44), [Tools.md](Tools.md#built-in-slice-44), [forge ChatModes.md](../../forge/documentation/ChatModes.md)).
+    - **Built**:
+      - in `conversation`: `chat.mode` and the `chat.modes` section, `Send` running the conversation's mode graph with the round as its host (`conversation.Host`), the chat nodes, `Conversation.Mode`, `GET /conversation/modes`; the provider mode hook and `RoundFollower.Follow` removed;
+      - in `cognition`: Go templates (`cognition/tmpl`), *Template* and *Setting*, `Exec.Setting`/`Render`, the mode kind's spec, `RunArgs.Wall`;
+      - in `tools`: tool sets (`tools.Spec`), *Tools*, *Describe tool*, *Graph tool*, *Ask model*, the Agent's *Tools* pin;
+      - in `chronicle`: stage 1's and the memory update's prompts as templates, *Memory changes*, Personal as the whole round (an editable built-in), the provider reduced to settings;
+      - in the browser: the mode select beside the level, the ⚙ showing the mode's settings;
+      - Forge's Builder as two editable graphs (the mode and the agent) with `forge.build` a graph tool; its provider, prompt code and ⚙ switch removed.
+      - the Cognition Editor's client moved from `common` to Forge (`forge/frontend/axiom/src/editors/cognition/`): graph editing is Forge's alone.
+      - a layout fix: `#root` has a fixed height and the workbench's `<main>` `minHeight: 0`, so a long side view (the Cognition Explorer) scrolls inside its panel instead of growing the page and pushing the canvas's fit view off screen.
+    - **Blockers**: none. Forge 06i questions 1 (offered by focus, chosen for new conversations), 2 (now) and 3 (nothing hard-coded: the round is the graph, editable built-ins, tool sets and graph tools), answered 2026-11-09.
+    - **Decisions to review after seeing it**: in [ChatCompletion.md](ChatCompletion.md#decisions-to-review-after-seeing-it-2).
+    - **Pending, carried forward**: a round in each mode against a real model; agents as modes directly; the golden tests and the demo with a real model (forge 6h).
 
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
@@ -787,3 +800,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 41. Applying, checking and previewing (Forge 6e) | forge 06-AIAuthoring 2 (drafts change without asking) and 06e 1 (`bus.Transact`), 2 (apply over a stale view, reporting changes) and 3 (a manifest role on the draft run's records), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-10), once the Builder uses the tools |
 | 42. Testing blueprints in a sandbox (Forge 6f) | forge 06f 1 (the app's records, with seeds) and 2 (external nodes stubbed with a sample), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-11), once the Builder uses the tool |
 | 43. The Builder mode (Forge 6g) | forge 06-AIAuthoring 1 (a context provider with a mode hook; chat modes as forge 06i) and 06g 1 (the Builder's presence entry), 2 (an Agent graph now) and 3 (configurable steps), answered | the decisions in [ChatCompletion.md](ChatCompletion.md#decisions-to-review-after-seeing-it-1), [Tools.md](Tools.md#decisions-to-review-after-seeing-it-1) and [Apps.md](Apps.md#decisions-to-review-after-seeing-it-12); watching the editor change as the chat works, with a real model |
+| 44. Chat modes (Forge 6i) | forge 06i 1 (offered by focus, chosen for new conversations), 2 (now) and 3 (nothing hard-coded), answered | the decisions in [ChatCompletion.md](ChatCompletion.md#decisions-to-review-after-seeing-it-2), and rounds in each mode with a real model |

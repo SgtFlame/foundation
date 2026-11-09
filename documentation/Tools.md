@@ -151,3 +151,6 @@ For Forge's Builder mode ([ChatCompletion.md › Built in slice 43](ChatCompleti
 ### Decisions to review after seeing it
 - **Three retries, 2, 4 and 8 seconds**, the same for 429 and 503, without reading Gemini's suggested delay. On a free key a 429 may need longer.
 - **A failed round's tool calls are still not carried into the next** (the Backlog's other half): "go on" after a failure starts without them.
+
+## Built in slice 44
+Forge 06i: tools are chosen in graphs. A **tool set** (`ToolSet`, `[]tools.Spec{name, title, description, input, effect, source, graph, asks, summary, timeoutSeconds}`) travels on pins: *Tools* (`tools.select`: include and exclude by name or prefix, `noAsking`, an *Enabled* pin; from a joined set, else the server's tools the section leaves on and, in a chat round, the browser's), *Describe tool* (`tools.describe`: a template for one tool's description) and *Graph tool* (`tools.graph`: a tool whose name, description and argument schema are templates, run by a function or agent graph from `On call` with the arguments as inputs; its outputs are the result and `summary` a template over them and `args`). `toolsnodes.Resolve` turns a set into the tools a loop offers; *Stream reply* and the Agent take one. Forge's `forge.build` is a graph tool of the Builder mode. The Send prompt's *Tools* section moved into the mode graphs' templates.

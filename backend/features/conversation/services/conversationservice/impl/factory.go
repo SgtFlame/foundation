@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
+	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
 	"github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -32,6 +33,13 @@ func WithChat(chat chatservice.Service) Option {
 func WithConfig(reader config.Reader) Option {
 	return func(s *service) {
 		s.config = reader
+	}
+}
+
+// WithEngine sets the Cognition engine that runs each round's mode graph.
+func WithEngine(e *engine.Engine) Option {
+	return func(s *service) {
+		s.engine = e
 	}
 }
 
