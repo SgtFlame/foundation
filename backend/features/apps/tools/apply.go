@@ -312,14 +312,42 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 // question 3): the draft run at route, as a manifest role when as is
 // given, its tree summarized.
 func preview(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route, as string) (map[string]any, error) {
+	pv, err := PreviewPage(call, reg, d, app, route, as)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{"route": route, "page": pv.Page.Route, "prefab": pv.Page.Prefab, "data": pv.Data, "tree": Summarize(pv.Tree), "problems": pv.Problems}
+	if len(pv.Params) > 0 {
+		out["params"] = pv.Params
+	}
+	if as != "" {
+		out["as"] = as
+	}
+	return out, nil
+}
+
+// Previewed is a page of an app's draft as forge.preview renders it,
+// before its tree is summarized.
+type Previewed struct {
+	Page     apps.Page
+	Params   map[string]string
+	Data     string // "records", or "preview data" when no entity type of the app is published
+	Tree     *ui.Node
+	Problems []ui.Problem
+}
+
+// PreviewPage renders a page of an app's draft at route, as a manifest
+// role when as is given: forge.preview's page with its whole tree, styling
+// included, for tests that assert on it (forge 06h).
+func PreviewPage(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route, as string) (Previewed, error) {
 	res := apps.Resource(call.Principal, app)
 	if err := authz.Check(call.Context(), call.Principal, "app.write", res).Err("app.write", res); err != nil {
-		return nil, err
+		return Previewed{}, err
 	}
 	tenant := call.Principal.TenantID
 	dr, ok := manifests.GetDraft(call.Context(), d.Store, tenant, app)
 	if !ok {
-		return nil, fmt.Errorf("there is no app %q; list them with app.list", app)
+		return Previewed{}, fmt.Errorf("there is no app %q; list them with app.list", app)
 	}
 	m := dr.Manifest
 	pg, params, ok := m.FindPage(route)
@@ -328,11 +356,11 @@ func preview(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route,
 		for _, p := range m.Pages {
 			routes = append(routes, p.Route)
 		}
-		return nil, fmt.Errorf("%s has no page at %s: its routes are %s", m.Name, route, strings.Join(routes, ", "))
+		return Previewed{}, fmt.Errorf("%s has no page at %s: its routes are %s", m.Name, route, strings.Join(routes, ", "))
 	}
 	args, err := roleArgs(call.ServiceArgs, reg, d, m, app, as)
 	if err != nil {
-		return nil, err
+		return Previewed{}, err
 	}
 	// Records need a published entity type: with none, the page's preview data
 	published := false
@@ -349,7 +377,7 @@ func preview(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route,
 		data = "preview data"
 		t, p, fail := ui.Preview(args, o, pg.Prefab, "", nil, true)
 		if fail != nil {
-			return nil, fmt.Errorf("%s", fail.Message)
+			return Previewed{}, fmt.Errorf("%s", fail.Message)
 		}
 		tree, problems = t, p
 	} else {
@@ -361,7 +389,7 @@ func preview(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route,
 			}
 		}
 		if !ok {
-			return nil, fmt.Errorf("the draft of %s cannot be run here", app)
+			return Previewed{}, fmt.Errorf("the draft of %s cannot be run here", app)
 		}
 		var root *ui.Node
 		o.Send = func(f any) {
@@ -372,7 +400,7 @@ func preview(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route,
 		raw, _ := json.Marshal(map[string]any{"route": route})
 		s, fail := ui.Open(args, fmt.Sprintf("preview-%d", features.NewTSID()), page, raw, nil, o)
 		if fail != nil {
-			return nil, fmt.Errorf("%s", fail.Message)
+			return Previewed{}, fmt.Errorf("%s", fail.Message)
 		}
 		s.Close(false)
 		// The page, without the app's frame around it: the draft run keys
@@ -380,14 +408,7 @@ func preview(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route,
 		tree = pageOf(root)
 		problems = ui.TreeProblems(tree)
 	}
-	out := map[string]any{"route": route, "page": pg.Route, "prefab": pg.Prefab, "data": data, "tree": Summarize(tree), "problems": problems}
-	if len(params) > 0 {
-		out["params"] = params
-	}
-	if as != "" {
-		out["as"] = as
-	}
-	return out, nil
+	return Previewed{Page: pg, Params: params, Data: data, Tree: tree, Problems: problems}, nil
 }
 
 // roleArgs are args that decide as one of an app draft's manifest roles

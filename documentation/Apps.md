@@ -670,3 +670,6 @@ For Forge's Builder mode ([ChatCompletion.md › Built in slice 43](ChatCompleti
 ### Decisions to review after seeing it
 - **Presence follows applies only**: while the round reads (forge.app, forge.read) the Builder is not shown, so it appears with its first batch.
 - **A prefab change also puts the Builder on the app's *Pages* tab**, and a graph change on *Blueprints*, whatever page uses them.
+
+## Changed after slice 43
+`apptools.PreviewPage(call, reg, deps, app, route, as)` is `forge.preview`'s page before its tree is summarized (`Previewed{Page, Params, Data, Tree, Problems}`), which `forge.preview` now builds on. Forge's golden tests (part 6h, [forge GoldenTests.md](../../forge/documentation/GoldenTests.md)) assert on its whole tree, since the summary leaves out styling such as a title's color.

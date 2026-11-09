@@ -56,6 +56,12 @@ func CreateService(opts ...Option) conversationservice.Service {
 	return instance
 }
 
+// New returns a service of its own, apart from the singleton, for tests
+// that run several stacks in one process (forge 06h's golden tests).
+func New(opts ...Option) conversationservice.Service {
+	return newService(opts...)
+}
+
 func newService(opts ...Option) *service {
 	s := &service{registry: extensions.NewRegistry(), waiting: map[string]*waiting{}}
 	for _, opt := range opts {

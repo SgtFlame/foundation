@@ -735,6 +735,7 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Blockers**: none. Forge 06 question 1 (a context provider with a mode hook; chat modes planned as forge 06i) and 06g questions 1 (presence on the proposal), 2 (the Agent graph now, the user's choice) and 3 (steps configurable in a `builder` section, the user's choice) were asked before building.
     - **Decisions to review after seeing it**: in [ChatCompletion.md](ChatCompletion.md#decisions-to-review-after-seeing-it-1), [Tools.md](Tools.md#decisions-to-review-after-seeing-it-1), [Apps.md](Apps.md#decisions-to-review-after-seeing-it-12) and forge BuilderMode.md.
     - **Pending, carried forward**: a failed round's tool calls carried into the next (Backlog); the golden tests and the demo with a real model (forge 6h); chat modes (forge 6i).
+    - **After slice 43**: Forge's golden tests (part 6h, [forge GoldenTests.md](../../forge/documentation/GoldenTests.md)) are Forge's own, with three hooks here: `chatimpl.New` and `conversationimpl.New` beside the singletons ([AIChatEmbed.md](AIChatEmbed.md#changed-after-slice-43), [ChatCompletion.md](ChatCompletion.md#changed-after-slice-43)), `gemini.WithBaseURL`, and `apptools.PreviewPage` ([Apps.md](Apps.md#changed-after-slice-43)).
 
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 

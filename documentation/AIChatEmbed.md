@@ -170,6 +170,9 @@ Frontend clients: `src/services/Index.ts`, `Embed.ts` and `Chat.ts` (`Chat.strea
 ### Changed in slice 43
 Gemini's 503 (overloaded) and 429 (rate) are kept with their status and marked `providers.Error.Busy`, so their error code is `providers.BusyCode` (`provider_busy`) and the tool loop tries them again ([Tools.md › Changed in slice 43](Tools.md#changed-in-slice-43)). Before, an upstream 503 was reported as 502. A missing or wrong key stays 503, not busy.
 
+### Changed after slice 43
+For Forge's golden tests (part 6h, [forge GoldenTests.md](../../forge/documentation/GoldenTests.md)): `gemini.WithBaseURL(url)` sends the provider's calls to another address speaking the Gemini API, such as a test's stub server (`$GOOGLE_GEMINI_BASE_URL` still works without it), and `chatimpl.New(opts...)` makes a chat service apart from the `CreateService` singleton, for tests that run several stacks in one process.
+
 ## Verification
 1. `cd backend && scripts/build.sh` produces `out/cli`. `scripts/build.sh --test` runs every test, including LanceDB's (`lancestore`) and the index service's (with in-memory fakes).
 2. `GEMINI_API_KEY=… scripts/serve.sh`. On startup it migrates the database and queues existing volume files, and `.…md.index.json` sidecars appear.

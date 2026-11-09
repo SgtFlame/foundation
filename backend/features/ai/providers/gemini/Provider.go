@@ -40,6 +40,7 @@ type Provider struct {
 	embedModel string
 	dimensions int
 	chatModel  string
+	baseURL    string // the API's address when not Google's; empty for the default
 
 	// keyFor, when set, picks each call's key from its context, so a user's
 	// or tenant's own key is used for their calls (Secrets question 7)
@@ -83,6 +84,15 @@ func WithEmbedDimensions(n int) Option {
 func WithKeyFor(keyFor func(ctx context.Context) string) Option {
 	return func(p *Provider) {
 		p.keyFor = keyFor
+	}
+}
+
+// WithBaseURL sends every call to another address speaking the Gemini
+// API, such as a test's stub server (forge 06h). Without it the client's
+// default is used, which $GOOGLE_GEMINI_BASE_URL may change.
+func WithBaseURL(url string) Option {
+	return func(p *Provider) {
+		p.baseURL = url
 	}
 }
 
@@ -141,7 +151,7 @@ func (p *Provider) getClient(ctx context.Context) (*genai.Client, error) {
 	if client, ok := p.clients[key]; ok {
 		return client, nil
 	}
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{APIKey: key, Backend: genai.BackendGeminiAPI})
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{APIKey: key, Backend: genai.BackendGeminiAPI, HTTPOptions: genai.HTTPOptions{BaseURL: p.baseURL}})
 	if err != nil {
 		return nil, providers.Errorf(http.StatusServiceUnavailable, "gemini: %s", err)
 	}
