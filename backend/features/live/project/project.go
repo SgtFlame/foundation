@@ -188,6 +188,33 @@ func (p *Projections) run(ctx context.Context, tenant uint64, pr live.Projector,
 // a projector, a follower starts the first time it is asked for in a
 // tenant, and catches up from where it stopped.
 func (p *Projections) Follow(ctx context.Context, tenant uint64, area live.Area, name string, subjects []string, fn func(live.Event) error) error {
+	return p.follow(ctx, tenant, area, name, subjects, jetstream.DeliverAllPolicy, fn)
+}
+
+// FollowNew is Follow for a follower that only needs the events committed
+// after it is first made, such as the jobs' outbox follower (forge 07a),
+// which is made before the first commit that needs it: made, it starts at
+// the stream's end rather than reading the whole history; afterwards it
+// catches up from where it stopped like any follower.
+func (p *Projections) FollowNew(ctx context.Context, tenant uint64, area live.Area, name string, subjects []string, fn func(live.Event) error) error {
+	return p.follow(ctx, tenant, area, name, subjects, jetstream.DeliverNewPolicy, fn)
+}
+
+// Following reports whether a follower is made in the tenant's area
+// stream, by any process: whether this process should follow it too.
+func (p *Projections) Following(ctx context.Context, tenant uint64, area live.Area, name string) bool {
+	stream, err := p.Stream(ctx, tenant, area)
+	if err != nil {
+		return false
+	}
+	_, err = stream.Consumer(ctx, FollowerName(name))
+	return err == nil
+}
+
+// FollowerName is a follower's durable consumer.
+func FollowerName(name string) string { return "fol_" + strings.ReplaceAll(name, ".", "_") }
+
+func (p *Projections) follow(ctx context.Context, tenant uint64, area live.Area, name string, subjects []string, deliver jetstream.DeliverPolicy, fn func(live.Event) error) error {
 	key := fmt.Sprintf("%d/follow/%s", tenant, name)
 	p.mu.Lock()
 	started := p.running[key] != nil
@@ -204,10 +231,22 @@ func (p *Projections) Follow(ctx context.Context, tenant uint64, area live.Area,
 	if p.running[key] != nil || p.stopping {
 		return nil
 	}
-	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Durable: "fol_" + strings.ReplaceAll(name, ".", "_"), FilterSubjects: subjects,
-		AckPolicy: jetstream.AckExplicitPolicy, DeliverPolicy: jetstream.DeliverAllPolicy, MaxAckPending: 1, AckWait: 30 * time.Second,
-	})
+	cfg := jetstream.ConsumerConfig{
+		Durable: FollowerName(name), FilterSubjects: subjects,
+		AckPolicy: jetstream.AckExplicitPolicy, DeliverPolicy: deliver, MaxAckPending: 1, AckWait: 30 * time.Second,
+	}
+	var cons jetstream.Consumer
+	if deliver != jetstream.DeliverAllPolicy {
+		// Made once; a deliver policy cannot change, so a made one is kept
+		if cons, err = stream.Consumer(ctx, cfg.Durable); err != nil {
+			cons, err = stream.CreateConsumer(ctx, cfg)
+			if errors.Is(err, jetstream.ErrConsumerExists) {
+				cons, err = stream.Consumer(ctx, cfg.Durable)
+			}
+		}
+	} else {
+		cons, err = stream.CreateOrUpdateConsumer(ctx, cfg)
+	}
 	if err != nil {
 		return log.Wrapf(err, "cannot make the consumer of follower %s", name)
 	}

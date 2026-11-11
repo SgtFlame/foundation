@@ -125,12 +125,19 @@ type Settings struct {
 	Defaults map[string]any `json:"defaults,omitempty"`
 }
 
-// Trigger is declared here and filled in by forge iteration 11.
+// Trigger is background work the app runs while installed (forge 07a):
+// its app.trigger graph, started by the graph's event node (On event, On
+// record changed, On schedule) as the app's own principal. A trigger
+// without a graph is only declared.
 type Trigger struct {
-	ID          string         `json:"id"`
-	Title       string         `json:"title,omitempty"`
-	Description string         `json:"description,omitempty"`
-	Config      map[string]any `json:"config,omitempty"`
+	ID          string `json:"id"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	// Graph is the app's own app.trigger graph it runs.
+	Graph string `json:"graph,omitempty"`
+	// Queue is the job queue its runs go to; default when empty.
+	Queue  string         `json:"queue,omitempty"`
+	Config map[string]any `json:"config,omitempty"`
 }
 
 // Requires is what must be in a tenant before the app installs there.

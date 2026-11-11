@@ -179,8 +179,8 @@ type Summary struct {
 	Commands    []Entry           `json:"commands"`
 	Queries     []Entry           `json:"queries"`
 	EditorKinds []apps.EditorKind `json:"editorKinds"`
-	// Triggers are recorded; none runs until forge iteration 11 (forge 05b
-	// question 4).
+	// Triggers run as jobs while the app is installed (forge 07a,
+	// features/jobs).
 	Triggers    []apps.Trigger `json:"triggers"`
 	InstalledBy uint64         `json:"installedBy,string"`
 	InstalledAt time.Time      `json:"installedAt"`

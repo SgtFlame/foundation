@@ -228,9 +228,13 @@ func (b *Bus) Execute(r Request) Result {
 		if cmd.Logged() {
 			d.Op = &live.OpInfo{}
 		}
+		d.Outbox = &live.Outbox{}
 		events, problems := cmd.Decide(d)
 		if len(problems) > 0 {
 			return rejected(problems...)
+		}
+		if len(events) == 0 && len(d.Jobs()) > 0 {
+			return rejected(noCarrier(r.Type))
 		}
 		if len(events) == 0 {
 			return Result{Common: features.OK(), Stream: streamName, Target: tg.ID, Seq: state.Seq, RequestID: r.RequestID}
@@ -243,7 +247,7 @@ func (b *Bus) Execute(r Request) Result {
 				op.Inverse = []live.Op{}
 			}
 		}
-		res, conflict, err := b.commit(r, cmd, tg, stream, read, events, op)
+		res, conflict, err := b.commit(r, cmd, tg, stream, read, events, op, d.Jobs())
 		if conflict {
 			// Someone committed since: decide again once projected
 			var keys []string
@@ -273,6 +277,22 @@ func (b *Bus) Execute(r Request) Result {
 		return res
 	}
 	return Result{Common: *r.Fail(http.StatusConflict, log.Code("conflict").Errorf("%s on %s kept conflicting with other changes; try again", r.Type, tg.Key()))}
+}
+
+// noCarrier refuses a decision that enqueues jobs but commits nothing:
+// its jobs would have no event to ride on (forge 07a).
+func noCarrier(command string) live.Problem {
+	return live.Problem{Message: command + " enqueued a job but committed no event, so the job cannot be enqueued", Fix: "emit an event with the job, or enqueue it from a server.action graph"}
+}
+
+// ActorOf is who a request's events name as sending it for the
+// principal: the request's actor (the chat), else an app principal's app
+// (forge 07a: a trigger's commands show as the app's).
+func ActorOf(r Request) string {
+	if r.Actor == "" && r.Principal.Kind == features.PrincipalApp {
+		return "app:" + r.Principal.App
+	}
+	return r.Actor
 }
 
 // hold locks keys, keeping those held already. Locks are taken in key
@@ -355,7 +375,7 @@ func problemOf(err error) (live.Problem, bool) {
 // expected as the stream has it now. One event is published alone, and
 // several as one atomic batch: every check passes and all are stored, or
 // none is.
-func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstream.Stream, read map[string]uint64, events []live.NewEvent, op *live.LoggedOp) (Result, bool, error) {
+func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstream.Stream, read map[string]uint64, events []live.NewEvent, op *live.LoggedOp, jobs []live.Job) (Result, bool, error) {
 	ctx := r.Context()
 	tenant := r.Principal.TenantID
 	streamName := stream.CachedInfo().Config.Name
@@ -379,9 +399,9 @@ func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstre
 		if err != nil {
 			return res, false, err
 		}
-		e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: r.ID, RequestID: r.RequestID, UserID: r.Principal.UserID, Actor: r.Actor, TenantID: tenant, Time: now}
+		e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: r.ID, RequestID: r.RequestID, UserID: r.Principal.UserID, Actor: ActorOf(r), TenantID: tenant, Time: now}
 		if i == 0 {
-			e.Op = op
+			e.Op, e.Jobs = op, jobs
 		}
 		if len(events) > 1 {
 			e.Batch = &live.Batch{Index: i + 1, Count: len(events)}

@@ -92,6 +92,9 @@ func named(m apps.Manifest) map[string][]string {
 	for _, q := range m.Queries {
 		add("graph", q.Graph)
 	}
+	for _, t := range m.Triggers {
+		add("graph", t.Graph)
+	}
 	for _, e := range m.Entities {
 		add("entity", e)
 	}

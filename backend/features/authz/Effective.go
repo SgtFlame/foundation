@@ -56,12 +56,14 @@ func (pol *Policy) EffectiveFor(p features.Principal) (Effective, error) {
 	case features.PrincipalAnonymous:
 		return Effective{}, nil
 	}
-	grants, err := pol.GrantsOf(p.UserID)
+	roles, err := pol.Roles()
 	if err != nil {
 		return e, err
 	}
-	roles, err := pol.Roles()
-	if err != nil {
+	var grants []RoleGrant
+	if p.Kind == features.PrincipalApp {
+		grants = AppGrants(roles, p.TenantID, p.App)
+	} else if grants, err = pol.GrantsOf(p.UserID); err != nil {
 		return e, err
 	}
 	for _, g := range grants {

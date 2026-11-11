@@ -51,7 +51,7 @@ func (k Kind) Allows(t NodeType) bool {
 	if t.Event && len(k.Events) > 0 && !slices.Contains(k.Events, t.ID) {
 		return false
 	}
-	return !(k.Pure && t.Effects)
+	return !(k.Pure && t.Effects && !slices.Contains(t.PureIn, k.ID))
 }
 
 // Conversions is the cognition.conversion point: the safe implicit

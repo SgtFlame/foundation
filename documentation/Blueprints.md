@@ -12,7 +12,7 @@ Answered before building, in [forge 02-Blueprints.md › TODO](../../forge/docum
 - **Hot swapping** (question 3): a republished handler runs from each open session's next event.
 - **Tracing** (question 4): a blueprint's run is traced in full while its graph is open in an editor, and otherwise only when it fails. The other runs are counted.
 - **Commands as graphs** (question 6): every entity will get generic record commands (forge 03-DataModel). `command` graphs are for writes that need their own checks.
-- **`app.trigger`** (question 8): only the kind and its events, until forge 07-Email.
+- **`app.trigger`** (question 8): the kind and its events; since slice 45 they run as jobs, as the app's own principal ([Jobs.md](Jobs.md#triggers)).
 
 Decided while building:
 - **A command or query graph's id follows from its spec**: `cmd-<command, - for .>` and `qry-<query, - for .>` (`Kind.IDFor`, checked by `bp.create` and `bp.setInfo`). The bus and the subscriptions find a tenant's graph by the type alone.
@@ -30,7 +30,7 @@ Decided while building:
 | `data.query` (pure) | *On query* (`live.onQuery`: params, declared fields) | Return's output `result` | `live/nodes` |
 | `server.action` | *On call* | its declared outputs | `live/nodes` |
 | `prefab.logic` | *On mount*, *On props changed*, *On query changed*, *On unmount* | (no runs until forge 04) | `ui/nodes` |
-| `app.trigger` | *On event*, *On schedule*, *On webhook* | (no runs until forge 07) | `live/nodes` |
+| `app.trigger` | *On event*, *On record changed*, *On schedule*, *On webhook* | an installed app's trigger, as a job ([Jobs.md](Jobs.md)); *On webhook* from forge 11 | `live/nodes`, `records/nodes`, `jobs` |
 
 **Command graphs** (`livenodes.CommandFor`, the bus's new `Resolve`) are found when no feature registered the command.
 - The spec `{command, title, description, args, area, targetType, projection, action, events}` makes it a `live.Command`.
@@ -94,7 +94,7 @@ Every node type has a description, an example and its pins described. `hello_tes
 
 ## Changed in slice 23
 For the Hello task list (forge 03i, [Records.md › Built in slice 23](Records.md#built-in-slice-23)):
-- **Record nodes** (`records/nodes`, category *Records*): *Create record*, *Update record*, *Delete record*, *Add to* and *Remove from* in `command` graphs, whose events commit with the command's as one batch; *Get record*, *Query* and *Aggregate* in every kind, which a `data.query` graph watches to run again; *On record changed*, an `app.trigger` event (no runs until forge 07). Elsewhere than a command graph, a write is *Send command* with `record.*`.
+- **Record nodes** (`records/nodes`, category *Records*): *Create record*, *Update record*, *Delete record*, *Add to* and *Remove from* in `command` graphs, whose events commit with the command's as one batch; *Get record*, *Query* and *Aggregate* in every kind, which a `data.query` graph watches to run again; *On record changed*, an `app.trigger` event (run as jobs since slice 45, [Jobs.md](Jobs.md#triggers)). Elsewhere than a command graph, a write is *Send command* with `record.*`.
 - ***Current user*** (`live.currentUser`): the run's user id as text.
 - **A command graph's host** carries the command's `Decision`, so nodes can read and change other targets in its area.
 - **Hello's task graphs** (built-in, editable, owner `app:hello`):

@@ -98,3 +98,52 @@ func TestAppRoles(t *testing.T) {
 		t.Error("an uninstalled app's role still allows")
 	}
 }
+
+// An installed app's own principal (forge 07a question 1) holds its app's
+// roles in its tenant and nothing else: no grant, no other app's roles, no
+// tenant role; its rules are its roles'.
+func TestAppPrincipal(t *testing.T) {
+	ctx := context.Background()
+	pol := testPolicy(t)
+	ResourceTypes.Register(pol.registry, ResourceType{
+		Descriptor: extensions.Descriptor{ID: "record"}, Parent: "tenant", Fence: "app",
+		Actions: []Action{{Name: "read", Class: ClassRead}, {Name: "update", Class: ClassWrite}},
+	})
+	Install(pol)
+	t.Cleanup(func() { Install(nil) })
+	if _, err := pol.SyncAppRoles(ctx, 1, "tasks", []AppRole{
+		{ID: "member", Name: "Member", Permissions: []string{"app:tasks/entity:task/record.read"}, Rules: map[string]string{"task": "record.public"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pol.SyncAppRoles(ctx, 1, "notes", []AppRole{
+		{ID: "writer", Name: "Writer", Permissions: []string{"app:notes/entity:note/record.update"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pol.SyncAppRoles(ctx, 2, "tasks", []AppRole{
+		{ID: "manager", Name: "Manager", Permissions: []string{"app:tasks/entity:task/record.update"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	tasks := features.AppPrincipal(1, "tasks")
+	for _, c := range []struct {
+		p           features.Principal
+		action, res string
+		want        bool
+	}{
+		{tasks, "record.read", "tenant:1/app:tasks/entity:task", true},     // its own role
+		{tasks, "record.update", "tenant:1/app:tasks/entity:task", false},  // not in its role (tenant 2's app role has it)
+		{tasks, "record.update", "tenant:1/app:notes/entity:note", false},  // another app's role
+		{tasks, "record.read", "tenant:1/records/entity:note", false},      // the tenant's records: no tenant role
+		{tasks, "record.read", "tenant:2/app:tasks/entity:task", false},    // another tenant
+		{features.AppPrincipal(1, ""), "record.read", "tenant:1/app:tasks/entity:task", false},
+	} {
+		if d := Check(ctx, c.p, c.action, c.res); d.Allowed != c.want {
+			t.Errorf("%s %s on %s: %v (%s)", c.p, c.action, c.res, d.Allowed, d.Reason)
+		}
+	}
+	if rules, restricted := RowRules(ctx, tasks, "record.read", "tenant:1/app:tasks/entity:task", "task"); !restricted || !slices.Equal(rules, []string{"record.public"}) {
+		t.Errorf("rules: %v %v", rules, restricted)
+	}
+}

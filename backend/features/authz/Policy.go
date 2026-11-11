@@ -1,6 +1,7 @@
 package authz
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -175,15 +176,17 @@ func (pol *Policy) decide(ctx context.Context, p features.Principal, action, res
 // needs one; RowRules needs them all). reason says why grants or roles
 // could not be read.
 func (pol *Policy) allowing(ctx context.Context, p features.Principal, typ ResourceType, action string, path []string, first bool) ([]Held, string) {
-	grants, err := pol.GrantsOf(p.UserID)
-	if err != nil {
-		log.Error(ctx, err, "authz: cannot read grants")
-		return nil, "grants could not be read"
-	}
 	roles, err := pol.Roles()
 	if err != nil {
 		log.Error(ctx, err, "authz: cannot read roles")
 		return nil, "roles could not be read"
+	}
+	var grants []RoleGrant
+	if p.Kind == features.PrincipalApp {
+		grants = AppGrants(roles, p.TenantID, p.App)
+	} else if grants, err = pol.GrantsOf(p.UserID); err != nil {
+		log.Error(ctx, err, "authz: cannot read grants")
+		return nil, "grants could not be read"
 	}
 	var out []Held
 	for _, g := range grants {
@@ -198,6 +201,20 @@ func (pol *Policy) allowing(ctx context.Context, p features.Principal, typ Resou
 		}
 	}
 	return out, ""
+}
+
+// AppGrants are an app principal's grants (forge 07a question 1): each of
+// the app's roles in the tenant, granted on the tenant by the system. They
+// change as the app's roles do, at install, upgrade and uninstall.
+func AppGrants(roles map[uint64]Role, tenant uint64, app string) []RoleGrant {
+	var out []RoleGrant
+	for _, r := range roles {
+		if app != "" && r.App == app && r.TenantID == tenant {
+			out = append(out, RoleGrant{RoleID: r.ID, Resource: Resource("tenant", tenant)})
+		}
+	}
+	slices.SortFunc(out, func(a, b RoleGrant) int { return cmp.Compare(a.RoleID, b.RoleID) })
+	return out
 }
 
 // crosses tells whether a grant on grant may reach path past the type's
@@ -239,7 +256,7 @@ func RowRules(ctx context.Context, p features.Principal, action, resource, key s
 		return nil, false
 	}
 	pol := installed.Load()
-	if pol == nil || p.Kind != features.PrincipalUser {
+	if pol == nil || (p.Kind != features.PrincipalUser && p.Kind != features.PrincipalApp) {
 		return nil, false
 	}
 	typ, _, ok := actionOf(pol.registry, action)

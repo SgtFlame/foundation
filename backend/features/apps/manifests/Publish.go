@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -197,6 +198,27 @@ func (c *decision) pin(m apps.Manifest) (apps.Version, []live.Problem) {
 	}
 	for _, q := range m.Queries {
 		v.Graphs[q.Graph], _ = c.publishedGraph(q.Graph)
+	}
+	for _, t := range m.Triggers {
+		if t.Graph != "" {
+			v.Graphs[t.Graph], _ = c.publishedGraph(t.Graph)
+		}
+	}
+	// The app's own graphs those name in a node's config (a job's graph,
+	// Call graph's), so a trigger or command runs its version's copies too
+	// (forge 07a)
+	for queue := slices.Collect(maps.Keys(v.Graphs)); len(queue) > 0; {
+		id := queue[0]
+		queue = queue[1:]
+		for _, ref := range apps.GraphsNamed(v.Graphs[id]) {
+			if _, have := v.Graphs[ref]; have {
+				continue
+			}
+			if g, ok := c.publishedGraph(ref); ok && g.Owner == apps.Owner(m.ID) {
+				v.Graphs[ref] = g
+				queue = append(queue, ref)
+			}
+		}
 	}
 	for _, e := range m.Entities {
 		et, _ := c.publishedEntity(e)

@@ -139,7 +139,7 @@ Made while building:
 ### Not built yet (in forge 5c and 5d)
 - Roles made at install and the installer granted *manager*; the settings section (5c).
 - Pages rendering the pinned prefab versions, and graphs named by prefabs run from the version's copies; removed pages closing their tabs and open sessions reloading at their next event (5d, ★ in forge 05b).
-- Triggers running (forge iteration 11).
+- Triggers running: built in slice 45 ([Jobs.md](Jobs.md#triggers)).
 
 ### Verification of slice 32
 - `go test ./features/apps/...` (also with `-race`, three runs in a row), against embedded NATS and SQLite, with the record nodes:

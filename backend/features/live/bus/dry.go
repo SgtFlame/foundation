@@ -314,6 +314,7 @@ func (d *Dry) decide(rp *Request, cmd live.Command) Result {
 	if cmd.Logged() {
 		dec.Op = &live.OpInfo{}
 	}
+	dec.Outbox = &live.Outbox{} // a sandboxed command's jobs are never enqueued
 	events, problems := cmd.Decide(dec)
 	if len(problems) > 0 {
 		return rejected(problems...)

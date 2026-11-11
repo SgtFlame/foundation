@@ -62,11 +62,14 @@ func RuleEnv(record map[string]json.RawMessage, p features.Principal) map[string
 		}
 	}
 	kind := "user"
-	if p.Kind == features.PrincipalService {
+	switch p.Kind {
+	case features.PrincipalService:
 		kind = "service"
+	case features.PrincipalApp:
+		kind = "app" // an installed app's own principal (forge 07a)
 	}
 	return map[string]any{"record": r, "principal": map[string]any{
-		"user": strconv.FormatUint(p.UserID, 10), "tenant": strconv.FormatUint(p.TenantID, 10), "kind": kind,
+		"user": strconv.FormatUint(p.UserID, 10), "tenant": strconv.FormatUint(p.TenantID, 10), "kind": kind, "app": p.App,
 	}}
 }
 

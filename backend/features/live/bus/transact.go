@@ -162,6 +162,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 		type planned struct {
 			events []live.NewEvent
 			op     *live.LoggedOp
+			jobs   []live.Job
 		}
 		var plan []planned
 		var decided []Decided
@@ -182,6 +183,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 			if s.cmd.Logged() {
 				d.Op = &live.OpInfo{}
 			}
+			d.Outbox = &live.Outbox{}
 			events, problems := s.cmd.Decide(d)
 			if len(problems) > 0 {
 				for j := range problems {
@@ -202,6 +204,13 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 				}
 			}
 			if failed != nil {
+				break
+			}
+			if len(events) == 0 && len(d.Jobs()) > 0 {
+				p := noCarrier(s.op.Command)
+				p.Path = fmt.Sprintf("ops.%d", i)
+				res := TransactResult{Result: rejected(p), Ops: decided}
+				failed = &res
 				break
 			}
 			var op *live.LoggedOp
@@ -242,7 +251,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 			if failed != nil {
 				break
 			}
-			plan = append(plan, planned{events: events, op: op})
+			plan = append(plan, planned{events: events, op: op, jobs: d.Jobs()})
 			decided = append(decided, Decided{Op: s.op, Events: len(events)})
 			all = append(all, events...)
 		}
@@ -267,9 +276,9 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 				t := *ne.Target
 				data, _ := json.Marshal(ne.Data)
 				e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: fmt.Sprintf("%s.%d", r.ID, i), RequestID: r.RequestID,
-					UserID: r.Principal.UserID, Actor: r.Actor, TenantID: tenant, Time: now, Batch: &live.Batch{Index: len(msgs) + 1, Count: len(all)}}
+					UserID: r.Principal.UserID, Actor: ActorOf(r), TenantID: tenant, Time: now, Batch: &live.Batch{Index: len(msgs) + 1, Count: len(all)}}
 				if j == 0 {
-					e.Op = p.op
+					e.Op, e.Jobs = p.op, p.jobs
 				}
 				raw, _ := json.Marshal(e)
 				m := nats.NewMsg(t.Subject(tenant, ne.Type))

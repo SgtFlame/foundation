@@ -1,6 +1,7 @@
 package apps
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
@@ -133,4 +134,30 @@ func Missing(r Requires, catalog map[string]ui.Component, installed func(app str
 		}
 	}
 	return out
+}
+
+// GraphsNamed are the graphs a graph's nodes name in their config's graph
+// field: Call graph's, a job's (forge 07a). An app's version keeps copies
+// of its own graphs named so, as it does of its commands' graphs.
+func GraphsNamed(g cognition.Graph) []string {
+	var out []string
+	for _, n := range g.Nodes {
+		var c struct {
+			Graph string `json:"graph"`
+		}
+		if len(n.Config) > 0 && json.Unmarshal(n.Config, &c) == nil && c.Graph != "" && !slices.Contains(out, c.Graph) {
+			out = append(out, c.Graph)
+		}
+	}
+	return out
+}
+
+// Trigger is one of the version's triggers with its pinned graph.
+func (v Version) Trigger(id string) (Trigger, cognition.Graph, bool) {
+	i := slices.IndexFunc(v.Manifest.Triggers, func(t Trigger) bool { return t.ID == id })
+	if i < 0 || v.Manifest.Triggers[i].Graph == "" {
+		return Trigger{}, cognition.Graph{}, false
+	}
+	g, ok := v.Graphs[v.Manifest.Triggers[i].Graph]
+	return v.Manifest.Triggers[i], g, ok
 }

@@ -146,6 +146,7 @@ func (r *run) evaluate(id string) error {
 func (r *run) exec(id string, node cognition.Node) *cognition.Exec {
 	x := cognition.NewExec(r.args.ServiceArgs, r.record.ID, node, r.result)
 	x.Host, x.Vars, x.MaxIterations = r.args.Host, r.vars, r.settings.MaxLoopIterations
+	x.GraphID, x.Owner = r.res.Graph.ID, r.res.Graph.Owner
 	x.Hooks = cognition.ExecHooks{
 		Flow: func(pin, frame string) error {
 			outer := r.ctx

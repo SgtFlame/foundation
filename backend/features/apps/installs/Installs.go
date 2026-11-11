@@ -126,7 +126,7 @@ func specs() []spec {
 	return []spec{
 		{
 			id: "app.install", title: "Install an app", events: []string{EventInstalled}, args: versionArgs, example: `{}`,
-			description: "Installs a published app into this tenant (the target is the app's id): its commands and queries go live as <appId>.<name>, decided and answered by the graphs its version pinned, and its triggers are recorded (they run from forge iteration 11). It fails, naming what is missing, when the tenant lacks a primitive or an app the app requires. An app is installed once; later versions come by app.upgrade.",
+			description: "Installs a published app into this tenant (the target is the app's id): its commands and queries go live as <appId>.<name>, decided and answered by the graphs its version pinned, and its triggers start: each runs its app.trigger graph in the background, as the app's own principal, on the events or schedule its event node names (jobs). It fails, naming what is missing, when the tenant lacks a primitive or an app the app requires. An app is installed once; later versions come by app.upgrade.",
 			decide: func(c *decision, n int) ([]live.NewEvent, []live.Problem) {
 				if c.exists && c.install.Installed() {
 					return nil, problem("target", fmt.Sprintf("the app %s is installed already, at version %d", c.Target.ID, c.install.Version.Version), "take a newer version with app.upgrade")

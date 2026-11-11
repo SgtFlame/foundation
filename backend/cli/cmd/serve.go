@@ -78,6 +78,8 @@ import (
 	indeximpl "github.com/SgtFlame/foundation/backend/features/index/services/indexservice/impl"
 	indexsource "github.com/SgtFlame/foundation/backend/features/index/source"
 	"github.com/SgtFlame/foundation/backend/features/index/store/lancestore"
+	"github.com/SgtFlame/foundation/backend/features/jobs"
+	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/collabhandlers"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/kbhandlers"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/volumehandlers"
@@ -403,6 +405,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var liveNodeDeps livenodes.Deps
 		var uiNodeDeps uinodes.Deps
 		var livePresence *presence.Presence
+		var jobDeps jobs.Deps
+		var jobNodeDeps jobsnodes.Deps
 		var uiService uiservice.Service
 		var configLive configservice.Service
 		var chatLive chatservice.Service
@@ -410,7 +414,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var collabLive collabservice.Service
 		registry := extensions.NewRegistry()
 		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.Modes, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, authz.ResourceTypes,
-			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources)
+			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents)
 		// Each feature declares its resource types and their actions
 		authz.Contribute(registry)
 		identity.ContributeAccess(registry)
@@ -427,6 +431,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		records.ContributeAccess(registry)
 		ui.ContributePrefabAccess(registry)
 		apps.ContributeAccess(registry)
+		jobs.ContributeAccess(registry)
 		aisettings.Contribute(registry)
 		logssettings.Contribute(registry)
 		usagesettings.Contribute(registry)
@@ -451,6 +456,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// also a tool, so livetools runs after every feature's commands
 		livesettings.Contribute(registry)
 		recordssettings.Contribute(registry)
+		jobs.ContributeSettings(registry)
 		uisettings.Contribute(registry)
 		if err := uicomponents.Contribute(registry); err != nil {
 			return err
@@ -478,6 +484,10 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// records they name
 		manifests.Contribute(registry, func() manifests.Deps { return appDeps })
 		installs.Contribute(registry, func() installs.Deps { return installDeps })
+		// Background jobs and the apps' triggers (forge 07a), after the
+		// installs whose triggers they run
+		jobs.Contribute(registry, func() jobs.Deps { return jobDeps })
+		jobsnodes.Contribute(registry, func() jobsnodes.Deps { return jobNodeDeps })
 		ops.Contribute(registry)                                         // the operation log: ops.log and ops.list
 		ops.ContributeUndo(registry, func() ops.Deps { return opsDeps }) // ops.undo, ops.redo and ops.stack (forge 06b)
 		apptools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
@@ -738,6 +748,25 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		}))
 		// An installed app's own entity types are under its path (forge 05c)
 		records.SetPlacement(installs.Placement(func() installs.Deps { return installDeps }))
+		// This process runs its share of every tenant's jobs; other
+		// processes on the same JetStream share the queues (forge 07a)
+		jobDeps = jobs.Deps{Projections: projections, Bus: liveBus, Engine: cognitionEngine, Config: configService}
+		jobRunner := jobs.New(jobDeps, jobs.Options{})
+		defer jobRunner.Close() // before the projections close
+		jobNodeDeps = jobsnodes.Deps{Runner: jobRunner, Store: projections}
+		go jobRunner.Start(func() ([]uint64, error) {
+			ids := []uint64{features.LocalTenantID}
+			var rows []uint64
+			if err := appDB.Model(&identity.Tenant{}).Pluck("id", &rows).Error; err != nil {
+				return ids, err
+			}
+			for _, id := range rows {
+				if id != features.LocalTenantID {
+					ids = append(ids, id)
+				}
+			}
+			return ids, nil
+		})
 		prefabService := prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
 		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())),
 			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))

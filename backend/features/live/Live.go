@@ -111,6 +111,11 @@ type Event struct {
 	// Op is set on the first event of a definition command: the command as
 	// an op of the operation log, with its inverse.
 	Op *LoggedOp `json:"op,omitempty"`
+	// Jobs is set on the first event of a commit whose command enqueued
+	// background jobs (forge 07a): the commit's outbox, which the jobs
+	// feature's outbox follower turns into jobs, so a job is enqueued if
+	// and only if the command's events commit.
+	Jobs []Job `json:"jobs,omitempty"`
 	// Set when read back from the stream.
 	Stream string `json:"-"`
 	Seq    uint64 `json:"-"`
@@ -168,6 +173,31 @@ type LoggedOp struct {
 	Events int `json:"events,omitempty"`
 }
 
+// Job is a background job a command enqueues (forge 07a): carried on the
+// commit's first event and enqueued by the jobs feature once the events
+// are stored, to run as the command's principal.
+type Job struct {
+	// ID is the job's id and idempotency key: a job with an id already
+	// enqueued is not enqueued again.
+	ID     string          `json:"id"`
+	Graph  string          `json:"graph"`
+	Inputs json.RawMessage `json:"inputs,omitempty"`
+	Queue  string          `json:"queue,omitempty"`
+	// Key, when set, runs the jobs with the same key one at a time, in
+	// order (one mail account's syncs).
+	Key   string    `json:"key,omitempty"`
+	RunAt time.Time `json:"runAt,omitzero"`
+	// App is the app whose installed version's copy of Graph runs, when
+	// the enqueuing graph is an app's.
+	App string `json:"app,omitempty"`
+	// As is who the job runs as: the command's principal.
+	As features.PrincipalRef `json:"as"`
+}
+
+// Outbox holds the jobs a decision enqueues, shared by the decision's
+// copies.
+type Outbox struct{ Jobs []Job }
+
 // Logged reports whether a command is an op of the operation log: every
 // definition command is (forge 06a question 3).
 func (c Command) Logged() bool { return c.Area == AreaDefinitions }
@@ -206,6 +236,28 @@ type Decision struct {
 	// Op is set for a definition command: Decide fills it with the
 	// command's inverse and its target's app.
 	Op *OpInfo
+	// Outbox is set by the bus: the jobs Enqueue adds commit with the
+	// events (forge 07a).
+	Outbox *Outbox
+}
+
+// Enqueue adds a job to the commit's outbox: it is enqueued once the
+// command's events are stored, and never if they are not. It reports
+// false when the decision has no outbox (a decision made outside the bus).
+func (d Decision) Enqueue(j Job) bool {
+	if d.Outbox == nil {
+		return false
+	}
+	d.Outbox.Jobs = append(d.Outbox.Jobs, j)
+	return true
+}
+
+// Jobs are the jobs a decision enqueued.
+func (d Decision) Jobs() []Job {
+	if d.Outbox == nil {
+		return nil
+	}
+	return d.Outbox.Jobs
 }
 
 // Undo sets the op's inverse, when the decision is logged.

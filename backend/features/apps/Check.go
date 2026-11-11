@@ -404,6 +404,26 @@ func (c *check) triggers() {
 			c.add(path+".id", fmt.Sprintf("the trigger %s is declared twice", t.ID), "")
 		}
 		seen[t.ID] = true
+		if t.Queue != "" && !live.ValidToken(t.Queue) {
+			c.add(path+".queue", fmt.Sprintf("%q is not a queue name", t.Queue), "use letters, digits, _ and -")
+		}
+		if t.Graph == "" {
+			continue // declared only
+		}
+		var g cognition.Graph
+		ok := false
+		if c.env.Graph != nil && live.ValidToken(t.Graph) {
+			g, ok = c.env.Graph(t.Graph)
+		}
+		switch {
+		case !ok:
+			c.add(path+".graph", fmt.Sprintf("there is no graph %q", t.Graph), "make an app.trigger graph with bp.create first")
+		case g.Kind != "app.trigger":
+			c.add(path+".graph", fmt.Sprintf("the graph %s is a %s graph, not an app.trigger graph", t.Graph, g.Kind), "name an app.trigger graph")
+		case g.Owner != Owner(c.m.ID):
+			// It runs as this app's principal, so it must be the app's own
+			c.add(path+".graph", fmt.Sprintf("the graph %s is not this app's own", t.Graph), "make the trigger graph with owner app:"+c.m.ID)
+		}
 	}
 }
 

@@ -4,7 +4,7 @@
 // events commit with the command's own as one atomic batch; every kind
 // reads records with Get record, Query and Aggregate, and a data.query
 // graph runs again when the records it read change. On record changed is
-// the app.trigger event for records (runs come with forge 07-Email).
+// the app.trigger event for records, run by the jobs feature (forge 07a).
 // Elsewhere than a command graph, a write is Send command with record.*.
 package recordsnodes
 
@@ -52,16 +52,18 @@ func Contribute(reg *extensions.Registry, deps func() data.Deps) {
 	contributeReads(reg, deps)
 	contributeFiles(reg, deps)
 	node(reg, 700, cognition.NodeType{
-		Descriptor: extensions.Descriptor{ID: "records.onChanged"}, Title: "On record changed", Category: "Events", Event: true, Kinds: []string{livenodes.KindTrigger},
-		Description: "Starts a trigger when a record of an entity type is created, changed or deleted (runs come with forge 07-Email)",
+		Descriptor: extensions.Descriptor{ID: OnChanged}, Title: "On record changed", Category: "Events", Event: true, Kinds: []string{livenodes.KindTrigger},
+		Description: "Starts a trigger, in the background as the app's own principal, once for each record of an entity type created, changed or deleted, on a type the app may read (forge 07a)",
 		Example:     "On record changed for task, when done turns true, to email the task's creator",
-		Examples:    cognition.ConfigExample("records.onChanged", `{"entity":"task","events":["updated"]}`),
+		Examples:    cognition.ConfigExample(OnChanged, `{"entity":"task","events":["updated"]}`),
 		Config:      json.RawMessage(`{"type":"object","properties":{` + entityConfig + `,"events":{"type":"array","title":"Events","items":{"type":"string","enum":["created","updated","deleted"]},"description":"The changes it starts on; every one when empty"}},"required":["entity"]}`),
 		Pins: cognition.Pins{Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""),
-			cognition.DataPin("record", "Record", "json", "The record after the change; nothing once deleted"),
+			cognition.DataPin("record", "Record", "json", "The record as it is when the run starts; nothing once deleted or hidden from the app"),
 			cognition.DataPin("old", "Old", "json", "The values the change replaced"),
-			cognition.DataPin("event", "Event", "string", "created, updated or deleted")}},
+			cognition.DataPin("event", "Event", "string", "created, updated or deleted"),
+			cognition.DataPin("id", "ID", "string", "The record's id")}},
 	})
+	contributeTrigger(reg, deps)
 }
 
 // write is one write node: the record command it decides, and how its

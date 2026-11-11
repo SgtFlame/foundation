@@ -78,6 +78,10 @@ type NodeType struct {
 	// Effects is set on nodes with side effects (model calls, commands,
 	// writes), which pure kinds such as data.query refuse.
 	Effects bool
+	// PureIn are kinds a node with Effects is still allowed in, because
+	// there its effect is part of what the run decides: Enqueue job in a
+	// command graph only adds to the commit's outbox (forge 07a).
+	PureIn []string
 	// External is set on nodes that reach outside the tenant's data: a
 	// model, a tool, the object store, mail. A sandboxed run (forge.test,
 	// forge 06f) does not run them: it gives their Sample and lists them.
@@ -213,7 +217,10 @@ type Exec struct {
 	// session's handle for a ui.handler, a command's decision for a
 	// command graph; nil for a chat mode.
 	Host any
-	Vars Values // the run's variables, by ID
+	// GraphID and Owner are the running graph's id and owner (app:<appId>
+	// for an app's graph), for nodes that name the app's other graphs.
+	GraphID, Owner string
+	Vars           Values // the run's variables, by ID
 	// MaxIterations is how many times a loop may run its body (the
 	// cognition section's maxLoopIterations).
 	MaxIterations int

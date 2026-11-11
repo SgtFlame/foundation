@@ -73,8 +73,8 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				h := &QueryHost{Pos: live.Position{}}
 				return h, func() any { return h }
 			}},
-		{Descriptor: extensions.Descriptor{ID: KindTrigger}, Title: "Trigger", Events: []string{"live.onEvent", "live.onSchedule", "live.onWebhook"},
-			Description: "Runs in the background when an event is committed, on a schedule, or on a webhook (runs come with forge 07-Email).", Returns: "nothing"},
+		{Descriptor: extensions.Descriptor{ID: KindTrigger}, Title: "Trigger", Events: []string{OnEvent, OnSchedule, OnWebhook, "records.onChanged"},
+			Description: "Runs in the background, as its app's own principal, when an event is committed or on a schedule (webhooks come with forge 11-Zapier). Named by the app's manifest as a trigger, it runs only while the app is installed, each event or tick once, as a durable job (forge 07a).", Returns: "nothing"},
 	} {
 		k.Order, k.Source = 100+i*10, source
 		cognition.Kinds.Register(reg, k)
@@ -283,15 +283,32 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			return declared(config, cognition.ExecPin(cognition.Then, ""), cognition.DataPin("params", "Params", "json", "The query's params"))
 		},
 	})
-	for i, e := range []struct{ id, title, description, example string }{
-		{"live.onEvent", "On event", "Starts a trigger when an event is committed, such as a record changed", "On event deals.stageChanged to email the owner"},
-		{"live.onSchedule", "On schedule", "Starts a trigger on a schedule", "On schedule every morning at 8 to send a digest"},
-		{"live.onWebhook", "On webhook", "Starts a trigger when its webhook is called", "On webhook from the payment provider"},
-	} {
-		node(reg, 600+i, cognition.NodeType{
-			Descriptor: extensions.Descriptor{ID: e.id}, Title: e.title, Category: "Events", Event: true, Kinds: []string{KindTrigger},
-			Description: e.description + " (runs come with forge 07-Email)", Example: e.example,
-			Pins: cognition.Pins{Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("event", "Event", "json", "What started it")}},
-		})
-	}
+	node(reg, 600, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: OnEvent}, Title: "On event", Category: "Events", Event: true, Kinds: []string{KindTrigger},
+		Description: "Starts a trigger, in the background as the app's own principal, once for each event of a type the app's own command graphs commit (area app_<appId>); for records' changes use On record changed",
+		Example:     "On event counter.incremented to post the new value to a log",
+		Examples:    cognition.ConfigExample(OnEvent, `{"type":"counter","events":["incremented"]}`),
+		Config:      json.RawMessage(onEventSchema),
+		Pins: cognition.Pins{Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""),
+			cognition.DataPin("event", "Event", "json", "The committed event: {type, target, data, userId, time, …}"),
+			cognition.DataPin("data", "Data", "json", "The event's data"),
+			cognition.DataPin("type", "Type", "string", "The event's type"),
+			cognition.DataPin("target", "Target", "string", "The id of the event's target")}},
+	})
+	node(reg, 601, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: OnSchedule}, Title: "On schedule", Category: "Events", Event: true, Kinds: []string{KindTrigger},
+		Description: "Starts a trigger, in the background as the app's own principal, on a schedule: every interval (every: 5m) or at a time of day (at: 08:00, in a time zone); one run per tick across every server",
+		Example:     "On schedule at 08:00 Europe/Paris to send a digest",
+		Examples:    cognition.ConfigExample(OnSchedule, `{"every":"15m"}`),
+		Config:      json.RawMessage(OnScheduleSchema),
+		Pins: cognition.Pins{Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""),
+			cognition.DataPin("event", "Event", "json", "The tick: {time}"),
+			cognition.DataPin("time", "Time", "string", "When the tick was due, RFC 3339 in UTC")}},
+	})
+	node(reg, 602, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: OnWebhook}, Title: "On webhook", Category: "Events", Event: true, Kinds: []string{KindTrigger},
+		Description: "Starts a trigger when its webhook is called (runs come with forge 11-Zapier)", Example: "On webhook from the payment provider",
+		Pins: cognition.Pins{Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("event", "Event", "json", "What started it")}},
+	})
+	contributeTriggers(reg)
 }

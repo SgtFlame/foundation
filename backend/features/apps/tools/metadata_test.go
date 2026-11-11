@@ -2,6 +2,8 @@ package apptools_test
 
 import (
 	"encoding/json"
+	"github.com/SgtFlame/foundation/backend/features/jobs"
+	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	"slices"
 	"strings"
 	"testing"
@@ -59,6 +61,8 @@ func everything(t *testing.T) *extensions.Registry {
 	apptools.ContributeForge(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })
 	apptools.ContributeApply(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })
 	apptools.ContributeTest(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })
+	jobs.Contribute(reg, func() jobs.Deps { return jobs.Deps{} })
+	jobsnodes.Contribute(reg, func() jobsnodes.Deps { return jobsnodes.Deps{} })
 	return reg
 }
 
