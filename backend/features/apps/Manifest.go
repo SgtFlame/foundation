@@ -6,6 +6,10 @@
 package apps
 
 import (
+	"encoding/json"
+	"maps"
+	"slices"
+
 	"github.com/SgtFlame/foundation/backend/features/logging"
 )
 
@@ -37,8 +41,11 @@ type Manifest struct {
 	Roles    []Role    `json:"roles"`
 	Settings Settings  `json:"settings"`
 	Triggers []Trigger `json:"triggers"`
-	Requires Requires  `json:"requires"`
-	Version  int       `json:"version"` // the published version; 0 in a draft never published
+	// Connectors are scripted connector types (forge 07d): contracts
+	// implemented in blueprints, installed as <appId>.<name>.
+	Connectors []Connector `json:"connectors"`
+	Requires   Requires    `json:"requires"`
+	Version    int         `json:"version"` // the published version; 0 in a draft never published
 }
 
 // DefaultFrame is the prefab an app that names no frame is framed by:
@@ -140,6 +147,49 @@ type Trigger struct {
 	Config map[string]any `json:"config,omitempty"`
 }
 
+// Connector is a scripted connector type (forge 07d): it implements
+// contracts defined in Go with one connector.op graph per operation, and
+// is installed into the tenant's registry as <appId>.<name>, source
+// scripted, beside the builtin types.
+type Connector struct {
+	Name        string `json:"name"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	Icon        string `json:"icon,omitempty"`
+	// Contracts are id@version, one version of each.
+	Contracts []string `json:"contracts"`
+	// Settings is the connections' settings schema, in Configuration's
+	// schema language; fields marked secret go to the SecretStore.
+	Settings json.RawMessage `json:"settings,omitempty"`
+	// Operations map an operation's id to the app's own connector.op
+	// graph that answers it, for every contract named that has it. An
+	// operation left out answers notSupported.
+	Operations map[string]string `json:"operations"`
+	// Watch is the app's own connector.op graph run by the event source
+	// on the connection's poll interval, for a type that polls something;
+	// empty when the app's triggers raise its events.
+	Watch string `json:"watch,omitempty"`
+}
+
+// TypeID is a connector's installed type id: <appId>.<name>.
+func (c Connector) TypeID(app string) string { return app + "." + c.Name }
+
+// ConnectorGraphs are the graphs a manifest's connectors name, in order.
+func (m Manifest) ConnectorGraphs() []string {
+	var out []string
+	for _, c := range m.Connectors {
+		for _, op := range slices.Sorted(maps.Keys(c.Operations)) {
+			if g := c.Operations[op]; g != "" && !slices.Contains(out, g) {
+				out = append(out, g)
+			}
+		}
+		if c.Watch != "" && !slices.Contains(out, c.Watch) {
+			out = append(out, c.Watch)
+		}
+	}
+	return out
+}
+
 // Requires is what must be in a tenant before the app installs there.
 type Requires struct {
 	// Primitives are component ids (mui.table) or families (mui).
@@ -177,6 +227,17 @@ func Normalize(m *Manifest) {
 	}
 	if m.Triggers == nil {
 		m.Triggers = []Trigger{}
+	}
+	if m.Connectors == nil {
+		m.Connectors = []Connector{}
+	}
+	for i := range m.Connectors {
+		if m.Connectors[i].Contracts == nil {
+			m.Connectors[i].Contracts = []string{}
+		}
+		if m.Connectors[i].Operations == nil {
+			m.Connectors[i].Operations = map[string]string{}
+		}
 	}
 }
 

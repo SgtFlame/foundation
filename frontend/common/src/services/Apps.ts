@@ -67,6 +67,19 @@ export interface AppTrigger {
   config?: Record<string, unknown>
 }
 
+// A scripted connector type (forge 07d): contracts implemented in
+// blueprints, installed as the type <appId>.<name>
+export interface AppConnector {
+  name: string
+  title?: string
+  description?: string
+  icon?: string
+  contracts: string[] // id@version
+  settings?: Record<string, unknown> // the connections' settings schema
+  operations: Record<string, string> // operation id → connector.op graph
+  watch?: string // the event source's connector.op graph
+}
+
 export interface AppRequires {
   primitives?: string[]
   apps?: string[]
@@ -89,6 +102,7 @@ export interface AppManifest {
   roles: AppRole[]
   settings: AppSettings
   triggers: AppTrigger[]
+  connectors: AppConnector[]
   requires: AppRequires
   version: number
 }
@@ -166,6 +180,7 @@ export interface InstalledApp {
   queries: InstalledEntry[]
   editorKinds: AppEditorKind[]
   triggers: AppTrigger[]
+  connectors: string[] // the scripted connector types it installs
   installedBy: string
   installedAt: string
   updatedAt: string

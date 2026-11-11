@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/cognition"
+	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/records"
 	"github.com/SgtFlame/foundation/backend/features/ui"
@@ -135,6 +136,8 @@ type DocumentEnv struct {
 	// Builtin is a built-in graph of the server.
 	Builtin func(id string) (cognition.Graph, bool)
 	Query   func(name string) bool // a live query of the server
+	// Contract is a contract defined in Go (forge 07d).
+	Contract func(ref string) (connectors.Contract, bool)
 }
 
 // CheckDocument is validation of a whole document plus the
@@ -164,9 +167,10 @@ func CheckDocument(d Document, env DocumentEnv) []live.Problem {
 		}
 	}
 	menv := Env{Catalog: env.Catalog,
-		Prefab: func(id string) (ui.Prefab, bool) { p, ok := c.prefabs[id]; return p, ok },
-		Graph:  c.graphOf,
-		Entity: func(id string) (records.EntityType, bool) { e, ok := c.entities[id]; return e, ok },
+		Prefab:   func(id string) (ui.Prefab, bool) { p, ok := c.prefabs[id]; return p, ok },
+		Graph:    c.graphOf,
+		Entity:   func(id string) (records.EntityType, bool) { e, ok := c.entities[id]; return e, ok },
+		Contract: env.Contract,
 	}
 	for _, p := range CheckManifest(d.Manifest, menv) {
 		p.Path = strings.TrimSuffix("manifest."+p.Path, ".")

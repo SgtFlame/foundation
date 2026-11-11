@@ -2,8 +2,6 @@ package adapter
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"slices"
@@ -14,8 +12,6 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/connectors"
-	"github.com/SgtFlame/foundation/backend/features/live"
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -416,31 +412,11 @@ func (s *server) pass(ctx context.Context, h *held, cursors jetstream.KeyValue) 
 	})
 }
 
-// publish puts one event in CX_<tenant>, its id as the message id so an
-// event emitted again (after a crash before its cursor was stored) is
-// dropped, and returns once JetStream has it.
+// publish puts one event in CX_<tenant> (connectors.PublishEvent), after
+// checking the type implements its contract.
 func (s *server) publish(ctx context.Context, src connectors.Source, e Event) error {
-	id, version, err := connectors.ParseRef(e.Contract)
-	if err != nil || version == 0 {
-		return connectors.Errorf(connectors.CodeInvalid, "event %s names no contract version: %q", e.Name, e.Contract)
-	}
 	if !slices.Contains(s.types[src.Type].Contracts, e.Contract) {
 		return connectors.Errorf(connectors.CodeInvalid, "%s does not implement %s", src.Type, e.Contract)
 	}
-	if e.ID == "" {
-		sum := sha256.Sum256(append([]byte(e.Contract+"|"+e.Name+"|"), e.Payload...))
-		e.ID = hex.EncodeToString(sum[:16])
-	}
-	at := e.At
-	if at.IsZero() {
-		at = time.Now().UTC()
-	}
-	body, _ := json.Marshal(live.Event{Type: e.Name, Target: live.Target{Area: connectors.EventArea, Type: connectors.Token(id), ID: src.Connection},
-		Data: e.Payload, CommandID: e.ID, TenantID: src.Tenant, Time: at})
-	m := nats.NewMsg(connectors.EventSubject(src.Tenant, src.Connection, id, e.Name))
-	m.Data = body
-	m.Header.Set(jetstream.MsgIDHeader, src.Connection+":"+e.Name+":"+e.ID)
-	m.Header.Set(connectors.HeaderEventContract, e.Contract)
-	_, err = s.js.PublishMsg(ctx, m)
-	return err
+	return connectors.PublishEvent(ctx, s.js, src.Tenant, src.Connection, e.Contract, e.Name, e.ID, e.Payload, e.At)
 }

@@ -41,7 +41,7 @@ type Deps struct {
 func Contribute(reg *extensions.Registry, deps func() Deps) {
 	node(reg, 900, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "jobs.enqueue"}, Title: "Enqueue job", Effects: true, PureIn: []string{livenodes.KindCommand},
-		Kinds:       []string{livenodes.KindCommand, livenodes.KindAction, livenodes.KindTrigger, "ui.handler"},
+		Kinds:       []string{livenodes.KindCommand, livenodes.KindAction, livenodes.KindTrigger, livenodes.KindConnectorOp, "ui.handler"},
 		Description: "Runs a server.action graph later, in the background, as the run's principal, as a durable job: retried when it fails retryably, run once even if a server dies. In a command graph it is enqueued only if the command's events commit. Jobs with one key run one at a time, in order; a job's id makes it run once however often it is enqueued.",
 		Example:     "Enqueue job mail-send with the draft's id as inputs, key the account and a 10s delay, so Undo send can cancel it",
 		Examples:    cognition.ConfigExample("jobs.enqueue", `{"graph":"mail-send"}`),
@@ -118,7 +118,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	})
 	node(reg, 910, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "jobs.cancel"}, Title: "Cancel job", Effects: true,
-		Kinds:       []string{livenodes.KindAction, livenodes.KindTrigger, "ui.handler"},
+		Kinds:       []string{livenodes.KindAction, livenodes.KindTrigger, livenodes.KindConnectorOp, "ui.handler"},
 		Description: "Cancels a job that has not started yet, as the run's principal (Undo send); continues by Canceled, or Not canceled when it is running, finished or someone else's",
 		Example:     "Cancel job with the id Enqueue job gave when the user clicks Undo send",
 		Pins: cognition.Pins{

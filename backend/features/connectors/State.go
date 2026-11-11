@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -301,4 +303,55 @@ func Lock(ctx context.Context, js jetstream.JetStream, tenant uint64, connection
 		case <-time.After(250 * time.Millisecond):
 		}
 	}
+}
+
+// EventID is a connector event's id: its id fields' values joined by |,
+// in the order the event names them, or a hash of the contract, event and
+// payload when a field is missing (or the event names none).
+func EventID(def EventDef, contract string, payload json.RawMessage) string {
+	var p map[string]any
+	_ = json.Unmarshal(payload, &p)
+	var parts []string
+	for _, f := range def.IDFields {
+		v, ok := p[f]
+		if !ok || v == nil || v == "" {
+			parts = nil
+			break
+		}
+		parts = append(parts, fmt.Sprint(v))
+	}
+	if len(parts) > 0 {
+		return strings.Join(parts, "|")
+	}
+	sum := sha256.Sum256(append([]byte(contract+"|"+def.ID+"|"), payload...))
+	return hex.EncodeToString(sum[:16])
+}
+
+// PublishEvent puts one connector event in CX_<tenant> on a connection,
+// its id in the message id so an event published again (a poll after a
+// crash, a trigger run twice) is kept once, and returns once JetStream has
+// it. contract is id@version; an empty id is made from the payload.
+func PublishEvent(ctx context.Context, js jetstream.JetStream, tenant uint64, connection, contract, event, id string, payload json.RawMessage, at time.Time) error {
+	cid, version, err := ParseRef(contract)
+	if err != nil || version == 0 {
+		return Errorf(CodeInvalid, "event %s names no contract version: %q", event, contract)
+	}
+	if id == "" {
+		sum := sha256.Sum256(append([]byte(contract+"|"+event+"|"), payload...))
+		id = hex.EncodeToString(sum[:16])
+	}
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	if _, err := EventStream(ctx, js, tenant); err != nil {
+		return err
+	}
+	body, _ := json.Marshal(live.Event{Type: event, Target: live.Target{Area: EventArea, Type: Token(cid), ID: connection},
+		Data: payload, CommandID: id, TenantID: tenant, Time: at})
+	m := nats.NewMsg(EventSubject(tenant, connection, cid, event))
+	m.Data = body
+	m.Header.Set(jetstream.MsgIDHeader, connection+":"+event+":"+id)
+	m.Header.Set(HeaderEventContract, contract)
+	_, err = js.PublishMsg(ctx, m)
+	return err
 }

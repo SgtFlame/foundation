@@ -95,6 +95,9 @@ func named(m apps.Manifest) map[string][]string {
 	for _, t := range m.Triggers {
 		add("graph", t.Graph)
 	}
+	for _, g := range m.ConnectorGraphs() {
+		add("graph", g)
+	}
 	for _, e := range m.Entities {
 		add("entity", e)
 	}
@@ -173,7 +176,7 @@ type watched struct {
 func contributeQueries(reg *extensions.Registry, deps func() Deps) {
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "app.describe", Source: "apps"}, Title: "An app",
-		Description: "An app's draft as it is edited: {manifest: {id, name, icon, description, home, frame, pages, nav, editorKinds, entities, commands, queries, roles, settings, triggers, requires}, rev, parts}. parts are the prefabs, graphs and entity types the manifest names or the app owns (owner app:<appId>), each {type, id, name, description, kind, owner, rev, published, changed, named, owned, missing}. Changes with every app.* command and with every change to a part.",
+		Description: "An app's draft as it is edited: {manifest: {id, name, icon, description, home, frame, pages, nav, editorKinds, entities, commands, queries, roles, settings, triggers, connectors, requires}, rev, parts}. parts are the prefabs, graphs and entity types the manifest names or the app owns (owner app:<appId>), each {type, id, name, description, kind, owner, rev, published, changed, named, owned, missing}. Changes with every app.* command and with every change to a part.",
 		Params:      json.RawMessage(`{"type":"object","properties":{"id":{"type":"string","description":"The app's id"}},"required":["id"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"id":"tasks"}`)},
 		Action:      "app.read",

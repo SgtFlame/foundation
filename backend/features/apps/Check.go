@@ -9,6 +9,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/config"
+	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/records"
 	"github.com/SgtFlame/foundation/backend/features/tools"
@@ -23,6 +24,9 @@ type Env struct {
 	Graph   func(id string) (cognition.Graph, bool) // its kind and owner
 	Entity  func(id string) (records.EntityType, bool)
 	Catalog map[string]ui.Component
+	// Contract is a contract defined in Go, by id@version, which a
+	// scripted connector may implement (forge 07d).
+	Contract func(ref string) (connectors.Contract, bool)
 }
 
 // dotted is a command type or query name: tokens joined with '.'.
@@ -71,6 +75,7 @@ func CheckManifest(m Manifest, env Env) []live.Problem {
 	c.roles()
 	c.settings()
 	c.triggers()
+	c.connectors()
 	c.requires()
 	return c.problems
 }

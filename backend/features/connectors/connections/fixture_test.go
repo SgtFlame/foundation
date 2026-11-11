@@ -27,6 +27,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connectorstest"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
+	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
@@ -112,17 +113,18 @@ func (h *hits) all() []any {
 }
 
 type fixture struct {
-	t       *testing.T
-	srv     *natsd.Server
-	reg     *extensions.Registry
-	p       *project.Projections
-	bus     *bus.Bus
-	subs    *subscribe.Subscriptions
-	deps    connections.Deps
-	jobs    jobs.Deps
-	secrets *memSecrets
-	hits    *hits
-	n       atomic.Int64
+	t        *testing.T
+	srv      *natsd.Server
+	reg      *extensions.Registry
+	p        *project.Projections
+	bus      *bus.Bus
+	subs     *subscribe.Subscriptions
+	deps     connections.Deps
+	jobs     jobs.Deps
+	secrets  *memSecrets
+	hits     *hits
+	scripted scripted.Deps
+	n        atomic.Int64
 }
 
 type jobSettings struct{}
@@ -151,6 +153,7 @@ func setup(t *testing.T) *fixture {
 		jobNodes   jobsnodes.Deps
 		cxDeps     connectors.Deps
 		connDeps   connections.Deps
+		scrDeps    scripted.Deps
 	)
 	livenodes.Contribute(reg, func() livenodes.Deps { return nodeDeps })
 	drafts.Contribute(reg, func() drafts.Deps { return draftDeps })
@@ -167,6 +170,7 @@ func setup(t *testing.T) *fixture {
 	connectorsnodes.Contribute(reg, func() connectors.Deps { return cxDeps })
 	connections.Contribute(reg, func() connections.Deps { return connDeps })
 	connections.ContributeTrigger(reg, func() connections.Deps { return connDeps })
+	scripted.Contribute(reg, func() scripted.Deps { return scrDeps })
 	h := &hits{}
 	cognition.Nodes.Register(reg, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "test.hit", Source: "test"}, Title: "Hit", Category: "Test", Effects: true,
@@ -212,6 +216,8 @@ func setup(t *testing.T) *fixture {
 	cxDeps = connectors.Deps{Registry: registry, Dispatcher: dispatcher}
 	connDeps = connections.Deps{Projections: p, Bus: f.bus, Registry: registry, Secrets: f.secrets, Dispatcher: dispatcher}
 	f.deps = connDeps
+	scrDeps = scripted.Deps{Store: p, Engine: eng, JS: srv.JS(), Reg: reg}
+	f.scripted = scrDeps
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	if err := connections.Serve(ctx, srv.Conn(), func() connections.Deps { return connDeps }); err != nil {

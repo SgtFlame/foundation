@@ -314,3 +314,67 @@ In Forge, in headless Chromium, with a scratch NATS server running the test adap
 - Pushed events at a hook URL, registration with the service and backfill after a gap (15f).
 - Several sessions per connection in one instance (one session serves concurrent calls).
 - Authorization between processes, which `cx.resolve` waits for.
+
+## Built in slice 48
+
+Forge's part [7d](../../forge/documentation/plans/07d-ScriptedConnectors.md): scripted connectors, connector types an app declares in its manifest and implements in blueprints. Packages: `features/connectors/scripted` (the `connector.op` kind, its nodes, *Emit connector event* and the scripted adapter), additions to `apps` (the manifest's `connectors`, their check, the version's pinned graphs), `apps/manifests` (the keyed list, publishing their graphs, lint), `apps/installs` (`app.installs` lists them), `connectors` (`EventID`, `PublishEvent`, the registry's `scripted` source) and `connectors/connections` (disabling the connections of removed types).
+
+### The manifest's `connectors`
+
+A keyed list by `name` (`app.addConnector`, `app.updateConnector`, `app.removeConnector`, each an op with its inverse): `{name, title?, description, icon?, contracts: [id@version], settings? (Configuration's schema language; a field of type `secret` is sealed into the SecretStore like any connection's), operations: {<operation id>: <graph>}, watch?}`. `operations` merges per key (`null` removes one). Installed, the type is `<appId>.<name>` with source `scripted`, tags `scripted` and the app's id.
+
+`apps.CheckManifest` (with the contracts in `apps.Env.Contract`, `apps.BuiltinContracts(reg)`: the `connector.contract` contributions, the contracts defined in Go):
+- the name is letters, digits and `-`, and the type id passes `connectors.ValidID` (an app id with `_` cannot have connectors);
+- the type passes `connectors.CheckType`, so the registry never refuses its announcement: a description, known contracts, one version of each, a settings schema that parses;
+- every operation named is one of its contracts', answered by a `connector.op` graph owned by the app whose *Operation called* names that operation, and whose every *Return* gives only the result's fields and all of its required ones;
+- `watch` names a `connector.op` graph whose entry is the watch entry.
+
+An operation of its contracts with no graph is a **warning** of `forge.check` (`apps.ConnectorWarnings`): calling it answers `notSupported`. `app.publish` copies the operation and watch graphs into the version (`Manifest.ConnectorGraphs`, `Version.ConnectorGraph`, `Version.WatchGraph`), so an export carries them (question 2), and an import under another id renames `op-<app>-…` graphs as it does `cmd-` and `qry-`.
+
+### The `connector.op` graph kind
+
+- **Operation called** (`connector.operation`, config `{contract, operation}` or `{watch: true}`): outputs one pin per top-level field of the operation's args (from `Normalize`, as *Call connector*'s; a field named `settings`, `connection`, `caller`, `cursor` or `args` is read from `args`), `args` whole, `settings` (secrets included: the graph runs on the server), `connection` and `caller` (`{kind, tenant, user?, app?}`). The watch entry gives `cursor` in place of the args.
+- **Return** (`flow.return`) gives the result's fields; **Return error** (`connector.returnError`, `{code, message, retryable?, retryAfter? (seconds)}`) ends the run with a typed error, retryable by its code's default unless the input says otherwise.
+- It runs as **the app's principal** (`features.AppPrincipal`), so it reads and writes the app's records by commands; *Enqueue job*, *Cancel job* and *Upload file* allow the kind too (`livenodes.KindConnectorOp`).
+
+### Raising events
+
+**Emit connector event** (`connector.emit`, config `{contract, event}`, inputs `connection`, `payload`; output `id`), in `server.action`, `app.trigger` and `connector.op` graphs: only in a graph owned by an installed app that declares a type implementing the contract, for a connection of that type. The payload is checked against the event's schema; its id is the id fields' values joined by `|` (`connectors.EventID`, else a hash); it is published by `connectors.PublishEvent`, the code a builtin `Watch`'s events go through, so the message id `<connection>:<event>:<id>` keeps an event raised twice once. In a watch graph's run its events are held and published by the event source after the run, the returned cursor stored with the last (or alone when there are none).
+
+### The scripted adapter
+
+`scripted.Serve(ctx, nc, deps, tenants, Options)` runs in every process (`serve.go`, beside `connections.Start`). Per tenant it watches `apps.install` and, when the scripted types the installs declare change (`scripted.Types`), starts an `adapter.Serve` for that tenant alone (`Tenants: [t]`) over those types and their contracts, then stops the old one a second later, so no call meets *no responders*. Being an ordinary adapter, it **announces** the types in `cx_adapters` (which is how they reach the registry: `connectors.types` lists them with source `scripted` and they leave it at uninstall, the registry's subscribers told of both), answers calls in their queue groups (`cx.<type>`, shared by every process), resolves settings on `cx.resolve`, writes the ledger after a keyed call, and contends for their event sources' leases. A session reads the install at each call, so an upgrade's graphs answer the next call; it runs the operation's pinned graph through the engine (`TraceFailures`), `Trigger` `connector:<appId>.<name>`, and replies with its outputs or its typed error; a failed run is `unavailable` naming the run. A type without a watch graph has a source that only waits: its events come from the app's triggers.
+
+**Uninstalling** an app, or an upgrade dropping one of its connectors, disables the connections of the removed types (`connection.disable` as the tenant's service principal, from the connections follower on install events); enabling one again is the user's choice once the type is back.
+
+### Decisions
+
+Answered before building (the user, 2026-11-11), each as proposed: question 1 (no scripted contracts here; 11-Zapier adds them) and 2 (the types travel with the manifest in an export).
+
+Decided while building:
+
+1. **Installed types reach the registry by announcement**, not by the registry reading installs: the scripted adapter is an adapter like any other, so online state, subscriptions, queue groups, the ledger and event sources needed nothing new, and `connectors` still does not import `apps`.
+2. **One adapter per tenant**, since two tenants may install different versions of one app with one type id; announcements are per instance.
+3. **The graphs run as the app's principal**, the caller given as `caller` (the plan said both: "as the call's principal" and "as the app's install principal"; the app's own records need the second).
+4. **Only contracts defined in Go** (`connector.contract` contributions) may be implemented, not announced ones: an app's check must not depend on an external adapter being online.
+5. **A secret setting is a field of type `secret`**, Configuration's schema language, as the builtin types' are (the plan wrote `"secret": true`).
+6. **One graph per operation id**: an operation two of the connector's contracts declare (`check`) is answered by the same graph.
+7. **Removed types' connections are disabled** by the connections follower that already follows install events, reading the old version for an upgrade.
+
+### Decisions to review after seeing it
+
+- ★ The Applications editor's Connectors tab (Forge [ApplicationsEditor.md](../../forge/documentation/ApplicationsEditor.md#built-in-part-7d)), once there are contracts defined in Go (7e).
+- Whether a failed run should be `unavailable` (retried by a job) or not retryable: a bug in a graph is retried until the job dies.
+
+### Verification
+
+`go test ./features/connectors/...` (three times in a row), `./features/apps/...`, `./features/jobs/...`, `./features/live/...`, `./features/cognition/...`. In `connectors/connections`' `scripted_test.go`, the Stub app implements `test.echo@1` in blueprints as `stub.echo`, served by two scripted adapters on their own NATS connections beside the builtin `test.secure`:
+
+- **same answers:** `echo` with and without `repeat` and `options.upper` gives the builtin's text and length through a connection to each type; `fail` with `notFound`, `conflict`, `rateLimited` and `invalid` gives the same code, message and retryability; `connectors.types` lists `stub.echo` as `scripted` with two instances;
+- **ledger:** `start {id: k1}` three times runs its graph once; **check:** `connection.test` runs the check graph;
+- **left out:** with only `echo` and `check`, `forge.check` warns of `operations.fail` and calling `fail` is `notSupported`, not retryable;
+- **events:** an action of the Stub app emitting `finished` starts the Watcher app's trigger; the same event id twice starts it once; emitting on a `test.secure` connection is refused;
+- **install:** the type is absent before install, listed after, gone after uninstall, the registry's subscribers told each time; its connection is disabled and a call on it refused;
+- **refused:** `app.addConnector` naming a missing graph, a graph answering another operation, a graph of another kind or an operation no contract has is refused at `connectors[echo].operations.<op>` with a fix; a Return without the required `text` is refused.
+
+In Chromium against Forge's server, the Applications editor's Connectors tab renders beside Commands and Queries with no console errors; the server defines no Go contracts until 7e, so the tab says so and a connector cannot be made from it yet.

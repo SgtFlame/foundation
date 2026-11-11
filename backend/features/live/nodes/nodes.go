@@ -34,6 +34,10 @@ const (
 	KindAction  = "server.action"
 	KindQuery   = "data.query"
 	KindTrigger = "app.trigger"
+	// KindConnectorOp is a scripted connector's operation graph (forge
+	// 07d), registered by connectors/scripted; nodes allowed in actions
+	// that a connector operation may use name it too.
+	KindConnectorOp = "connector.op"
 )
 
 // Event node types.

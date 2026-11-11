@@ -91,7 +91,8 @@ func envFrom(get func(projector, key string) (json.RawMessage, bool), reg *exten
 		return ok && json.Unmarshal(raw, v) == nil
 	}
 	return apps.Env{
-		Catalog: ui.Catalog(reg),
+		Catalog:  ui.Catalog(reg),
+		Contract: apps.BuiltinContracts(reg),
 		Prefab: func(id string) (ui.Prefab, bool) {
 			var d prefabs.Draft
 			if read(prefabs.DraftProjector, prefabs.TargetType+"."+id, &d) {
@@ -320,7 +321,7 @@ func commandSpecs() []spec {
 	specs := []spec{
 		{
 			id: "app.create", title: "Create an app", create: true, events: []string{EventCreated},
-			description: "Makes a new application: a manifest of pages (routes to prefabs), navigation, editor kinds, entity types, commands, queries, roles, settings and triggers. Its id is the target, or made from the name when left out (My tasks is myTasks). Its parts (prefabs, graphs, entity types) are made with their own commands with owner app:<appId>, then named in the manifest with app.addPage, app.addEntity, app.addCommand and the rest.",
+			description: "Makes a new application: a manifest of pages (routes to prefabs), navigation, editor kinds, entity types, commands, queries, roles, settings, triggers and scripted connectors. Its id is the target, or made from the name when left out (My tasks is myTasks). Its parts (prefabs, graphs, entity types) are made with their own commands with owner app:<appId>, then named in the manifest with app.addPage, app.addEntity, app.addCommand and the rest.",
 			args:        `{"type":"object","properties":{"name":{"type":"string","description":"What people call it, e.g. Tasks"},"icon":{"type":"string","description":"A Material icon name, such as checklist"},"description":{"type":"string","description":"What the app is for, for a model"}},"required":["name"]}`,
 			example:     `{"name":"Tasks","icon":"checklist","description":"Tasks assigned to people, with due dates"}`,
 			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
@@ -423,7 +424,7 @@ func commandSpecs() []spec {
 	}
 	specs = append(specs, spec{
 		id: "app.setManifest", title: "Replace an app's manifest", events: []string{EventManifestSet},
-		description: "Replaces the app's whole manifest (pages, nav, home, frame, editor kinds, entity types, commands, queries, roles, settings, triggers, requires), checked whole against its parts. Importing an app (app.import) uses it; to change one item, use its own command.",
+		description: "Replaces the app's whole manifest (pages, nav, home, frame, editor kinds, entity types, commands, queries, roles, settings, triggers, connectors, requires), checked whole against its parts. Importing an app (app.import) uses it; to change one item, use its own command.",
 		args:        `{"type":"object","properties":{"manifest":{"type":"object","description":"A manifest as app.describe gives it; its id and version are the app's own"}},"required":["manifest"]}`,
 		example:     `{"manifest":{"name":"Tasks","pages":[{"route":"/mine","prefab":"myTasks"}],"entities":["task"]}}`,
 		decide: func(c *decision) ([]live.NewEvent, []live.Problem) {

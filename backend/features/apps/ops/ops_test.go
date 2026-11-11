@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/connectors/connectorstest"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -51,6 +52,7 @@ type fixture struct {
 
 func setup(t *testing.T) *fixture {
 	reg := extensions.NewRegistry()
+	connectorstest.Contribute(reg) // test.echo@1, for scripted connectors (forge 07d)
 	cognitionnodes.Contribute(reg)
 	uinodes.Contribute(reg)
 	if err := uicomponents.Contribute(reg); err != nil {
@@ -393,6 +395,9 @@ func steps() []step {
 		s("app.addTrigger", "tasks", m{"id": "taskDone", "title": "Done"}),
 		s("app.updateTrigger", "tasks", m{"id": "taskDone", "config": m{"field": "done"}}),
 		s("app.removeTrigger", "tasks", m{"id": "taskDone"}),
+		s("app.addConnector", "tasks", m{"name": "stub", "description": "A stub", "contracts": []string{"test.echo@1"}}),
+		s("app.updateConnector", "tasks", m{"name": "stub", "title": "Stub", "icon": "science"}),
+		s("app.removeConnector", "tasks", m{"name": "stub"}),
 		s("app.addEntity", "tasks", m{"entity": "note"}),
 		s("app.setSeed", "tasks", m{"seed": m{"task": []m{{"id": "t1", "values": m{"title": "First"}}}}}),
 		s("app.removeEntity", "tasks", m{"entity": "note"}),

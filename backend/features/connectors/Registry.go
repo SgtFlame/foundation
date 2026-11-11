@@ -18,7 +18,8 @@ import (
 // and surfaces adapters announce in cx_adapters, and the connections'
 // discovered contracts. Each process keeps a cache of cx_adapters kept
 // current by a KV watch: a cache of JetStream state, the same in every
-// process. Scripted types (07d) join it later.
+// process. Scripted types (07d) are announced, per tenant, by the scripted
+// adapter (connectors/scripted).
 type Registry struct {
 	reg   *extensions.Registry
 	js    jetstream.JetStream
@@ -346,7 +347,11 @@ func (r *Registry) Catalog(ctx context.Context, tenant uint64) (Catalog, error) 
 			}
 			t := types[a.Type.ID]
 			if t == nil {
-				t = &TypeInfo{Type: *a.Type, Source: FromAnnounced, Direction: Outbound}
+				src := FromAnnounced
+				if a.Type.Source == SourceScripted {
+					src = SourceScripted // an app's, served by the scripted adapter (07d)
+				}
+				t = &TypeInfo{Type: *a.Type, Source: src, Direction: Outbound}
 				types[a.Type.ID] = t
 			}
 			if online {

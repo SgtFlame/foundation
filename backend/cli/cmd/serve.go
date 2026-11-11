@@ -57,6 +57,11 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/config/rest/confighandlers"
 	"github.com/SgtFlame/foundation/backend/features/config/services/configservice"
 	configimpl "github.com/SgtFlame/foundation/backend/features/config/services/configservice/impl"
+	"github.com/SgtFlame/foundation/backend/features/connectors"
+	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
+	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
+	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
+	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
 	conversationnodes "github.com/SgtFlame/foundation/backend/features/conversation/nodes"
 	"github.com/SgtFlame/foundation/backend/features/conversation/rest/conversationhandlers"
@@ -80,10 +85,6 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/index/store/lancestore"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
-	"github.com/SgtFlame/foundation/backend/features/connectors"
-	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
-	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
-	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/collabhandlers"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/kbhandlers"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/volumehandlers"
@@ -413,6 +414,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var jobNodeDeps jobsnodes.Deps
 		var connectorDeps connectors.Deps
 		var connectionDeps connections.Deps
+		var scriptedDeps scripted.Deps
 		var uiService uiservice.Service
 		var configLive configservice.Service
 		var chatLive chatservice.Service
@@ -504,6 +506,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// connection.test and On connector event as a trigger event
 		connections.Contribute(registry, func() connections.Deps { return connectionDeps })
 		connections.ContributeTrigger(registry, func() connections.Deps { return connectionDeps })
+		scripted.Contribute(registry, func() scripted.Deps { return scriptedDeps })
 		ops.Contribute(registry)                                         // the operation log: ops.log and ops.list
 		ops.ContributeUndo(registry, func() ops.Deps { return opsDeps }) // ops.undo, ops.redo and ops.stack (forge 06b)
 		apptools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
@@ -741,6 +744,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		connectorDispatcher := &connectors.Dispatcher{NC: nats.Conn(), Registry: connectorRegistry, Connections: connectionAccess, Failed: connectionAccess.Failed}
 		connectorDeps = connectors.Deps{Registry: connectorRegistry, Dispatcher: connectorDispatcher}
 		connectionDeps = connections.Deps{Projections: projections, Bus: liveBus, Registry: connectorRegistry, Secrets: secretStore, Dispatcher: connectorDispatcher}
+		scriptedDeps = scripted.Deps{Store: projections, Engine: cognitionEngine, JS: connectorRegistry.JetStream(), Reg: registry}
 		// Adapters' settings on cx.resolve and their sources' status on
 		// cx.status, in a queue group in every process
 		if err := connections.Serve(ctx, nats.Conn(), func() connections.Deps { return connectionDeps }); err != nil {
@@ -811,6 +815,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Every process keeps cx_sources, the connections a trigger listens
 		// to, which adapters' instances lease and run (forge 07c)
 		go connections.Start(ctx, func() connections.Deps { return connectionDeps }, tenantIDs)
+		// Scripted connector types (forge 07d), served in this process too
+		go scripted.Serve(ctx, nats.Conn(), func() scripted.Deps { return scriptedDeps }, tenantIDs, scripted.Options{})
 		prefabService := prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
 		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())),
 			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))

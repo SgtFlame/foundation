@@ -14,11 +14,13 @@ import (
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/apps"
 	"github.com/SgtFlame/foundation/backend/features/apps/installs"
+	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	livenodes "github.com/SgtFlame/foundation/backend/features/live/nodes"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -239,7 +241,63 @@ func followed(ctx context.Context, d Deps, tenant uint64, e live.Event) error {
 			return err
 		}
 	}
+	if e.Target.Type == installs.TargetType {
+		if err := disableRemoved(ctx, d, tenant, e); err != nil {
+			return err
+		}
+	}
 	return Reconcile(ctx, d, tenant)
+}
+
+// disableRemoved disables the connections of scripted types an install
+// event took away (forge 07d): all of an uninstalled app's, and those an
+// upgrade's version no longer declares. Enabling one again is the user's
+// choice once the type is back.
+func disableRemoved(ctx context.Context, d Deps, tenant uint64, e live.Event) error {
+	var removed []string
+	in, ok := installs.Get(ctx, d.Projections, tenant, e.Target.ID)
+	if !ok {
+		return nil
+	}
+	switch e.Type {
+	case installs.EventUninstalled:
+		for _, k := range in.Version.Manifest.Connectors {
+			removed = append(removed, k.TypeID(in.App))
+		}
+	case installs.EventUpgraded:
+		var c struct {
+			From int `json:"from"`
+		}
+		_ = json.Unmarshal(e.Data, &c)
+		args := features.ServiceArgs{Ctx: ctx, Principal: features.ServicePrincipal(tenant)}
+		old, ok := manifests.GetVersion(args, d.Projections, in.App, c.From)
+		if !ok {
+			return nil
+		}
+		for _, k := range old.Manifest.Connectors {
+			if _, still := in.Version.Connector(k.Name); !still {
+				removed = append(removed, k.TypeID(in.App))
+			}
+		}
+	}
+	if len(removed) == 0 {
+		return nil
+	}
+	conns, err := list(ctx, d, tenant)
+	if err != nil {
+		return err
+	}
+	for _, c := range conns {
+		if !slices.Contains(removed, c.Type) || c.Status == StatusDisabled {
+			continue
+		}
+		args := features.ServiceArgs{Ctx: ctx, Principal: features.ServicePrincipal(tenant)}
+		res := d.Bus.Execute(bus.Request{ServiceArgs: args, ID: fmt.Sprintf("removed-%d-%s", e.Seq, c.ID), Type: "connection.disable", Target: c.ID, Args: json.RawMessage(`{}`)})
+		if res.Common.Code >= 300 {
+			log.With("connection", c.ID).Warn(ctx, "connection %s of the removed type %s could not be disabled: %s", c.ID, c.Type, res.Common.Message)
+		}
+	}
+	return nil
 }
 
 // ContributeTrigger registers On connector event as a trigger event: a

@@ -181,7 +181,8 @@ func CheckDraft(ctx context.Context, store live.Store, tenant uint64, reg *exten
 	if errors == nil {
 		errors = []live.Problem{}
 	}
-	return errors, Lint(doc), true
+	warnings = append(Lint(doc), apps.ConnectorWarnings(doc.Manifest, apps.BuiltinContracts(reg))...)
+	return errors, warnings, true
 }
 
 // Lint is the warnings of an app document: what does not stop it running

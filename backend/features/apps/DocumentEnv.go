@@ -27,5 +27,6 @@ func DocumentEnvOf(reg *extensions.Registry) DocumentEnv {
 		Query: func(name string) bool {
 			return slices.ContainsFunc(live.Queries.All(reg), func(q live.Query) bool { return q.ID == name })
 		},
+		Contract: BuiltinContracts(reg),
 	}
 }

@@ -2,12 +2,13 @@ package apptools_test
 
 import (
 	"encoding/json"
+	"github.com/SgtFlame/foundation/backend/features/connectors"
+	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
+	"github.com/SgtFlame/foundation/backend/features/connectors/connectorstest"
+	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
+	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
-	"github.com/SgtFlame/foundation/backend/features/connectors"
-	"github.com/SgtFlame/foundation/backend/features/connectors/connectorstest"
-	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
-	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"slices"
 	"strings"
 	"testing"
@@ -70,6 +71,7 @@ func everything(t *testing.T) *extensions.Registry {
 	connectors.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
 	connectorsnodes.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
 	connections.Contribute(reg, func() connections.Deps { return connections.Deps{} })
+	scripted.Contribute(reg, func() scripted.Deps { return scripted.Deps{} })
 	connectorstest.Contribute(reg) // the builtin contracts a test registry has
 	return reg
 }

@@ -147,7 +147,7 @@ func (c *decision) pin(m apps.Manifest) (apps.Version, []live.Problem) {
 	if problems != nil {
 		return v, problems
 	}
-	env := apps.Env{Catalog: ui.Catalog(c.reg), Prefab: c.publishedPrefab, Graph: c.publishedGraph, Entity: c.publishedEntity}
+	env := apps.Env{Catalog: ui.Catalog(c.reg), Prefab: c.publishedPrefab, Graph: c.publishedGraph, Entity: c.publishedEntity, Contract: apps.BuiltinContracts(c.reg)}
 	for _, p := range apps.CheckManifest(m, env) {
 		p.Path = strings.TrimSuffix("manifest."+p.Path, ".")
 		problems = append(problems, p)
@@ -203,6 +203,9 @@ func (c *decision) pin(m apps.Manifest) (apps.Version, []live.Problem) {
 		if t.Graph != "" {
 			v.Graphs[t.Graph], _ = c.publishedGraph(t.Graph)
 		}
+	}
+	for _, g := range m.ConnectorGraphs() {
+		v.Graphs[g], _ = c.publishedGraph(g)
 	}
 	// The app's own graphs those name in a node's config (a job's graph,
 	// Call graph's), so a trigger or command runs its version's copies too

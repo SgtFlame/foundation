@@ -19,7 +19,7 @@ import (
 func contributeFiles(reg *extensions.Registry, deps func() data.Deps) {
 	node(reg, 680, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "records.uploadFile"}, Title: "Upload file",
-		Kinds:       []string{livenodes.KindAction, uinodes.KindHandler},
+		Kinds:       []string{livenodes.KindAction, livenodes.KindConnectorOp, uinodes.KindHandler},
 		External:    true, // the object store, which a sandboxed run leaves alone
 		Sample:      cognition.Values{"file": map[string]any{"id": "sample", "name": "sample.txt", "size": 0, "contentType": "text/plain"}},
 		Description: "Keeps a file for an entity type's file fields and gives the reference to set on a record (with Send command record.update, or Update record in the command graph it sends). The content is text, or base64 when the encoding says so; the records section's maxFileMB bounds it. Not in command graphs, which may be decided more than once.",

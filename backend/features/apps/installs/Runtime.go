@@ -181,10 +181,13 @@ type Summary struct {
 	EditorKinds []apps.EditorKind `json:"editorKinds"`
 	// Triggers run as jobs while the app is installed (forge 07a,
 	// features/jobs).
-	Triggers    []apps.Trigger `json:"triggers"`
-	InstalledBy uint64         `json:"installedBy,string"`
-	InstalledAt time.Time      `json:"installedAt"`
-	UpdatedAt   time.Time      `json:"updatedAt"`
+	Triggers []apps.Trigger `json:"triggers"`
+	// Connectors are the scripted connector types it installs, by type id
+	// (<appId>.<name>, forge 07d).
+	Connectors  []string  `json:"connectors"`
+	InstalledBy uint64    `json:"installedBy,string"`
+	InstalledAt time.Time `json:"installedAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 // Entry is one of an installed app's commands or queries, by the name it
@@ -201,7 +204,10 @@ func summaryOf(in apps.Install) Summary {
 	m := in.Version.Manifest
 	s := Summary{App: in.App, Name: m.Name, Icon: m.Icon, Description: m.Description, Status: in.Status, Version: in.Version.Version,
 		Commands: []Entry{}, Queries: []Entry{}, EditorKinds: m.EditorKinds, Triggers: m.Triggers,
-		InstalledBy: in.InstalledBy, InstalledAt: in.InstalledAt, UpdatedAt: in.UpdatedAt}
+		InstalledBy: in.InstalledBy, InstalledAt: in.InstalledAt, UpdatedAt: in.UpdatedAt, Connectors: []string{}}
+	for _, k := range m.Connectors {
+		s.Connectors = append(s.Connectors, k.TypeID(in.App))
+	}
 	for _, c := range m.Commands {
 		spec, _ := specOf[livenodes.CommandSpec](in.Version.Graphs[c.Graph].Spec)
 		action, _ := actionOf(c, spec)
@@ -226,7 +232,7 @@ func firstOf(a, b string) string {
 func contributeQueries(reg *extensions.Registry, deps func() Deps) {
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "app.installs", Source: "apps"}, Title: "Installed apps",
-		Description: "The apps installed in this tenant (and those uninstalled, with their data kept), keyed app.<appId>: {app, name, icon, description, status, version, commands, queries, editorKinds, triggers, installedBy, installedAt, updatedAt}. Each command and query has the name it has on the live core, <appId>.<name>, its args' schema and the action it needs; send a command with live.command and read a query with live.query.",
+		Description: "The apps installed in this tenant (and those uninstalled, with their data kept), keyed app.<appId>: {app, name, icon, description, status, version, commands, queries, editorKinds, triggers, connectors (the scripted connector types it installs), installedBy, installedAt, updatedAt}. Each command and query has the name it has on the live core, <appId>.<name>, its args' schema and the action it needs; send a command with live.command and read a query with live.query.",
 		Params:      json.RawMessage(`{"type":"object","properties":{}}`),
 		Action:      "app.read",
 		Run: func(f live.Feed) error {

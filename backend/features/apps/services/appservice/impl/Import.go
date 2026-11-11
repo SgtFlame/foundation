@@ -69,7 +69,8 @@ func (s *service) Import(a appservice.ImportArgs) appservice.ImportResponse {
 }
 
 // renamed is a document whose app has another id: its own parts' owner
-// and its command and query graphs' ids follow (forge 05e question 1).
+// and its command, query and connector operation graphs' ids follow
+// (forge 05e question 1, 07d).
 func renamed(doc apps.Document, id string) apps.Document {
 	raw, _ := json.Marshal(doc)
 	var out apps.Document
@@ -78,7 +79,7 @@ func renamed(doc apps.Document, id string) apps.Document {
 	ids := map[string]string{}
 	for i := range out.Parts.Graphs {
 		g := &out.Parts.Graphs[i]
-		for _, prefix := range []string{"cmd-", "qry-"} {
+		for _, prefix := range []string{"cmd-", "qry-", "op-"} {
 			if rest, ok := strings.CutPrefix(g.ID, prefix+old+"-"); ok {
 				ids[g.ID] = prefix + id + "-" + rest
 				g.ID, g.Graph.ID = ids[g.ID], ids[g.ID]
@@ -105,6 +106,13 @@ func renamed(doc apps.Document, id string) apps.Document {
 	}
 	for i := range out.Manifest.Queries {
 		out.Manifest.Queries[i].Graph = rename(out.Manifest.Queries[i].Graph)
+	}
+	for i := range out.Manifest.Connectors {
+		k := &out.Manifest.Connectors[i]
+		for op, g := range k.Operations {
+			k.Operations[op] = rename(g)
+		}
+		k.Watch = rename(k.Watch)
 	}
 	out.App, out.Manifest.ID = id, id
 	return out
