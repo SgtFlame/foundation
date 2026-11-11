@@ -1,0 +1,387 @@
+{
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "description": "A typed connector error",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "auth",
+              "notFound",
+              "conflict",
+              "invalid",
+              "rateLimited",
+              "unavailable",
+              "notSupported"
+            ],
+            "description": "What went wrong"
+          },
+          "message": {
+            "type": "string",
+            "description": "Why, for a person"
+          },
+          "retryable": {
+            "type": "boolean",
+            "description": "Whether trying again later may succeed"
+          },
+          "retryAfter": {
+            "type": "integer",
+            "description": "How long to wait before retrying, in milliseconds"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ]
+      }
+    }
+  },
+  "info": {
+    "description": "A test API: echoes text, fails on request and finishes jobs later. For tests only.",
+    "title": "Test echo",
+    "version": "1",
+    "x-contract": "test.echo",
+    "x-tags": [
+      "test"
+    ]
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/echo": {
+      "post": {
+        "description": "Gives the text back, repeated, with its length and the adapter instance that served it",
+        "operationId": "test_echo_echo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "The text to echo"
+                  },
+                  "repeat": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10,
+                    "description": "How many times; once when left out"
+                  },
+                  "options": {
+                    "type": "object",
+                    "description": "Nested options, one pin",
+                    "properties": {
+                      "upper": {
+                        "type": "boolean",
+                        "description": "In capitals"
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "description": "The echoed text"
+                    },
+                    "length": {
+                      "type": "integer",
+                      "description": "Its length in bytes"
+                    },
+                    "by": {
+                      "type": "string",
+                      "description": "The adapter instance that served the call"
+                    }
+                  },
+                  "required": [
+                    "text",
+                    "length"
+                  ]
+                }
+              }
+            },
+            "description": "The result"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A typed error"
+          }
+        },
+        "summary": "Echo",
+        "x-effect": "read",
+        "x-errors": [
+          "invalid"
+        ]
+      }
+    },
+    "/fail": {
+      "post": {
+        "description": "Fails with the typed error asked for, for testing error paths",
+        "operationId": "test_echo_fail",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "auth",
+                      "notFound",
+                      "conflict",
+                      "invalid",
+                      "rateLimited",
+                      "unavailable",
+                      "notSupported"
+                    ],
+                    "description": "The error code to fail with"
+                  },
+                  "message": {
+                    "type": "string",
+                    "description": "The error's message"
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "description": "Never: it always fails"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "The result"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A typed error"
+          }
+        },
+        "summary": "Fail",
+        "x-destructive": true,
+        "x-effect": "write",
+        "x-errors": [
+          "auth",
+          "notFound",
+          "conflict",
+          "invalid",
+          "rateLimited",
+          "unavailable",
+          "notSupported"
+        ]
+      }
+    },
+    "/start": {
+      "post": {
+        "callbacks": {
+          "finished": {
+            "{$request.header.Cx-Hook-Url}": {
+              "post": {
+                "description": "A job started by start finished. Read the job's state rather than trust the order of events.",
+                "operationId": "test_echo_event_finished",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "description": "The event's own id, unique"
+                          },
+                          "jobId": {
+                            "type": "string",
+                            "description": "The job that finished"
+                          },
+                          "at": {
+                            "type": "string",
+                            "description": "When, RFC 3339, by the service's clock"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "jobId"
+                        ]
+                      }
+                    }
+                  },
+                  "required": true
+                },
+                "responses": {
+                  "200": {
+                    "description": "Received"
+                  }
+                },
+                "summary": "Job finished",
+                "x-correlate": {
+                  "event": "jobId",
+                  "result": "jobId"
+                },
+                "x-delivery": [
+                  "watch",
+                  "callback"
+                ],
+                "x-id-fields": [
+                  "id"
+                ],
+                "x-subscription": "job.finished"
+              }
+            }
+          }
+        },
+        "description": "Starts a job outside; its finished event answers it later, with the same job id",
+        "operationId": "test_echo_start",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "The idempotency key: a start with an id already started starts nothing"
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "What the job works on"
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jobId": {
+                      "type": "string",
+                      "description": "The started job's id, which its finished event names"
+                    }
+                  },
+                  "required": [
+                    "jobId"
+                  ]
+                }
+              }
+            },
+            "description": "The result"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A typed error"
+          }
+        },
+        "summary": "Start a job",
+        "x-effect": "send",
+        "x-idempotency-key": "id"
+      }
+    }
+  },
+  "webhooks": {
+    "finished": {
+      "post": {
+        "description": "A job started by start finished. Read the job's state rather than trust the order of events.",
+        "operationId": "test_echo_event_finished",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "The event's own id, unique"
+                  },
+                  "jobId": {
+                    "type": "string",
+                    "description": "The job that finished"
+                  },
+                  "at": {
+                    "type": "string",
+                    "description": "When, RFC 3339, by the service's clock"
+                  }
+                },
+                "required": [
+                  "id",
+                  "jobId"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Received"
+          }
+        },
+        "summary": "Job finished",
+        "x-delivery": [
+          "watch",
+          "callback"
+        ],
+        "x-id-fields": [
+          "id"
+        ],
+        "x-subscription": "job.finished"
+      }
+    }
+  }
+}

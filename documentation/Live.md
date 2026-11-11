@@ -213,3 +213,6 @@ For undo by request ([Apps.md › Built in slice 39](Apps.md#built-in-slice-39),
 For Forge's Builder in presence ([Apps.md › Changed in slice 43](Apps.md#changed-in-slice-43), forge 06g question 1):
 - **`presence.Entry.Actor`**: who is there for the user when not them by hand, `builder` for a chat round. `Presence.SetAs(ctx, principal, object, conn, actor, state)` sets such an entry under the actor's own connection id (`builder-<round>`); `Set` is `SetAs` with no actor.
 - **In the browser**: `PresentUser.actor`; `PresenceAvatars` shows an actor as its own avatar (a robot, outlined in the user's colour, badged with their initials, tooltip *Builder, for Ada*), grouping by user and actor; `presentName(u)` names a connection so, for the editors' own selection markers.
+
+## Changed in slice 46
+`natsd.Server.Connect(name)` opens another connection to the same server, as another process would (in-process to the embedded server, else to the external URL), and `ClientURL()` is where another process connects; `natsd.StartTestListening(t)` starts a test server with a TCP listener on a free port. The connector tests use them for adapters on their own connections and in another process ([Connectors.md](Connectors.md#verification)).

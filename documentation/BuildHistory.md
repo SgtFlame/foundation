@@ -750,6 +750,21 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [ChatCompletion.md](ChatCompletion.md#decisions-to-review-after-seeing-it-2).
     - **Pending, carried forward**: a round in each mode against a real model; agents as modes directly; the golden tests and the demo with a real model (forge 6h).
 
+45. **The job runner and triggers** (Forge iteration 7, part 7a, [forge 07a-JobRunner.md](../../forge/documentation/plans/07a-JobRunner.md)). *Built* ([Jobs.md](Jobs.md#built-in-slice-45)).
+    - **Built**: durable jobs on JetStream (CQRS state on `EVT_<tenant>_jobs`, dispatch through the work queue `JOBS_<tenant>`, message schedules for delays and *On schedule*, keyed jobs in order), installed apps' triggers as the app's own principal, *Enqueue job* on a command's outbox, *Cancel job*, *Fail*, *Job info*, Administration › Jobs; built for several runners per tenant in several processes.
+    - **Blockers**: none; see the questions table below.
+    - **Decisions to review after seeing it**: in [Jobs.md](Jobs.md#decisions-to-review-after-seeing-it).
+46. **The connector registry and bus** (Forge iteration 7, part 7b, [forge 07b-ConnectorRegistry.md](../../forge/documentation/plans/07b-ConnectorRegistry.md)). *Built* ([Connectors.md](Connectors.md#built-in-slice-46), [Cognition.md](Cognition.md#changed-in-slice-46), [Apps.md](Apps.md#changed-in-slice-46), [Live.md](Live.md#changed-in-slice-46); Forge's palette in [forge BlueprintEditor.md](../../forge/documentation/BlueprintEditor.md)).
+    - **Built**:
+      - `features/connectors`: versioned contracts, connector types, typed errors, the metadata check with the tool shape, `ToolSpec`/`MCPTool`/`FunctionSpec`/`OpenAPI` with golden tests, the registry over the builtin points and `cx_adapters` announcements, discovered contracts in `cx_discovered_<tenant>`, the dispatcher, the `connectors.*` queries;
+      - `connectors/adapter`: the adapter runtime, in-process or external, with the interfaces declared for 7c, 15c and 15f and surfaces announced;
+      - `connectors/nodes`: *Call connector* and *On connector event*, pins normalized from the contract; `NodeType.SampleFor`; `bp.import` normalizing what it can;
+      - `forge.catalog`'s `connectors` area; `natsd.Server.Connect`, `ClientURL` and `StartTestListening`;
+      - Forge's *Connectors* palette and connector details.
+    - **Blockers**: none. Forge 07b questions 1, 2, 4 to 10 answered with their proposals, and 3 by the user's direction, before building (2026-11-11).
+    - **Decisions to review after seeing it**: in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it).
+    - **Pending, carried forward**: connections, sessions with settings, the ledger and event sources (7c); scripted connectors (7d); the mail contracts (7e); the inbound gateway, MCP and hooks (15).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -802,3 +817,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 43. The Builder mode (Forge 6g) | forge 06-AIAuthoring 1 (a context provider with a mode hook; chat modes as forge 06i) and 06g 1 (the Builder's presence entry), 2 (an Agent graph now) and 3 (configurable steps), answered | the decisions in [ChatCompletion.md](ChatCompletion.md#decisions-to-review-after-seeing-it-1), [Tools.md](Tools.md#decisions-to-review-after-seeing-it-1) and [Apps.md](Apps.md#decisions-to-review-after-seeing-it-12); watching the editor change as the chat works, with a real model |
 | 44. Chat modes (Forge 6i) | forge 06i 1 (offered by focus, chosen for new conversations), 2 (now) and 3 (nothing hard-coded), answered | the decisions in [ChatCompletion.md](ChatCompletion.md#decisions-to-review-after-seeing-it-2), and rounds in each mode with a real model |
 | 45. The job runner and triggers (Forge 7a) | forge 07-Email 9 (built here) and 10 (a slice per part), and 07a 1 (a principal per install) and 2 (the outbox on the commit's first event), answered; built for several runners per tenant in several processes (the user's direction) | the decisions in [Jobs.md](Jobs.md#decisions-to-review-after-seeing-it), and whether a dead job's trace says enough to fix it |
+| 46. The connector registry and bus (Forge 7b) | forge 07b 1 (nested objects one pin), 2 (versions side by side), 4 (`cx.resolve` in 7c), 5 (the protocol in the docs), 6 (shapes here, adapters in 15), 7 (claiming in 15c), 8 (`destructive`), 9 (no durable wait) and 10 (callback metadata here), answered with their proposals; 3 (always NATS) the user's direction | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it), the *Connectors* palette with real contracts |

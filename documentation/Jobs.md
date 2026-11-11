@@ -144,4 +144,4 @@ In Forge (the user's app), on a fresh `serve` with Vite, a Playwright walk over 
 - **Retention.** Job events are kept forever, like every stream's, and done jobs stay in the projection. A `MaxAge` on the jobs stream, with done jobs dropped from the projection after `doneHours`, would bound them, at the cost of idempotency for ids older than that.
 - **Per-record row rules on triggers.** A trigger starts on every change of a type its app may read. The record it reads is filtered by its rules when the run starts.
 - **Run time limits for jobs.** A job's run has the `cognition` section's wall time; a mail sync may need more.
-- *On webhook* (forge 11), cron expressions in the editor (forge 11), and *On connector event* (7b).
+- *On webhook* (forge 11), cron expressions in the editor (forge 11), and *On connector event* starting triggers (the node is built in slice 46, [Connectors.md](Connectors.md#nodes); it runs from `CX_<tenant>` with 7c).

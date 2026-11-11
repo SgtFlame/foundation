@@ -13,7 +13,9 @@ require (
 	github.com/lancedb/lancedb-go v0.1.3-0.20260509194607-fa14ce29c772
 	github.com/nats-io/nats-server/v2 v2.15.2
 	github.com/nats-io/nats.go v1.55.0
+	github.com/nats-io/nuid v1.0.1
 	github.com/samber/oops v1.23.2
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	golang.org/x/crypto v0.58.0
@@ -63,7 +65,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/nats-io/jwt/v2 v2.8.2 // indirect
 	github.com/nats-io/nkeys v0.4.16 // indirect
-	github.com/nats-io/nuid v1.0.1
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/oklog/ulid/v2 v2.1.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect

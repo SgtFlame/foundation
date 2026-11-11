@@ -80,6 +80,9 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/index/store/lancestore"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
+	"github.com/SgtFlame/foundation/backend/features/connectors"
+	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
+	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/collabhandlers"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/kbhandlers"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/volumehandlers"
@@ -407,6 +410,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var livePresence *presence.Presence
 		var jobDeps jobs.Deps
 		var jobNodeDeps jobsnodes.Deps
+		var connectorDeps connectors.Deps
 		var uiService uiservice.Service
 		var configLive configservice.Service
 		var chatLive chatservice.Service
@@ -414,7 +418,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var collabLive collabservice.Service
 		registry := extensions.NewRegistry()
 		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.Modes, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, authz.ResourceTypes,
-			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents)
+			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents, connectors.Contracts, connectors.Types)
 		// Each feature declares its resource types and their actions
 		authz.Contribute(registry)
 		identity.ContributeAccess(registry)
@@ -432,6 +436,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		ui.ContributePrefabAccess(registry)
 		apps.ContributeAccess(registry)
 		jobs.ContributeAccess(registry)
+		connectors.ContributeAccess(registry)
 		aisettings.Contribute(registry)
 		logssettings.Contribute(registry)
 		usagesettings.Contribute(registry)
@@ -488,6 +493,10 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// installs whose triggers they run
 		jobs.Contribute(registry, func() jobs.Deps { return jobDeps })
 		jobsnodes.Contribute(registry, func() jobsnodes.Deps { return jobNodeDeps })
+		// Connectors (forge 07b): the registry's queries and the connector
+		// nodes; builtin contracts and types are contributed beside them
+		connectors.Contribute(registry, func() connectors.Deps { return connectorDeps })
+		connectorsnodes.Contribute(registry, func() connectors.Deps { return connectorDeps })
 		ops.Contribute(registry)                                         // the operation log: ops.log and ops.list
 		ops.ContributeUndo(registry, func() ops.Deps { return opsDeps }) // ops.undo, ops.redo and ops.stack (forge 06b)
 		apptools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
@@ -715,7 +724,21 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		liveBus.Resolve = installs.CommandFor(func() installs.Deps { return installDeps }, livenodes.CommandFor(func() livenodes.Deps { return liveNodeDeps }))
 		subscriptions.Resolve = installs.QueryFor(func() installs.Deps { return installDeps }, livenodes.QueryFor(func() livenodes.Deps { return liveNodeDeps }))
 		liveToolDeps = livetools.Deps{Bus: liveBus, Subscriptions: subscriptions}
-		forgeToolDeps = apptools.ForgeDeps{Subscriptions: subscriptions, Store: projections, Bus: liveBus, Engine: cognitionEngine, Presence: livePresence}
+		// The connector registry and bus (forge 07b): calls go over NATS to an
+		// adapter in this process or another; connections come with 07c
+		connectorRegistry := connectors.NewRegistry(registry, nats.JS())
+		defer connectorRegistry.Close()
+		connectorDeps = connectors.Deps{Registry: connectorRegistry, Dispatcher: &connectors.Dispatcher{NC: nats.Conn(), Registry: connectorRegistry}}
+		// This process's adapter serves the builtin types implemented here
+		// (none yet; the mail types with 07e), on the server's own connection
+		if impls := connectorImpls(); len(impls.Impls) > 0 {
+			go func() {
+				if err := adapter.Serve(ctx, nats.Conn(), impls); err != nil {
+					logging.In("connectors").Error(ctx, err, "the in-process connector adapter stopped")
+				}
+			}()
+		}
+		forgeToolDeps = apptools.ForgeDeps{Subscriptions: subscriptions, Store: projections, Bus: liveBus, Engine: cognitionEngine, Presence: livePresence, Connectors: connectorRegistry}
 		liveSubscriptions = subscriptions
 		recordEmbedder = embedService
 		recordFiles := recordsfiles.New(nats.JS())
@@ -931,4 +954,11 @@ func targetFrom(raw string) (logging.Target, error) {
 	u.User = nil
 	t.URL = u.String()
 	return t, nil
+}
+
+// connectorImpls are the connector types this server's in-process adapter
+// serves, with their metadata (forge 07b); an external adapter binary
+// serves its own with adapter.Serve.
+func connectorImpls() adapter.Options {
+	return adapter.Options{Name: "server"}
 }

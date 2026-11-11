@@ -204,3 +204,9 @@ Forge's chat modes, part 6i ([ChatCompletion.md › Built in slice 44](ChatCompl
 - **`engine.RunArgs.Wall`** replaces the section's time per run (a chat round's two hours), kept by the graphs it calls.
 - **Personal** (`chronicle/nodes/personal.json`) is now the whole round and an editable built-in: Chronicle memory (Sequence then Branch on the Chronicles setting, stage 1, the chosen entries kept in a variable), *Gather context* from `workbench` and `rag`, the *Instructions* template over the `chat` section's prompt and the tools, *Add context*, *Stream reply*, then *Ask for a title* when untitled, and the memory update with *Memory changes* and *Emit followed chronicle*. The prompts of stage 1 and the memory update are in its nodes ([Chronicle.md › Built in slice 44](Chronicle.md#built-in-slice-44)).
 - **The editor moved to Forge**: the Cognition Editor's client (`GraphEditor`, `GraphCanvas`, the Palette, Variables, Explorer, Log Viewer and details panel) is now `forge/frontend/axiom/src/editors/cognition/`, beside the Blueprint Editor that reuses it. Foundation's example app has no graph editor; its graphs (Personal among them) run as shipped, and Forge is where they are edited.
+
+## Changed in slice 46
+For Forge's *Call connector* ([Connectors.md › Built in slice 46](Connectors.md#nodes)):
+- **`NodeType.SampleFor(config)`** gives a stubbed External node's sample from its config, in place of `Sample`: *Call connector*'s outputs follow from the operation it names, so a sandboxed run (`forge.test`, `bp.test`) gives that operation's result example.
+- **`bp.import` normalizes the nodes it can**: each node whose type has `Normalize` gets its completed config (a connector call's pins from its contract, a *Call graph*'s signature). A config that cannot be completed, such as a *Call graph* whose callee is imported later, is kept as exported.
+- The `app.trigger` kind allows the `connector.on` event node.

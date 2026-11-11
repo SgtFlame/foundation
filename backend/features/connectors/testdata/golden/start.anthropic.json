@@ -1,0 +1,20 @@
+{
+  "name": "test_echo_start",
+  "description": "Starts a job outside; its finished event answers it later, with the same job id",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The idempotency key: a start with an id already started starts nothing"
+      },
+      "text": {
+        "type": "string",
+        "description": "What the job works on"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  }
+}

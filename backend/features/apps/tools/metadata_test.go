@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
+	"github.com/SgtFlame/foundation/backend/features/connectors"
+	"github.com/SgtFlame/foundation/backend/features/connectors/connectorstest"
+	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"slices"
 	"strings"
 	"testing"
@@ -38,7 +41,7 @@ import (
 func everything(t *testing.T) *extensions.Registry {
 	reg := extensions.NewRegistry()
 	reg.Declare(cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools,
-		live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components)
+		live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, connectors.Contracts, connectors.Types)
 	cognitionnodes.Contribute(reg)
 	conversationnodes.Contribute(reg)
 	chroniclenodes.Contribute(reg, func() chroniclenodes.Deps { return chroniclenodes.Deps{} })
@@ -63,7 +66,29 @@ func everything(t *testing.T) *extensions.Registry {
 	apptools.ContributeTest(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })
 	jobs.Contribute(reg, func() jobs.Deps { return jobs.Deps{} })
 	jobsnodes.Contribute(reg, func() jobsnodes.Deps { return jobsnodes.Deps{} })
+	connectors.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
+	connectorsnodes.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
+	connectorstest.Contribute(reg) // the builtin contracts a test registry has
 	return reg
+}
+
+// connectorProblems is the metadata check over every builtin contract and
+// type (forge 07b): titles, descriptions, examples and the tool shape.
+func connectorProblems(reg *extensions.Registry) []string {
+	var out []string
+	refs := map[string]connectors.Contract{}
+	for _, c := range connectors.Contracts.All(reg) {
+		refs[c.Contract.Ref()] = c.Contract
+		for _, p := range connectors.CheckContract(c.Contract) {
+			out = append(out, "contract "+c.Contract.Ref()+": "+p.String())
+		}
+	}
+	for _, t := range connectors.Types.All(reg) {
+		for _, p := range connectors.CheckType(t.Type, func(ref string) (connectors.Contract, bool) { c, ok := refs[ref]; return c, ok }) {
+			out = append(out, "connector type "+t.Type.ID+": "+p.String())
+		}
+	}
+	return out
 }
 
 // Every catalog item and op carries the metadata a model needs (forge
@@ -99,6 +124,9 @@ func TestMetadata(t *testing.T) {
 			t.Errorf("node type %s's example config: %v", n.ID, err)
 		}
 	}
+	for _, p := range connectorProblems(reg) {
+		t.Error(p)
+	}
 	for _, c := range live.Commands.All(reg) {
 		if c.Internal {
 			continue
@@ -119,6 +147,21 @@ func TestMetadata(t *testing.T) {
 		} else if err := tools.CheckArgs(c.Args, c.Examples[0]); err != nil {
 			t.Errorf("%s's example: %v", c.ID, err)
 		}
+	}
+}
+
+// The connector check refuses a builtin type whose contract has an
+// undescribed operation, or one past a tool name's length.
+func TestMetadataRefusesBadConnectors(t *testing.T) {
+	reg := extensions.NewRegistry()
+	reg.Declare(connectors.Contracts, connectors.Types)
+	bad := connectorstest.Contract()
+	bad.Operations[0].Description = ""
+	bad.Operations[1].ID = strings.Repeat("y", 70)
+	connectors.ContributeBuiltins(reg, "test", []connectors.Contract{bad}, connectorstest.Types())
+	got := strings.Join(connectorProblems(reg), "\n")
+	if !strings.Contains(got, "operations.echo.description") || !strings.Contains(got, "more than a tool name's 64") {
+		t.Errorf("problems: %s", got)
 	}
 }
 
@@ -148,8 +191,10 @@ func TestCatalog(t *testing.T) {
 	if got := items(map[string]any{"area": "fields"}); len(got) == 0 || got[0].Ref != "field:autoNumber" {
 		t.Errorf("fields: %+v", got)
 	}
-	if got := items(map[string]any{"area": "connectors"}); len(got) != 0 {
-		t.Errorf("connectors: %+v", got)
+	got0 := items(map[string]any{"area": "connectors"})
+	if !slices.ContainsFunc(got0, func(it apptools.Item) bool { return it.Ref == "contract:test.echo@1" }) ||
+		!slices.ContainsFunc(got0, func(it apptools.Item) bool { return it.Ref == "connector:test.secure" }) {
+		t.Errorf("connectors: %+v", got0)
 	}
 	got := items(map[string]any{"search": "money"})
 	if len(got) == 0 || got[0].Ref != "field:money" {
@@ -185,7 +230,13 @@ func TestCatalog(t *testing.T) {
 	if d := describe("field:rollup"); d["computed"] != true {
 		t.Errorf("rollup: %v", d)
 	}
-	for _, ref := range []string{"component:mui.nope", "node:nope", "field:nope", "connector:smtp", "button"} {
+	if d := describe("contract:test.echo@1"); d["contract"] == nil || d["area"] != "connectors" {
+		t.Errorf("contract: %v", d)
+	}
+	if d := describe("connector:test.echo"); d["type"] == nil {
+		t.Errorf("connector: %v", d)
+	}
+	for _, ref := range []string{"component:mui.nope", "node:nope", "field:nope", "connector:smtp", "contract:nope@1", "button"} {
 		if _, err := run(t, reg, "forge.describe", map[string]any{"ref": ref}); err == nil {
 			t.Errorf("%s was described", ref)
 		}

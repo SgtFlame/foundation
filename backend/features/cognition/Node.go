@@ -89,6 +89,10 @@ type NodeType struct {
 	// Sample is what a stubbed External node gives, by output pin; a data
 	// output left out gives nothing.
 	Sample Values
+	// SampleFor, when set, gives the Sample from the node's config, for a
+	// node whose outputs follow from it: Call connector's operation's
+	// result example (forge 07b).
+	SampleFor func(config json.RawMessage) Values
 	// Volatile pure nodes are evaluated every time they are pulled, not
 	// once per execution context, e.g. Get variable.
 	Volatile bool

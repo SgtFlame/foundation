@@ -32,6 +32,8 @@ playwright install chromium   # only if ~/.cache/ms-playwright has no chromium-1
 sudo apt-get install -y build-essential inotify-tools
 ```
 
+- **Test-only Go module**: `github.com/santhosh-tekuri/jsonschema/v6` validates the connector tool mappings against the MCP and OpenAPI 3.1 JSON Schemas kept in `features/connectors/testdata` (forge 07b); no production code imports it.
+
 - **`GEMINI_API_KEY`**: the Gemini API key for the AI services (or `serve --gemini-api-key`).
 
 - **VictoriaLogs** (optional): log storage for the Log Explorer. `backend/scripts/victorialogs.sh` downloads the pinned release into `backend/third_party/victorialogs/` on first use and runs it on `:9428`; then turn it on in Settings › System › Logging, or pass `serve --vlogs-url http://localhost:9428`. Without it, logs go to stderr only.

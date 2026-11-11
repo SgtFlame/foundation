@@ -243,13 +243,19 @@ func (r *run) call(id string, in cognition.Values) (string, error) {
 // output pin, leaving by its first exec output.
 func (r *run) stub(id string, t cognition.NodeType) (cognition.Values, string) {
 	r.stubbed = append(r.stubbed, id)
+	sample := t.Sample
+	if t.SampleFor != nil {
+		if n, ok := r.res.Graph.NodeByID(id); ok {
+			sample = t.SampleFor(n.Config)
+		}
+	}
 	out, pin := cognition.Values{}, ""
 	for _, p := range r.res.Pins[id].Out {
 		switch {
 		case p.Exec && pin == "":
 			pin = p.ID
 		case !p.Exec:
-			out[p.ID] = t.Sample[p.ID]
+			out[p.ID] = sample[p.ID]
 		}
 	}
 	return out, pin

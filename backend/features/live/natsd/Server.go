@@ -101,6 +101,28 @@ func (s *Server) Conn() *nats.Conn { return s.nc }
 // JS is the JetStream context.
 func (s *Server) JS() jetstream.JetStream { return s.js }
 
+// Connect opens another connection to the same server, as another
+// process would (an external connector adapter, forge 07b): in-process to
+// the embedded server, else to the external one's URL.
+func (s *Server) Connect(name string) (*nats.Conn, error) {
+	if s.ns != nil {
+		return nats.Connect("", nats.InProcessServer(s.ns), nats.Name(name))
+	}
+	return nats.Connect(s.nc.ConnectedUrl(), nats.Name(name), nats.MaxReconnects(-1))
+}
+
+// ClientURL is where another process connects: the embedded server's
+// listener (empty when it listens nowhere), or the external server's URL.
+func (s *Server) ClientURL() string {
+	if s.ns != nil {
+		if s.ns.Addr() == nil {
+			return ""
+		}
+		return s.ns.ClientURL()
+	}
+	return s.nc.ConnectedUrl()
+}
+
 // Close drains the connection and stops the embedded server.
 func (s *Server) Close() {
 	if err := s.nc.Drain(); err != nil {
@@ -113,6 +135,18 @@ func (s *Server) Close() {
 		s.ns.Shutdown()
 		s.ns.WaitForShutdown()
 	}
+}
+
+// StartTestListening is StartTest with a TCP listener on a free local
+// port, for tests that connect from another process (ClientURL).
+func StartTestListening(t testing.TB) *Server {
+	t.Helper()
+	s, err := Start(context.Background(), Options{Dir: t.TempDir(), Listen: "127.0.0.1:-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	return s
 }
 
 // StartTest starts an embedded server in a temporary directory, closed

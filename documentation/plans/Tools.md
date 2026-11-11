@@ -3,6 +3,7 @@
 Tool calling in `chatservice`, `tools.Loop`, the first server tools, confirmation cards, the client tools and the `Agent` node are built; see [Tools.md](../Tools.md).
 
 ## MCP
+Planned as Forge's iteration 15 ([15-MCP-and-Tools.md](../../../forge/documentation/plans/15-MCP-and-Tools.md)), in both directions, on the connector bus (`features/connectors`), with an inbound gateway, exposures and client keys.
 - **MCP client**: consume external MCP servers as tool sources, configured per tenant, with their tools mapped onto `tools.Tool`.
 - **MCP server**: expose Foundation's tools to external agents.
 - A **Tools and MCP manager** editor: tenant tool policies and the registry of MCP servers ([Backlog.md](Backlog.md)).
@@ -27,7 +28,7 @@ Fetch and search, with an `external` effect and stricter policy.
 ## TODO
 ### Open questions
 3. **Should tool results be cited inline like retrieval segments?** *Proposal*, built in slice 8: yes. The passages `kb.search`, `kb.read`, `chronicle.search` and `chronicle.getEntry` return become the round's next citations, after its context. *Decision*: (after seeing) built on the proposal in slice 8.
-4. **When is MCP support needed?** *Decision*:
+4. **When is MCP support needed?** *Decision*: in Forge's iteration 15, after iteration 7's connector bus, in both directions (the user's direction, 2026-11-11); [7b](../../../forge/documentation/plans/07b-ConnectorRegistry.md) shapes the bus for it.
 
 (Questions 1 and 2 are decided; see [Tools.md › Decisions](../Tools.md#decisions).)
 

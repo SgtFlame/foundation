@@ -12,6 +12,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/apps/ops"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
+	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
@@ -32,6 +33,9 @@ type ForgeDeps struct {
 	// Presence shows a chat round's Builder where forge.apply works (forge
 	// 06g); nil shows nothing.
 	Presence *presence.Presence
+	// Connectors is the connector registry (forge 07b); without it the
+	// connectors area lists the builtin contracts and types, offline.
+	Connectors *connectors.Registry
 }
 
 // Catalog areas (forge 06d): what forge.catalog searches.
@@ -40,7 +44,7 @@ const (
 	AreaNodes      = "nodes"
 	AreaFields     = "fields"
 	AreaPrefabs    = "prefabs"
-	AreaConnectors = "connectors" // none until forge iterations 7 and 11 (06d question 3)
+	AreaConnectors = "connectors" // contracts and connector types (forge 07b)
 )
 
 // Areas are the catalog's areas, in the order forge.catalog lists them.
@@ -49,7 +53,7 @@ var Areas = []string{AreaComponents, AreaNodes, AreaFields, AreaPrefabs, AreaCon
 // Item is one catalog entry as forge.catalog lists it; forge.describe
 // gives the whole of it by its ref.
 type Item struct {
-	Ref         string   `json:"ref"` // component:<id>, node:<type>, field:<type>, prefab:<id>
+	Ref         string   `json:"ref"` // component:<id>, node:<type>, field:<type>, prefab:<id>, contract:<id@v>, connector:<type>
 	Area        string   `json:"area"`
 	Title       string   `json:"title"`
 	Category    string   `json:"category,omitempty"`
@@ -130,7 +134,7 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "forge.catalog", Source: "apps"}, Title: "Search the catalog", Effect: tools.EffectRead,
-		Description: "Searches what applications are built with: UI primitives (components), Blueprint node types (nodes), entity field types (fields), the tenant's published prefabs, the starter library's included (prefabs), and connectors (none yet). Each item has a ref, title, category, its description's first sentence and tags; forge.describe {ref} gives one in full, with its schema and examples. area narrows it to one area; search keeps items holding every word, best matches first.",
+		Description: "Searches what applications are built with: UI primitives (components), Blueprint node types (nodes), entity field types (fields), the tenant's published prefabs, the starter library's included (prefabs), and connectors: contracts (contract:<id@version>, APIs of services outside the tenant that Call connector calls) and connector types (connector:<type>, their implementations). Each item has a ref, title, category, its description's first sentence and tags; forge.describe {ref} gives one in full, with its schema and examples. area narrows it to one area; search keeps items holding every word, best matches first.",
 		Input:       json.RawMessage(`{"type":"object","properties":{"area":{"type":"string","enum":["components","nodes","fields","prefabs","connectors"],"description":"One area; every area when left out"},"search":{"type":"string","description":"Words every item found holds, in its title, description, category or tags, e.g. table"}}}`),
 		Run: func(call tools.Call) (tools.Result, error) {
 			a, err := tools.Decode[struct{ Area, Search string }](call)
@@ -184,6 +188,23 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 					}
 				}
 			}
+			if in(AreaConnectors) {
+				cat := catalogOf(call, reg, deps().Connectors)
+				for _, c := range cat.Contracts {
+					tags := append(slices.Clone(c.Contract.Meta.Tags), "contract")
+					if !c.Online {
+						tags = append(tags, "offline")
+					}
+					add(Item{Ref: "contract:" + c.Ref, Area: AreaConnectors, Title: c.Contract.Meta.Title, Category: "Contracts", Description: short(c.Contract.Meta.Description), Tags: tags})
+				}
+				for _, t := range cat.Types {
+					tags := append(slices.Clone(t.Type.Meta.Tags), "connector", t.Source)
+					if !t.Online {
+						tags = append(tags, "offline")
+					}
+					add(Item{Ref: "connector:" + t.Type.ID, Area: AreaConnectors, Title: t.Type.Meta.Title, Category: "Connector types", Description: short(t.Type.Meta.Description), Tags: tags})
+				}
+			}
 			order := func(area string) int { return slices.Index(Areas, area) }
 			slices.SortFunc(items, func(x, y Item) int {
 				if x.score != y.score {
@@ -203,8 +224,8 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "forge.describe", Source: "apps"}, Title: "Describe a catalog item", Effect: tools.EffectRead,
-		Description: "Gives one catalog item in full by its ref (from forge.catalog): a component's props schema, events, slots and example trees; a node type's pins, config schema, kinds and examples ({type, config}); a field type's group and example fields (as entity.addField takes them); a prefab's interface as a component (props schema, events, slots, variants) with example nodes from its preview data, from its last published version. Each has its title, description and tags.",
-		Input:       json.RawMessage(`{"type":"object","properties":{"ref":{"type":"string","description":"component:<id>, node:<type>, field:<type> or prefab:<id>, e.g. prefab:recordTable"}},"required":["ref"]}`),
+		Description: "Gives one catalog item in full by its ref (from forge.catalog): a component's props schema, events, slots and example trees; a node type's pins, config schema, kinds and examples ({type, config}); a field type's group and example fields (as entity.addField takes them); a prefab's interface as a component (props schema, events, slots, variants) with example nodes from its preview data, from its last published version; a contract's operations (args and result schemas, examples, effect) and events, with the types implementing it, to call with Call connector {contract, operation}; a connector type's contracts and settings. Each has its title, description and tags.",
+		Input:       json.RawMessage(`{"type":"object","properties":{"ref":{"type":"string","description":"component:<id>, node:<type>, field:<type>, prefab:<id>, contract:<id@version> or connector:<type>, e.g. prefab:recordTable"}},"required":["ref"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
 			a, err := tools.Decode[struct{ Ref string }](call)
 			if err != nil {
@@ -261,10 +282,16 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 				maps.Copy(out, map[string]any{"area": AreaPrefabs, "id": p.ID, "type": c.ID, "title": c.Title, "description": c.Description, "category": c.Category, "tags": c.Tags,
 					"owner": p.Owner, "version": version, "props": c.Props, "events": c.Events, "slots": c.Slots, "variants": variants, "examples": c.Examples})
 				return tools.Result{Content: out, Summary: c.Title}, nil
-			case "connector":
-				return tools.Result{}, fmt.Errorf("there are no connectors yet")
+			case "contract", "connector":
+				d, err := describeConnector(call, reg, deps().Connectors, a.Ref)
+				if err != nil {
+					return tools.Result{}, err
+				}
+				maps.Copy(out, d)
+				out["area"] = AreaConnectors
+				return tools.Result{Content: out, Summary: a.Ref}, nil
 			}
-			return tools.Result{}, fmt.Errorf("%q is not a catalog ref: use component:<id>, node:<type>, field:<type> or prefab:<id>, as forge.catalog gives them", a.Ref)
+			return tools.Result{}, fmt.Errorf("%q is not a catalog ref: use component:<id>, node:<type>, field:<type>, prefab:<id>, contract:<id@version> or connector:<type>, as forge.catalog gives them", a.Ref)
 		},
 	})
 
@@ -349,4 +376,50 @@ type prefabRow struct {
 	Tags                         []string
 	Published                    int
 	Deleted                      bool
+}
+
+// catalogOf is the connector registry's catalog for the caller's tenant,
+// or, with no registry, the builtin contracts and types, offline.
+func catalogOf(call tools.Call, reg *extensions.Registry, r *connectors.Registry) connectors.Catalog {
+	if r != nil {
+		if cat, err := r.Catalog(call.ServiceArgs.Context(), call.ServiceArgs.Principal.TenantID); err == nil {
+			return cat
+		}
+	}
+	var cat connectors.Catalog
+	types := map[string][]string{}
+	for _, t := range connectors.Types.All(reg) {
+		cat.Types = append(cat.Types, connectors.TypeInfo{Type: t.Type, Source: connectors.FromBuiltin, Direction: connectors.Outbound})
+		for _, ref := range t.Type.Contracts {
+			types[ref] = append(types[ref], t.Type.ID)
+		}
+	}
+	for _, c := range connectors.Contracts.All(reg) {
+		cat.Contracts = append(cat.Contracts, connectors.ContractInfo{Contract: c.Contract, Ref: c.Contract.Ref(), Source: connectors.FromBuiltin, Types: types[c.Contract.Ref()]})
+	}
+	return cat
+}
+
+// describeConnector is forge.describe of a contract:<ref> or
+// connector:<type>.
+func describeConnector(call tools.Call, reg *extensions.Registry, r *connectors.Registry, ref string) (map[string]any, error) {
+	if r != nil {
+		return r.Describe(call.ServiceArgs.Context(), call.ServiceArgs.Principal.TenantID, ref)
+	}
+	kind, id, _ := strings.Cut(ref, ":")
+	cat := catalogOf(call, reg, nil)
+	if kind == "contract" {
+		for _, c := range cat.Contracts {
+			if c.Ref == id || c.Contract.ID == id {
+				return map[string]any{"ref": ref, "kind": "contract", "contract": c.Contract, "source": c.Source, "online": false, "types": c.Types}, nil
+			}
+		}
+		return nil, fmt.Errorf("there is no contract %q; search them with forge.catalog {area: \"connectors\"}", id)
+	}
+	for _, t := range cat.Types {
+		if t.Type.ID == id {
+			return map[string]any{"ref": ref, "kind": "connector", "type": t.Type, "source": t.Source, "online": false}, nil
+		}
+	}
+	return nil, fmt.Errorf("there is no connector type %q; search them with forge.catalog {area: \"connectors\"}", id)
 }

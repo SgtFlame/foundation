@@ -7,7 +7,7 @@ Workbench surfaces and features that have come up but have no plan of their own 
 - **Conversation history**: search, reopen, rename, export and delete past conversations, beyond the continuous scroll in Chat ([ChatCompletion.md](ChatCompletion.md)).
 - **Audit log viewer**: configuration revisions, grant changes and denied access (`AccessAudit`), secret changes (`SecretAudit`), and tool-call approvals. It could be a saved view in the Log Explorer if audit records are also logged ([RBAC.md](RBAC.md), [Secrets.md](Secrets.md)).
 - **Index administration**: indexing health, files pending, failed files, reindex, and the effect of an embedding-model change ([AIChatEmbed.md](AIChatEmbed.md)).
-- **Tools and MCP manager**: tenant tool policies and the registry of MCP servers ([Tools.md](Tools.md)).
+- **Tools and MCP manager**: tenant tool policies ([Tools.md](Tools.md)). MCP servers are connections and exposures, planned in Forge's iteration 15.
 - **Runs and schedules**: Cognition runs across all graphs, and schedules, if background runs are approved ([Cognition.md](Cognition.md) question 3).
 - **Budgets**: limits and alerts per tenant and user ([Usage.md](Usage.md)).
 - **Notifications**: approvals waiting, runs finished, budget warnings, shares accepted.
@@ -16,7 +16,7 @@ Workbench surfaces and features that have come up but have no plan of their own 
 - **Moderation queue**: segments flagged by 👎 *Incorrect*, beside global Chronicle shares ([ContextRetrieval.md](ContextRetrieval.md)).
 
 ### Not yet placed
-Budgets and alerts (including alerts on log queries); saved Log Explorer queries; MCP; background and scheduled runs; usage retention and roll-ups; runtime plugins; editing documents with the AI. Each is described in its plan.
+Budgets and alerts (including alerts on log queries); saved Log Explorer queries; background and scheduled runs; usage retention and roll-ups; runtime plugins; editing documents with the AI. Each is described in its plan.
 
 ### App-wide issues seen while verifying
 - **Dark preference**: under a dark browser preference the page body turns dark but the MUI theme stays light, so side-bar headings (*COGNITION* and others) are hard to read. No MUI theme follows the preference yet (`ui.appearance`, [Configuration.md](Configuration.md)). Seen since slice 7.

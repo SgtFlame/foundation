@@ -673,3 +673,6 @@ For Forge's Builder mode ([ChatCompletion.md › Built in slice 43](ChatCompleti
 
 ## Changed after slice 43
 `apptools.PreviewPage(call, reg, deps, app, route, as)` is `forge.preview`'s page before its tree is summarized (`Previewed{Page, Params, Data, Tree, Problems}`), which `forge.preview` now builds on. Forge's golden tests (part 6h, [forge GoldenTests.md](../../forge/documentation/GoldenTests.md)) assert on its whole tree, since the summary leaves out styling such as a title's color.
+
+## Changed in slice 46
+`forge.catalog {area: "connectors"}` lists the connector registry's contracts (`contract:<id@version>`) and types (`connector:<type>`), tagged `offline` when no adapter serves them, and `forge.describe` gives either in full: a contract's operations with their schemas, examples and effect, its events and the types implementing it; a type's contracts and settings ([Connectors.md › The registry](Connectors.md#the-registry)). `ForgeDeps.Connectors` is the registry; without one, the builtin contracts and types are listed, offline. `TestMetadata` checks every builtin contract and type.

@@ -352,6 +352,20 @@ func commandSpecs() []spec {
 				if g.Name == "" {
 					g.Name = c.Target.ID
 				}
+				// Configs are completed where they can be (a connector call's
+				// pins from its contract, forge 07b), and kept as exported where
+				// they cannot (a called graph imported later)
+				for i := range g.Nodes {
+					if t, ok := c.catalog.Type(g.Nodes[i].Type); ok && t.Normalize != nil {
+						if config, err := t.Normalize(cognition.Normalizing{
+							ServiceArgs: c.ServiceArgs, Config: g.Nodes[i].Config,
+							Graph:     func(id string) (cognition.Graph, bool) { return lookup(c.ServiceArgs, c.deps, id) },
+							Signature: func(g cognition.Graph) (in, out []cognition.Pin) { return cognition.SignatureOf(g, c.catalog.Types) },
+						}); err == nil {
+							g.Nodes[i].Config = config
+						}
+					}
+				}
 				return ev(EventCreated, map[string]any{"graph": g}), nil
 			},
 		},
