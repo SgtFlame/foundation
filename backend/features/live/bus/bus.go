@@ -176,6 +176,13 @@ func (b *Bus) Execute(r Request) Result {
 	if err := tools.CheckArgs(cmd.Args, r.Args); err != nil {
 		return rejected(live.Problem{Path: "args", Message: err.Error()})
 	}
+	if cmd.Seal != nil {
+		sealed, problem := cmd.Seal(live.Sealing{ServiceArgs: r.ServiceArgs, Target: tg, Args: r.Args})
+		if problem != nil {
+			return rejected(*problem)
+		}
+		r.Args = sealed
+	}
 
 	ctx := r.Context()
 	tenant := r.Principal.TenantID

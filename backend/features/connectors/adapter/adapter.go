@@ -12,9 +12,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
@@ -40,17 +42,35 @@ type Connection struct {
 // Context is what a type's code sees of a call or a session: the
 // caller's ServiceArgs (principal, Meta, trace) and a logger that never
 // logs settings. Everything it gives reaches JetStream over the adapter's
-// own NATS connection, so it works the same in an external process. The
-// tenant's file store and the ledger writer join it with 07c.
+// own NATS connection, so it works the same in an external process.
 type Context struct {
 	context.Context
-	Args      features.ServiceArgs
-	CallID    string
-	Contract  string // id@version
-	Operation string
-	Key       string // the call's idempotency key
-	Log       logging.Builder
-	js        jetstream.JetStream
+	Args       features.ServiceArgs
+	CallID     string
+	Contract   string // id@version
+	Operation  string
+	Key        string // the call's idempotency key
+	Connection string // the call's connection, "" for none
+	// Since is the event source's initial window, for a Watch with no
+	// cursor yet (07c); zero for none.
+	Since    time.Time
+	Log      logging.Builder
+	js       jetstream.JetStream
+	accepted *bool
+}
+
+// Accepted writes the call's result to the ledger the moment the outside
+// service accepted the request, for an operation with an idempotency key
+// (07c): a retry, in any process, then returns it without a request. The
+// runtime writes it after a successful call if the type did not.
+func (c Context) Accepted(result json.RawMessage) error {
+	if c.Key == "" || c.js == nil {
+		return nil
+	}
+	if c.accepted != nil {
+		*c.accepted = true
+	}
+	return connectors.LedgerPut(c, c.js, c.Tenant(), c.Connection, c.Operation, c.Key, connectors.LedgerEntry{Result: result, CallID: c.CallID})
 }
 
 // Tenant is the call's tenant.
@@ -89,6 +109,9 @@ type Event struct {
 	ID       string          `json:"id"` // from the event's id fields
 	Payload  json.RawMessage `json:"payload"`
 	At       time.Time       `json:"at"`
+	// Cursor is where the source resumes after this event, opaque to
+	// Foundation; stored once the event is in CX_<tenant> (07c).
+	Cursor json.RawMessage `json:"cursor,omitempty"`
 }
 
 // Watcher is optional, for a session whose contracts declare watched
@@ -175,9 +198,18 @@ type Options struct {
 	Surfaces  []Surface
 	// Tenants it serves; every tenant when empty.
 	Tenants []uint64
-	// Resolve gives a connection's settings to open a session (07c's
-	// cx.resolve); without it a session opens with none.
+	// Resolve gives a connection's settings to open a session; without it
+	// the adapter asks Foundation on cx.resolve (07c), which answers only
+	// for a connection of a type it serves.
 	Resolve func(ctx context.Context, tenant uint64, typ, connection string) (Connection, error)
+	// IdleTimeout is how long an unused session stays open (5m).
+	IdleTimeout time.Duration
+	// LeaseEvery is how often an instance refreshes its leases and looks
+	// for sources to take (5s, a third of the lease's life); tests shorten
+	// it with connectors.LeaseTTL.
+	LeaseEvery time.Duration
+	// Host names this process in its leases (the host name when empty).
+	Host string
 	// AnnounceEvery is how often announcements are refreshed (5s), and
 	// TTL how long one stays online unrefreshed (three times that).
 	AnnounceEvery time.Duration
@@ -215,6 +247,8 @@ type server struct {
 type entry struct {
 	mu   sync.Mutex
 	sess Session
+	used atomic.Int64 // unix nanoseconds of the last call
+	busy atomic.Int32 // calls running
 }
 
 func newServer(nc *nats.Conn, o Options) (*server, error) {
@@ -229,6 +263,15 @@ func newServer(nc *nats.Conn, o Options) (*server, error) {
 	}
 	if o.MaxConcurrent <= 0 {
 		o.MaxConcurrent = 64
+	}
+	if o.IdleTimeout <= 0 {
+		o.IdleTimeout = 5 * time.Minute
+	}
+	if o.LeaseEvery <= 0 {
+		o.LeaseEvery = connectors.LeaseTTL / 3
+	}
+	if o.Host == "" {
+		o.Host, _ = os.Hostname()
 	}
 	js, err := jetstream.New(nc)
 	if err != nil {
@@ -316,8 +359,16 @@ func (s *server) run(ctx context.Context) error {
 		}()
 	}
 	s.announce(ctx, kv)
+	// Event sources: this instance contends for the leases of its types'
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.runSources(surfaces)
+	}()
 	tick := time.NewTicker(s.o.AnnounceEvery)
 	defer tick.Stop()
+	idle := time.NewTicker(min(s.o.IdleTimeout/2, time.Minute))
+	defer idle.Stop()
 loop:
 	for {
 		select {
@@ -325,6 +376,8 @@ loop:
 			break loop
 		case <-tick.C:
 			s.announce(ctx, kv)
+		case <-idle.C:
+			s.closeIdle()
 		}
 	}
 	stopSurfaces()
@@ -437,8 +490,14 @@ func (s *server) handle(m *nats.Msg) {
 	}
 	ctx = logging.WithContext(ctx, b)
 	args := features.ServiceArgs{Ctx: ctx, Principal: h.Principal.In(call.Tenant), Meta: h.Meta}
-	x := Context{Context: ctx, Args: args, CallID: h.CallID, Contract: h.Contract, Operation: call.Operation, Key: h.Key, Log: b, js: s.js}
+	accepted := false
+	x := Context{Context: ctx, Args: args, CallID: h.CallID, Contract: h.Contract, Operation: call.Operation, Key: h.Key, Connection: call.Connection, Log: b, js: s.js, accepted: &accepted}
 	result, e := s.call(x, im, call, m.Data)
+	if e == nil && h.Key != "" && !accepted {
+		if err := x.Accepted(result); err != nil {
+			b.Warn(ctx, "%s %s: the ledger could not be written: %v", call.Type, call.Operation, err)
+		}
+	}
 	if e != nil {
 		b.Debug(ctx, "%s %s failed: %s", call.Type, call.Operation, e.Code)
 	}
@@ -453,14 +512,24 @@ func (s *server) call(x Context, im Impl, call connectors.ParsedCall, data []byt
 			result, e = nil, connectors.Errorf(connectors.CodeUnavailable, "%s failed", call.Type)
 		}
 	}()
-	sess, err := s.session(x, im, call)
-	if err != nil {
-		return nil, connectors.AsError(err)
-	}
 	if len(data) == 0 {
 		data = []byte("{}")
 	}
-	out, err := sess.Call(x, call.Operation, data)
+	var out json.RawMessage
+	var err error
+	if s.types[call.Type].Exclusive && call.Connection != "" {
+		out, err = s.exclusive(x, im, call, data)
+	} else {
+		var e *entry
+		e, err = s.session(x, im, call)
+		if err != nil {
+			return nil, connectors.AsError(err)
+		}
+		e.busy.Add(1)
+		out, err = e.sess.Call(x, call.Operation, data)
+		e.used.Store(time.Now().UnixNano())
+		e.busy.Add(-1)
+	}
 	if err != nil {
 		return nil, connectors.AsError(err)
 	}
@@ -474,8 +543,80 @@ func key(tenant uint64, typ, connection string) string {
 	return fmt.Sprintf("%d/%s/%s", tenant, typ, connection)
 }
 
+// exclusive runs a call of an exclusive type: under the connection's lock,
+// on a session opened for it and closed after, so no two instances in any
+// process hold a session on the connection at once.
+func (s *server) exclusive(x Context, im Impl, call connectors.ParsedCall, data []byte) (json.RawMessage, error) {
+	release, err := connectors.Lock(x, s.js, call.Tenant, call.Connection, s.instance)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	conn, err := s.resolve(x, call.Tenant, call.Type, call.Connection)
+	if err != nil {
+		return nil, err
+	}
+	sess, err := im.Open(x, conn)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = sess.Close() }()
+	return sess.Call(x, call.Operation, data)
+}
+
+// resolve is a connection's settings: Options.Resolve, else Foundation's
+// answer on cx.resolve.
+func (s *server) resolve(ctx context.Context, tenant uint64, typ, connection string) (Connection, error) {
+	if connection == "" {
+		return Connection{Type: typ, Tenant: tenant}, nil
+	}
+	if s.o.Resolve != nil {
+		return s.o.Resolve(ctx, tenant, typ, connection)
+	}
+	return ResolveOverBus(ctx, s.nc, tenant, typ, connection)
+}
+
+// ResolveOverBus asks Foundation for a connection's settings on cx.resolve.
+func ResolveOverBus(ctx context.Context, nc *nats.Conn, tenant uint64, typ, connection string) (Connection, error) {
+	body, _ := json.Marshal(connectors.ResolveRequest{Type: typ})
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+	}
+	reply, err := nc.RequestWithContext(ctx, connectors.ResolveSubject(tenant, connection), body)
+	if err != nil {
+		return Connection{}, connectors.Errorf(connectors.CodeUnavailable, "the settings of connection %s cannot be read now", connection)
+	}
+	var r connectors.ResolveReply
+	if err := json.Unmarshal(reply.Data, &r); err != nil {
+		return Connection{}, connectors.Errorf(connectors.CodeUnavailable, "the settings of connection %s cannot be read", connection)
+	}
+	if r.Error != nil {
+		return Connection{}, r.Error
+	}
+	return Connection{ID: connection, Type: typ, Tenant: tenant, Settings: r.Settings}, nil
+}
+
+// closeIdle closes the sessions no call used for IdleTimeout.
+func (s *server) closeIdle() {
+	cutoff := time.Now().Add(-s.o.IdleTimeout).UnixNano()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, e := range s.sessions {
+		if e.busy.Load() > 0 || e.used.Load() > cutoff || !e.mu.TryLock() {
+			continue
+		}
+		delete(s.sessions, k)
+		if e.sess != nil {
+			_ = e.sess.Close()
+		}
+		e.mu.Unlock()
+	}
+}
+
 // session is the connection's open session, opened once per process.
-func (s *server) session(x Context, im Impl, call connectors.ParsedCall) (Session, error) {
+func (s *server) session(x Context, im Impl, call connectors.ParsedCall) (*entry, error) {
 	k := key(call.Tenant, call.Type, call.Connection)
 	s.mu.Lock()
 	e, ok := s.sessions[k]
@@ -487,22 +628,19 @@ func (s *server) session(x Context, im Impl, call connectors.ParsedCall) (Sessio
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.sess != nil {
-		return e.sess, nil
+		return e, nil
 	}
-	conn := Connection{ID: call.Connection, Type: call.Type, Tenant: call.Tenant}
-	if call.Connection != "" && s.o.Resolve != nil {
-		c, err := s.o.Resolve(x, call.Tenant, call.Type, call.Connection)
-		if err != nil {
-			return nil, err
-		}
-		conn = c
+	conn, err := s.resolve(x, call.Tenant, call.Type, call.Connection)
+	if err != nil {
+		return nil, err
 	}
 	sess, err := im.Open(x, conn)
 	if err != nil {
 		return nil, err
 	}
 	e.sess = sess
-	return sess, nil
+	e.used.Store(time.Now().UnixNano())
+	return e, nil
 }
 
 // drop closes the sessions opened on a connection, which changed.

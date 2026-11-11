@@ -85,7 +85,7 @@ func sample(f Field) any {
 		if f.Currency != "" {
 			return 0.0
 		}
-	case "text", "longText", "richText", "enum", "date", "dateTime", "duration", "user":
+	case "text", "longText", "richText", "enum", "date", "dateTime", "duration", "user", "connection":
 		return ""
 	case "relation":
 		if f.Relation != nil && f.Relation.Many {

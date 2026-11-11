@@ -211,6 +211,10 @@ type Type struct {
 	// Receives is the callback verification scheme (stripe, github,
 	// standard-webhooks, hmac-sha256), when the service pushes events.
 	Receives string `json:"receives,omitempty"`
+	// Exclusive is set when the outside service allows one session at a
+	// time on a connection (POP3 locks the mailbox): its calls and its
+	// event source take the connection's lock in cx_locks_<tenant> (07c).
+	Exclusive bool `json:"exclusive,omitempty"`
 }
 
 // SurfaceInfo is an inbound surface as the registry lists it (15a): an

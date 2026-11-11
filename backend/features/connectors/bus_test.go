@@ -148,7 +148,7 @@ func TestInProcessAdapter(t *testing.T) {
 	f.serve(connectorstest.Options("a", nil))
 	f.online("test.echo", true, 2*time.Second)
 	d, err := f.r.Describe(context.Background(), 1, "contract:test.echo@1")
-	if err != nil || len(d["types"].([]connectors.TypeInfo)) != 2 || d["online"] != true {
+	if err != nil || len(d["types"].([]connectors.TypeInfo)) != 3 || d["online"] != true {
 		t.Fatalf("describe: %v %v", d, err)
 	}
 	if d, err := f.r.Describe(context.Background(), 1, "contract:test.echo"); err != nil || d["contract"].(connectors.Contract).Version != 1 {

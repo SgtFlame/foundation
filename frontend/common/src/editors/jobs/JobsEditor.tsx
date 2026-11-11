@@ -4,7 +4,8 @@
 // attempt, whose Cognition trace loads on demand; Retry queues a dead or
 // canceled job again and Cancel stops one that has not started, both as
 // commands. Everything stays live: a job moves through its statuses as
-// the runners run it.
+// the runners run it. Event sources (forge 07c) shows the connector event
+// sources and who runs them.
 
 import { Fragment, useMemo, useState } from 'react'
 import {
@@ -31,6 +32,7 @@ import { useQuery } from '../../live/useQuery.ts'
 import { live } from '../../live/LiveConnection.ts'
 import JsonView from '../../components/json/JsonView.tsx'
 import type { Step } from '../../services/Cognition.ts'
+import EventSources from './EventSources.tsx'
 import { jobStatuses, principalText, type Job, type JobRun, type JobStatus, type JobsList } from '../../services/Jobs.ts'
 
 const statusColor: Record<JobStatus, 'default' | 'primary' | 'info' | 'warning' | 'error' | 'success'> = {
@@ -197,6 +199,7 @@ function JobsEditor() {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState<string>()
   const [error, setError] = useState<string>()
+  const [showSources, setShowSources] = useState(false)
   const params = useMemo(() => (status ? { status } : {}), [status])
   const { data, loading, error: queryError } = useQuery<JobsList>('jobs.list', params)
 
@@ -231,7 +234,15 @@ function JobsEditor() {
           ))}
         </ToggleButtonGroup>
         <TextField size="small" label="Search id, graph, app or key" value={search} onChange={(e) => setSearch(e.target.value)} sx={{ minWidth: 260 }} />
+        <ToggleButton size="small" value="sources" selected={showSources} onChange={() => setShowSources(!showSources)}>
+          Event sources
+        </ToggleButton>
       </Stack>
+      {showSources && (
+        <Box sx={{ mb: 3 }}>
+          <EventSources />
+        </Box>
+      )}
       {error && (
         <Alert severity="error" onClose={() => setError(undefined)} sx={{ mb: 2 }}>
           {error}

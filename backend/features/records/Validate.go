@@ -163,6 +163,12 @@ func checkType(f Field, p string, exists func(string) bool, e *EntityType) []liv
 		if f.Currency != "" && (t.ID != "money" || !currency.MatchString(f.Currency)) {
 			add(p+".currency", fmt.Sprintf("%q is not an ISO 4217 currency code of a money field", f.Currency), `use three capital letters, e.g. "USD"`)
 		}
+	case "connection":
+		if f.Contract != "" {
+			if id, v, ok := strings.Cut(f.Contract, "@"); !ok || id == "" || v == "" || strings.Trim(v, "0123456789") != "" {
+				add(p+".contract", fmt.Sprintf("%q is not a contract reference", f.Contract), "write id@version, such as mail.mailbox@1 (connectors.contracts)")
+			}
+		}
 	case "json":
 		if f.Schema != nil {
 			var s map[string]any

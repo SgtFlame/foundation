@@ -1,0 +1,25 @@
+{
+  "name": "test_echo_check",
+  "title": "Check",
+  "description": "Signs in and does nothing: whether the connection's settings work",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean",
+        "description": "Always true: a failure is an error"
+      }
+    }
+  },
+  "annotations": {
+    "title": "Check",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

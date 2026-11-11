@@ -63,6 +63,8 @@ var FieldTypes = []FieldType{
 		Tags: []string{"upload", "attachment"}, Examples: example(`{"name":"Attachment","type":"file"}`)},
 	{ID: "volumeFile", Title: "Volume file", Group: GroupReferences, Description: "A file in one of the tenant's Volumes {volumeId, path}, path relative to the volume",
 		Tags: []string{"file", "volume", "path"}, Examples: example(`{"name":"Document","type":"volumeFile"}`)},
+	{ID: "connection", Title: "Connection", Group: GroupReferences, Description: "A connection's id (a mailbox, an API account: connections.list), optionally only of connector types implementing contract (id@version). Reading the record never reads the connection's secrets",
+		Tags: []string{"connector", "account", "integration"}, Examples: example(`{"name":"Inbound","type":"connection","contract":"mail.mailbox@1"}`)},
 	{ID: "json", Title: "JSON", Group: GroupStructured, Description: "Any JSON value, following schema when it has one",
 		Tags: []string{"structured", "any"}, Examples: example(`{"name":"Metadata","type":"json","schema":{"type":"object"}}`)},
 	{ID: "list", Title: "List", Group: GroupStructured, Description: "A list of values, each as items describes ({type, …})",

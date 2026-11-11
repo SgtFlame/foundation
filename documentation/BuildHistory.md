@@ -764,6 +764,15 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Blockers**: none. Forge 07b questions 1, 2, 4 to 10 answered with their proposals, and 3 by the user's direction, before building (2026-11-11).
     - **Decisions to review after seeing it**: in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it).
     - **Pending, carried forward**: connections, sessions with settings, the ledger and event sources (7c); scripted connectors (7d); the mail contracts (7e); the inbound gateway, MCP and hooks (15).
+47. **Connections, sessions and event sources** (Forge iteration 7, part 7c, [forge 07c-Connections.md](../../forge/documentation/plans/07c-Connections.md)). *Built* ([Connectors.md](Connectors.md#built-in-slice-47)).
+    - **Built**:
+      - `connectors/connections`: connections as definitions (`connection.*` commands with inverses, `connectors.connection`), secrets sealed into the SecretStore by the bus (`live.Command.Seal`, `NoTool`), the `connection` resource type, `connections.list|describe`, `connection.test`, `cx.resolve` and `cx.status` served in a queue group, status from call errors, `cx_sources` kept by every process, *On connector event* as a trigger event on `CX_<tenant>`;
+      - `connectors`: the ledger, exclusive locks, `Type.Exclusive`, the event stream and buckets, `Dispatcher.Failed`;
+      - `connectors/adapter`: `cx.resolve` by default, `Context.Accepted`, idle sessions closed, exclusive calls, leased event sources with cursors and fair shares;
+      - `jobs`/`live/nodes`: `TriggerEvent.Stream` and `Accept`; `records`: the `connection` field type (exports leave its values out); `ui`: the `connection.form` primitive, the Jobs view's *Event sources*, a secret-safe command option in the browser; Forge's *Connection form* prefab.
+    - **Blockers**: none. Forge 07c questions 1 to 3 answered with their proposals before building (2026-11-11).
+    - **Decisions to review after seeing it**: in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-1).
+    - **Pending, carried forward**: the *Connection* picker in *Call connector*'s panel; pushed events and registration (15f); scripted connectors (7d); the mail contracts and types (7e to 7h).
 
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
@@ -818,3 +827,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 44. Chat modes (Forge 6i) | forge 06i 1 (offered by focus, chosen for new conversations), 2 (now) and 3 (nothing hard-coded), answered | the decisions in [ChatCompletion.md](ChatCompletion.md#decisions-to-review-after-seeing-it-2), and rounds in each mode with a real model |
 | 45. The job runner and triggers (Forge 7a) | forge 07-Email 9 (built here) and 10 (a slice per part), and 07a 1 (a principal per install) and 2 (the outbox on the commit's first event), answered; built for several runners per tenant in several processes (the user's direction) | the decisions in [Jobs.md](Jobs.md#decisions-to-review-after-seeing-it), and whether a dead job's trace says enough to fix it |
 | 46. The connector registry and bus (Forge 7b) | forge 07b 1 (nested objects one pin), 2 (versions side by side), 4 (`cx.resolve` in 7c), 5 (the protocol in the docs), 6 (shapes here, adapters in 15), 7 (claiming in 15c), 8 (`destructive`), 9 (no durable wait) and 10 (callback metadata here), answered with their proposals; 3 (always NATS) the user's direction | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it), the *Connectors* palette with real contracts |
+| 47. Connections, sessions and event sources (Forge 7c) | forge 07c 1 (definitions), 2 (`connection.manage`, grantable to an app role per connection), 3 (share plus one, no rebalancing), answered with their proposals | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-1), the Connection form for a type with many settings |

@@ -84,6 +84,8 @@ The request body is the operation's args, a JSON object.
 
 **Callbacks.** KV `cx_hooks` (15f) maps `<hookId>` to `connectors.Hook{tenant, connection, type}`; only its shape is fixed here.
 
+Slice 47 adds `cx.resolve`, `cx.status`, the ledger, locks, event sources and `CX_<tenant>` to the protocol: see [Built in slice 47 › Protocol additions](#protocol-additions).
+
 ### The registry
 
 `connectors.NewRegistry(reg, js)` merges, per tenant:
@@ -212,10 +214,103 @@ In Forge, the Blueprint Editor was checked in headless Chromium. The setup was a
 
 ### Not built
 
-- Connections: `cx.resolve`, `use` checks, the ledger, connection status on `auth`, the *Connection* picker in the details panel, and the secret test on a real connection (7c). The secret test here uses a resolver given to the adapter.
-- Event sources, `CX_<tenant>`, and *On connector event* starting triggers (7c).
+- ~~Connections, `cx.resolve`, `use` checks, the ledger, status on `auth`, event sources, `CX_<tenant>` and *On connector event* starting triggers~~: built in [slice 47](#built-in-slice-47). The *Connection* picker in *Call connector*'s details panel is still to build.
 - Scripted types in the registry (7d), and the mail contracts and types (7e).
 - `bp.check` re-normalizing nodes when an announced contract changes, and the editor redrawing pins at once. A change shows when the node's config is next set or the graph is imported.
 - A *Call connector* in a chat tool asking for approval by its operation's effect (graph tools ask by their own `asks`).
 - The gateway, exposures, MCP and tool adapters, discovery, the hook endpoint and registration (iteration 15).
 - Authorization between processes (per-adapter NATS users).
+
+## Built in slice 47
+
+Forge's part [7c](../../forge/documentation/plans/07c-Connections.md): connections, sessions and event sources. Packages: `features/connectors/connections` (the connections themselves, Foundation's side of the bus and of event sources), additions to `features/connectors` (`State.go`: subjects, buckets, the ledger, locks, the event stream) and `connectors/adapter` (`sources.go`: leases and `Watch`), the `connection` field type in `records`, the `connection.form` primitive, and in the live core the commands' `Seal` and `NoTool` and the trigger events' `Stream` and `Accept`.
+
+### Connections
+
+A connection is one configured use of a connector type, a **definition** on the `def` stream (target type `connection`, projection `connectors.connection`, keyed `connection.<id>`): `{id, name, type, owner (tenant or user:<id>), settings, secrets (field → version), status (ok, error, disabled), lastError, checkedAt, options {pollInterval, since, paused}, createdAt, createdBy, updatedAt}`.
+
+- **Commands**, every one an op of the operation log with its inverse: `connection.create {type, name, owner? (me, the default, or tenant), settings?, secrets?, options?}` (its inverse a delete), `connection.update {settings? (a merge, null removes), secrets? (a value replaces, "" keeps, null clears), options?}` (clears an error status; its inverse restores each changed setting, secret reference and the options), `connection.rename`, `connection.disable`/`connection.enable` (each the other's inverse), `connection.delete` (irreversible: its secrets are forgotten) and the internal `connection.setStatus {status, error}`. Each create and update is checked whole against the type's settings schema (`connections.FieldsOf`: Configuration's schema language, the top-level `secret` fields being the secrets).
+- **Secrets are sealed by the bus.** `live.Command.Seal` runs after the authz and argument checks and before the command is decided or logged: each secret value goes to the `config.SecretStore` under a new version (`SecretRef{tenant/<t>, connections/<id>, <field>/<version>}`), its placeholder into KV `cx_secrets_<tenant>` at `<connection>.<field>.<version>`, and the arguments keep `{"$ref": <version>}`. So events, ops, `forge.apply` batches and undo carry only references; old versions stay (an undo restores one) until a delete purges them. Seal checks `manage` first, so a refused command stores nothing; in a dry run it stores nothing. `connection.create` and `connection.update` have no tool (`live.Command.NoTool`): a tool call records its arguments.
+- **Access**: the resource type `connection` (`read`, `use`, `manage`; `Owned`, fenced by `user`). A user's own connection is at `tenant:<t>/user:<u>/connection:<id>`: used and managed by that user alone (`connections.CheckAccess`; an administrator sees that it exists). A tenant connection is at `tenant:<t>/connection:<id>`, made by holders of `connection.manage` on the tenant (class `admin`: *Owner*, *Administrator*), used with `use` (class `execute`). An app role may be granted either on one connection.
+- **Queries**: `connections.list {type?, contract?}` and `connections.describe {id}` give `connections.View` (each secret only `{set: true}`), checked for `read`. `connection.test {id}` (a call ending with one `result` event, and a tool) sends the type's `check` operation as the caller and records the status.
+- **The `connection` field type** holds a connection's id, optionally only of types implementing `contract` (id@version); reading the record never reads a secret. An app's export leaves its values out of the seed, and an import clears them for the tenant to fill.
+
+### Calls on a connection
+
+- The dispatcher's `Connections` is `connections.Connections`: `TypeOf` checks `use` as the run's principal (agents included) and refuses a disabled or errored connection (`unavailable`, not retryable; `connection.test` may call an errored one). Adapters trust this check.
+- **The ledger**: for an operation with a `key`, the dispatcher reads KV `cx_ledger_<tenant>` (`<connection>.<operation>.<sha256 of the key>`, TTL 30 days) before sending; a hit returns the stored result with no request. The adapter writes the entry through `Context.Accepted(result)` the moment the outside service accepts the request, and the runtime writes it after a successful call if the type did not.
+- **Status**: `Dispatcher.Failed` is told of each typed error a reply carries. `auth` commits the connection's `error` status (which stops its event source until it is updated); `unavailable` and `rateLimited` are kept as its last error. Only a change is committed.
+- **Sessions** live in the adapter instance that receives the call: one per connection, opened on demand with the settings from `cx.resolve` (or `Options.Resolve`), closed when idle (`Options.IdleTimeout`, 5 minutes) or on `cx.changed`.
+- **Exclusive types** (`Type.Exclusive`, POP3 in 7h) run each call under the connection's lock in KV `cx_locks_<tenant>` (created only if absent, released by revision, gone after 2 minutes if its holder dies), on a session opened for it and closed after. A waiter wakes on the lock's release (a KV watch), else retries every 250 ms; one that cannot take it before its deadline is `unavailable`.
+
+### Event sources
+
+- **Which sources run.** KV `cx_sources`, keyed `<tenant>.<connection>`: `{tenant, connection, type, contracts, pollInterval, since, revision, at}`, for each connection that is ok, not paused, of a type implementing a contract an installed trigger's *On connector event* names (unfiltered, or filtered to it), and that the trigger's app may use. `connections.Reconcile` computes it from the installs and connections projections and writes only what differs; every server process runs it (`connections.Start`) from a follower on connection and install events (`connectors.sources`, one durable consumer shared by all) and once a minute. The same follower purges a deleted connection's secrets. `revision` hashes the settings, secret references and options, so a change restarts the source.
+- **Who runs it.** Each adapter instance serving a type with watched events watches `cx_sources` and contends for a lease in KV `cx_leases` (`<tenant>.<connection>`, created only if absent, refreshed with the revision it holds every `LeaseEvery`, TTL 15 s): `{adapter, instance, host, since, lastError, lastErrorAt}`. It takes a new lease only while it holds fewer than its share, sources of the type ÷ its live instances in `cx_adapters`, plus one; running sources are never handed over. A holder that has not refreshed for TTL − `LeaseEvery` stops its `Watch`, so two never run; a stopped instance deletes its leases at once.
+- **Running it.** The holder opens its own session (under the lock for an exclusive type) as the tenant's service principal and calls `Watch(ctx, cursor, emit)` with the cursor from KV `cx_cursors` (`{cursor, at, lastEvent}`) and `Context.Since` from the connection's window. A push connector's `Watch` runs until cancelled; a poll connector's returns and is called again after the poll interval (1 minute by default). An error backs off from 1 s to the interval; an `auth` error is sent on `cx.status` for Foundation to commit.
+- **Once and in order.** Each emitted event is published to `CX_<tenant>` with `<connection>:<event>:<id>` as its message id (a hash of its payload when it has no id), then its cursor is stored. A new holder resumes from the stored cursor; an event emitted again after a crash between the two is dropped by JetStream within the stream's duplicate window (2 minutes, `connectors.EventDuplicates`). The stream keeps events 30 days.
+- **Triggers.** *On connector event* is a trigger event with its own stream (`livenodes.TriggerEvent.Stream`, CX_<tenant>): a trigger's durable consumer filters `cx.event.<tenant>.<connection or *>.<contract>.<event>`. A trigger filtered to a connection its app may not use is refused, with the reason in the runner's warning, and does not run; an unfiltered one skips (`TriggerEvent.Accept`) the events of connections its app may not use. Its outputs are the payload's fields, `connection` and `event {contract, name, id, payload, at}`. A message in `CX_<tenant>` is a `live.Event` (type the event, target `{cx, <contract token>, <connection>}`, data the payload, `commandId` the event's id), so the job runner's trigger code serves it unchanged.
+- The live `connectors.sources` query (`job.manage`) lists them with their holder, cursor age, last event and last error, and whether an adapter serves the type; Administration › Jobs shows it under *Event sources*.
+
+### Protocol additions
+
+| Subject or bucket | Kind | What |
+|---|---|---|
+| `cx.resolve.<tenant>.<connection>` | request/reply, queue `cx.foundation` | An adapter asks for a connection's settings: body `{type}`, reply `{type, settings}` with the secrets in place, or `{error}`. Answered only for a connection of the type asked. Until authorization between processes is built, this channel is as trusted as the cluster. |
+| `cx.status.<tenant>.<connection>` | request/reply, queue `cx.foundation` | An event source's error: body `{error {code, message}}`; an `auth` one marks the connection errored |
+| `cx.event.<tenant>.<connection>.<contract>.<event>` | JetStream `CX_<tenant>` | An event as a `live.Event`; header `Cx-Contract: id@version`; `Nats-Msg-Id` `<connection>:<event>:<id>` |
+| `cx_sources` | KV | `<tenant>.<connection>` → the source (Foundation writes) |
+| `cx_leases` | KV, TTL 15 s | `<tenant>.<connection>` → its holder (adapters write) |
+| `cx_cursors` | KV | `<tenant>.<connection>` → where it resumes (adapters write) |
+| `cx_ledger_<tenant>` | KV, TTL 30 days | `<connection>.<operation>.<key hash>` → `{result, at, callId}` |
+| `cx_locks_<tenant>` | KV, TTL 2 min | `<connection>` → the holder of an exclusive connection |
+| `cx_secrets_<tenant>` | KV | `<connection>.<field>.<version>` → the SecretStore's placeholder, never a value |
+
+Every connector type that needs a connection should implement a contract with a `check` operation (a sign-in and a no-op): `connection.test` sends it, and is `notSupported` without one. The test contract has one.
+
+### The Connection form
+
+The primitive `connection.form` (`frontend/common/src/ui/renderers/connectors/ConnectionForm.tsx`; props `connection`, `contract`, `owner`, `saveLabel`, `disabled`; events `saved {id}`, `tested {ok, error}`) picks a connector type implementing the contract (an offline one marked), draws its plain settings with Configuration's `SchemaField`, its secrets as write-only password fields (a stored one is *Set: leave empty to keep it*), and has *Test* and *Save*, then goes on editing a connection it made. It sends `connection.create`/`connection.update` with `{secret: true}`, which records the frame in DevTools' Live tab with each secret as `•••`. A `connection` field's editor picks among `connections.list {contract}`. Forge's starter library wraps the primitive as the *Connection form* prefab.
+
+### Decisions
+
+Answered before building (the user, 2026-11-11), each as proposed: question 1 (connections are definitions on the `def` stream), 2 (tenant connections made by holders of `connection.manage`; an app role may be granted it on one connection), 3 (an instance takes leases up to its share plus one, no rebalancing).
+
+Decided while building:
+
+1. **Secrets sealed by the bus** (`Command.Seal`), versioned, so no event, op or undo ever carries a value and a refused or failed command leaves at most an unreferenced version.
+2. **Sources, leases and cursors in single buckets keyed `<tenant>.<connection>`**, not one per tenant as the plan had: an adapter instance watches every tenant's sources, and a KV watch cannot span buckets. The ledger, locks and secrets stay per tenant.
+3. **A user's own connection is theirs alone for `use` and `manage`**, even for an administrator, who sees that it exists (the iteration's question 7 proposal for mail accounts).
+4. **"Refused at install"** for a trigger on a connection its app may not use means the trigger does not run and the runner warns why, as for *On record changed* on a type the app may not read; `app.install` itself is not refused.
+5. **`connection.update` clears an error status**, so fixing a password restarts the source; `connection.enable` clears one too.
+6. **Status commits only on a change**, so a flaky service does not fill the `def` stream; `checkedAt` is set by each status commit and by `connection.test`.
+7. **Connector events are `live.Event`s** in `CX_<tenant>`, so the job runner's trigger consumers needed only a stream opener and an accept hook (`TriggerEvent.Stream`, `Accept`), and job ids stay `<app>-<trigger>-<seq>`.
+8. **A source's session is its own**, apart from the call pool, since a push `Watch` holds its connection open.
+
+### Decisions to review after seeing it
+
+- ★ The Connection form for a type with many settings (seen with the test type's six fields: each `SchemaField` row keeps room for its source badge, which a connection never has).
+- Whether an event re-emitted more than 2 minutes after its first publish (a cursor lost for longer) should be deduplicated further than the stream's window.
+
+### Verification
+
+`go test ./features/connectors/connections` (all seven three times in a row), on the live core, drafts, installs, a job runner and adapters on their own NATS connections:
+
+- **secrets:** a connection made with a secret, echoed through, updated with an empty secret (kept) and a new one (replaced): the secret is in no command result, event or op on the `def` stream, query result (`connections.list`/`describe` say `{set: true}`), log line at debug, `connection.test` tool result, or message on the bus but the replies to `cx.resolve`; a delete purges every version from the store;
+- **use:** with a policy installed, a user's own connection is refused to another *Editor* and to an *Administrator*; an *Editor* cannot make a tenant connection, an *Administrator* can and an *Editor* uses it; *On connector event* filtered to another's connection is refused for the app, an unfiltered one gives `cx.event.1.*.test_echo.finished` and skips that connection's events;
+- **event source:** an installed trigger on `test.echo@1 finished`, a tenant connection with three events whose third stores no cursor, polled every second: the trigger runs three times though event 3 is emitted on every pass; the holder (adapter *a*) shown by `connectors.sources` is stopped and an adapter in another connection takes the lease and resumes from the cursor, still three; raised to five events, each of the five reaches the trigger once; paused, the source is gone;
+- **exclusive:** ten concurrent calls on a `test.exclusive` connection served by two instances: all succeed, never two sessions open at once;
+- **ledger:** `start {id: k1}` is served once; the same call from another process's dispatcher returns `j-k1` with no message on `cx.call.>`; another key is served;
+- **auth:** a refused password on a call marks the connection `error`, after which calls are refused (not retryable) and an installed trigger lists no source; an update clears it, the source's own `auth` failure (sent on `cx.status`) marks it again and removes the source; another update restores it; `connection.test` records ok;
+- **undo:** each of six commands (settings, a secret, options, rename, disable, enable) undone by its inverse restores the connection exactly, and done again gives the same state; delete is irreversible.
+
+`go test ./features/connectors/...`, `./features/jobs`, `./features/live/...`, `./features/apps/...` and `./features/records/...` pass (records/search builds only with `build.sh`); `apps/tools`' `TestMetadata` checks the connection commands, queries, tool and the `connection.form` primitive.
+
+In Forge, in headless Chromium, with a scratch NATS server running the test adapter and `serve --nats-url` against it: the *Connection form* prefab's Canvas (Interact) listed the three test types, drew *Test secure echo*'s settings and its *Password* field, saved a new connection (`connections.list`: `"secrets":{"password":{"set":true}}`), then showed it with its status, the password as *Set: leave empty to keep it*, and *Test* answered *The connection works* through the external adapter, settings resolved over `cx.resolve` from the cipher store. The secret was in neither the server's log nor any file under the data directories.
+
+### Not built
+
+- The *Connection* picker in *Call connector*'s details panel, and a *Connections* administration view (apps embed the form).
+- Pushed events at a hook URL, registration with the service and backfill after a gap (15f).
+- Several sessions per connection in one instance (one session serves concurrent calls).
+- Authorization between processes, which `cx.resolve` waits for.

@@ -7,18 +7,19 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/logging"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
-// Connections resolves a connection's type for a call as the caller (07c
-// builds them: settings and secrets in SecretStore, use checked as the
-// run's principal). Until then a call that names a connection needs one
-// given to the Dispatcher.
+// Connections resolves a connection's type for a call as the caller: the
+// connections feature (07c) checks use on it as the run's principal and
+// refuses a disabled, errored or deleted one.
 type Connections interface {
 	TypeOf(args features.ServiceArgs, connection string) (string, error)
 }
@@ -44,6 +45,18 @@ type Dispatcher struct {
 	Registry    *Registry
 	Connections Connections
 	Timeout     time.Duration
+	// Failed, when set, is told of a typed error a call on a connection
+	// returned: an auth error commits the connection's error status, an
+	// unavailable one is recorded as its last error (07c).
+	Failed func(args features.ServiceArgs, connection string, e *Error)
+
+	once sync.Once
+	js   jetstream.JetStream
+}
+
+func (d *Dispatcher) jetStream() jetstream.JetStream {
+	d.once.Do(func() { d.js, _ = jetstream.New(d.NC) })
+	return d.js
 }
 
 // Call is one call through the dispatcher.
@@ -90,6 +103,13 @@ func (d *Dispatcher) Call(args features.ServiceArgs, c Call) (json.RawMessage, *
 			h.Key = fmt.Sprint(v)
 		}
 	}
+	// The ledger: a key the outside service accepted already returns what
+	// it gave, with no request, whichever process sent it first (07c)
+	if h.Key != "" {
+		if le, ok, err := LedgerGet(ctx, d.jetStream(), tenant, conn, op.ID, h.Key); err == nil && ok {
+			return le.Result, nil
+		}
+	}
 	timeout := d.Timeout
 	if timeout <= 0 {
 		timeout = DefaultTimeout
@@ -117,6 +137,9 @@ func (d *Dispatcher) Call(args features.ServiceArgs, c Call) (json.RawMessage, *
 	if r.Error != nil {
 		if !ValidCode(r.Error.Code) {
 			r.Error.Code = CodeUnavailable
+		}
+		if d.Failed != nil && conn != NoConnection && conn != "" {
+			d.Failed(args, conn, r.Error)
 		}
 		return nil, r.Error
 	}

@@ -24,6 +24,7 @@ import {
 import { useQuery } from '../../../live/useQuery.ts'
 import { docFromText, plainText, Records, type FileRef, type RecordPage, type RichTextDoc } from '../../../services/Records.ts'
 import type { RendererProps } from '../../points.ts'
+import type { ConnectionList } from '../../../services/Connectors.ts'
 import { isComputed, same, type Field } from './fields.ts'
 import { FieldDisplay, titleOf } from './FieldValue.tsx'
 
@@ -248,6 +249,8 @@ export function FieldInput(props: FieldInputProps) {
       return text(false, str(value), (t) => (t.trim() === '' ? null : t.trim()))
     case 'file':
       return <FileInput {...p} />
+    case 'connection':
+      return <ConnectionInput {...p} />
   }
   // json, list, object, volumeFile and any type to come
   return <JsonInput {...p} />
@@ -274,5 +277,31 @@ export function RecordFieldEditor(p: RendererProps) {
         if (!textual) p.emit('change', { value: v })
       }}
       onCommit={() => !same(own, server) && p.emit('change', { value: own })} />
+  )
+}
+
+// A connection field picks among the connections the user may read, of
+// types implementing the field's contract when it names one (forge 07c);
+// the value is only the id.
+function ConnectionInput({ field, value, onChange, label, problem, disabled }: FieldInputProps) {
+  const { data } = useQuery<ConnectionList>('connections.list', field.contract ? { contract: field.contract } : {})
+  const id = `field-${field.id}`
+  const list = data?.connections ?? []
+  const missing = !!value && !list.some((c) => c.id === value)
+  return (
+    <FormControl size="small" fullWidth error={!!problem || missing} disabled={disabled}>
+      <InputLabel id={id}>{label}</InputLabel>
+      <Select labelId={id} label={label} value={str(value)} onChange={(e) => onChange(e.target.value || null)}>
+        <MenuItem value=""><em>None</em></MenuItem>
+        {list.map((c) => (
+          <MenuItem key={c.id} value={c.id}>
+            {c.name}
+            {c.status !== 'ok' && <Chip size="small" label={c.status} color={c.status === 'error' ? 'error' : 'default'} sx={{ ml: 1 }} />}
+          </MenuItem>
+        ))}
+        {missing && <MenuItem value={str(value)}>Connection {str(value)}</MenuItem>}
+      </Select>
+      {(problem || missing) && <FormHelperText>{problem || 'This connection is gone, or you may not see it'}</FormHelperText>}
+    </FormControl>
   )
 }

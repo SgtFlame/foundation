@@ -69,7 +69,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		},
 	})
 	for _, c := range live.Commands.All(reg) {
-		if !c.Internal {
+		if !c.Internal && !c.NoTool {
 			tools.Tools.Register(reg, commandTool(c, deps))
 		}
 	}

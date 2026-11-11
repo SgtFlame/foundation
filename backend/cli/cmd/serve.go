@@ -82,6 +82,7 @@ import (
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
+	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/collabhandlers"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/kbhandlers"
@@ -411,6 +412,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var jobDeps jobs.Deps
 		var jobNodeDeps jobsnodes.Deps
 		var connectorDeps connectors.Deps
+		var connectionDeps connections.Deps
 		var uiService uiservice.Service
 		var configLive configservice.Service
 		var chatLive chatservice.Service
@@ -437,6 +439,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		apps.ContributeAccess(registry)
 		jobs.ContributeAccess(registry)
 		connectors.ContributeAccess(registry)
+		connections.ContributeAccess(registry)
 		aisettings.Contribute(registry)
 		logssettings.Contribute(registry)
 		usagesettings.Contribute(registry)
@@ -497,6 +500,10 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// nodes; builtin contracts and types are contributed beside them
 		connectors.Contribute(registry, func() connectors.Deps { return connectorDeps })
 		connectorsnodes.Contribute(registry, func() connectors.Deps { return connectorDeps })
+		// Connections (forge 07c): connection.* commands, their queries,
+		// connection.test and On connector event as a trigger event
+		connections.Contribute(registry, func() connections.Deps { return connectionDeps })
+		connections.ContributeTrigger(registry, func() connections.Deps { return connectionDeps })
 		ops.Contribute(registry)                                         // the operation log: ops.log and ops.list
 		ops.ContributeUndo(registry, func() ops.Deps { return opsDeps }) // ops.undo, ops.redo and ops.stack (forge 06b)
 		apptools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
@@ -728,7 +735,17 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// adapter in this process or another; connections come with 07c
 		connectorRegistry := connectors.NewRegistry(registry, nats.JS())
 		defer connectorRegistry.Close()
-		connectorDeps = connectors.Deps{Registry: connectorRegistry, Dispatcher: &connectors.Dispatcher{NC: nats.Conn(), Registry: connectorRegistry}}
+		// A call names a connection its principal may use (forge 07c); an
+		// auth reply marks the connection errored
+		connectionAccess := connections.Connections{Deps: func() connections.Deps { return connectionDeps }}
+		connectorDispatcher := &connectors.Dispatcher{NC: nats.Conn(), Registry: connectorRegistry, Connections: connectionAccess, Failed: connectionAccess.Failed}
+		connectorDeps = connectors.Deps{Registry: connectorRegistry, Dispatcher: connectorDispatcher}
+		connectionDeps = connections.Deps{Projections: projections, Bus: liveBus, Registry: connectorRegistry, Secrets: secretStore, Dispatcher: connectorDispatcher}
+		// Adapters' settings on cx.resolve and their sources' status on
+		// cx.status, in a queue group in every process
+		if err := connections.Serve(ctx, nats.Conn(), func() connections.Deps { return connectionDeps }); err != nil {
+			return err
+		}
 		// This process's adapter serves the builtin types implemented here
 		// (none yet; the mail types with 07e), on the server's own connection
 		if impls := connectorImpls(); len(impls.Impls) > 0 {
@@ -777,7 +794,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		jobRunner := jobs.New(jobDeps, jobs.Options{})
 		defer jobRunner.Close() // before the projections close
 		jobNodeDeps = jobsnodes.Deps{Runner: jobRunner, Store: projections}
-		go jobRunner.Start(func() ([]uint64, error) {
+		tenantIDs := func() ([]uint64, error) {
 			ids := []uint64{features.LocalTenantID}
 			var rows []uint64
 			if err := appDB.Model(&identity.Tenant{}).Pluck("id", &rows).Error; err != nil {
@@ -789,7 +806,11 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 				}
 			}
 			return ids, nil
-		})
+		}
+		go jobRunner.Start(tenantIDs)
+		// Every process keeps cx_sources, the connections a trigger listens
+		// to, which adapters' instances lease and run (forge 07c)
+		go connections.Start(ctx, func() connections.Deps { return connectionDeps }, tenantIDs)
 		prefabService := prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
 		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())),
 			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))

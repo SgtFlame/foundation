@@ -19,6 +19,7 @@ export interface Field {
   relation?: { entity: string; many?: boolean; inverse?: string }
   scale?: number
   currency?: string
+  contract?: string // connection: only connections of types implementing it
   items?: Field
   fields?: Field[]
   returns?: string

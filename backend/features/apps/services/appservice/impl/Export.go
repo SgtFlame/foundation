@@ -244,7 +244,8 @@ func (x *exporter) seed() error {
 			sr := apps.SeedRecord{ID: id, Values: map[string]json.RawMessage{}}
 			for _, f := range e.Entity.Fields {
 				v, ok := r[f.ID]
-				if !ok || f.Hidden || records.IsComputed(f) || f.Type == "file" || string(v) == "null" {
+				// An export never carries connections (forge 07c)
+				if !ok || f.Hidden || records.IsComputed(f) || f.Type == "file" || f.Type == "connection" || string(v) == "null" {
 					continue
 				}
 				sr.Values[f.ID] = v

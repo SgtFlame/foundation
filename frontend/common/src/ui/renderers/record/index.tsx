@@ -1,5 +1,5 @@
 // The renderers of the starter library's primitives (forge 04e): the
-// record.* family, presence.avatars and mui.breadcrumbs
+// record.* family, presence.avatars, mui.breadcrumbs and connection.form
 
 import { useEffect, useSyncExternalStore, type ComponentType } from 'react'
 import { Breadcrumbs, Link, Typography } from '@mui/material'
@@ -10,6 +10,7 @@ import type { RendererProps } from '../../points.ts'
 import { RecordFieldEditor } from './FieldEditor.tsx'
 import { RecordFieldValue } from './FieldValue.tsx'
 import { RecordForm } from './RecordForm.tsx'
+import { ConnectionForm } from '../connectors/ConnectionForm.tsx'
 
 const str = (v: unknown) => (v === undefined || v === null ? '' : String(v))
 
@@ -55,4 +56,5 @@ export const starterRenderers: Record<string, ComponentType<RendererProps>> = {
   'record.form': RecordForm,
   'presence.avatars': PresenceAvatarsRenderer,
   'mui.breadcrumbs': MuiBreadcrumbs,
+  'connection.form': ConnectionForm,
 }

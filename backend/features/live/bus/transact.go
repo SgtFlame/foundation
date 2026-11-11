@@ -112,6 +112,13 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 		if err := tools.CheckArgs(cmd.Args, args); err != nil {
 			return at(live.Problem{Path: "args", Message: err.Error()})
 		}
+		if cmd.Seal != nil {
+			sealed, problem := cmd.Seal(live.Sealing{ServiceArgs: r.ServiceArgs, Target: tg, Args: args, Dry: DryOf(r.Context()) != nil})
+			if problem != nil {
+				return at(*problem)
+			}
+			ops[i].Args = sealed
+		}
 		steps[i] = step{op: ops[i], cmd: cmd, tg: tg}
 	}
 

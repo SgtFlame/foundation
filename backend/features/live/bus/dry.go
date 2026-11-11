@@ -299,6 +299,13 @@ func (d *Dry) decide(rp *Request, cmd live.Command) Result {
 	if err := tools.CheckArgs(cmd.Args, r.Args); err != nil {
 		return rejected(live.Problem{Path: "args", Message: err.Error()})
 	}
+	if cmd.Seal != nil {
+		sealed, problem := cmd.Seal(live.Sealing{ServiceArgs: r.ServiceArgs, Target: tg, Args: r.Args, Dry: true})
+		if problem != nil {
+			return rejected(*problem)
+		}
+		r.Args = sealed
+	}
 	ctx, tenant := r.Context(), r.Principal.TenantID
 	state, err := d.value(ctx, tenant, cmd.Projection, tg)
 	if err != nil {

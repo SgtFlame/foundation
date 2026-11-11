@@ -6,6 +6,7 @@ import (
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connectorstest"
+	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"slices"
 	"strings"
@@ -68,6 +69,7 @@ func everything(t *testing.T) *extensions.Registry {
 	jobsnodes.Contribute(reg, func() jobsnodes.Deps { return jobsnodes.Deps{} })
 	connectors.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
 	connectorsnodes.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
+	connections.Contribute(reg, func() connections.Deps { return connections.Deps{} })
 	connectorstest.Contribute(reg) // the builtin contracts a test registry has
 	return reg
 }

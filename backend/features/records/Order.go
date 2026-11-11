@@ -37,7 +37,7 @@ func Token(b []byte) string { return tokens.EncodeToString(b) }
 func Sortable(f Field) bool {
 	f = ValueField(f)
 	switch f.Type {
-	case "text", "longText", "number", "decimal", "money", "bool", "date", "dateTime", "duration", "enum", "relation", "user":
+	case "text", "longText", "number", "decimal", "money", "bool", "date", "dateTime", "duration", "enum", "relation", "user", "connection":
 		return f.Type != "relation" || f.Relation == nil || !f.Relation.Many
 	}
 	return false
@@ -190,7 +190,7 @@ func sortBytes(f Field, raw json.RawMessage) ([]byte, error) {
 			return append(binary.BigEndian.AppendUint16(out, math.MaxUint16), s...), nil
 		}
 		return binary.BigEndian.AppendUint16(out, uint16(i)), nil
-	case "relation", "user":
+	case "relation", "user", "connection":
 		s, ok := v.(string)
 		if !ok {
 			return nil, want("an id", v)

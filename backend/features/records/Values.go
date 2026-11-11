@@ -170,6 +170,12 @@ func checkValue(f Field, v any) (any, error) {
 			return out, nil
 		}
 		return recordID(v)
+	case "connection":
+		s, _ := v.(string)
+		if _, err := strconv.ParseUint(s, 10, 64); err != nil {
+			return nil, want("a connection id (digits, as a string)", v)
+		}
+		return s, nil
 	case "user":
 		s, _ := v.(string)
 		if _, err := strconv.ParseUint(s, 10, 64); err != nil {

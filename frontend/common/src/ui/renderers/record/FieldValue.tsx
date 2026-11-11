@@ -75,6 +75,8 @@ export function valueText(field: Field, value: unknown, expanded?: unknown): str
       return Array.isArray(value) ? value.join(', ') : str(value)
     case 'user':
       return expanded ? titleOf(expanded) : `User ${str(value)}`
+    case 'connection':
+      return `Connection ${str(value)}`
     case 'richText':
       return plainText(value as RichTextDoc)
     case 'file':

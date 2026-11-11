@@ -1,6 +1,7 @@
 package livenodes
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 // Trigger event node types (forge 07a).
@@ -33,6 +35,15 @@ type TriggerEvent struct {
 	// Inputs are the event node's outputs for one event, read as the job's
 	// principal when the job runs.
 	Inputs func(args features.ServiceArgs, config json.RawMessage, e live.Event) (cognition.Values, error)
+	// Stream, when set, opens the stream the subjects are in, for events
+	// that are not committed events (a connector's, in CX_<tenant>, forge
+	// 07c); Subjects' area then only names it in the consumer's key. Its
+	// messages are live.Events all the same.
+	Stream func(ctx context.Context, js jetstream.JetStream, tenant uint64) (jetstream.Stream, error)
+	// Accept, when set, decides as the app's principal whether one event
+	// starts the trigger; a refused event is skipped, with no job (a
+	// connection the app may not use).
+	Accept func(args features.ServiceArgs, config json.RawMessage, e live.Event) bool
 }
 
 // TriggerEvents are the event nodes that start triggers from events.

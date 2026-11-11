@@ -61,3 +61,9 @@ func AsError(err error) *Error {
 
 // ValidCode reports whether code is an error code.
 func ValidCode(code string) bool { return slices.Contains(Codes, code) }
+
+// NotRetryable makes e one that trying again does not fix.
+func (e *Error) NotRetryable() *Error {
+	e.Retry = false
+	return e
+}

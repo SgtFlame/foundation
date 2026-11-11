@@ -309,6 +309,17 @@ func (im *importer) importAll() (int, error) {
 	if _, err := im.do("app.setManifest", app, map[string]any{"manifest": im.doc.Manifest}, "", ""); err != nil {
 		return 0, err
 	}
+	// connection fields are left empty for the tenant to fill (forge 07c)
+	for _, e := range im.doc.Parts.Entities {
+		for _, f := range e.Entity.Fields {
+			if f.Type != "connection" {
+				continue
+			}
+			for _, r := range im.doc.Seed[e.ID] {
+				delete(r.Values, f.ID)
+			}
+		}
+	}
 	if len(im.doc.Seed) > 0 {
 		if _, err := im.do("app.setSeed", app, map[string]any{"seed": im.doc.Seed}, "", ""); err != nil {
 			return 0, err

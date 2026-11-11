@@ -1,0 +1,11 @@
+{
+  "type": "function",
+  "function": {
+    "name": "test_echo_check",
+    "description": "Signs in and does nothing: whether the connection's settings work",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+}

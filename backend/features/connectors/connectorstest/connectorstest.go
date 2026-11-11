@@ -1,14 +1,17 @@
 // Package connectorstest is the test contract and builtin test types of
 // the connector registry (forge 07b), for tests only: test.echo@1, served
-// by test.echo (no connection) and test.secure (a connection with a
-// secret password), both implemented here.
+// by test.echo (no connection), test.secure (a connection with a secret
+// password and an event source scripted by its settings) and
+// test.exclusive (the same, one session at a time), all implemented here.
 package connectorstest
 
 import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
@@ -61,6 +64,14 @@ func Contract() connectors.Contract {
 				Examples:  []connectors.Example{{Args: json.RawMessage(`{"id":"k1","text":"export"}`), Result: json.RawMessage(`{"jobId":"j-k1"}`)}},
 				Callbacks: []connectors.CallbackDef{{Event: "finished", Correlate: connectors.Correlate{Result: "jobId", Event: "jobId"}}},
 			},
+			{
+				ID: "check", Title: "Check", Description: "Signs in and does nothing: whether the connection's settings work",
+				Effect:   connectors.EffectRead,
+				Args:     json.RawMessage(`{"type":"object","properties":{}}`),
+				Result:   json.RawMessage(`{"type":"object","properties":{"ok":{"type":"boolean","description":"Always true: a failure is an error"}}}`),
+				Examples: []connectors.Example{{Args: json.RawMessage(`{}`), Result: json.RawMessage(`{"ok":true}`)}},
+				Errors:   []string{connectors.CodeAuth, connectors.CodeUnavailable},
+			},
 		},
 		Events: []connectors.EventDef{{
 			ID: "finished", Title: "Job finished", Description: "A job started by start finished. Read the job's state rather than trust the order of events.",
@@ -81,11 +92,24 @@ func Types() []connectors.Type {
 	return []connectors.Type{
 		{ID: "test.echo", Contracts: []string{ContractRef}, NoConnection: true, Source: connectors.SourceBuiltin,
 			Meta: connectors.Meta{Title: "Test echo", Description: "Implements test.echo@1 in Go with no connection. For tests only.", Tags: []string{"test"}}},
-		{ID: "test.secure", Contracts: []string{ContractRef}, Source: connectors.SourceBuiltin,
-			Settings: json.RawMessage(`{"type":"object","properties":{"user":{"type":"string","title":"User"},"password":{"type":"secret","title":"Password"}}}`),
-			Meta:     connectors.Meta{Title: "Test secure echo", Description: "Implements test.echo@1 over a connection with a secret password. For tests only.", Tags: []string{"test"}}},
+		{ID: "test.secure", Contracts: []string{ContractRef}, Source: connectors.SourceBuiltin, Settings: json.RawMessage(settings),
+			Meta: connectors.Meta{Title: "Test secure echo", Description: "Implements test.echo@1 over a connection with a secret password. For tests only.", Tags: []string{"test"}}},
+		{ID: "test.exclusive", Contracts: []string{ContractRef}, Source: connectors.SourceBuiltin, Settings: json.RawMessage(settings), Exclusive: true,
+			Meta: connectors.Meta{Title: "Test exclusive echo", Description: "Implements test.echo@1 over a connection that allows one session at a time. For tests only.", Tags: []string{"test"}}},
 	}
 }
+
+// settings is the connection types' settings schema: a user and secret
+// password, and the event source's script: Watch emits finished events 1
+// to events after its cursor (storing no cursor from loseCursorFrom on),
+// then returns, or waits when push; failWatch makes it fail with that code.
+const settings = `{"type":"object","properties":{
+  "user":{"type":"string","title":"User"},
+  "password":{"type":"secret","title":"Password"},
+  "events":{"type":"integer","title":"Events","description":"How many finished events the source has"},
+  "loseCursorFrom":{"type":"integer","title":"Lose cursor from"},
+  "push":{"type":"boolean","title":"Push"},
+  "failWatch":{"type":"string","title":"Fail watch"}},"required":["user"]}`
 
 // Contribute registers the test contract and types as builtins.
 func Contribute(reg *extensions.Registry) {
@@ -102,31 +126,114 @@ func (c *Counter) N() int64 { return c.n.Load() }
 // by; count, when not nil, counts the calls served.
 func Options(by string, count *Counter) adapter.Options {
 	open := func(ctx adapter.Context, conn adapter.Connection) (adapter.Session, error) {
-		if conn.Type == "test.secure" {
-			var s struct{ User, Password string }
-			_ = json.Unmarshal(conn.Settings, &s)
-			if s.Password == "" {
-				return nil, connectors.Errorf(connectors.CodeAuth, "connection %s has no password", conn.ID)
+		var st Settings
+		if conn.Type != "test.echo" {
+			_ = json.Unmarshal(conn.Settings, &st)
+			if st.Password == "" || st.Password == "wrong" {
+				return nil, connectors.Errorf(connectors.CodeAuth, "connection %s: the password was refused", conn.ID)
 			}
 		}
-		return session{by: by, count: count}, nil
+		Sessions.open(conn.ID)
+		return &session{by: by, count: count, conn: conn.ID, settings: st}, nil
 	}
 	return adapter.Options{Name: "test-" + by, Types: Types(), Contracts: []connectors.Contract{Contract()},
-		Impls: []adapter.Impl{{Type: "test.echo", Open: open}, {Type: "test.secure", Open: open}}}
+		Impls: []adapter.Impl{{Type: "test.echo", Open: open}, {Type: "test.secure", Open: open}, {Type: "test.exclusive", Open: open}}}
+}
+
+// Settings are a test connection's settings as its session reads them.
+type Settings struct {
+	User, Password string
+	Events         int
+	LoseCursorFrom int
+	Push           bool
+	FailWatch      string
+}
+
+// SessionCount counts the sessions open on each connection, in this
+// process, and the most ever open at once.
+type SessionCount struct {
+	mu  sync.Mutex
+	now map[string]int
+	max map[string]int
+}
+
+// Sessions are this process's test sessions.
+var Sessions = &SessionCount{now: map[string]int{}, max: map[string]int{}}
+
+func (c *SessionCount) open(conn string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now[conn]++
+	c.max[conn] = max(c.max[conn], c.now[conn])
+}
+
+func (c *SessionCount) close(conn string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now[conn]--
+}
+
+// Max is the most sessions ever open at once on conn.
+func (c *SessionCount) Max(conn string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.max[conn]
 }
 
 type session struct {
-	by    string
-	count *Counter
+	by       string
+	count    *Counter
+	conn     string
+	settings Settings
+	closed   atomic.Bool
 }
 
-func (s session) Close() error { return nil }
+func (s *session) Close() error {
+	if !s.closed.Swap(true) {
+		Sessions.close(s.conn)
+	}
+	return nil
+}
 
-func (s session) Call(ctx adapter.Context, op string, args json.RawMessage) (json.RawMessage, error) {
+// Watch is the scripted event source.
+func (s *session) Watch(ctx adapter.Context, cursor json.RawMessage, emit func(adapter.Event) error) error {
+	if s.settings.FailWatch != "" {
+		return connectors.Errorf(s.settings.FailWatch, "the source failed as asked")
+	}
+	from := 0
+	if len(cursor) > 0 {
+		_ = json.Unmarshal(cursor, &from)
+	}
+	for i := from + 1; i <= s.settings.Events; i++ {
+		id := fmt.Sprintf("evt_%d", i)
+		payload, _ := json.Marshal(map[string]any{"id": id, "jobId": fmt.Sprintf("j-%d", i), "at": "2026-11-11T10:00:00Z"})
+		e := adapter.Event{Contract: ContractRef, Name: "finished", ID: id, Payload: payload}
+		if s.settings.LoseCursorFrom == 0 || i < s.settings.LoseCursorFrom {
+			e.Cursor, _ = json.Marshal(i)
+		}
+		if err := emit(e); err != nil {
+			return err
+		}
+	}
+	if s.settings.Push {
+		<-ctx.Done()
+	}
+	return nil
+}
+
+func (s *session) Call(ctx adapter.Context, op string, args json.RawMessage) (json.RawMessage, error) {
 	if s.count != nil {
 		s.count.n.Add(1)
 	}
 	switch op {
+	case "check":
+		if s.conn != "" && s.settings.User == "" {
+			return nil, connectors.Errorf(connectors.CodeAuth, "no user")
+		}
+		return json.RawMessage(`{"ok":true}`), nil
+	case "echo" + "-slow":
+		time.Sleep(50 * time.Millisecond)
+		return json.RawMessage(`{}`), nil
 	case "echo":
 		var a struct {
 			Text    string

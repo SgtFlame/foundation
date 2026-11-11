@@ -310,6 +310,10 @@ type Command struct {
 	// Internal commands are sent only by the server, such as converting a
 	// record when its field's type changes: they get no tool.
 	Internal bool
+	// NoTool commands get no tool though clients send them: their
+	// arguments may hold what a tool call must not record, such as a
+	// connection's secrets (forge 07c).
+	NoTool bool
 	// Action is the authz action it needs, checked on Resource (the
 	// principal's tenant when nil).
 	Action   string
@@ -318,6 +322,13 @@ type Command struct {
 	// when another command committed on the target (or a target it read)
 	// in between. Several events commit as one atomic batch.
 	Decide func(d Decision) ([]NewEvent, []Problem)
+	// Seal, when set, replaces what must never be stored in the arguments
+	// before the command is decided and logged: a connection's secrets go
+	// to the SecretStore and the arguments keep only references to them
+	// (forge 07c). It runs after the authz and argument checks, once per
+	// command (not again on a conflict); in a dry run Dry is set and it
+	// must store nothing.
+	Seal func(s Sealing) (json.RawMessage, *Problem)
 	// Report, when set, is what the command's tool returns after a commit
 	// at seq, beside the sequence: a graph draft's problems, for example,
 	// so a model sees what its change left to fix.
@@ -402,4 +413,13 @@ type Extension struct {
 type ConnHandler interface {
 	Handle(frameType string, raw json.RawMessage)
 	Close()
+}
+
+// Sealing is what a command's Seal is given.
+type Sealing struct {
+	features.ServiceArgs
+	Target Target
+	Args   json.RawMessage
+	// Dry is set in a sandboxed run: nothing may be stored.
+	Dry bool
 }

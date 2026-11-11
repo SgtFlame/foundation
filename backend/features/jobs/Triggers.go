@@ -85,6 +85,7 @@ type desired struct {
 	graph    cognition.Graph
 	node     started
 	area     live.Area // for an event trigger
+	stream   jetstream.Stream
 	subjects []string
 	schedule string // for On schedule: the Nats-Schedule pattern
 	zone     string
@@ -154,6 +155,14 @@ func (r *Runner) reconcile(t *tenant, in apps.Install) error {
 					continue
 				}
 				d.area, d.subjects = area, subjects
+				if te.Stream != nil {
+					d.stream, err = te.Stream(r.ctx, r.d.Projections.JetStream(), t.id)
+				} else {
+					d.stream, err = r.d.Projections.Stream(r.ctx, t.id, area)
+				}
+				if err != nil {
+					return err
+				}
 			}
 			want[tr.ID] = d
 		}
@@ -175,16 +184,13 @@ func (r *Runner) reconcile(t *tenant, in apps.Install) error {
 	if err != nil {
 		return err
 	}
-	for key, area := range have {
-		name := strings.TrimPrefix(key, string(area)+"/")
-		if d, ok := want[strings.TrimPrefix(name, TriggerConsumer(app, ""))]; ok && d.area == area && name == TriggerConsumer(app, d.trigger.ID) {
+	for key, stream := range have {
+		sname := stream.CachedInfo().Config.Name
+		name := strings.TrimPrefix(key, sname+"/")
+		if d, ok := want[strings.TrimPrefix(name, TriggerConsumer(app, ""))]; ok && d.stream != nil && d.stream.CachedInfo().Config.Name == sname && name == TriggerConsumer(app, d.trigger.ID) {
 			continue
 		}
 		r.stopTrigger(t, key)
-		stream, err := r.d.Projections.Stream(r.ctx, t.id, area)
-		if err != nil {
-			return err
-		}
 		if err := stream.DeleteConsumer(r.ctx, name); err != nil && !errors.Is(err, jetstream.ErrConsumerNotFound) {
 			return err
 		}
@@ -220,31 +226,49 @@ func (r *Runner) schedulesOf(t *tenant, app string) (map[string]string, error) {
 }
 
 // triggerConsumers are the app's trigger consumers made on any of the
-// tenant's event streams, keyed <area>/<name>.
-func (r *Runner) triggerConsumers(t *tenant, app string) (map[string]live.Area, error) {
-	out := map[string]live.Area{}
+// tenant's event streams, and on the streams of trigger events that have
+// their own (CX_<tenant>), keyed <stream>/<name>.
+func (r *Runner) triggerConsumers(t *tenant, app string) (map[string]jetstream.Stream, error) {
+	out := map[string]jetstream.Stream{}
+	var streams []jetstream.Stream
 	prefix := fmt.Sprintf("EVT_%d_", t.id)
-	streams := r.d.Projections.JetStream().StreamNames(r.ctx, jetstream.WithStreamListSubject(fmt.Sprintf("evt.%d.>", t.id)))
-	for name := range streams.Name() {
+	names := r.d.Projections.JetStream().StreamNames(r.ctx, jetstream.WithStreamListSubject(fmt.Sprintf("evt.%d.>", t.id)))
+	for name := range names.Name() {
 		if !strings.HasPrefix(name, prefix) {
 			continue
 		}
-		area := live.Area(strings.TrimPrefix(name, prefix))
-		s, err := r.d.Projections.Stream(r.ctx, t.id, area)
+		s, err := r.d.Projections.Stream(r.ctx, t.id, live.Area(strings.TrimPrefix(name, prefix)))
 		if err != nil {
 			return nil, err
 		}
+		streams = append(streams, s)
+	}
+	if err := names.Err(); err != nil {
+		return nil, log.Wrap(err)
+	}
+	for _, te := range livenodes.TriggerEvents.All(r.d.Engine.Registry()) {
+		if te.Stream == nil {
+			continue
+		}
+		s, err := te.Stream(r.ctx, r.d.Projections.JetStream(), t.id)
+		if err != nil {
+			return nil, err
+		}
+		streams = append(streams, s)
+	}
+	for _, s := range streams {
+		sname := s.CachedInfo().Config.Name
 		list := s.ListConsumers(r.ctx)
 		for c := range list.Info() {
 			if c.Config.Metadata["app"] == app && c.Config.Metadata["trigger"] != "" {
-				out[string(area)+"/"+c.Name] = area
+				out[sname+"/"+c.Name] = s
 			}
 		}
 		if err := list.Err(); err != nil {
 			return nil, log.Wrap(err)
 		}
 	}
-	return out, streams.Err()
+	return out, nil
 }
 
 // consume makes sure an event trigger's consumer exists with its subjects
@@ -253,11 +277,8 @@ func (r *Runner) triggerConsumers(t *tenant, app string) (map[string]live.Area, 
 // resumes where the old version stopped).
 func (r *Runner) consume(t *tenant, in apps.Install, d desired) error {
 	name := TriggerConsumer(in.App, d.trigger.ID)
-	key := string(d.area) + "/" + name
-	stream, err := r.d.Projections.Stream(r.ctx, t.id, d.area)
-	if err != nil {
-		return err
-	}
+	stream := d.stream
+	key := stream.CachedInfo().Config.Name + "/" + name
 	cons, err := stream.Consumer(r.ctx, name)
 	switch {
 	case errors.Is(err, jetstream.ErrConsumerNotFound):
@@ -284,7 +305,14 @@ func (r *Runner) consume(t *tenant, in apps.Install, d desired) error {
 		return nil
 	}
 	app, trigger, graph, node, queue := in.App, d.trigger.ID, d.graph.ID, d.node.node, d.trigger.Queue
-	cc, err := cons.Consume(func(msg jetstream.Msg) { r.onEvent(t, app, trigger, graph, node, queue, msg) })
+	var accept func(live.Event) bool
+	if te, ok := triggerEvent(r.d.Engine, node); ok && te.Accept != nil {
+		config := d.node.config
+		accept = func(e live.Event) bool {
+			return te.Accept(features.ServiceArgs{Ctx: r.ctx, Principal: features.AppPrincipal(t.id, app)}, config, e)
+		}
+	}
+	cc, err := cons.Consume(func(msg jetstream.Msg) { r.onEvent(t, app, trigger, graph, node, queue, accept, msg) })
 	if err != nil {
 		return log.Wrapf(err, "cannot consume %s", name)
 	}
@@ -305,7 +333,7 @@ func (r *Runner) stopTrigger(t *tenant, key string) {
 // the job's id is the event's, so an event delivered twice is one job.
 // A trigger does not start on events its own app committed, so a trigger
 // that changes what it watches does not run forever.
-func (r *Runner) onEvent(t *tenant, app, trigger, graph, node, queue string, msg jetstream.Msg) {
+func (r *Runner) onEvent(t *tenant, app, trigger, graph, node, queue string, accept func(live.Event) bool, msg jetstream.Msg) {
 	md, err := msg.Metadata()
 	var e live.Event
 	if err == nil {
@@ -316,7 +344,7 @@ func (r *Runner) onEvent(t *tenant, app, trigger, graph, node, queue string, msg
 		_ = msg.Term()
 		return
 	}
-	if e.Actor == "app:"+app {
+	if e.Actor == "app:"+app || (accept != nil && !accept(e)) {
 		_ = msg.Ack()
 		return
 	}

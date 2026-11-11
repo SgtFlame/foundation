@@ -37,6 +37,21 @@ export interface Ack {
 export interface CommandOptions {
   request?: string
   app?: string
+  // secret: the args' secrets (a connection's, forge 07c) are not recorded
+  // in DevTools' Live tab; the server seals them before anything stores them
+  secret?: boolean
+}
+
+// Frames whose args.secrets are recorded only as set
+const secretFrames = new WeakSet<Frame>()
+
+function redacted(frame: Frame): string {
+  const args = (frame.args ?? {}) as Record<string, unknown>
+  const secrets = args.secrets as Record<string, unknown> | undefined
+  if (!secrets) return JSON.stringify(frame)
+  const hidden: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(secrets)) hidden[k] = v ? '•••' : v
+  return JSON.stringify({ ...frame, args: { ...args, secrets: hidden } })
 }
 
 // A change to a query's result: replace, upsert or remove a key, or reached
@@ -173,7 +188,7 @@ export class LiveConnection {
     this.start()
     if (this.socket?.readyState !== WebSocket.OPEN) return false
     const text = JSON.stringify(frame)
-    recordFrame('out', frame.type, text)
+    recordFrame('out', frame.type, secretFrames.has(frame) ? redacted(frame) : text)
     this.socket.send(text)
     return true
   }
@@ -185,6 +200,7 @@ export class LiveConnection {
     const id = newId('c')
     const request = options?.request ?? this.gestureRequest
     const frame: Frame = { type: 'command', id, command, target, args, request, app: options?.app, trace: newTraceId() }
+    if (options?.secret) secretFrames.add(frame)
     const p = new Promise<Ack>((resolve, reject) => {
       this.commands.set(id, { frame, resolve, reject })
       this.send(frame)
