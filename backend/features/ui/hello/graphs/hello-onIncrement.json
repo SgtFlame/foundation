@@ -1,0 +1,77 @@
+{
+  "id": "hello-onIncrement",
+  "name": "On increment",
+  "description": "Adds one to the shared counter; a refusal is shown as a toast.",
+  "kind": "ui.handler",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "ui.onEvent",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 300,
+        "y": 0
+      },
+      "config": {
+        "command": "hello.increment",
+        "target": "main"
+      }
+    },
+    {
+      "id": "toast",
+      "type": "ui.toast",
+      "position": {
+        "x": 600,
+        "y": 120
+      },
+      "config": {
+        "severity": "error"
+      },
+      "title": "Toast the refusal"
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "toast",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "toast",
+        "pin": "message"
+      }
+    }
+  ]
+}

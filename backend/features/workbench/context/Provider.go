@@ -46,10 +46,17 @@ type Subject struct {
 	Summary string `json:"summary"`
 }
 
-// Selection is a line range in a text editor, or the selected rows.
+// Selection is a line range in a text editor, or the selected rows; the
+// Forge editors add where in their subject the user is (forge 06g): the
+// editor's tab, the part on it, a node (a prefab's key path, a graph's
+// node id) and an entity type's field.
 type Selection struct {
 	Lines []int    `json:"lines"` // [from, to], from 1
 	Items []string `json:"items"`
+	Tab   string   `json:"tab"`   // e.g. pages, in the Applications editor
+	Part  string   `json:"part"`  // e.g. /contacts, a page's route on that tab
+	Node  string   `json:"node"`  // e.g. root/actions/save
+	Field string   `json:"field"` // e.g. email
 }
 
 type Recent struct {
@@ -134,6 +141,18 @@ func describe(e Editor) string {
 	if sel := e.Selection; sel != nil {
 		if len(sel.Lines) == 2 {
 			fmt.Fprintf(&b, ", lines %d–%d selected", sel.Lines[0], sel.Lines[1])
+		}
+		if sel.Tab != "" {
+			fmt.Fprintf(&b, ", on its %s tab", strconv.Quote(sel.Tab))
+		}
+		if sel.Part != "" {
+			fmt.Fprintf(&b, ", at %s", strconv.Quote(sel.Part))
+		}
+		if sel.Node != "" {
+			fmt.Fprintf(&b, ", node %s selected", strconv.Quote(sel.Node))
+		}
+		if sel.Field != "" {
+			fmt.Fprintf(&b, ", field %s selected", strconv.Quote(sel.Field))
 		}
 		if len(sel.Items) > 0 {
 			quoted := make([]string, len(sel.Items))

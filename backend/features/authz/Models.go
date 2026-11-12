@@ -8,13 +8,18 @@ import (
 
 // CustomRole is a role a tenant's administrator defines (RBAC.md › Roles):
 // usable only within that tenant, holding only tenant permissions. Built-in
-// roles are code (Builtins), not rows.
+// roles are code (Builtins), not rows. An app's roles are custom roles too,
+// made at install (forge 05c, AppRoles): AppID names the app, AppRole the
+// role's id in its manifest, and they change only with the app.
 type CustomRole struct {
 	db.Model
 	TenantID    uint64 `gorm:"index;not null"`
 	Name        string `gorm:"not null"`
 	Description string
-	Permissions string // JSON array of "<type>.<action>"
+	Permissions string // JSON array of "<type>.<action>", or "<scope>/<type>.<action>" for an app's role
+	Rules       string // an app role's row rules, JSON {key: expression}
+	AppID       string `gorm:"index"`
+	AppRole     string
 	Revision    int
 }
 

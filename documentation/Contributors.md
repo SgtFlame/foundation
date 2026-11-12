@@ -30,7 +30,7 @@ Decision: contributors are **compile-time and auto-discovered**. The registry AP
   - `get(point, ctx?)` returns the contributions sorted by `order` and filtered by `when`.
   - `subscribe(listener)` notifies on changes. The snapshot array is replaced on each change, as DevTools' `RingBuffer` does.
   - `useContributions(point, ctx?)` reads the registry through `useSyncExternalStore`.
-- **Discovery** in `main.tsx`, before the first render:
+- **Discovery** in `register.ts`, which an app imports before the first render:
   ```ts
   import.meta.glob('./**/contributions.ts', { eager: true })
   ```
@@ -73,7 +73,7 @@ The backend points are `config.section`, `chat.contextProvider`, `chat.roundFoll
 
 ## Built in slice 1
 **Frontend**
-- `src/workbench/extensions/` as above. `main.tsx` globs `./**/points.ts` as well as `./**/contributions.ts`, so a point is declared, and listed in DevTools, before anything contributes to it.
+- `src/workbench/extensions/` as above. `register.ts` globs `./**/points.ts` as well as `./**/contributions.ts`, so a point is declared, and listed in DevTools, before anything contributes to it.
 - `useContributions(point, ctx)` subscribes to the point's own sorted array, which only changes when that point changes, and filters by `when` on each render.
 - **`workbench.borderTab`** (`src/workbench/points.ts`): `{ name, helpText?, location, size?, component }`, where `component` is usually `lazy(...)`. `pages/workbench/borders.ts` builds the borders from the contributions when the workbench first renders, one border per location that has tabs, since flexlayout draws empty borders. Later contributions join an existing border; one for a location with no border appears after a reload, because flexlayout cannot add a border to a live model. The tab component is `borderTab`, and `BorderTabHost` renders the contribution, or a "not available" placeholder once it is gone.
 - **`configuration`** (`src/settings/points.ts`) is declared with the section shape of [Configuration.md](Configuration.md). Nothing contributes yet.
@@ -136,7 +136,7 @@ The backend points are `config.section`, `chat.contextProvider`, `chat.roundFoll
   - `conversationnodes.Contribute`: the chat events and Chat's types;
   - `chroniclenodes.Contribute`: Chronicle's six nodes, its types and the Personal graph, taking a function that returns the step functions (the late binding again);
   - `cognitionsettings.Contribute`: the `cognition` section.
-- **Frontend**: the Cognition editor contributes `workbench.editor` `cognition`, the `workbench.sideView` **Cognition** (the Explorer) and the `workbench.command` `open-cognition` (AgentOS › Cognition). Every node body is drawn from its type and pins.
+- **Frontend** (in Forge since slice 44): the Cognition editor contributes `workbench.editor` `cognition`, the `workbench.sideView` **Cognition** (the Explorer) and the `workbench.command` `open-cognition` (AgentOS › Cognition). Every node body is drawn from its type and pins.
 
 ## Built in slice 8
 - **Backend**: `tools.tool` (`tools.Tools`, [Tools.md › Built in slice 8](Tools.md#built-in-slice-8)), declared in `serve.go`. A tool is a struct with function fields, like a node type.

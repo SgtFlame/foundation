@@ -15,5 +15,4 @@ func (ch *CollabHandler) Register(router gin.IRouter, service collabservice.Serv
 	group := router.Group("/kb/collab")
 
 	group.POST("/files/open", ch.OpenFile)
-	group.GET("/files/:fileId", ch.Collaborate) // WebSocket
 }

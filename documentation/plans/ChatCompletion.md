@@ -24,9 +24,7 @@ A fourth view beside Live Preview, Source and WYSIWYG, for asking about the open
 - **Review and undo**: proposed edits show as a diff to accept or reject, and each applied edit is one undo step.
 
 ## Modes
-- A mode is a published Cognition `mode` graph ([Cognition.md](Cognition.md)) plus a label and icon, listed in the `chat.modes` configuration. *Personal* is the built-in graph that runs the Chronicle pipeline. Agents built in the Cognition Editor can be chosen as modes too.
-- The conversation's mode shows as a chip above the composer; clicking it switches mode, and ✕ returns to the default.
-- `Send` then runs the conversation's mode graph from `On user message`, and its SSE events come from the graph's `Stream reply` and `Emit …` nodes. A mode graph declares which context settings it uses, and the composer hides the others.
+Built in slice 44 ([ChatCompletion.md › Built in slice 44](../ChatCompletion.md#built-in-slice-44)): `chat.modes`, the mode select beside the level, and `Send` running the conversation's mode graph. What remains: choosing an `agent` graph as a mode directly (today a mode must be a `mode` graph that calls it).
 
 ## The rest of the transcript
 - **Editing a user bubble**: editing regenerates the reply from that round; later rounds are kept but marked stale.
@@ -52,7 +50,7 @@ A fourth view beside Live Preview, Source and WYSIWYG, for asking about the open
 
 ### Not built yet
 - The Markdown Editor's Chat tab, and editing the document with the AI (above).
-- Modes and `chat.modes` (above, and [Cognition.md](Cognition.md)).
+- Agents as modes (above).
 - Editing a user bubble; Chronicle chip corrections; the Advanced sampling overrides; renaming and deleting conversations.
 - The Volumes side view, and the command palette for `workbench.command` ([Contributors.md](Contributors.md)).
 - Storing the memory update's `followed` line with its round, so it survives a reload ([Chronicle.md](Chronicle.md)).

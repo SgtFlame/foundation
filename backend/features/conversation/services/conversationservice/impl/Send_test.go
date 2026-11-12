@@ -12,13 +12,18 @@ import (
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
 	"github.com/SgtFlame/foundation/backend/features/ai/settings"
+	"github.com/SgtFlame/foundation/backend/features/cognition"
+	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
+	"github.com/SgtFlame/foundation/backend/features/cognition/nodes"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
+	"github.com/SgtFlame/foundation/backend/features/conversation/nodes"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	"github.com/SgtFlame/foundation/backend/features/conversation/settings"
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	"github.com/SgtFlame/foundation/backend/features/tools"
+	"github.com/SgtFlame/foundation/backend/features/tools/nodes"
 )
 
 // fakeChat replies with the words of the last message, and "A title" to
@@ -72,10 +77,13 @@ func newTestService(t *testing.T, chat *fakeChat) (*service, *[]conversation.Gat
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Migrate(gdb, slices.Concat(conversation.Models(), retrieval.Models(), tools.Models())...); err != nil {
+	if err := db.Migrate(gdb, slices.Concat(conversation.Models(), retrieval.Models(), tools.Models(), cognition.Models())...); err != nil {
 		t.Fatal(err)
 	}
 	reg := extensions.NewRegistry()
+	cognitionnodes.Contribute(reg)
+	conversationnodes.Contribute(reg)
+	contributeModes(t, reg)
 	var gathered []conversation.GatherArgs
 	conversation.ContextProviders.Register(reg, conversation.ContextProvider{
 		Descriptor: extensions.Descriptor{ID: "test"},
@@ -91,8 +99,12 @@ func newTestService(t *testing.T, chat *fakeChat) (*service, *[]conversation.Gat
 		aisettings.LevelsID:     `{"levels": [{"id": "fast", "modelRef": "lite"}, {"id": "standard", "modelRef": "flash", "default": true}]}`,
 		aisettings.ModelsID: `{"models": [{"id": "lite", "model": "m-lite"},
 			{"id": "flash", "model": "m-flash", "pricing": {"inputPerMTok": 1, "outputPerMTok": 10}}]}`,
+		conversationsettings.ModesID: testModesSection,
 	}
-	return newService(WithDB(gdb), WithChat(chat), WithConfig(config), WithRegistry(reg)), &gathered
+	s := newService(WithDB(gdb), WithChat(chat), WithConfig(config), WithRegistry(reg), WithEngine(engine.New(gdb, reg, config)))
+	// The Ask model of the modes' titles is the service's chat, whichever it is when they run
+	toolsnodes.Contribute(reg, func() toolsnodes.Deps { return toolsnodes.Deps{Chat: s.chat, Registry: reg} })
+	return s, &gathered
 }
 
 func collect(req *conversationservice.SendRequest) map[conversationservice.SendEventKind][]conversationservice.SendEvent {
@@ -249,6 +261,7 @@ func TestRoundsCiteSegmentsAndTakeFeedback(t *testing.T) {
 	}
 }
 
+// The mode graph's Emit followed reports after the reply.
 func TestPinnedSegmentsGoFirstAndFollowersFollow(t *testing.T) {
 	chat := &fakeChat{}
 	s, _ := newTestService(t, chat)
@@ -271,20 +284,15 @@ func TestPinnedSegmentsGoFirstAndFollowersFollow(t *testing.T) {
 			return []conversation.ContextItem{segment("library", "c1", 0.9, false), segment("chronicle", "e1", 0.8, false)}, nil
 		},
 	})
-	var followed []conversation.FollowArgs
 	var verdicts []retrieval.Feedback
 	conversation.RoundFollowers.Register(s.registry, conversation.RoundFollower{
 		Descriptor: extensions.Descriptor{ID: "memory"},
-		Follow: func(args conversation.FollowArgs) (*conversation.Followed, error) {
-			followed = append(followed, args)
-			return &conversation.Followed{Summary: "Memory: updated *e1*"}, nil
-		},
 		Feedback: func(_ features.ServiceArgs, _ conversation.Round, _, to retrieval.Feedback) {
 			verdicts = append(verdicts, to)
 		},
 	})
 	args := features.ServiceArgs{Principal: features.LocalPrincipal()}
-	first := collect(s.Send(conversationservice.SendArgs{ServiceArgs: args, Text: "hi",
+	first := collect(s.Send(conversationservice.SendArgs{ServiceArgs: args, Text: "hi", Mode: "memo",
 		ContextSettings: map[string]json.RawMessage{"memory": json.RawMessage(`{"enabled": true, "checked": ["5"]}`)}}))
 	sources := first[conversationservice.EventSources][0].Segments
 	if len(sources) != 2 || sources[0].SegmentKey != "e1" || !sources[0].Pinned || sources[0].Number != 1 || sources[1].SegmentKey != "c1" {
@@ -298,10 +306,6 @@ func TestPinnedSegmentsGoFirstAndFollowersFollow(t *testing.T) {
 		t.Fatalf("followed %+v", f)
 	}
 	done := first[conversationservice.EventDone][0].Round
-	if len(followed) != 1 || followed[0].Round.ID != done.ID || len(followed[0].Segments) != 2 ||
-		string(followed[0].Settings) != `{"enabled": true, "checked": ["5"]}` || followed[0].Context().Err() != nil {
-		t.Errorf("follow args %+v", followed)
-	}
 
 	// The next round's providers see the window
 	collect(s.Send(conversationservice.SendArgs{ServiceArgs: args, ConversationID: done.ConversationID, Text: "again"}))

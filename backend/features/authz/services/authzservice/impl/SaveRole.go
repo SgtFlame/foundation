@@ -13,7 +13,10 @@ import (
 	"gorm.io/gorm"
 )
 
-var errStale = errors.New("the role has changed since it was read")
+var (
+	errStale   = errors.New("the role has changed since it was read")
+	errAppRole = errors.New("the role is an app's")
+)
 
 // SaveRole makes or changes one of the tenant's custom roles. It may hold
 // only tenant permissions (RBAC.md › Roles), and only ones the principal
@@ -59,6 +62,9 @@ func (s *service) SaveRole(args authzservice.SaveRoleArgs) authzservice.SaveRole
 		if err := tx.Where("tenant_id = ?", args.Principal.TenantID).First(&row, args.RoleID).Error; err != nil {
 			return err
 		}
+		if row.AppID != "" {
+			return errAppRole
+		}
 		if row.Revision != args.Revision {
 			return errStale
 		}
@@ -69,6 +75,8 @@ func (s *service) SaveRole(args authzservice.SaveRoleArgs) authzservice.SaveRole
 	switch {
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		return authzservice.SaveRoleResponse{Common: *args.Fail(http.StatusNotFound, log.Code("role_not_found").With("roleId", args.RoleID).New("there is no such role"))}
+	case errors.Is(err, errAppRole):
+		return authzservice.SaveRoleResponse{Common: *args.Fail(http.StatusConflict, log.Code("app_role").Public("This role is an app's; it changes with the app's manifest and an upgrade").Wrap(err))}
 	case errors.Is(err, errStale):
 		return authzservice.SaveRoleResponse{Common: *args.Fail(http.StatusConflict, log.Code("role_conflict").Public("Someone changed this role; reload it").Wrap(err))}
 	case err != nil:

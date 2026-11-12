@@ -63,7 +63,7 @@ Editing is **multi-user and autosaved** with the common standard for shared text
 - **Wiring** in `backend/cli/cmd/serve.go`: `collabimpl.CreateService(collabimpl.WithRoot(...))` with the `--kb-root` flag, and `collabhandlers.CollabHandler{}.Register(api, svc)`.
 - **Dependency:** `go get github.com/coder/websocket`.
 
-## Frontend: shared pieces (`frontend/axiom`)
+## Frontend: shared pieces (`frontend/common`)
 - **Dependencies** (`yarn add`): `yjs`, `y-protocols`, `lib0`.
 - **Vite:** in `vite.config.ts`, change the proxy entry to `'/api/v1/kb': { target: 'http://localhost:8080', ws: true }`.
 - `src/services/Collab.ts`: the client for `collabservice`. It has DTOs that mirror `collabdto` (`fileId: string`) and `Collab.openFile(request)` through `http`. It also has `Collab.socketUrl(fileId)`, which builds a `ws(s)://` URL from `API_BASE` and `location`.
@@ -92,7 +92,7 @@ Editing is **multi-user and autosaved** with the common standard for shared text
 
 ## Common verification
 - `cd backend && go vet ./... && go test ./features/kb/...`, which runs the protocol and room tests.
-- `cd frontend/axiom && yarn build && yarn lint`.
+- `cd frontend/example && yarn build && yarn lint`.
 - Manual test:
   - Run `serve` and `yarn dev`, create a volume and a file, and double-click it. The Markdown tab should open with the status "ready".
   - Open the same file in a second browser window. Both should show two peers.
@@ -158,3 +158,12 @@ Editing is **multi-user and autosaved** with the common standard for shared text
 - **Verification:**
   - Format text with the toolbar. The Source tab should show the right markdown, and untouched list markers and emphasis styles should stay unchanged.
   - Edit at the same time in two windows (one WYSIWYG, one Source). Both should converge, and the file on disk should match after autosave.
+
+## Since slice 13
+A room is no longer its own WebSocket. It is a channel on the live connection ([Live.md](Live.md)).
+- **Joining**: the browser sends `collab.join {channel, fileId}`, and the room's y-websocket messages then travel as binary frames prefixed with the channel. `collab.leave` leaves it.
+- **Ending**: the room ends a channel with `collab.closed {channel, code, message}`, where 4000 + an HTTP status means for good (4404: open the file again) and 1000 means join again.
+- **The route**: `GET /kb/collab/files/:fileId` is gone. `collabhandlers.ContributeLive` adapts a channel to `collabservice.Conn`, and the default-tenant check moved there from `kbhandlers.InTenant`.
+- **The provider**: `CollabProvider(fileId, doc, awareness, events)` rejoins on a new channel whenever the connection comes back. Its events are unchanged, so the editors did not change.
+
+Two users edited one file this way in headless Chromium.

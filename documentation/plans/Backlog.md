@@ -7,7 +7,7 @@ Workbench surfaces and features that have come up but have no plan of their own 
 - **Conversation history**: search, reopen, rename, export and delete past conversations, beyond the continuous scroll in Chat ([ChatCompletion.md](ChatCompletion.md)).
 - **Audit log viewer**: configuration revisions, grant changes and denied access (`AccessAudit`), secret changes (`SecretAudit`), and tool-call approvals. It could be a saved view in the Log Explorer if audit records are also logged ([RBAC.md](RBAC.md), [Secrets.md](Secrets.md)).
 - **Index administration**: indexing health, files pending, failed files, reindex, and the effect of an embedding-model change ([AIChatEmbed.md](AIChatEmbed.md)).
-- **Tools and MCP manager**: tenant tool policies and the registry of MCP servers ([Tools.md](Tools.md)).
+- **Tools and MCP manager**: tenant tool policies ([Tools.md](Tools.md)). MCP servers are connections and exposures, planned in Forge's iteration 15.
 - **Runs and schedules**: Cognition runs across all graphs, and schedules, if background runs are approved ([Cognition.md](Cognition.md) question 3).
 - **Budgets**: limits and alerts per tenant and user ([Usage.md](Usage.md)).
 - **Notifications**: approvals waiting, runs finished, budget warnings, shares accepted.
@@ -16,10 +16,17 @@ Workbench surfaces and features that have come up but have no plan of their own 
 - **Moderation queue**: segments flagged by 👎 *Incorrect*, beside global Chronicle shares ([ContextRetrieval.md](ContextRetrieval.md)).
 
 ### Not yet placed
-Budgets and alerts (including alerts on log queries); saved Log Explorer queries; MCP; background and scheduled runs; usage retention and roll-ups; runtime plugins; editing documents with the AI. Each is described in its plan.
+Budgets and alerts (including alerts on log queries); saved Log Explorer queries; background and scheduled runs; usage retention and roll-ups; runtime plugins; editing documents with the AI. Each is described in its plan.
 
 ### App-wide issues seen while verifying
 - **Dark preference**: under a dark browser preference the page body turns dark but the MUI theme stays light, so side-bar headings (*COGNITION* and others) are hard to read. No MUI theme follows the preference yet (`ui.appearance`, [Configuration.md](Configuration.md)). Seen since slice 7.
+- **A failing collaboration test**: `kb/services/collabservice/impl`'s `TestRoomSeedRelaySaveHandover` fails every run on its temp directory's cleanup (*unlinkat …/vol: directory not empty*): a save still writes into the volume as the test ends. Seen in slice 35's full run; code that slice did not touch.
+- **Deep's model is retired**: the 🧪 Deep level's default model, `gemini-2.5-pro`, is refused by Gemini as no longer offered to new users (it suggests `gemini-3.1-pro-preview`). The `ai.chat.levels` defaults and the `ai.models` catalog need it replaced. Seen in slice 23.
+- **A failed round's tool calls are lost**: the history window carries no tool calls, so "go on" after a round that failed (past its retries) has no context (slice 30). Carry a failed round's tool calls into the next. (The rest of this item, and *too few tool steps for building*, were built in slice 43: a busy provider is retried, and the Builder mode has its own steps.)
+- **The first read of an unused projection reads it empty**: `project.Projections.Get` makes a projector's bucket and consumer on first use and reads at once, before the consumer has folded the stream. On a fresh tenant whose `cognition.published` nobody had read, the first `app.publish` refused its graphs as *not published* (seen in slice 45's walk; a second try passed). A bucket made by a read should `Settle` before it answers. This also blocks splitting into processes (foundation `CLAUDE.md` › *Multiple processes*).
 
 ### Building
+- **`records/data` tests fail about one run in five** (on HEAD before slice 23 as well): two projections making the same KV bucket at once get `stream name already in use`, and the test that hits it loses records (`TestAScanStopsAtTheLimitAndSaysSo`, `TestACursorWalksEveryPageOnce`). Making a bucket should treat that error as made by the other, and read it. Seen in slice 23.
+- **`ui/hello`'s task test fails when run more than once in a process** (`go test -count=3`): Hello's `seeded` and `prefabsSeeded` caches are package-wide, so the second run skips seeding *Task* and the prefabs against its fresh NATS (so the whole 4d demo is one test). The cache should be per projections (or cleared by the test). Seen in slice 26; one run passes, also with `-race`.
+- **A record scan can miss a record rewritten while it lists**: `data.Find`'s scan lists the projection's keys, and a record updated during the listing moves past the listing's end, so it is missing from that page (seen in slice 28: a poll during two concurrent toggles found one task of two, about one run in thirty with `-race`). Live queries are not affected, since they follow updates; one-time scans (`records.list`'s snapshot, `Find`, the record tools) are. The `ui/hello` test polls again.
 - On the 7 GB codespace the linker can be killed for lack of memory while linking `out/cli`, and test binaries while the vite dev server and `serve` run. Link with `GOGC=25 GOFLAGS=-ldflags=-s backend/scripts/build.sh` (see CLAUDE.md › *Building*), or stop the other processes.

@@ -7,7 +7,7 @@ AgentOS › Chat is a chat editor for general conversations with long-term memor
 
 Terminology: memory entries are **Chronicles**, and knowledge base collections are **Volumes**.
 
-What is built, slice by slice: slice 4 built Chat, thin (conversations and rounds, the levels, context providers and the composer); slice 5 added RAG Search, inline citations, the Sources row, the Context inspector and feedback; slice 6 added Chronicle memory (the window, stage 1, Chronicle chips and the memory update); slice 8 made the reply the tool loop. What remains, including the Markdown Editor's Chat tab, is in [plans/ChatCompletion.md](plans/ChatCompletion.md).
+What is built, slice by slice: slice 4 built Chat, thin (conversations and rounds, the levels, context providers and the composer); slice 5 added RAG Search, inline citations, the Sources row, the Context inspector and feedback; slice 6 added Chronicle memory (the window, stage 1, Chronicle chips and the memory update); slice 8 made the reply the tool loop; slice 44 made every round its chat mode's graph ([Built in slice 44](#built-in-slice-44)). What remains, including the Markdown Editor's Chat tab, is in [plans/ChatCompletion.md](plans/ChatCompletion.md).
 
 ## Decisions
 - **Default models per level**: Fast = `gemini-3.5-flash-lite`, Standard = `gemini-3.8-flash` (the default level) and Deep = `gemini-2.5-pro`, with Chronicle's internal calls on Fast. These are the `ai.chat.levels` defaults seeded in slice 2.
@@ -135,3 +135,54 @@ Tool calling is in [Tools.md › Built in slice 8](Tools.md#built-in-slice-8). W
   - `chatservice` (tag `chat`): each call's feature, level, model, temperature, max tokens, thinking budget, message roles, tools and JSON schema size; and a failure at `warn`, which `Fail` otherwise logs at `debug` for a 4xx.
   - the Gemini provider (tag `gemini`): the request config as JSON (without the system instruction's text, only its size) and each content's shape (`user[text:120]`, `model[call:kb_search+signature]`); a refusal's HTTP status, gRPC status and `details`; and a reply's finish reason, tokens, size and tool calls.
 - Prompts and replies are never logged, as in [Usage.md](Usage.md); `usage.capture` is the way to see them.
+
+## Since slice 13
+`conversation.send` is a call on the live connection ([Live.md](Live.md)) rather than `POST /conversation/send` with Server-Sent Events. Its events (`started`, `sources`, `delta`, `tool`, `done`, `title`, `followed`) and their data are the same, and a message refused before its round is stored ends the call with its status. `Conversation.send` keeps its signature, and aborting its signal cancels the call, which stops the reply. `POST /conversation/answer` stays REST.
+
+## Changed after slice 43
+`conversationimpl.New(opts...)` makes a conversation service apart from the `CreateService` singleton, so Forge's golden tests (part 6h, [forge GoldenTests.md](../../forge/documentation/GoldenTests.md)) run a whole Builder round, through the real tool loop and Gemini provider, on a stack of their own per test.
+
+## Built in slice 43
+Forge's Builder mode, part 6g ([forge 06g-BuilderMode.md](../../forge/documentation/plans/06g-BuilderMode.md), [forge BuilderMode.md](../../forge/documentation/BuilderMode.md)), needed chat to run in a mode before chat modes exist, rounds long enough to build, and a round that survives a busy provider. Built in Foundation:
+- **A context provider's mode.** `conversation.ContextProvider.Mode(GatherArgs) (*Mode, error)` runs beside `Gather`; a `conversation.Mode` is `{ID, Title, Instructions, MaxSteps, Tools}`. When providers give one, the first in `Order` wins: its instructions go in the system prompt as `# Mode: <Title>` after the `chat` section's prompt and before the context (so they read as instructions, unlike context items, which are data), `MaxSteps` replaces the `tools` section's steps for the round, and `Tools` (names, or prefixes ending in `.`; `Mode.Offers`) narrows the tools offered. The round stores its mode (`Round.Mode`, DTO `mode`) and the transcript shows it as a chip. Forge's `builder` provider is the only one; Foundation's chat modes, which replace the hook, are [forge 06i-ChatModes.md](../../forge/documentation/plans/06i-ChatModes.md).
+- **`chat.roundEnd`** (`conversation.RoundEnds`, declared in `serve.go`): `RoundEnd{End(args, round)}` runs once a round ends however it ends (done, failed, stopped), after its `done` event, on a context the browser cannot cancel. `apps/tools` clears the Builder's presence with it.
+- **The `retry` event** (`conversationservice.EventRetry`, DTO `SendRetry {try, waitMs, status}`, `Conversation.send`'s `onRetry`): the provider was busy and the step is tried again after a wait (the tool loop's retry, [Tools.md › Changed in slice 43](Tools.md#changed-in-slice-43)). The transcript shows *The model is busy (503); trying again in 2 s (try 1)…* while the round streams.
+- **Links that open subjects.** A reply's `workbench:<type>/<id>?<where>` link opens the subject in its editor on a plain click ([WorkbenchContext.md › Changed in slice 43](WorkbenchContext.md#changed-in-slice-43)): `livePreview({onLink})`, `MarkdownText`'s `onLink`, and `RoundActions.onOpenLink`, which the Chat editor gives.
+
+### Decisions
+1. **A mode hook, not chat modes** (forge 06 question 1, answered 2026-11-08): a context provider can only add data, so it gains `Mode`; the composer has no mode picker, and a round is in a mode only while a provider says so. Chat modes are planned in forge 06i.
+2. **One mode per round**: the first provider in `Order` that gives one; modes do not combine.
+3. **Instructions before the context**: the mode's text follows the system prompt, and the *Tools* section still comes last.
+4. **`chat.roundEnd` beside the followers**: followers run only after a successful reply, and presence must go however the round ends.
+
+### Verification of slice 43
+- Go: `TestSendRunsInAProvidersMode` (the mode's instructions in the system prompt, its tools only, its steps forcing the answer on the third call, `Round.Mode`, `chat.roundEnd` called once with the round).
+- In headless Chromium against Forge's `serve` and a stub Gemini server: the Builder chip on the round, the retry note, a summary's links opening the Prefab Editor and the Data Designer ([forge BuilderMode.md › Verification](../../forge/documentation/BuilderMode.md#verification)).
+
+### Decisions to review after seeing it
+- The mode chip and the retry note in the transcript: their place and wording.
+- A mode chosen per round from the workbench, rather than kept by the conversation (forge 06i question 1).
+
+## Built in slice 44
+Forge's chat modes, part 6i ([forge 06i-ChatModes.md](../../forge/documentation/plans/06i-ChatModes.md), [forge ChatModes.md](../../forge/documentation/ChatModes.md)), with the request that nothing about a round be hard-coded: **a round is its mode graph**. `Send` stores the round, resolves its mode and runs the mode's published graph (an editable built-in until a tenant edits it) from `On user message`; the graph gathers the context, builds the prompt and tools with Go templates, streams the reply, names the conversation and follows the reply up. Slice 43's mode hook, `RoundFollower.Follow` and the Go title and prompt code are gone. The slice 43 decisions above are superseded.
+- **`chat.mode`** (`conversation.Modes`, declared in `serve.go`): `ModeEntry{ID, Label, Icon, GraphRef, Default, Focus{Kinds, Subjects}}`. `conversationsettings.Contribute` builds the **`chat.modes`** section's defaults from them (`{modes: [{id, label, icon, graphRef, default, focus}]}`, app, tenant and user scopes; Settings › AI › Chat modes), so a tenant or user can add modes (any `mode` graph) or drop them. Chronicle contributes *Personal* (🧠, default) and Forge the *Builder* (🛠️, focused on the Forge editors).
+- **`Send`**: `SendArgs.Mode` (DTO `mode`) picks the mode, else the conversation's (`Conversation.Mode`, DTO `mode`, kept as last sent), else the default (400 `unknown_mode`, 503 `no_chat_modes`, 503 `chat_not_configured` without `WithEngine`). The run's inputs are `On user message`'s pins (`text`, `window`, `settings` by provider id, `workbench`, `conversation`, `title`, `level`, `round`); its host is the round (`conversation.Host`): `Turn`, `Settings`, `Gather`, `AddContext`, `ServerTools`/`ClientTools`, `Reply`, `Say`, `SetTitle`, `Followed`. The run outlives the browser (`context.WithoutCancel`, a two-hour wall, `engine.RunArgs.Wall`) while the reply itself stops with it. A graph that ends without replying completes the round with what it said (`Say`), else as failed (500, *The chat mode failed: …*, the run's error).
+- **The chat nodes** (`conversation/nodes`, category Chat, mode graphs only): *Context settings*, *Gather context* (named providers, enabled ones only), *Add context* (the old prompt builder, its header and citing text templates; stores the segments and sends `sources`), *Messages* and *Add message* (`Message[]`), *Stream reply* (the tool loop, streamed, with the gate and citations; leaves by *Replied* or *Failed*, gives `reply`, `calls`, `round`, `segments`), *Say*, *Set title* (cleans the title) and *Emit followed*.
+- **Context providers** now only declare settings and may gather: the `chronicle` provider has no `Gather` (Personal's nodes read its settings), and `chat.roundFollower` keeps only `Feedback`.
+- **`GET /conversation/modes`** (`conversationservice.Modes`, `Conversations.modes()`): the `chat.modes` with each graph's description, its `settings` (the mode kind's spec, `cognition.ModeSpec`) and `missing`.
+- **The composer** (`components/chat/ModePicker.tsx`, `modes.ts`): a mode select beside the level, showing the modes whose focus matches the editor the user was in (and the conversation's own); a new conversation starts in the first mode whose focus matches, else the default; a conversation keeps its mode. The ⚙ shows only the context settings the mode's graph lists.
+
+### Decisions
+1. **Offered by focus, chosen for new conversations** (forge 06i question 1): a mode with a focus is offered only from a matching editor and picked for a new conversation started there; an existing conversation keeps its mode until switched. Switching changes the next rounds' graph, not the history.
+2. **Nothing hard-coded** (forge 06i question 3): the round's pipeline is the graph; `Send` keeps storage, the stream, approvals and accounting. The built-in graphs are editable built-ins (seeded on first edit), not seeded into each tenant.
+3. **The run outlives the browser**, the reply does not: the title and memory update still run after *Stop* only when the reply succeeded, since the graph follows *Replied*.
+4. **Round accounting counts *Stream reply*'s calls**, as before: other model calls (stage 1, the title, the memory update) are attributed to the round and the run's node in usage, not added to the round's tokens.
+
+### Verification of slice 44
+- Go: `TestSendRunsTheConversationsModeGraph` (the default mode's tools and prompt; switching to a builder-like mode narrows the tools, adds its instructions, forces the answer at its steps and keeps the history; the conversation keeps the mode; an unknown mode is 400), `TestAFailingModeFailsItsRound`, `TestModesListsTheModesGraphs`, and the earlier Send tests on a plain test mode graph; Chronicle's `TestPersonalRunsARound` and `TestPersonalWithMemoryOff` (the whole round through the Personal graph), `TestPersonalSeedsTheDefaultPrompts`.
+- Forge: the builder package's `TestTheBuilderModeBuildsWithTheAgentGraph`, and every golden test passing in the Builder mode with the provider removed.
+- In headless Chromium against Forge's `serve`: from the Data Designer the composer shows *🛠️ Builder*, the menu lists Personal and Builder with their graphs' descriptions, and the ⚙ hides Chronicles in the Builder mode. No round was sent against a model.
+
+### Decisions to review after seeing it
+- The mode select: its place beside the level, the descriptions in its menu, and hiding it where only one mode is offered.
+- Builder rounds no longer use Chronicle memory (its graph gathers the workbench and Volumes only).

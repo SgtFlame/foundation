@@ -6,6 +6,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,9 +20,19 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ai/providers/gemini"
 	"github.com/SgtFlame/foundation/backend/features/ai/rest/chathandlers"
 	"github.com/SgtFlame/foundation/backend/features/ai/rest/embedhandlers"
+	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
 	chatimpl "github.com/SgtFlame/foundation/backend/features/ai/services/chatservice/impl"
+	"github.com/SgtFlame/foundation/backend/features/ai/services/embedservice"
 	embedimpl "github.com/SgtFlame/foundation/backend/features/ai/services/embedservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/ai/settings"
+	"github.com/SgtFlame/foundation/backend/features/apps"
+	"github.com/SgtFlame/foundation/backend/features/apps/installs"
+	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
+	"github.com/SgtFlame/foundation/backend/features/apps/ops"
+	apphandlers "github.com/SgtFlame/foundation/backend/features/apps/rest/apphandlers"
+	"github.com/SgtFlame/foundation/backend/features/apps/services/appservice"
+	appimpl "github.com/SgtFlame/foundation/backend/features/apps/services/appservice/impl"
+	apptools "github.com/SgtFlame/foundation/backend/features/apps/tools"
 	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/SgtFlame/foundation/backend/features/authz/rest/authzhandlers"
 	authzimpl "github.com/SgtFlame/foundation/backend/features/authz/services/authzservice/impl"
@@ -36,6 +47,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/chronicle/store/entrystore"
 	chronicletools "github.com/SgtFlame/foundation/backend/features/chronicle/tools"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
+	"github.com/SgtFlame/foundation/backend/features/cognition/drafts"
 	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
 	cognitionnodes "github.com/SgtFlame/foundation/backend/features/cognition/nodes"
 	"github.com/SgtFlame/foundation/backend/features/cognition/rest/cognitionhandlers"
@@ -43,10 +55,17 @@ import (
 	cognitionsettings "github.com/SgtFlame/foundation/backend/features/cognition/settings"
 	"github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/config/rest/confighandlers"
+	"github.com/SgtFlame/foundation/backend/features/config/services/configservice"
 	configimpl "github.com/SgtFlame/foundation/backend/features/config/services/configservice/impl"
+	"github.com/SgtFlame/foundation/backend/features/connectors"
+	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
+	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
+	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
+	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
 	conversationnodes "github.com/SgtFlame/foundation/backend/features/conversation/nodes"
 	"github.com/SgtFlame/foundation/backend/features/conversation/rest/conversationhandlers"
+	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	conversationimpl "github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice/impl"
 	conversationsettings "github.com/SgtFlame/foundation/backend/features/conversation/settings"
 	"github.com/SgtFlame/foundation/backend/features/db"
@@ -64,20 +83,47 @@ import (
 	indeximpl "github.com/SgtFlame/foundation/backend/features/index/services/indexservice/impl"
 	indexsource "github.com/SgtFlame/foundation/backend/features/index/source"
 	"github.com/SgtFlame/foundation/backend/features/index/store/lancestore"
+	"github.com/SgtFlame/foundation/backend/features/jobs"
+	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/collabhandlers"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/kbhandlers"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/volumehandlers"
+	"github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
 	collabimpl "github.com/SgtFlame/foundation/backend/features/kb/services/collabservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/kbservice"
 	kbimpl "github.com/SgtFlame/foundation/backend/features/kb/services/kbservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 	volumeimpl "github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice/impl"
 	kbtools "github.com/SgtFlame/foundation/backend/features/kb/tools"
+	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/SgtFlame/foundation/backend/features/live/bus"
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
+	livenodes "github.com/SgtFlame/foundation/backend/features/live/nodes"
+	"github.com/SgtFlame/foundation/backend/features/live/presence"
+	"github.com/SgtFlame/foundation/backend/features/live/project"
+	"github.com/SgtFlame/foundation/backend/features/live/rest/livehandlers"
+	liveimpl "github.com/SgtFlame/foundation/backend/features/live/services/liveservice/impl"
+	livesettings "github.com/SgtFlame/foundation/backend/features/live/settings"
+	"github.com/SgtFlame/foundation/backend/features/live/subscribe"
+	livetools "github.com/SgtFlame/foundation/backend/features/live/tools"
 	"github.com/SgtFlame/foundation/backend/features/logging"
 	"github.com/SgtFlame/foundation/backend/features/logs"
 	"github.com/SgtFlame/foundation/backend/features/logs/rest/logshandlers"
 	logsimpl "github.com/SgtFlame/foundation/backend/features/logs/services/logsservice/impl"
 	logssettings "github.com/SgtFlame/foundation/backend/features/logs/settings"
+	"github.com/SgtFlame/foundation/backend/features/records"
+	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
+	"github.com/SgtFlame/foundation/backend/features/records/entities"
+	recordsfiles "github.com/SgtFlame/foundation/backend/features/records/files"
+	recordsnodes "github.com/SgtFlame/foundation/backend/features/records/nodes"
+	"github.com/SgtFlame/foundation/backend/features/records/rest/entityhandlers"
+	"github.com/SgtFlame/foundation/backend/features/records/rest/recordhandlers"
+	recordssearch "github.com/SgtFlame/foundation/backend/features/records/search"
+	entityimpl "github.com/SgtFlame/foundation/backend/features/records/services/entityservice/impl"
+	"github.com/SgtFlame/foundation/backend/features/records/services/recordservice"
+	recordimpl "github.com/SgtFlame/foundation/backend/features/records/services/recordservice/impl"
+	recordssettings "github.com/SgtFlame/foundation/backend/features/records/settings"
+	recordstools "github.com/SgtFlame/foundation/backend/features/records/tools"
 	"github.com/SgtFlame/foundation/backend/features/rest"
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	retrievalcontext "github.com/SgtFlame/foundation/backend/features/retrieval/context"
@@ -96,6 +142,18 @@ import (
 	toolscontext "github.com/SgtFlame/foundation/backend/features/tools/context"
 	toolsnodes "github.com/SgtFlame/foundation/backend/features/tools/nodes"
 	toolssettings "github.com/SgtFlame/foundation/backend/features/tools/settings"
+	"github.com/SgtFlame/foundation/backend/features/ui"
+	uicomponents "github.com/SgtFlame/foundation/backend/features/ui/components"
+	"github.com/SgtFlame/foundation/backend/features/ui/hello"
+	uinodes "github.com/SgtFlame/foundation/backend/features/ui/nodes"
+	"github.com/SgtFlame/foundation/backend/features/ui/prefabs"
+	"github.com/SgtFlame/foundation/backend/features/ui/rest/prefabhandlers"
+	"github.com/SgtFlame/foundation/backend/features/ui/rest/uihandlers"
+	prefabimpl "github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice/impl"
+	"github.com/SgtFlame/foundation/backend/features/ui/services/uiservice"
+	uiimpl "github.com/SgtFlame/foundation/backend/features/ui/services/uiservice/impl"
+	uisettings "github.com/SgtFlame/foundation/backend/features/ui/settings"
+	uitools "github.com/SgtFlame/foundation/backend/features/ui/tools"
 	"github.com/SgtFlame/foundation/backend/features/usage"
 	"github.com/SgtFlame/foundation/backend/features/usage/rest/usagehandlers"
 	usageimpl "github.com/SgtFlame/foundation/backend/features/usage/services/usageservice/impl"
@@ -121,6 +179,7 @@ var (
 	serveVaultAddr  string
 	serveVaultMount string
 	serveVaultRole  string
+	serveNatsURL    string
 )
 
 // serveCmd represents the serve command
@@ -148,6 +207,11 @@ with no sign-in. Afterwards every request needs a session. Tenants, users
 and sessions live in the application database (--app-db); everything else
 lives in the tenant database (--db). Each tenant has its own LanceDB
 directory, <data-dir>/lancedb/<tenantId>.
+
+The live core (commands, their events, projections, presence and UI
+sessions) runs on NATS JetStream, embedded in <data-dir>/nats with no
+network listener; --nats-url uses an external server instead. Browsers
+hold one WebSocket each at /api/v1/live.
 
 Logs go to stderr, and to VictoriaLogs when Settings (System › Logging)
 turns it on; --vlogs-url or $FOUNDATION_VLOGS_URL wins over the setting.
@@ -260,9 +324,22 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		if err != nil {
 			return err
 		}
-		if err := db.Migrate(gdb, slices.Concat(config.Models(), usage.Models(), conversation.Models(), retrieval.Models(), chronicle.Models(), cognition.Models(), tools.Models())...); err != nil { // features add their models here
+		if err := db.Migrate(gdb, slices.Concat(config.Models(), usage.Models(), conversation.Models(), retrieval.Models(), chronicle.Models(), cognition.Models(), tools.Models(), records.Models(), ui.Models(), apps.Models())...); err != nil { // features add their models here
 			return err
 		}
+
+		// The live core's event streams, projections, presence and UI
+		// sessions live in NATS JetStream, embedded with no listener unless
+		// --nats-url names an external server (documentation/Live.md)
+		natsURL := serveNatsURL
+		if natsURL == "" {
+			natsURL = os.Getenv("FOUNDATION_NATS_URL")
+		}
+		nats, err := natsd.Start(ctx, natsd.Options{Dir: filepath.Join(dataDir, "nats"), URL: natsURL})
+		if err != nil {
+			return err
+		}
+		defer nats.Close() // drained after the HTTP server has shut down
 
 		// The index's and Chronicle's stores are opened first: retrieval's
 		// library and chronicle sources search them
@@ -288,6 +365,26 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		defer store.Close()
 		entries := entrystore.OpenTenants(lanceRoot, serveEmbedDims)
 		defer entries.Close()
+		// Searchable records are kept beside them, embedded once the embed
+		// service exists (and a key lets it)
+		var recordDeps recordsdata.Deps
+		var recordEmbedder embedservice.Service
+		recordSearch := recordssearch.New(lanceRoot, serveEmbedDims, func(args features.ServiceArgs, text, title string, query bool) ([]float32, error) {
+			if recordEmbedder == nil {
+				return nil, errors.New("embedding is not ready")
+			}
+			purpose := embedservice.PurposeDocument
+			if query {
+				purpose = embedservice.PurposeQuery
+			}
+			args.Meta = args.Meta.WithFeature("records-search")
+			resp := recordEmbedder.Embed(embedservice.EmbedArgs{ServiceArgs: args, Texts: []string{text}, Purpose: purpose, Title: title})
+			if resp.Common.Code != http.StatusOK || len(resp.Vectors) == 0 {
+				return nil, fmt.Errorf("embedding failed with %d: %s", resp.Common.Code, resp.Common.Message)
+			}
+			return resp.Vectors[0], nil
+		}, func() recordsdata.Deps { return recordDeps })
+		defer recordSearch.Close()
 
 		// Features contribute to each other's extension points here, in order.
 		// The RAG Search and Chronicle providers need services that need
@@ -295,11 +392,37 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// once they exist.
 		var retrievalService retrievalservice.Service
 		var chronicleDeps chroniclecontext.Deps
+		var chronicleNodeDeps chroniclenodes.Deps
 		var kbToolDeps kbtools.Deps
 		var chronicleToolDeps chronicletools.Deps
 		var agentDeps toolsnodes.Deps
+		var liveToolDeps livetools.Deps
+		var forgeToolDeps apptools.ForgeDeps
+		var draftDeps drafts.Deps
+		var entityDeps entities.Deps
+		var prefabDeps prefabs.Deps
+		var appDeps manifests.Deps
+		var installDeps installs.Deps
+		var opsDeps ops.Deps
+		var appService appservice.Service
+		var recordService recordservice.Service
+		var liveSubscriptions *subscribe.Subscriptions
+		var liveNodeDeps livenodes.Deps
+		var uiNodeDeps uinodes.Deps
+		var livePresence *presence.Presence
+		var jobDeps jobs.Deps
+		var jobNodeDeps jobsnodes.Deps
+		var connectorDeps connectors.Deps
+		var connectionDeps connections.Deps
+		var scriptedDeps scripted.Deps
+		var uiService uiservice.Service
+		var configLive configservice.Service
+		var chatLive chatservice.Service
+		var conversationLive conversationservice.Service
+		var collabLive collabservice.Service
 		registry := extensions.NewRegistry()
-		registry.Declare(config.Sections, conversation.ContextProviders, conversation.RoundFollowers, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, tools.Tools, authz.ResourceTypes)
+		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.Modes, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, authz.ResourceTypes,
+			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents, connectors.Contracts, connectors.Types, connections.Validators, authz.ContributedRoles)
 		// Each feature declares its resource types and their actions
 		authz.Contribute(registry)
 		identity.ContributeAccess(registry)
@@ -311,25 +434,94 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		retrieval.ContributeAccess(registry)
 		cognition.ContributeAccess(registry)
 		kbservice.ContributeAccess(registry)
+		ui.ContributeAccess(registry)
+		hello.ContributeAccess(registry)
+		records.ContributeAccess(registry)
+		ui.ContributePrefabAccess(registry)
+		apps.ContributeAccess(registry)
+		jobs.ContributeAccess(registry)
+		connectors.ContributeAccess(registry)
+		connections.ContributeAccess(registry)
 		aisettings.Contribute(registry)
 		logssettings.Contribute(registry)
 		usagesettings.Contribute(registry)
 		retrievalsettings.Contribute(registry)
 		indexsource.Contribute(registry, store, kbRoot)
 		chroniclesource.Contribute(registry, entries)
+		recordssearch.Contribute(registry, func() *recordssearch.Index { return recordSearch })
 		chroniclecontext.Contribute(registry, func() chroniclecontext.Deps { return chronicleDeps })
 		retrievalcontext.Contribute(registry, func() retrievalservice.Service { return retrievalService })
 		workbenchcontext.Contribute(registry)
 		cognitionsettings.Contribute(registry)
 		cognitionnodes.Contribute(registry)
 		conversationnodes.Contribute(registry)
-		chroniclenodes.Contribute(registry, func() chroniclesteps.Steps { return chronicleDeps.Steps })
+		chroniclenodes.Contribute(registry, func() chroniclenodes.Deps { return chronicleNodeDeps })
 		toolssettings.Contribute(registry)
 		toolsbuiltin.Contribute(registry)
 		kbtools.Contribute(registry, func() kbtools.Deps { return kbToolDeps })
 		chronicletools.Contribute(registry, func() chronicletools.Deps { return chronicleToolDeps })
 		toolscontext.Contribute(registry)
 		toolsnodes.Contribute(registry, func() toolsnodes.Deps { return agentDeps })
+		// The live core, server-driven UI and the Hello app; a command is
+		// also a tool, so livetools runs after every feature's commands
+		livesettings.Contribute(registry)
+		recordssettings.Contribute(registry)
+		jobs.ContributeSettings(registry)
+		uisettings.Contribute(registry)
+		if err := uicomponents.Contribute(registry); err != nil {
+			return err
+		}
+		// Blueprints: the graph kinds and nodes of the live core and the UI
+		drafts.Contribute(registry, func() drafts.Deps { return draftDeps })
+		livenodes.Contribute(registry, func() livenodes.Deps { return liveNodeDeps })
+		uinodes.Contribute(registry)
+		ui.ContributeOverlays(registry)
+		hello.Contribute(registry)
+		// Entity types: edited by entity.* commands, published into the
+		// tenant database
+		entities.Contribute(registry, func() entities.Deps { return entityDeps })
+		recordstools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
+		// Records: changed by record.* commands, converted when a field's
+		// type changes
+		recordsdata.Contribute(registry, func() recordsdata.Deps { return recordDeps })
+		recordsnodes.Contribute(registry, func() recordsdata.Deps { return recordDeps })
+		recordstools.ContributeRecords(registry, func() recordservice.Service { return recordService })
+		// Prefabs: edited by prefab.* commands, published into the tenant
+		// database
+		prefabs.Contribute(registry, func() prefabs.Deps { return prefabDeps })
+		uitools.ContributePrefabs(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
+		// Apps: manifests edited by app.* commands, after the prefabs and
+		// records they name
+		manifests.Contribute(registry, func() manifests.Deps { return appDeps })
+		installs.Contribute(registry, func() installs.Deps { return installDeps })
+		// Background jobs and the apps' triggers (forge 07a), after the
+		// installs whose triggers they run
+		jobs.Contribute(registry, func() jobs.Deps { return jobDeps })
+		jobsnodes.Contribute(registry, func() jobsnodes.Deps { return jobNodeDeps })
+		// Connectors (forge 07b): the registry's queries and the connector
+		// nodes; builtin contracts and types are contributed beside them
+		connectors.Contribute(registry, func() connectors.Deps { return connectorDeps })
+		connectorsnodes.Contribute(registry, func() connectors.Deps { return connectorDeps })
+		// Connections (forge 07c): connection.* commands, their queries,
+		// connection.test and On connector event as a trigger event
+		connections.Contribute(registry, func() connections.Deps { return connectionDeps })
+		connections.ContributeTrigger(registry, func() connections.Deps { return connectionDeps })
+		scripted.Contribute(registry, func() scripted.Deps { return scriptedDeps })
+		ops.Contribute(registry)                                         // the operation log: ops.log and ops.list
+		ops.ContributeUndo(registry, func() ops.Deps { return opsDeps }) // ops.undo, ops.redo and ops.stack (forge 06b)
+		apptools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
+		apptools.ContributeTransfer(registry, func() appservice.Service { return appService })
+		apptools.ContributeForge(registry, func() apptools.ForgeDeps { return forgeToolDeps }) // forge.catalog|describe|app|read (forge 06d)
+		apptools.ContributeApply(registry, func() apptools.ForgeDeps { return forgeToolDeps }) // forge.apply|changes|check|preview|undo (forge 06e)
+		apptools.ContributeTest(registry, func() apptools.ForgeDeps { return forgeToolDeps })  // forge.test (forge 06f)
+		presence.Contribute(registry, func() *presence.Presence { return livePresence })
+		uitools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
+		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
+		uihandlers.ContributeLive(registry, func() uiservice.Service { return uiService })
+		confighandlers.ContributeLive(registry, func() configservice.Service { return configLive })
+		chathandlers.ContributeLive(registry, func() chatservice.Service { return chatLive })
+		conversationhandlers.ContributeLive(registry, func() conversationservice.Service { return conversationLive })
+		collabhandlers.ContributeLive(registry, func() collabservice.Service { return collabLive })
 		conversationsettings.Contribute(registry) // after every chat.contextProvider: it adds their defaults sections
 		extensionsService := extensionsimpl.CreateService(extensionsimpl.WithRegistry(registry))
 
@@ -480,8 +672,17 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		usageService := usageimpl.CreateService(usageimpl.WithDB(gdb))
 		embedService := embedimpl.CreateService(embedimpl.WithProvider(usage.EmbedProvider(provider, "gemini", recorder)))
 		chatService := chatimpl.CreateService(chatimpl.WithProvider(usage.ChatProvider(provider, "gemini", recorder)), chatimpl.WithConfig(configService))
+		// The Cognition Engine runs the graphs, such as each chat round's
+		// mode graph (Personal, by default)
+		cognitionEngine := engine.New(gdb, registry, configService)
+		for _, g := range cognitionEngine.Graphs() {
+			for _, p := range cognitionEngine.Resolve(g).Problems {
+				log.With("graphId", g.ID, "nodeId", p.NodeID).Warn(ctx, "Cognition graph %s: %s %s", g.ID, p.Severity, p.Message)
+			}
+		}
 		conversationService := conversationimpl.CreateService(
 			conversationimpl.WithDB(gdb), conversationimpl.WithChat(chatService), conversationimpl.WithConfig(configService), conversationimpl.WithRegistry(registry),
+			conversationimpl.WithEngine(cognitionEngine),
 		)
 
 		retrievalService = retrievalimpl.CreateService(
@@ -489,23 +690,14 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		)
 		chronicleService := chronicleimpl.CreateService(chronicleimpl.WithDB(gdb), chronicleimpl.WithStore(entries), chronicleimpl.WithEmbedder(embedService),
 			chronicleimpl.WithUserName(userName))
-		// The Cognition Engine runs the built-in graphs, such as Chronicle's
-		// Personal mode, which the chronicle provider and follower run
-		cognitionEngine := engine.New(gdb, registry, configService)
-		for _, g := range cognitionEngine.Graphs() {
-			for _, p := range cognitionEngine.Resolve(g).Problems {
-				log.With("graphId", g.ID, "nodeId", p.NodeID).Warn(ctx, "Cognition graph %s: %s %s", g.ID, p.Severity, p.Message)
-			}
-		}
 		cognitionService := cognitionimpl.CreateService(cognitionimpl.WithDB(gdb), cognitionimpl.WithEngine(cognitionEngine))
 		kbToolDeps = kbtools.Deps{Root: kbRoot, Retrieval: retrievalService, Volumes: volumeService, Collab: collabService}
 		chronicleToolDeps = chronicletools.Deps{Retrieval: retrievalService, Entries: chronicleService}
 		agentDeps = toolsnodes.Deps{DB: gdb, Chat: chatService, Config: configService, Registry: registry}
 		chronicleDeps = chroniclecontext.Deps{
-			Steps:   chroniclesteps.Steps{DB: gdb, Chat: chatService, Config: configService, Retriever: func() retrievalservice.Service { return retrievalService }},
-			Engine:  cognitionEngine,
-			Entries: chronicleService,
+			Steps: chroniclesteps.Steps{DB: gdb, Chat: chatService, Config: configService, Retriever: func() retrievalservice.Service { return retrievalService }},
 		}
+		chronicleNodeDeps = chroniclenodes.Deps{Steps: chronicleDeps.Steps, Entries: chronicleService}
 		// Entries changed or never embedded (no key yet) are indexed now, and
 		// again whenever the provider settings change
 		reindexEntries := func() {
@@ -520,6 +712,123 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 				go reindexEntries()
 			}
 		})
+		configLive, chatLive, conversationLive, collabLive = configService, chatService, conversationService, collabService
+
+		// Commands decide on the projections; queries are subscriptions
+		projections := project.New(nats.JS(), registry)
+		defer projections.Close()
+		liveBus := bus.New(projections)
+		subscriptions := subscribe.New(projections, registry)
+		livePresence = presence.New(nats.JS(), userName)
+		// Graph drafts are edited by bp.* commands; the engine runs their
+		// published versions
+		cognitionEngine.SetSource(drafts.Source{Store: projections})
+		draftDeps = drafts.Deps{Engine: cognitionEngine, Projections: projections}
+		// Published command and query graphs are commands and queries like
+		// any other; handlers that are graphs run in the UI sessions
+		liveNodeDeps = livenodes.Deps{Engine: cognitionEngine, Bus: liveBus, Subscriptions: subscriptions, Store: projections, Presence: livePresence}
+		uiNodeDeps = uinodes.Deps{Engine: cognitionEngine, Presence: livePresence}
+		// An installed app's commands and queries are <appId>.<name>, run by
+		// the graphs its version pinned; a manifest app's own graphs are
+		// live only through its install
+		liveBus.Resolve = installs.CommandFor(func() installs.Deps { return installDeps }, livenodes.CommandFor(func() livenodes.Deps { return liveNodeDeps }))
+		subscriptions.Resolve = installs.QueryFor(func() installs.Deps { return installDeps }, livenodes.QueryFor(func() livenodes.Deps { return liveNodeDeps }))
+		liveToolDeps = livetools.Deps{Bus: liveBus, Subscriptions: subscriptions}
+		// The connector registry and bus (forge 07b): calls go over NATS to an
+		// adapter in this process or another; connections come with 07c
+		connectorRegistry := connectors.NewRegistry(registry, nats.JS())
+		defer connectorRegistry.Close()
+		// A call names a connection its principal may use (forge 07c); an
+		// auth reply marks the connection errored
+		connectionAccess := connections.Connections{Deps: func() connections.Deps { return connectionDeps }}
+		connectorDispatcher := &connectors.Dispatcher{NC: nats.Conn(), Registry: connectorRegistry, Connections: connectionAccess, Failed: connectionAccess.Failed}
+		connectorDeps = connectors.Deps{Registry: connectorRegistry, Dispatcher: connectorDispatcher}
+		connectionDeps = connections.Deps{Projections: projections, Bus: liveBus, Registry: connectorRegistry, Secrets: secretStore, Dispatcher: connectorDispatcher, Config: configService, Extensions: registry}
+		scriptedDeps = scripted.Deps{Store: projections, Engine: cognitionEngine, JS: connectorRegistry.JetStream(), Reg: registry}
+		// Adapters' settings on cx.resolve and their sources' status on
+		// cx.status, in a queue group in every process
+		if err := connections.Serve(ctx, nats.Conn(), func() connections.Deps { return connectionDeps }); err != nil {
+			return err
+		}
+		// This process's adapter serves the builtin types implemented here
+		// (none yet; the mail types with 07e), on the server's own connection
+		if impls := connectorImpls(); len(impls.Impls) > 0 {
+			go func() {
+				if err := adapter.Serve(ctx, nats.Conn(), impls); err != nil {
+					logging.In("connectors").Error(ctx, err, "the in-process connector adapter stopped")
+				}
+			}()
+		}
+		forgeToolDeps = apptools.ForgeDeps{Subscriptions: subscriptions, Store: projections, Bus: liveBus, Engine: cognitionEngine, Presence: livePresence, Connectors: connectorRegistry}
+		liveSubscriptions = subscriptions
+		recordEmbedder = embedService
+		recordFiles := recordsfiles.New(nats.JS())
+		recordDeps = recordsdata.Deps{Projections: projections, Bus: liveBus, Files: recordFiles, Search: recordSearch, Settings: func(args features.ServiceArgs) recordssettings.Records {
+			settings, err := config.Read[recordssettings.Records](configService, args, recordssettings.ID)
+			if err != nil {
+				return recordssettings.Defaults
+			}
+			return settings
+		}, Users: func(tenant uint64, ids []uint64) map[uint64]recordsdata.User {
+			var users []identity.User
+			appDB.Select("users.id", "users.username", "users.display_name").
+				Joins("JOIN memberships ON memberships.user_id = users.id AND memberships.tenant_id = ?", tenant).
+				Where("users.id IN ?", ids).Find(&users)
+			out := map[uint64]recordsdata.User{}
+			for _, u := range users {
+				out[u.ID] = recordsdata.User{Username: u.Username, DisplayName: u.DisplayName}
+			}
+			return out
+		}}
+		entityDeps = entities.Deps{Projections: projections, DB: gdb, OnPublish: func(args features.ServiceArgs) error { return recordsdata.Follow(args, recordDeps) }}
+		recordService = recordimpl.CreateService(recordimpl.WithRecords(liveBus, subscriptions, recordDeps), recordimpl.WithFiles(recordFiles))
+		entityService := entityimpl.CreateService(entityimpl.WithEntities(entityDeps))
+		prefabDeps = prefabs.Deps{Projections: projections, DB: gdb}
+		appDeps = manifests.Deps{Projections: projections, DB: gdb}
+		installDeps = installs.Deps{Projections: projections, DB: gdb, Nodes: liveNodeDeps, Roles: policy, Config: configService}
+		opsDeps = ops.Deps{Bus: liveBus, Store: projections}
+		appService = appimpl.CreateService(appimpl.WithDeps(func() appimpl.Deps {
+			return appimpl.Deps{Projections: projections, DB: gdb, Bus: liveBus, Subscriptions: subscriptions, Registry: registry}
+		}))
+		// An installed app's own entity types are under its path (forge 05c)
+		records.SetPlacement(installs.Placement(func() installs.Deps { return installDeps }))
+		// This process runs its share of every tenant's jobs; other
+		// processes on the same JetStream share the queues (forge 07a)
+		jobDeps = jobs.Deps{Projections: projections, Bus: liveBus, Engine: cognitionEngine, Config: configService}
+		jobRunner := jobs.New(jobDeps, jobs.Options{})
+		defer jobRunner.Close() // before the projections close
+		jobNodeDeps = jobsnodes.Deps{Runner: jobRunner, Store: projections}
+		tenantIDs := func() ([]uint64, error) {
+			ids := []uint64{features.LocalTenantID}
+			var rows []uint64
+			if err := appDB.Model(&identity.Tenant{}).Pluck("id", &rows).Error; err != nil {
+				return ids, err
+			}
+			for _, id := range rows {
+				if id != features.LocalTenantID {
+					ids = append(ids, id)
+				}
+			}
+			return ids, nil
+		}
+		go jobRunner.Start(tenantIDs)
+		// Every process keeps cx_sources, the connections a trigger listens
+		// to, which adapters' instances lease and run (forge 07c)
+		go connections.Start(ctx, func() connections.Deps { return connectionDeps }, tenantIDs)
+		// Scripted connector types (forge 07d), served in this process too
+		go scripted.Serve(ctx, nats.Conn(), func() scripted.Deps { return scriptedDeps }, tenantIDs, scripted.Options{})
+		prefabService := prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
+		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())),
+			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))
+		liveService := liveimpl.CreateService(liveimpl.WithBus(liveBus), liveimpl.WithSubscriptions(subscriptions), liveimpl.WithPresence(livePresence), liveimpl.WithRegistry(registry),
+			liveimpl.WithMaxSubscriptions(func() int {
+				settings, err := config.Read[livesettings.Live](configService, features.BackgroundArgs(ctx), livesettings.ID)
+				if err != nil || settings.MaxSubscriptions <= 0 {
+					return livesettings.Defaults.MaxSubscriptions
+				}
+				return settings.MaxSubscriptions
+			}))
+
 		indexOpts = append(indexOpts, indeximpl.WithEmbedder(embedService), indeximpl.WithStore(store))
 		indexService := indeximpl.CreateService(indexOpts...)
 
@@ -588,6 +897,23 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		retrievalHandler := &retrievalhandlers.RetrievalHandler{}
 		retrievalHandler.Register(api, retrievalService)
 
+		liveHandler := &livehandlers.LiveHandler{}
+		liveHandler.Register(api, liveService)
+
+		entityHandler := &entityhandlers.EntityHandler{}
+		entityHandler.Register(api, entityService)
+
+		recordHandler := &recordhandlers.RecordHandler{}
+		recordHandler.Register(api, recordService)
+
+		uiHandler := &uihandlers.UiHandler{}
+		uiHandler.Register(api, uiService)
+
+		prefabHandler := &prefabhandlers.PrefabHandler{}
+		prefabHandler.Register(api, prefabService)
+		appHandler := &apphandlers.AppHandler{}
+		appHandler.Register(api, appService)
+
 		indexHandler := &indexhandlers.IndexHandler{}
 		indexHandler.Register(volumes, indexService)
 
@@ -636,6 +962,7 @@ func init() {
 	serveCmd.Flags().StringVar(&serveVaultAddr, "vault-addr", "", "HashiCorp Vault holding the server's secrets, e.g. http://127.0.0.1:8200 (default $FOUNDATION_VAULT_ADDR); serve then starts sealed")
 	serveCmd.Flags().StringVar(&serveVaultMount, "vault-mount", "foundation", "Vault KV v2 mount of the server's secrets")
 	serveCmd.Flags().StringVar(&serveVaultRole, "vault-role-id", "", "the only AppRole role ID an unseal may use (default $FOUNDATION_VAULT_ROLE_ID); without it unseal.sh sends it")
+	serveCmd.Flags().StringVar(&serveNatsURL, "nats-url", "", "an external NATS server with JetStream for the live core, e.g. nats://127.0.0.1:4222 (default $FOUNDATION_NATS_URL); without it NATS runs embedded in <data-dir>/nats")
 	serveCmd.Flags().StringVar(&serveVLogsURL, "vlogs-url", "", "VictoriaLogs to store logs in, e.g. http://localhost:9428 (default $FOUNDATION_VLOGS_URL); wins over Settings")
 }
 
@@ -654,4 +981,11 @@ func targetFrom(raw string) (logging.Target, error) {
 	u.User = nil
 	t.URL = u.String()
 	return t, nil
+}
+
+// connectorImpls are the connector types this server's in-process adapter
+// serves, with their metadata (forge 07b); an external adapter binary
+// serves its own with adapter.Serve.
+func connectorImpls() adapter.Options {
+	return adapter.Options{Name: "server"}
 }

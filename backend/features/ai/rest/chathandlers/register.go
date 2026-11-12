@@ -15,5 +15,4 @@ func (ch *ChatHandler) Register(router gin.IRouter, service chatservice.Service)
 	group := router.Group("/ai/chat")
 
 	group.POST("/complete", ch.Complete)
-	group.POST("/stream", ch.Stream) // Server-Sent Events
 }

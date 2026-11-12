@@ -1,0 +1,137 @@
+{
+  "id": "cmd-task-clearDone",
+  "name": "task.clearDone",
+  "description": "Deletes every done task (up to 50) in one command: they all go, or none does.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "query",
+      "type": "records.query",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "config": {
+        "entity": "task",
+        "where": {
+          "done": true
+        },
+        "limit": 50
+      },
+      "title": "Done tasks"
+    },
+    {
+      "id": "each",
+      "type": "flow.forEach",
+      "position": {
+        "x": 300,
+        "y": 0
+      }
+    },
+    {
+      "id": "id",
+      "type": "data.expression",
+      "position": {
+        "x": 600,
+        "y": 200
+      },
+      "config": {
+        "expr": "item._id",
+        "type": "string"
+      },
+      "title": "Its id"
+    },
+    {
+      "id": "delete",
+      "type": "records.delete",
+      "position": {
+        "x": 900,
+        "y": 0
+      },
+      "config": {
+        "entity": "task"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "each",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "query",
+        "pin": "records"
+      },
+      "to": {
+        "node": "each",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "body"
+      },
+      "to": {
+        "node": "delete",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "delete",
+        "pin": "id"
+      }
+    }
+  ],
+  "spec": {
+    "command": "task.clearDone",
+    "title": "Clear done tasks",
+    "description": "Deletes the Hello app's done tasks, up to 50, as one atomic change. Its target is the list, main.",
+    "args": {
+      "type": "object",
+      "properties": {}
+    },
+    "area": "rec",
+    "targetType": "taskList",
+    "projection": "records.record",
+    "action": "record.delete",
+    "events": [
+      "deleted"
+    ]
+  }
+}

@@ -163,8 +163,11 @@ func GrantableOn(role Role, resource string) bool {
 		return len(path) == 0
 	case len(path) == 0 || !strings.HasPrefix(path[0], "tenant:"):
 		return false
-	case role.TenantID != 0:
-		return path[0] == Resource("tenant", role.TenantID)
+	case role.TenantID != 0 && path[0] != Resource("tenant", role.TenantID):
+		return false
+	case role.App != "":
+		// An app's role: on the tenant, or on the app and below
+		return len(path) == 1 || path[1] == "app:"+role.App
 	}
 	return true
 }

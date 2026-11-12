@@ -208,3 +208,20 @@ func find(segments []retrieval.Scored, key string) retrieval.Scored {
 	}
 	return retrieval.Scored{}
 }
+
+func TestOptionalSourcesAreSearchedWhenNamed(t *testing.T) {
+	a := seg("library", "a.md", 0, 100, "ha")
+	r := seg("records", "", 0, 0, "page.1@2")
+	r.Text, r.Title = "a record", "page › Plan"
+	records := source("records", retrieval.AxisLibrary, []retrieval.Segment{r}, []retrieval.Segment{r})
+	records.Optional = true
+	s := newTestService(t, fakeEmbedder{}, source("library", retrieval.AxisLibrary, []retrieval.Segment{a}, nil), records)
+
+	if resp := s.Retrieve(retrievalservice.RetrieveArgs{ServiceArgs: local, Query: "q"}); len(resp.Segments) != 1 || resp.Segments[0].SourceID != "library" {
+		t.Errorf("by default %+v", resp.Segments)
+	}
+	resp := s.Retrieve(retrievalservice.RetrieveArgs{ServiceArgs: local, Query: "q", Sources: []string{"library", "records"}})
+	if len(resp.Segments) != 2 {
+		t.Errorf("named %+v", resp.Segments)
+	}
+}

@@ -1,0 +1,40 @@
+{
+  "name": "test_echo_start",
+  "title": "Start a job",
+  "description": "Starts a job outside; its finished event answers it later, with the same job id",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The idempotency key: a start with an id already started starts nothing"
+      },
+      "text": {
+        "type": "string",
+        "description": "What the job works on"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "jobId": {
+        "type": "string",
+        "description": "The started job's id, which its finished event names"
+      }
+    },
+    "required": [
+      "jobId"
+    ]
+  },
+  "annotations": {
+    "title": "Start a job",
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": true
+  }
+}

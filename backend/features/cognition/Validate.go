@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // Problem severities: an error stops the graph from running; a warning does not.
@@ -28,6 +29,9 @@ type Resolved struct {
 	Types    map[string]NodeType // by node ID
 	Pins     map[string]Pins     // by node ID
 	Problems []Problem
+	// Conversions are the implicit conversions made on edges, by the input
+	// they feed.
+	Conversions map[PinRef]Conversion
 }
 
 // Errors reports whether any problem is an error.
@@ -35,20 +39,49 @@ func (r Resolved) Errors() bool {
 	return slices.ContainsFunc(r.Problems, func(p Problem) bool { return p.Severity == SeverityError })
 }
 
-// Resolve finds each node's type and pins and validates the graph: unknown
-// types, edges between pins that do not exist, run the wrong way, mix exec
-// and data or carry different types, inputs joined twice, required inputs
-// left unconnected, cycles among pure nodes, no event, and exec nodes no
-// event reaches (a warning).
+// Resolve resolves a graph against node types alone, with no kinds and no
+// conversions (Catalog.Resolve).
 func Resolve(g Graph, types []NodeType) Resolved {
+	return Catalog{Types: types}.Resolve(g)
+}
+
+// MetaProblems is what a node type lacks of the metadata a model needs
+// (forge Architecture › self-describing metadata): a description, an
+// example and a description of each fixed data pin.
+func MetaProblems(t NodeType) []string {
+	var out []string
+	if t.Description == "" {
+		out = append(out, "a description")
+	}
+	if t.Example == "" {
+		out = append(out, "an example")
+	}
+	for _, list := range [][]Pin{t.Pins.In, t.Pins.Out} {
+		for _, p := range list {
+			if !p.Exec && p.Description == "" {
+				out = append(out, "a description of pin "+p.ID)
+			}
+		}
+	}
+	return out
+}
+
+// Resolve finds each node's type and pins and validates the graph: unknown
+// types, types without metadata, nodes the graph's kind does not allow,
+// edges between pins that do not exist, run the wrong way, mix exec and
+// data or carry types that neither match nor convert, inputs joined twice,
+// required inputs left unconnected, cycles among pure nodes, no event, and
+// exec nodes no event reaches (a warning).
+func (c Catalog) Resolve(g Graph) Resolved {
 	byID := map[string]NodeType{}
-	for _, t := range types {
+	for _, t := range c.Types {
 		byID[t.ID] = t
 	}
-	r := Resolved{Graph: g, Types: map[string]NodeType{}, Pins: map[string]Pins{}}
+	r := Resolved{Graph: g, Types: map[string]NodeType{}, Pins: map[string]Pins{}, Conversions: map[PinRef]Conversion{}}
 	fail := func(node, pin, format string, a ...any) {
 		r.Problems = append(r.Problems, Problem{Severity: SeverityError, NodeID: node, Pin: pin, Message: fmt.Sprintf(format, a...)})
 	}
+	kind, hasKind := c.Kind(g.Kind)
 
 	events := map[string]string{}
 	for _, n := range g.Nodes {
@@ -60,6 +93,12 @@ func Resolve(g Graph, types []NodeType) Resolved {
 		if !ok {
 			fail(n.ID, "", "there is no node type %q", n.Type)
 			continue
+		}
+		if missing := MetaProblems(t); len(missing) > 0 {
+			fail(n.ID, "", "node type %s lacks %s, so it cannot be used", t.ID, strings.Join(missing, ", "))
+		}
+		if hasKind && !kind.Allows(t) {
+			fail(n.ID, "", "a %s graph cannot hold %s", kind.Title, t.Title)
 		}
 		pins, err := t.PinsOf(n.Config)
 		if err != nil {
@@ -113,7 +152,9 @@ func Resolve(g Graph, types []NodeType) Resolved {
 			}
 			next[e.From.Node] = append(next[e.From.Node], e.To.Node)
 		default:
-			if !Assignable(out.Type, in.Type) {
+			if conv, ok := c.Conversion(out.Type, in.Type); ok {
+				r.Conversions[e.To] = conv
+			} else if !Assignable(out.Type, in.Type) {
 				fail(e.To.Node, e.To.Pin, "%s carries a %s, but %s takes a %s", out.Name, out.Type, in.Name, in.Type)
 			}
 			if into[e.To]++; into[e.To] > 1 {
@@ -186,10 +227,49 @@ func Resolve(g Graph, types []NodeType) Resolved {
 }
 
 // Assignable reports whether an output of type from may feed an input of
-// type to. Implicit conversions (Cognition.md › Rules for edges) are not
-// built yet.
+// type to as it is; Catalog.Connects also allows implicit conversions.
 func Assignable(from, to string) bool {
 	return from == to || from == Any || to == Any
+}
+
+// EventCall is the On call event's node type, which starts function graphs
+// and actions; its declared outputs are the graph's inputs.
+const EventCall = "event.call"
+
+// SignatureOf is a graph's inputs (its On call event's outputs) and outputs
+// (its Return nodes' inputs), for Call graph.
+func SignatureOf(g Graph, types []NodeType) (in, out []Pin) {
+	byID := map[string]NodeType{}
+	for _, t := range types {
+		byID[t.ID] = t
+	}
+	seen := map[string]bool{}
+	for _, n := range g.Nodes {
+		t, ok := byID[n.Type]
+		if !ok {
+			continue
+		}
+		pins, err := t.PinsOf(n.Config)
+		if err != nil {
+			continue
+		}
+		switch n.Type {
+		case EventCall:
+			for _, p := range pins.Out {
+				if !p.Exec {
+					in = append(in, p)
+				}
+			}
+		case "flow.return":
+			for _, p := range pins.In {
+				if !p.Exec && !seen[p.ID] {
+					seen[p.ID] = true
+					out = append(out, p)
+				}
+			}
+		}
+	}
+	return in, out
 }
 
 // OutputsConfig is the config of a node whose data pins the user declares,

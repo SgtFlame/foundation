@@ -1,0 +1,11 @@
+{
+  "name": "test.echo.check",
+  "title": "Check",
+  "description": "Signs in and does nothing: whether the connection's settings work",
+  "input": {
+    "type": "object",
+    "properties": {}
+  },
+  "effect": "read",
+  "source": "connector"
+}

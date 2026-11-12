@@ -2,7 +2,7 @@
 
 ## Frontend
 
-The main React entry point is `frontend/axiom` but this will be refactored so that most of those components will e moved to `frontend/common`, and the thin client web app will be `frontend/axiom` and the thick client will be `frontend/axiom-core`.
+The frontend is a Yarn workspace in `frontend/`. `frontend/common` (`@foundation/common`) holds the pages, components, editors and services, consumed as source; an app is a thin entry point that composes them. `frontend/example` is the reference app. The thin client web app will be `frontend/axiom` and the thick client `frontend/axiom-core`, both built the same way on `frontend/common`.
 
 ### Common
 
@@ -21,6 +21,8 @@ The main React entry point is `frontend/axiom` but this will be refactored so th
 `Gin`
 `GORM`
 `samber/oops` - Structured errors, and the base of the `logging` builder
+`NATS JetStream` (`nats-server`, embedded, and `nats.go`) - The live core's event streams, KV projections, presence and UI sessions (`documentation/Live.md`)
+`coder/websocket` - The live connection, one WebSocket per browser window
 
 ### Relational Database
 
