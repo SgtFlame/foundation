@@ -216,6 +216,11 @@ type Type struct {
 	// time on a connection (POP3 locks the mailbox): its calls and its
 	// event source take the connection's lock in cx_locks_<tenant> (07c).
 	Exclusive bool `json:"exclusive,omitempty"`
+	// Group is the access group its tenant connections share (forge 07f:
+	// mail for SMTP, IMAP and POP3): they live under
+	// tenant:<t>/connectors:<group>, so a role scoped there (Forge's Mail
+	// administrator) manages them and no others. Empty for none.
+	Group string `json:"group,omitempty"`
 }
 
 // SurfaceInfo is an inbound surface as the registry lists it (15a): an

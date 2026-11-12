@@ -49,10 +49,13 @@ const (
 // holds it. Secrets are only references: the value is in the SecretStore,
 // its placeholder in cx_secrets_<tenant>.
 type Connection struct {
-	ID       string            `json:"id"`
-	Name     string            `json:"name"`
-	Type     string            `json:"type"`
-	Owner    string            `json:"owner"` // tenant, or user:<id>
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Type  string `json:"type"`
+	Owner string `json:"owner"` // tenant, or user:<id>
+	// Group is its type's access group when it was made (forge 07f): a
+	// tenant connection's path is then tenant:<t>/connectors:<group>/….
+	Group    string            `json:"group,omitempty"`
 	Settings map[string]any    `json:"settings"`
 	Secrets  map[string]string `json:"secrets,omitempty"` // field → version
 	// Status is ok, error (an auth error stopped it until it is updated)
@@ -89,19 +92,30 @@ func UserOf(owner string) uint64 {
 	return id
 }
 
-// Resource is a connection's authz path: tenant:<t>/connection:<id>, or
-// tenant:<t>/user:<u>/connection:<id> for a user's own, which is theirs.
-func Resource(tenant uint64, owner, id string) string {
+// Resource is a connection's authz path: tenant:<t>/connection:<id>,
+// tenant:<t>/connectors:<group>/connection:<id> for a tenant connection of
+// a grouped type, or tenant:<t>/user:<u>/connection:<id> for a user's own,
+// which is theirs.
+func Resource(tenant uint64, owner, group, id string) string {
+	return Parent(tenant, owner, group) + "/connection:" + id
+}
+
+// Parent is where a connection with that owner and group lives: the
+// resource connection.manage is checked on to make one.
+func Parent(tenant uint64, owner, group string) string {
 	base := "tenant:" + strconv.FormatUint(tenant, 10)
 	if u := UserOf(owner); u != 0 {
-		base += "/user:" + strconv.FormatUint(u, 10)
+		return base + "/user:" + strconv.FormatUint(u, 10)
 	}
-	return base + "/connection:" + id
+	if group != "" {
+		base += "/connectors:" + group
+	}
+	return base
 }
 
 // Check checks an action on a connection as p.
 func Check(args features.ServiceArgs, c Connection, action string) error {
-	res := Resource(args.Principal.TenantID, c.Owner, c.ID)
+	res := Resource(args.Principal.TenantID, c.Owner, c.Group, c.ID)
 	return authz.Check(args.Context(), args.Principal, "connection."+action, res).Err("connection."+action, res)
 }
 

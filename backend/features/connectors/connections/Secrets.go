@@ -99,12 +99,18 @@ func seal(deps func() Deps, create bool) func(s live.Sealing) (json.RawMessage, 
 		ctx, tenant := s.Context(), s.Principal.TenantID
 		if create {
 			owner := OwnerTenant
-			var o struct{ Owner string }
+			var o struct{ Owner, Type string }
 			_ = json.Unmarshal(s.Args, &o)
 			if o.Owner != OwnerTenant {
 				owner = OwnerOf(s.Principal)
 			}
-			if err := Check(s.ServiceArgs, Connection{ID: s.Target.ID, Owner: owner}, "manage"); err != nil && owner == OwnerTenant {
+			group := ""
+			if d.Registry != nil && owner == OwnerTenant {
+				if t, ok, _ := d.Registry.Type(ctx, tenant, o.Type); ok {
+					group = t.Type.Group
+				}
+			}
+			if err := Check(s.ServiceArgs, Connection{ID: s.Target.ID, Owner: owner, Group: group}, "manage"); err != nil && owner == OwnerTenant {
 				return nil, &live.Problem{Code: "forbidden", Message: err.Error()}
 			}
 		} else {
@@ -237,6 +243,9 @@ func Settings(ctx context.Context, d Deps, tenant uint64, c Connection) (json.Ra
 			return nil, log.Wrapf(err, "the secret %s of connection %s cannot be read", field, c.ID)
 		}
 		out[field] = v
+	}
+	if err := resolveRefs(ctx, d, tenant, c.Type, out); err != nil {
+		return nil, err
 	}
 	return json.Marshal(out)
 }

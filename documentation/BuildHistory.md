@@ -774,6 +774,15 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-1).
     - **Pending, carried forward**: the *Connection* picker in *Call connector*'s panel; pushed events and registration (15f); scripted connectors (7d); the mail contracts and types (7e to 7h).
 
+49. **Connector groups, contributed roles, connection validators and ref settings** (with Forge iteration 7, part 7f, [forge 07f-SMTP.md](../../forge/documentation/plans/07f-SMTP.md)). *Built* ([Connectors.md](Connectors.md#built-in-slice-49)).
+    - **Built**:
+      - `connectors`: `Type.Group`, checked by `CheckType`; `connections`: `Connection.Group`, tenant connections of a grouped type under `tenant:<t>/connectors:<group>` (`Resource`, `Parent`), the `connectors` resource type, the `connection.validator` point run by create and update, refs in settings resolved on `cx.resolve` (`Deps.Config`, `Deps.Extensions`, `RefItem`);
+      - `authz`: contributed built-in tenant roles (`authz.role`, ids 100–999);
+      - Forge: the `mail` section, the *Mail administrator* role, the mail account validator and `mail.smtp`.
+    - **Blockers**: none. Forge 07f questions 1 and 2 answered with their proposals before building (2026-11-12); 2 was the user's direction while building.
+    - **Decisions to review after seeing it**: in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-3).
+    - **Pending, carried forward**: IMAP and POP3 joining the `mail` group (7g, 7h).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -829,3 +838,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 46. The connector registry and bus (Forge 7b) | forge 07b 1 (nested objects one pin), 2 (versions side by side), 4 (`cx.resolve` in 7c), 5 (the protocol in the docs), 6 (shapes here, adapters in 15), 7 (claiming in 15c), 8 (`destructive`), 9 (no durable wait) and 10 (callback metadata here), answered with their proposals; 3 (always NATS) the user's direction | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it), the *Connectors* palette with real contracts |
 | 47. Connections, sessions and event sources (Forge 7c) | forge 07c 1 (definitions), 2 (`connection.manage`, grantable to an app role per connection), 3 (share plus one, no rebalancing), answered with their proposals | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-1), the Connection form for a type with many settings |
 | 48. Scripted connectors (Forge 7d) | forge 07d 1 (no scripted contracts; 11-Zapier) and 2 (exported with the manifest), answered with their proposals | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-2), the Connectors tab once 7e defines contracts |
+| 49. Connector groups, roles, validators and refs (with Forge 7f) | forge 07f 1 (only listed addresses) and 2 (tenant mail domains in a section, a Mail administrator role, personal accounts off the tenant domains, tenant accounts at their domain), answered with their proposals | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-3), the Connection form for a mail account |

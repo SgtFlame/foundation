@@ -190,6 +190,12 @@ func CheckType(t Type, contract func(ref string) (Contract, bool)) []Problem {
 		c.add("id", "%q is not a type id: dotted words of letters, digits and -, never _", t.ID)
 	}
 	c.meta("meta", t.Meta)
+	if t.Group != "" && (!ValidID(t.Group) || strings.ContainsAny(t.Group, "./:")) {
+		c.add("group", "%q is not a group: one word of letters, digits and -", t.Group)
+	}
+	if t.Group != "" && t.NoConnection {
+		c.add("group", "a type that needs no connection has no connections to group")
+	}
 	if t.Source != SourceBuiltin && t.Source != SourceScripted {
 		c.add("source", "must be builtin or scripted, not %q", t.Source)
 	}

@@ -33,6 +33,13 @@ func ContributeAccess(reg *extensions.Registry) {
 			{Name: "manage", Title: "Create, change and delete the tenant's connections", Class: authz.ClassAdmin},
 		},
 	})
+	// A connector type's access group (forge 07f): tenant connections of
+	// its types live under tenant:<t>/connectors:<group>, where a role
+	// scoped to it reaches them and no others. It has no actions of its own.
+	authz.ResourceTypes.Register(reg, authz.ResourceType{
+		Descriptor: extensions.Descriptor{ID: "connectors", Source: "connectors", Order: 97}, Title: "Connector groups", Parent: "tenant",
+		Actions: []authz.Action{},
+	})
 }
 
 // list reads every connection of the tenant.

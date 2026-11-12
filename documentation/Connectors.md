@@ -378,3 +378,51 @@ Decided while building:
 - **refused:** `app.addConnector` naming a missing graph, a graph answering another operation, a graph of another kind or an operation no contract has is refused at `connectors[echo].operations.<op>` with a fix; a Return without the required `text` is refused.
 
 In Chromium against Forge's server, the Applications editor's Connectors tab renders beside Commands and Queries with no console errors; the server defines no Go contracts until 7e, so the tab says so and a connector cannot be made from it yet.
+
+## Built in slice 49
+
+Built with Forge's part [7f](../../forge/documentation/MailConnectors.md#built-in-part-7f), for its mail domains (the user's direction, 2026-11-12: a tenant's mail domains are set at the tenant level, mail administrators add the tenant's accounts, and users' own accounts stay off those domains). Four generic additions, none of which knows about mail:
+
+### Connector groups
+
+- `Type.Group` names an access group shared by several types (Forge's `mail`: SMTP now, IMAP and POP3 next). `CheckType` takes one word, and refuses a group on a type that needs no connection.
+- A **tenant** connection of a grouped type records the group when it is made (`Connection.Group`) and lives at `tenant:<t>/connectors:<group>/connection:<id>` (`connections.Resource(tenant, owner, group, id)`). `connection.manage` to make one is checked on `connections.Parent(...)`, `tenant:<t>/connectors:<group>`, both in `Seal` and in the decision. A user's own connection is unchanged, at `tenant:<t>/user:<u>/connection:<id>`.
+- The `connectors` resource type (no actions) names the segment for grants and the Role Editor. *Owner* and *Administrator*, granted on the tenant, reach every group by inheritance; a role scoped to `connectors:<group>` reaches that group's connections and no others.
+
+### Contributed built-in roles
+
+`authz.ContributedRoles` (`authz.role`) lets a feature contribute a tenant role with fixed permissions, usually scoped (`config:mail/config.write`, `connectors:mail/connection.manage`): `authz.ContributedRole{Descriptor, Role}`, its id reserved in `FirstContributedRole`–`LastContributedRole` (100–999; one outside is left out with a warning). `Builtins` appends them as built-in tenant roles, so `IsBuiltin` covers them (neither edited nor deleted) and grants name them like any role. See [RBAC.md › Since slice 49](RBAC.md#since-slice-49).
+
+### Connection validators
+
+`connections.Validators` (`connection.validator`): `Validator{Descriptor, Types, Validate(args, Proposed) []FieldProblem}` checks what a settings schema cannot. `connection.create` and `connection.update` run the validators for the connection's type in their decision, after the schema check, on the connection as it would be (`Proposed{ID, Type, Owner, Group, Settings, Secrets}`: settings without secrets, and which secrets are set); problems refuse the command at their paths.
+
+### Ref settings resolved for adapters
+
+A type's settings field may carry Configuration's `ref` (`"<section>#<arrayPath>"`): its value is the key of an item of another section's list, the array schema's `key` (or `id`). The Connection form draws it with `SchemaField`'s `RefSelect`, a picker of the section's items. `cx.resolve` puts the item itself in the key's place (`connections.Settings` → `resolveRefs`, reading the section as the tenant's service principal through `Deps.Config` and `Deps.Extensions`), so an adapter in any process gets whole settings and never reads configuration. A key no item has any more fails the resolve (`ref_not_found`). `connections.RefItem(ctx, reader, reg, tenant, ref, key)` is the lookup, for validators too.
+
+### Decisions
+
+1. **Groups as a path segment**, not a permission per type: authz's scoped permissions and grant inheritance already give "this role manages these connections and no others", and a user's own connections are untouched.
+2. **A contributed role is granted beside a member's role.** The connection commands' bus check (`connection.read` on the tenant) is held by every member's tenant role, so a role scoped to a group only adds; Forge's Mail administrator says so in its description.
+3. **Refs are resolved by Foundation on `cx.resolve`**, the one place an adapter gets settings, rather than each adapter reading configuration: adapters may run outside the server.
+4. **Validators run inside the decision**, so a refused command stores nothing (its secrets were sealed already, as for any refusal after `Seal`) and every client and tool gets the same problems.
+
+### Decisions to review after seeing it
+
+- The Connection form for a grouped type: the domain picker beside the server fields a tenant account leaves empty (the form shows every field to both kinds of owner).
+- Whether connections listed to a Mail administrator should also show the users' own mail connections' existence, as an *Administrator* sees them.
+- A domain removed from its section while accounts name it: their sessions fail to resolve (`ref_not_found`, refused as unavailable) rather than the change being refused.
+
+### Verification
+
+`go test ./features/connectors/...`, `./features/authz/...`, `./features/config/...`, `./features/apps/...` and `./features/jobs/...` pass. `TestGroupsRolesValidatorsRefs` (`connections/groups_test.go`), with the policy installed: a grouped test type `test.grouped` (group `grp`, a `ref` to a test section keyed `name`), a validator and a contributed role (id 100) scoped to `connectors:grp`:
+
+- the role's holder (also a *Viewer*) makes a tenant `test.grouped` connection (recorded with group `grp`) and updates it, but cannot make a tenant `test.secure` one; an *Editor* and a *Viewer* cannot make a tenant grouped one; an *Administrator* can;
+- the validator refuses a personal connection naming a profile, at `settings.profile`, and accepts one without;
+- a call reaches an adapter in its own NATS connection with the profile's item in place of its key, the secret and the updated setting beside it; with the item gone, resolving fails with `not in test.profiles`.
+
+### Not built
+
+- Refs nested below the top level of a type's settings.
+- Refusing a section change that leaves connections naming a missing item.

@@ -28,6 +28,11 @@ type Deps struct {
 	Secrets     config.SecretStore
 	// Dispatcher sends connection.test's check.
 	Dispatcher *connectors.Dispatcher
+	// Config and Extensions resolve settings that are refs to another
+	// section's item (forge 07f), for cx.resolve; without them a ref is
+	// sent as its key.
+	Config     config.Reader
+	Extensions *extensions.Registry
 }
 
 // Events.
@@ -177,7 +182,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		NewTarget: func() string { return strconv.FormatUint(features.NewTSID(), 10) },
 		NoTool:    true, // its secrets would be recorded with the tool call
 		Seal:      seal(deps, true),
-		Decide:    func(d live.Decision) ([]live.NewEvent, []live.Problem) { return decideCreate(deps(), d) },
+		Decide:    func(d live.Decision) ([]live.NewEvent, []live.Problem) { return decideCreate(deps(), reg, d) },
 	})
 	command(live.Command{
 		Descriptor: extensions.Descriptor{ID: "connection.update"}, Title: "Update a connection",
@@ -187,7 +192,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Events:      []string{EventUpdated},
 		NoTool:      true,
 		Seal:        seal(deps, false),
-		Decide:      func(d live.Decision) ([]live.NewEvent, []live.Problem) { return decideUpdate(deps(), d) },
+		Decide:      func(d live.Decision) ([]live.NewEvent, []live.Problem) { return decideUpdate(deps(), reg, d) },
 	})
 	command(live.Command{
 		Descriptor: extensions.Descriptor{ID: "connection.rename"}, Title: "Rename a connection",
@@ -344,7 +349,7 @@ func problemsOf(fp []FieldProblem) []live.Problem {
 	return out
 }
 
-func decideCreate(deps Deps, d live.Decision) ([]live.NewEvent, []live.Problem) {
+func decideCreate(deps Deps, reg *extensions.Registry, d live.Decision) ([]live.NewEvent, []live.Problem) {
 	if len(d.State) > 0 {
 		return nil, []live.Problem{{Code: "connection_exists", Message: fmt.Sprintf("connection %s exists", d.Target.ID)}}
 	}
@@ -358,8 +363,13 @@ func decideCreate(deps Deps, d live.Decision) ([]live.NewEvent, []live.Problem) 
 	}
 	c := Connection{ID: d.Target.ID, Name: strings.TrimSpace(a.Name), Type: a.Type, Owner: owner, Settings: a.Settings, Status: StatusOK,
 		CreatedAt: time.Now().UTC(), CreatedBy: d.Principal.UserID}
+	typ, fields, p := fieldsFor(deps, d.ServiceArgs, a.Type)
+	if p != nil {
+		return nil, p
+	}
 	if owner == OwnerTenant {
-		res := authz.Tenant(d.Principal)
+		c.Group = typ.Group
+		res := Parent(d.Principal.TenantID, owner, c.Group)
 		if err := authz.Check(d.Context(), d.Principal, "connection.manage", res).Err("connection.manage", res); err != nil {
 			return nil, []live.Problem{{Code: "forbidden", Path: "owner", Message: err.Error(), Fix: "make it yours (owner me), or ask an administrator"}}
 		}
@@ -369,10 +379,6 @@ func decideCreate(deps Deps, d live.Decision) ([]live.NewEvent, []live.Problem) 
 	}
 	if c.Settings == nil {
 		c.Settings = map[string]any{}
-	}
-	_, fields, p := fieldsFor(deps, d.ServiceArgs, a.Type)
-	if p != nil {
-		return nil, p
 	}
 	secrets, p := sealedSecrets(a.Secrets)
 	if p != nil {
@@ -387,6 +393,9 @@ func decideCreate(deps Deps, d live.Decision) ([]live.NewEvent, []live.Problem) 
 	if fp := fields.Validate(c.Settings, set); len(fp) > 0 {
 		return nil, problemsOf(fp)
 	}
+	if p := validate(reg, d.ServiceArgs, Proposed{ID: c.ID, Type: c.Type, Owner: c.Owner, Group: c.Group, Settings: c.Settings, Secrets: slices.Sorted(maps.Keys(set))}); len(p) > 0 {
+		return nil, p
+	}
 	if len(set) > 0 {
 		c.Secrets = set
 	}
@@ -400,7 +409,7 @@ func decideCreate(deps Deps, d live.Decision) ([]live.NewEvent, []live.Problem) 
 	return []live.NewEvent{{Type: EventCreated, Data: c}}, nil
 }
 
-func decideUpdate(deps Deps, d live.Decision) ([]live.NewEvent, []live.Problem) {
+func decideUpdate(deps Deps, reg *extensions.Registry, d live.Decision) ([]live.NewEvent, []live.Problem) {
 	c, p := managed(d)
 	if p != nil {
 		return nil, p
@@ -445,6 +454,9 @@ func decideUpdate(deps Deps, d live.Decision) ([]live.NewEvent, []live.Problem) 
 	}
 	if fp := fields.Validate(settings, set); len(fp) > 0 {
 		return nil, problemsOf(fp)
+	}
+	if p := validate(reg, d.ServiceArgs, Proposed{ID: c.ID, Type: c.Type, Owner: c.Owner, Group: c.Group, Settings: settings, Secrets: slices.Sorted(maps.Keys(set))}); len(p) > 0 {
+		return nil, p
 	}
 	if a.Options != nil {
 		if fp := checkOptions(*a.Options); len(fp) > 0 {

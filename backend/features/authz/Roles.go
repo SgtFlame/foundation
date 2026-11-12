@@ -1,6 +1,7 @@
 package authz
 
 import (
+	"context"
 	"slices"
 	"strings"
 
@@ -110,8 +111,27 @@ var builtins = []builtin{
 		classIn(ClassRead)},
 }
 
+// ContributedRole is a built-in tenant role a feature contributes, such as
+// Forge's Mail administrator (forge 07f): fixed permissions, usually
+// scoped ("config:mail/config.write", "connectors:mail/connection.manage"),
+// granted on a tenant like any role, neither edited nor deleted. Its ID is
+// reserved, from FirstContributedRole to LastContributedRole.
+type ContributedRole struct {
+	extensions.Descriptor
+	Role Role
+}
+
+// The contributed roles' reserved IDs.
+const (
+	FirstContributedRole uint64 = 100
+	LastContributedRole  uint64 = 999
+)
+
+// ContributedRoles is the point contributed built-in roles are registered on.
+var ContributedRoles = extensions.NewPoint[ContributedRole]("authz.role", "Built-in tenant roles contributed by features, with fixed permissions")
+
 // Builtins are the built-in roles, their permissions taken from the
-// registry's resource types.
+// registry's resource types, then the contributed ones.
 func Builtins(reg *extensions.Registry) []Role {
 	out := make([]Role, 0, len(builtins))
 	for _, b := range builtins {
@@ -134,10 +154,22 @@ func Builtins(reg *extensions.Registry) []Role {
 		}
 		out = append(out, r)
 	}
+	for _, c := range ContributedRoles.All(reg) {
+		r := c.Role
+		if r.ID < FirstContributedRole || r.ID > LastContributedRole {
+			log.Warn(context.Background(), "authz: contributed role %q has id %d, outside %d-%d, and is left out", r.Name, r.ID, FirstContributedRole, LastContributedRole)
+			continue
+		}
+		r.BuiltIn, r.Scope, r.TenantID, r.App = true, OnTenant, 0, ""
+		if r.Permissions == nil {
+			r.Permissions = []string{}
+		}
+		out = append(out, r)
+	}
 	return out
 }
 
-// IsBuiltin tells whether id is a built-in role's.
+// IsBuiltin tells whether id is a built-in role's, contributed ones included.
 func IsBuiltin(id uint64) bool {
-	return id >= RoleSuperAdmin && id <= RoleViewer
+	return id >= RoleSuperAdmin && id <= RoleViewer || id >= FirstContributedRole && id <= LastContributedRole
 }

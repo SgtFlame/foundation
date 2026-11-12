@@ -422,7 +422,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var collabLive collabservice.Service
 		registry := extensions.NewRegistry()
 		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.Modes, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, authz.ResourceTypes,
-			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents, connectors.Contracts, connectors.Types)
+			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents, connectors.Contracts, connectors.Types, connections.Validators, authz.ContributedRoles)
 		// Each feature declares its resource types and their actions
 		authz.Contribute(registry)
 		identity.ContributeAccess(registry)
@@ -743,7 +743,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		connectionAccess := connections.Connections{Deps: func() connections.Deps { return connectionDeps }}
 		connectorDispatcher := &connectors.Dispatcher{NC: nats.Conn(), Registry: connectorRegistry, Connections: connectionAccess, Failed: connectionAccess.Failed}
 		connectorDeps = connectors.Deps{Registry: connectorRegistry, Dispatcher: connectorDispatcher}
-		connectionDeps = connections.Deps{Projections: projections, Bus: liveBus, Registry: connectorRegistry, Secrets: secretStore, Dispatcher: connectorDispatcher}
+		connectionDeps = connections.Deps{Projections: projections, Bus: liveBus, Registry: connectorRegistry, Secrets: secretStore, Dispatcher: connectorDispatcher, Config: configService, Extensions: registry}
 		scriptedDeps = scripted.Deps{Store: projections, Engine: cognitionEngine, JS: connectorRegistry.JetStream(), Reg: registry}
 		// Adapters' settings on cx.resolve and their sources' status on
 		// cx.status, in a queue group in every process

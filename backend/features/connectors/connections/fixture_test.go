@@ -120,6 +120,7 @@ type fixture struct {
 	bus      *bus.Bus
 	subs     *subscribe.Subscriptions
 	deps     connections.Deps
+	live     *connections.Deps // what Serve and the commands read
 	jobs     jobs.Deps
 	secrets  *memSecrets
 	hits     *hits
@@ -215,7 +216,7 @@ func setup(t *testing.T) *fixture {
 	dispatcher := &connectors.Dispatcher{NC: srv.Conn(), Registry: registry, Connections: conns, Failed: conns.Failed, Timeout: 3 * time.Second}
 	cxDeps = connectors.Deps{Registry: registry, Dispatcher: dispatcher}
 	connDeps = connections.Deps{Projections: p, Bus: f.bus, Registry: registry, Secrets: f.secrets, Dispatcher: dispatcher}
-	f.deps = connDeps
+	f.deps, f.live = connDeps, &connDeps
 	scrDeps = scripted.Deps{Store: p, Engine: eng, JS: srv.JS(), Reg: reg}
 	f.scripted = scrDeps
 	ctx, cancel := context.WithCancel(context.Background())
