@@ -144,7 +144,8 @@ type Operation struct {
 	// Destructive marks a write that deletes or overwrites (MCP's
 	// destructiveHint; 07b question 8).
 	Destructive bool `json:"destructive,omitempty"`
-	// Key is the arg that makes the operation idempotent (a message id):
+	// Key is the arg that makes the operation idempotent (a message id), a
+	// top-level field or a dotted path to a nested one (message.messageId):
 	// a call with a key already done is not done again (the ledger, 07c).
 	Key string `json:"key,omitempty"`
 	// Errors are the error codes it may return.

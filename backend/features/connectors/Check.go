@@ -101,8 +101,8 @@ func CheckContract(ct Contract) []Problem {
 		args := c.schema(path+".args", op.Args, true)
 		result := c.schema(path+".result", op.Result, true)
 		if op.Key != "" && args != nil {
-			if _, ok := args.Properties[op.Key]; !ok {
-				c.add(path+".key", "names %q, which args has no field for", op.Key)
+			if !args.has(op.Key) {
+				c.add(path+".key", "names %q, which args has no field for (a field, or a dotted path to a nested one)", op.Key)
 			}
 		}
 		for _, code := range op.Errors {

@@ -97,11 +97,7 @@ func (d *Dispatcher) Call(args features.ServiceArgs, c Call) (json.RawMessage, *
 	h := CallHeaders{CallID: strconv.FormatUint(features.NewTSID(), 10), Contract: info.Ref, Principal: args.Principal.Ref(),
 		Meta: args.Meta, Trace: logging.TraceFrom(ctx)}
 	if op.Key != "" {
-		var a map[string]any
-		_ = json.Unmarshal(c.Args, &a)
-		if v, ok := a[op.Key]; ok && v != nil {
-			h.Key = fmt.Sprint(v)
-		}
+		h.Key = KeyOf(op.Key, c.Args)
 	}
 	// The ledger: a key the outside service accepted already returns what
 	// it gave, with no request, whichever process sent it first (07c)
@@ -209,4 +205,25 @@ func implements(t Type, ref string) bool {
 		}
 	}
 	return false
+}
+
+// KeyOf is the idempotency key an operation's key names in args: a
+// top-level field or a dotted path to a nested one (message.messageId);
+// "" when it is missing or empty.
+func KeyOf(key string, args json.RawMessage) string {
+	var v any
+	if json.Unmarshal(args, &v) != nil {
+		return ""
+	}
+	for _, part := range strings.Split(key, ".") {
+		m, ok := v.(map[string]any)
+		if !ok {
+			return ""
+		}
+		v = m[part]
+	}
+	if v == nil || v == "" {
+		return ""
+	}
+	return fmt.Sprint(v)
 }

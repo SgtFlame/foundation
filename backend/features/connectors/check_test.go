@@ -76,6 +76,7 @@ func TestCheckRefusesBadMetadata(t *testing.T) {
 			c.Events[0].Delivery = []string{"push"}
 		}},
 		{"key", "operations.start.key", "no field", func(c *connectors.Contract) { c.Operations[2].Key = "nope" }},
+		{"nested key", "operations.echo.key", "no field", func(c *connectors.Contract) { c.Operations[0].Key = "options.nope" }},
 	}
 	for _, tc := range cases {
 		c := connectorstest.Contract()
@@ -83,6 +84,19 @@ func TestCheckRefusesBadMetadata(t *testing.T) {
 		if p := connectors.CheckContract(c); !has(p, tc.path, tc.want) {
 			t.Errorf("%s: want %q at %s, got %v", tc.name, tc.want, tc.path, p)
 		}
+	}
+	// a key may be a dotted path to a nested arg (mail.transport send's
+	// message.messageId), and the dispatcher reads it there
+	c := connectorstest.Contract()
+	c.Operations[0].Key = "options.upper"
+	if p := connectors.CheckContract(c); len(p) > 0 {
+		t.Errorf("a nested key: %v", p)
+	}
+	if k := connectors.KeyOf("options.upper", json.RawMessage(`{"text":"x","options":{"upper":true}}`)); k != "true" {
+		t.Errorf("KeyOf a nested key = %q", k)
+	}
+	if k := connectors.KeyOf("options.upper", json.RawMessage(`{"text":"x"}`)); k != "" {
+		t.Errorf("KeyOf a missing key = %q", k)
 	}
 	ty := connectorstest.Types()[0]
 	ty.Contracts = []string{"test.echo"}

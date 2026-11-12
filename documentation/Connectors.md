@@ -16,10 +16,10 @@ Services outside the tenant (a mail server, an HTTP API, a SaaS), described by m
 ### Contracts and types
 
 - **A contract** (`Contract{ID, Version, Meta, Operations, Events}`) is referenced as `id@version` (`Ref`, `ParseRef`). An incompatible change is a new version beside the old (07b question 2). A node names its version, and a type implements one version of each contract.
-- **An operation** has `id`, `title`, `description`, `args` and `result` (JSON Schemas, type object), `examples` (args with their result), `effect` (`read`, `write` or `send`), `destructive` (07b question 8), `key` (the arg that makes it idempotent), `errors` (the codes it may return), `callbacks` (events that answer it later, each with a `correlate {result, event}` pair of field paths) and `remote` (a discovered operation's outside name).
+- **An operation** has `id`, `title`, `description`, `args` and `result` (JSON Schemas, type object), `examples` (args with their result), `effect` (`read`, `write` or `send`), `destructive` (07b question 8), `key` (the arg that makes it idempotent: a top-level field or a dotted path to a nested one, such as `mail.transport` `send`'s `message.messageId`, read by `KeyOf`; added with Forge's 7e), `errors` (the codes it may return), `callbacks` (events that answer it later, each with a `correlate {result, event}` pair of field paths) and `remote` (a discovered operation's outside name).
 - **An event** has `id`, `title`, `description`, `payload` (a JSON Schema, type object), `example`, `idFields` (the payload fields that make it unique, its future `Nats-Msg-Id`), `delivery` (`watch`, `callback` or both) and `subscription` (the service's own name for it).
 - **A type** (`Type`) has `id`, `contracts` (refs with versions), `meta`, `settings` (Configuration's schema language; fields of type `secret` go to `SecretStore` with 7c), `noConnection`, `source` (`builtin` or `scripted`), `discovers` (its contract comes from each connection) and `receives` (a callback scheme: `stripe`, `github`, `standard-webhooks`, `hmac-sha256`).
-- **Builtin contracts and types** are contributions to the `connector.contract` and `connector.type` points (`BuiltinContract`, `BuiltinType`), registered with `connectors.ContributeBuiltins(reg, source, contracts, types)` from a feature's `Contribute`. `serve.go` declares both points. Neither server has builtin types yet; Forge's mail types come with 7e.
+- **Builtin contracts and types** are contributions to the `connector.contract` and `connector.type` points (`BuiltinContract`, `BuiltinType`), registered with `connectors.ContributeBuiltins(reg, source, contracts, types)` from a feature's `Contribute`. `serve.go` declares both points. Foundation's server has no builtin types; Forge's contributes the mail contracts and `mail.mime` (Forge [MailConnectors.md](../../forge/documentation/MailConnectors.md#built-in-part-7e)).
 - **Errors** (`*connectors.Error{code, message, retryable, retryAfter}`) use the codes `auth`, `notFound`, `conflict`, `invalid`, `rateLimited`, `unavailable` and `notSupported`. `Errorf` makes `unavailable` and `rateLimited` retryable. The error has `Retryable()` and `RetryAfter()`, so `jobs.Classify` retries a job that fails with a retryable one. `AsError` turns any other error into a non-retryable `unavailable`.
 
 ### The metadata check
@@ -138,7 +138,7 @@ A call no adapter serves gets NATS's *no responders* at once and returns retryab
 - **Announcements** are written at once and every `AnnounceEvery`. A stop unsubscribes, waits for running calls, deletes its announcements and closes its sessions.
 - **Surfaces.** `Surfaces` are announced, and each `Listen` runs with a `Gateway` that refuses every request (`notSupported`) until 15a. `Watcher` is run by 7c, `Describer` by 15c, and `Receiver`/`Registrar` by 15f; they are declared only.
 
-`serve.go` (Foundation's and Forge's) makes the registry and dispatcher. It starts an in-process adapter from `connectorImpls()` when that lists implementations; it lists none yet.
+`serve.go` (Foundation's and Forge's) makes the registry and dispatcher. It starts an in-process adapter from `connectorImpls()` when that lists implementations: none in Foundation's; Forge's lists `mail.mime` (7e).
 
 ### Nodes
 
@@ -215,7 +215,7 @@ In Forge, the Blueprint Editor was checked in headless Chromium. The setup was a
 ### Not built
 
 - ~~Connections, `cx.resolve`, `use` checks, the ledger, status on `auth`, event sources, `CX_<tenant>` and *On connector event* starting triggers~~: built in [slice 47](#built-in-slice-47). The *Connection* picker in *Call connector*'s details panel is still to build.
-- Scripted types in the registry (7d), and the mail contracts and types (7e).
+- ~~Scripted types in the registry (7d)~~: built in slice 48. ~~The mail contracts (7e)~~: built in Forge ([MailConnectors.md](../../forge/documentation/MailConnectors.md#built-in-part-7e)); the SMTP, IMAP and POP3 types are 7f to 7h.
 - `bp.check` re-normalizing nodes when an announced contract changes, and the editor redrawing pins at once. A change shows when the node's config is next set or the graph is imported.
 - A *Call connector* in a chat tool asking for approval by its operation's effect (graph tools ask by their own `asks`).
 - The gateway, exposures, MCP and tool adapters, discovery, the hook endpoint and registration (iteration 15).
