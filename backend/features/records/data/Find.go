@@ -377,9 +377,10 @@ type planned struct {
 	q      Query
 	// rule is the entity type's read rule, which hides records from who
 	// as a filter does (Records.md › Built in slice 21)
-	rule   *vm.Program
-	who    features.Principal
-	expand []expansion
+	rule    *vm.Program
+	ruleSrc string // the rule's source, which a table's query compiles to SQL
+	who     features.Principal
+	expand  []expansion
 }
 
 // match reports whether a record is one the query gives its principal.
@@ -395,8 +396,8 @@ func prepare(args features.ServiceArgs, d Deps, q Query) (*planned, error) {
 	if problems != nil {
 		return nil, log.Code("entity_not_found").Errorf("%s", problems[0].Message)
 	}
-	rule, _ := e.RuleFor(args.Context(), args.Principal, "read")
-	p := &planned{e: e, q: q, rule: rule, who: args.Principal}
+	rule, src := e.RuleFor(args.Context(), args.Principal, "read")
+	p := &planned{e: e, q: q, rule: rule, ruleSrc: src, who: args.Principal}
 	var and []Filter
 	ids := make([]string, 0, len(q.Where))
 	for id := range q.Where {
@@ -596,6 +597,9 @@ func (p *planned) read(args features.ServiceArgs, d Deps) (Result, []row, error)
 	limit := d.settings(args).ScanLimit
 	if _, ok := d.Projections.(*sandbox); ok {
 		return p.scan(args, d, limit)
+	}
+	if d.sql(p.e) {
+		return d.Tables.read(args, p, limit)
 	}
 	// An ordered walk: an index in the sort's order, the filter's path
 	// through it or, without one, the whole index

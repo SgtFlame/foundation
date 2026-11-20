@@ -52,7 +52,11 @@ type Deps struct {
 	Files Files // without it, no file can be set on a record
 	// Search keeps the searchable records' search index; without it,
 	// records are not searched (records/search)
-	Search      Searcher
+	Search Searcher
+	// Tables keeps the relational projection of the types whose storage is
+	// {projection: "sql"}; without it, their queries read the KV projection
+	// (Records.md › Built in slice 52)
+	Tables      *Tables
 	Projections Projections
 	Bus         *bus.Bus // the converter's record.convert commands
 	// Settings reads the records section as the principal sees it.

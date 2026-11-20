@@ -58,7 +58,9 @@ func runFind(deps func() Deps) func(live.Feed) error {
 		if err != nil {
 			return err
 		}
-		if len(p.expand) > 0 {
+		if _, dry := d.Projections.(*sandbox); len(p.expand) > 0 || !dry && d.sql(p.e) {
+			// a table's page runs again on its type's changes, as an
+			// expansion's does (Records.md › Built in slice 52)
 			return rerunFind(f, d, p)
 		}
 		// Changes are followed from before the page is read, so none is

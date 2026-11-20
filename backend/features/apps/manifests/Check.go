@@ -12,6 +12,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/records"
+	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
 	"github.com/SgtFlame/foundation/backend/features/records/entities"
 	"github.com/SgtFlame/foundation/backend/features/ui"
 	"github.com/SgtFlame/foundation/backend/features/ui/prefabs"
@@ -253,6 +254,28 @@ func Lint(doc apps.Document) []live.Problem {
 		}
 		if p.description == "" {
 			warn(path+".description", fmt.Sprintf("the %s %s has no description", p.typ, p.id), "describe what it is for in a sentence, for the next author and the model")
+		}
+	}
+	// Large tables: a read rule the table cannot compile to SQL filters
+	// rows in Go after the query (forge 07k)
+	for _, g := range []apps.Parts{doc.Parts, doc.TenantParts} {
+		for _, p := range g.Entities {
+			e := p.Entity
+			if !e.SQL() {
+				continue
+			}
+			e.ID = p.ID
+			rules := map[string]string{fmt.Sprintf("parts.entity[%s].access.read", p.ID): e.Access.Read}
+			for _, r := range m.Roles {
+				if src, ok := r.RowRules[p.ID]; ok {
+					rules[fmt.Sprintf("manifest.roles[%s].rowRules.%s", r.ID, p.ID)] = src
+				}
+			}
+			for path, src := range rules {
+				if !recordsdata.RuleCompiles(e, src) {
+					warn(path, fmt.Sprintf("%s is a large table, but its rule %q does not compile to SQL: its rows are filtered after the query, which reads more of them", p.ID, src), "compare record fields with ==, !=, in, and, or and not against constants and principal.user, principal.tenant or principal.kind")
+				}
+			}
 		}
 	}
 	// Pages: reached by the nav, as home, by an editor kind, or by a part

@@ -27,7 +27,10 @@ type EntityType struct {
 	Fields     []Field `json:"fields"`
 	Indexes    []Index `json:"indexes"` // declared here, built from Forge's part 3d
 	Access     Access  `json:"access"`  // declared here, enforced from Forge's part 3g
-	Version    int     `json:"version"` // the published version it is; 0 before the first
+	// Storage is how its records are kept beyond the stream and the KV
+	// projection (Forge's part 7k).
+	Storage Storage `json:"storage,omitzero"`
+	Version int     `json:"version"` // the published version it is; 0 before the first
 	// Hidden is a deleted entity type: its records are kept, and
 	// entity.restore brings it back with them.
 	Hidden bool `json:"hidden,omitempty"`
@@ -106,6 +109,24 @@ type Access struct {
 	Update string `json:"update,omitempty"`
 	Delete string `json:"delete,omitempty"`
 }
+
+// Storage is how an entity type's records are kept for queries: the KV
+// projection alone (the default), or also a table in the tenant database
+// that the query planner reads (Records.md › Built in slice 52).
+type Storage struct {
+	// Projection is "" for the KV projection alone, or ProjectionSQL.
+	Projection string `json:"projection,omitempty"`
+}
+
+// ProjectionSQL projects an entity type's records into a table of the
+// tenant database too: a large table, listed, counted and sorted by SQL.
+const ProjectionSQL = "sql"
+
+// Projections are the values Storage.Projection can have.
+var Projections = []string{"", ProjectionSQL}
+
+// SQL reports whether the entity type's records are projected into a table.
+func (e EntityType) SQL() bool { return e.Storage.Projection == ProjectionSQL }
 
 // UserEntity is the built-in entity type of the tenant's users, which
 // relation fields may point to.

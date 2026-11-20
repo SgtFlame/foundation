@@ -314,6 +314,7 @@ func steps() []step {
 		s("entity.addIndex", "task", m{"fields": []string{"title"}}),
 		s("entity.removeIndex", "task", m{"index": "byDone"}),
 		s("entity.setAccess", "task", m{"access": m{"update": "record.assignee == principal.user"}}),
+		s("entity.setStorage", "task", m{"storage": m{"projection": "sql"}}),
 		s("entity.setInfo", "task", m{"name": "Todo", "description": "Something to do"}),
 		s("entity.import", "memo", m{"entity": m{"name": "Memo", "owner": own, "fields": []m{{"id": "text", "name": "text", "type": "text"}}}}),
 		s("entity.import", "memo", m{"entity": m{"name": "Memo", "owner": own, "fields": []m{{"id": "text", "name": "text", "type": "text"}, {"id": "seen", "name": "seen", "type": "bool"}}}}),

@@ -768,7 +768,11 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		liveSubscriptions = subscriptions
 		recordEmbedder = embedService
 		recordFiles := recordsfiles.New(nats.JS())
-		recordDeps = recordsdata.Deps{Projections: projections, Bus: liveBus, Files: recordFiles, Search: recordSearch, Settings: func(args features.ServiceArgs) recordssettings.Records {
+		recordTables, err := recordsdata.NewTables(gdb, projections) // large tables in the tenant database (forge 07k)
+		if err != nil {
+			return err
+		}
+		recordDeps = recordsdata.Deps{Projections: projections, Bus: liveBus, Files: recordFiles, Search: recordSearch, Tables: recordTables, Settings: func(args features.ServiceArgs) recordssettings.Records {
 			settings, err := config.Read[recordssettings.Records](configService, args, recordssettings.ID)
 			if err != nil {
 				return recordssettings.Defaults

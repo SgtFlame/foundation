@@ -24,7 +24,15 @@ const Converter = "records.converter"
 // (entities.Deps.OnPublish), and the record commands and records.list start
 // them after a restart, catching up on what was published meanwhile.
 func Follow(args features.ServiceArgs, deps Deps) error {
-	if deps.Bus == nil || deps.Projections == nil {
+	if deps.Projections == nil {
+		return nil
+	}
+	if deps.Tables != nil {
+		if err := deps.Tables.Follow(args); err != nil {
+			return err
+		}
+	}
+	if deps.Bus == nil {
 		return nil
 	}
 	if err := followIndexes(args, deps); err != nil {

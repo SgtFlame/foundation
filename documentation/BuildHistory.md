@@ -791,6 +791,15 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Blockers**: none. Forge 07j questions 1 and 2 answered with their proposals before building (2026-11-20).
     - **Decisions to review after seeing it**: in [RBAC.md](RBAC.md#decisions-to-review-after-seeing-it-1).
     - **Pending, carried forward**: revoking a deleted agent's grants; agents' presence set by the Agents app's runner (7m).
+52. **The relational projection** (Forge iteration 7, part 7k, [forge 07k-RelationalProjection.md](../../forge/documentation/plans/07k-RelationalProjection.md)). *Built* ([Records.md](Records.md#built-in-slice-52)).
+    - **Built**:
+      - `records`: `EntityType.Storage` and `entity.setStorage`; `records_tables` and `records_db_instance`;
+      - `records/data`: `Tables` (a table per large type in the tenant database, followed from the `rec` stream by a consumer per database, migrated or rebuilt from the stream as versions change), the planner reading it (filters, rules, sorts and keyset pages in SQL, every row checked in Go), aggregates in SQL, `records.find` over it run again on changes;
+      - `apps/manifests`: `forge.check` warns about a large table's rule that does not compile to SQL;
+      - browser: `Entities.ts` `storage`; Forge's Data Designer *Large table* switch.
+    - **Blockers**: none. Forge 07k question 1 answered by the user (GORM and portable SQL; full-text search behind an interface on LanceDB) and question 2 (a consumer per database) with its proposal, before building (2026-11-20).
+    - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it-8).
+    - **Pending, carried forward**: the full-text budget at 50 000 records (LanceDB's); Postgres (a `C` collation on token columns); a grouped count over a field without an index.
 
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
@@ -850,3 +859,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 49. Connector groups, roles, validators and refs (with Forge 7f) | forge 07f 1 (only listed addresses) and 2 (tenant mail domains in a section, a Mail administrator role, personal accounts off the tenant domains, tenant accounts at their domain), answered with their proposals | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-3), the Connection form for a mail account |
 | 50. Connections of type, Wait, own changes (with Forge 7i) | forge 07i 2 (a *Connections of type* node limited to the app's own types) and 4 (a *Wait* node; asked as promise-shaped, built as an exec node), the user's answers; a trigger's record read once the projection holds its change, found while testing | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-4) |
 | 51. Agent principals, record grants and app tools (Forge 7j) | forge 07j 1 (record grants) and 2 (agents by whoever may create the record, never above their granter), answered with their proposals | the decisions in [RBAC.md](RBAC.md#decisions-to-review-after-seeing-it-1), the Share dialog with agents once the Agents app uses it |
+| 52. The relational projection (Forge 7k) | forge 07k 1 (GORM and portable SQL; full-text search behind `data.Searcher` on LanceDB, the user's answer) and 2 (a consumer per database, a gap found while reading, answered with its proposal) | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-8), the Data Designer's *Large table* switch |

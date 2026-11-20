@@ -52,6 +52,7 @@ const (
 	EventIndexAdded    = "indexAdded"    // {index}
 	EventIndexRemoved  = "indexRemoved"  // {index: id}
 	EventAccessSet     = "accessSet"     // {access}
+	EventStorageSet    = "storageSet"    // {storage}
 	EventPublished     = "published"     // Publication
 	EventDeleted       = "deleted"       // {}: the entity type is hidden, its records kept
 	EventRestored      = "restored"      // {}
@@ -173,6 +174,12 @@ func Apply(d *Draft, e live.Event) error {
 			return err
 		}
 		x.Access = v.Access
+	case EventStorageSet:
+		v, err := decode[struct{ Storage records.Storage }](e.Data)
+		if err != nil {
+			return err
+		}
+		x.Storage = v.Storage
 	case EventPublished:
 		p, err := decode[Publication](e.Data)
 		if err != nil {

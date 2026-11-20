@@ -61,6 +61,9 @@ export interface EntityType {
   fields: EntityField[]
   indexes: EntityIndex[]
   access: EntityAccess
+  // storage {projection: 'sql'} also keeps the records in a table of the
+  // tenant database, for tens of thousands of them (forge 07k)
+  storage?: { projection?: '' | 'sql' }
   version: number
   hidden?: boolean // deleted: its records are kept, entity.restore brings it back
 }

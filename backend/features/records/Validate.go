@@ -43,6 +43,9 @@ func Check(e EntityType, known func(id string) bool) []live.Problem {
 	for path, message := range checkAccess(e.Access) {
 		add(path, message, `use record.<field id>, record._createdBy and principal.user, e.g. "record.assignee == principal.user"`)
 	}
+	if !slices.Contains(Projections, e.Storage.Projection) {
+		add("storage.projection", fmt.Sprintf("there is no projection %q", e.Storage.Projection), `use "sql" for a large table, or "" for the default`)
+	}
 	problems = append(problems, checkFields(e.Fields, "fields", exists, &e)...)
 
 	visible := map[string]Field{}

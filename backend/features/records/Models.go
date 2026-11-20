@@ -27,7 +27,34 @@ type EntityTypeVersion struct {
 // TableName names the table after the feature.
 func (EntityTypeVersion) TableName() string { return "records_entity_versions" }
 
+// ProjectedTable is the state of one entity type's table in the tenant
+// database (Records.md › Built in slice 52): which table holds its rows,
+// the published version and columns it was built for, and the last event
+// of the type it reflects. Every write to the table updates it in the same
+// transaction, so an event at or below Seq is never applied twice.
+type ProjectedTable struct {
+	TenantID uint64 `gorm:"primaryKey;autoIncrement:false"`
+	Entity   string `gorm:"primaryKey"`
+	Name     string `gorm:"not null"` // the table: rec_<tenant>_<tsid>, a new one at each rebuild
+	Version  int    // the published version it follows
+	Schema   string // its columns, as JSON (data.tableSchema)
+	Seq      uint64 // the rec stream sequence of the last event of the type applied
+}
+
+// TableName names the table after the feature.
+func (ProjectedTable) TableName() string { return "records_tables" }
+
+// DatabaseInstance names this database: the followers that write its
+// tables are named after it, so each database (one SQLite file per process,
+// or a shared one) gets every row (forge 07k question 2).
+type DatabaseInstance struct {
+	ID string `gorm:"primaryKey"`
+}
+
+// TableName names the table after the feature.
+func (DatabaseInstance) TableName() string { return "records_db_instance" }
+
 // Models are the records tables, for db.Migrate.
 func Models() []any {
-	return []any{&EntityTypeVersion{}}
+	return []any{&EntityTypeVersion{}, &ProjectedTable{}, &DatabaseInstance{}}
 }

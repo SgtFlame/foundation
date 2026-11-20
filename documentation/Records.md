@@ -544,3 +544,51 @@ Forge's part 6d ([Apps.md](Apps.md#built-in-slice-40)): every field type has a `
 For forge 07j ([RBAC.md › Built in slice 51](RBAC.md#built-in-slice-51)):
 - **The `principal` field type** (computed, `Field.Kind` `agent`, the default; at most one per entity type, at the top level): each record of the type defines an agent principal whose id is the record's own, written into the field by the create's decision (only for a numeric id); its name is the record's title and it is retired when the record is deleted. `recordsdata.Agents` is authz's directory of them (`records.PrincipalField`). Its value reads as `text`.
 - **Row rules** see `principal.agent`, `principal.onBehalfOf` and `principal.hasRole(role, record)` (`authz.HasRole`), and `principal.kind` is `agent` in an agent's runs.
+
+## Built in slice 52
+
+Forge's part 7k ([forge 07k-RelationalProjection.md](../../forge/documentation/plans/07k-RelationalProjection.md)): an entity type can keep its records in a table of the tenant database too, which the query planner reads, so a type of tens of thousands of records (a mailbox) lists, counts and sorts within budget. Forge's Data Designer shows it as *Large table* ([forge DataDesigner.md](../../forge/documentation/DataDesigner.md#changed-in-slice-52)).
+
+### Decisions
+Asked before building:
+- **GORM and portable SQL; full-text search stays on LanceDB** (forge 07k question 1): the tables are made by GORM's `AutoMigrate` on a model built from the fields, and queried with SQL that SQLite and Postgres both take (quoted identifiers, row values, `LIMIT`, `EXISTS`). Full-text search stays behind an interface, `data.Searcher`, and its index is LanceDB's (`records/search`), not FTS5 or `tsvector`, which the user judged more efficient; so `records.search` over a large table is unchanged, and no FTS table is made.
+- **One consumer per database** (forge 07k question 2, a gap found while reading): the database names itself (`records_db_instance`, a TSID made once), and the followers that write its tables are named after it, `records.tables.<instance>` (published types) and `records.sql.<instance>.<entity>` (a type's records). Each SQLite file, one per process, gets every row; a shared Postgres would have one consumer.
+
+Decided while building:
+- **`entity.setStorage {storage: {projection: "sql"}}`** sets it on the draft (`EntityType.Storage`, event `storageSet`, undone by setting the previous value); it takes effect when published. `{}` goes back to the KV projection alone, and publishing that drops the table.
+- **The table is one more projection of the `rec` stream.** A row per record holds the record as the KV projection has it (`data`, folded by the same `data.Apply`), its id, `ord` (the id ordered as `compareIDs` orders it: length, then text), the last event's `seq`, and for each visible field `v<n>` (the value as compact JSON, as `same` compares values), `t<n>` (its sort token, for a field with an order) and `n<n>` (a number as `real`, or a decimal or money with a currency in units of its scale as `integer`, for sums); `_id`, `_createdAt` and `_updatedAt` have columns of their own. A list-like field (`multiEnum`, tags, to-many relations, lists) has a child table, `<table>_l<n>`, a row per item. Column numbers are given once per field id, so field ids never become SQL names. The plan's typed columns became value, token and number columns, so SQL orders and compares exactly as the KV indexes do.
+- **Queries filter, sort and page in SQL, then check every row in Go.** `planned.read` hands a large type to `Tables.read`: the filter and the read rule compile to a `WHERE` that keeps at least every matching row (`clause.exact` says whether it keeps only them), `ORDER BY` the sort's token columns and `ord`, and a cursor becomes a keyset (a row value when every direction agrees, so an index answers it). Rows come in pages, each checked with `planned.match`, until the page is full, so the KV path and the table give the same records in the same order, and cursors are interchangeable. Pushed down: `eq`, `ne` and `in` on the value column, ranges and short prefixes on the token column, `contains` on a list through its child table; `contains` on text is checked in Go only.
+- **Row rules compile to SQL as far as they can** (`ruleSQL`): `==`, `!=`, `in`, `and`, `or` and `not` over record fields, literals and `principal.user|tenant|kind|app|agent|onBehalfOf`, and ranges over number fields. A part that does not compile keeps every row, and the rule is applied in Go as always. `forge.check` warns about a large table's rule that does not compile in full (`data.RuleCompiles`, in `manifests.Lint`), the type's own and app roles' row rules.
+- **Aggregates run in SQL when the filter and rule compile exactly** (`Tables.summarize`): counts, sums and averages (sums of decimals in integer units, then scaled), min and max by token with the value looked up after; grouped by the token column (or the child table, `LEFT JOIN`ed, so a record counts once per item), each group's key read after by one indexed lookup per group (one grouped read past 256 groups), so a count over an indexed field reads the index alone. Anything else reads the rows and aggregates in Go.
+- **A read waits for its table** to hold every event of the type committed before it began (the subject's last sequence against the table's `Seq`, up to `Tables.CatchUp`, 5 s, then `table_behind`), so a read right after a command sees it, and the KV projector's position is still a true position for the result.
+- **`records.find` over a large table runs again**, debounced, on its type's changes and sends the differences (`rerunFind`), as a page with expansions does; `records.list` takes its snapshot from the table and follows the KV projection's updates; `records.get` reads KV.
+- **Making, migrating and rebuilding.** `Tables.ensure` brings a type's table to its published version: a new field adds columns (`AutoMigrate`), and a change to what a column holds (a field's value type, scale, options or their order, a restored field) rebuilds it. A rebuild replays the type's events (an ordered consumer up to the subject's last sequence) into a new table, `rec_<tenant>_<tsid>`, and swaps it for the old one in one transaction with the state row, so a read sees one or the other. Every write runs in a transaction with the type's `records_tables` row (`ProjectedTable`: table, version, columns, `Seq`), and an event at or below `Seq` is skipped, so redeliveries change nothing. Indexes follow the declared ones (their leading fields with an order, then `ord`), plus `ord` alone.
+- **The published-types follower uses the publication in its event** when the published projection has not folded it yet, so a storage change is never missed.
+
+### Backend
+- **`records`**: `EntityType.Storage` (`Storage{Projection}`, `ProjectionSQL`, `Projections`, `EntityType.SQL()`), checked at `storage.projection`; `ProjectedTable` (`records_tables`) and `DatabaseInstance` (`records_db_instance`) in `Models()`.
+- **`records/entities`**: `entity.setStorage`, `EventStorageSet` and its inverse.
+- **`records/data`**: `Tables.go` (`Tables`, `NewTables(db, streams)`, `Follow`, `Rebuild`, the schema, model, writer, replay and followers), `TableQuery.go` (`clause`, `condSQL`, `nodeSQL`, `ruleSQL`, `RuleCompiles`, `ready`, `read`, `keyset`, `summarize`, `groupKeys`); `Deps.Tables`; `planned.ruleSrc`; `data.Follow` starts the tables' followers.
+- **`apps/manifests`**: `Lint` warns about large tables' rules that do not compile.
+- **Wiring**: `serve.go`, Foundation's and Forge's, makes `recordsdata.NewTables(gdb, projections)` and sets `Deps.Tables`.
+
+### Browser
+- `Entities.ts`: `EntityType.storage`.
+
+### Verification of slice 52
+- **Go tests** (`records/data`, on embedded NATS with a SQLite file):
+  - `TestTableAgreesWithKV`: 600 records loaded into a large type and its KV twin; 120 random queries (filters with and, or, every operator; twelve sorts, mixed directions; pages of 3, 7, 50 or all) give the same records in the same order, page by page, every one read from the table.
+  - `TestTableAggregatesAgreeWithKV`: count, count of a field, sums of numbers and money, an average of decimals, min and max, grouped by nothing, a bool, an enum, tags, text, a date and a number, unfiltered and under random filters, equal the KV path's.
+  - `TestTableFollowsCommands`: an open `records.find` window over the table follows creates and updates; a read right after a command shows it; tags added by `record.addTo` are found by `contains`.
+  - `TestTableRebuildsTheSame`: a table dropped and rebuilt from the stream (creates loaded, then updates and a delete by commands) has the same rows; an added field adds its column without a rebuild and is queried; reordered enum options rebuild the table, which sorts as KV does once KV's index is rebuilt; going back to the default drops it.
+  - `TestTableRowRules`: four read rules (compiled, partly compiled, not compiled, with `not` and `in`), three users each, a page and a filter, and a grouped count and sum: the table shows each user what KV shows them.
+  - `TestTableAtScale` (skipped with `-short`): 50 000 records; the table built in 13 s; a sorted page of 50 (an eq filter and a sort by an index) in 3.8 ms and a grouped count over an indexed enum in 8.4 ms, against budgets of 20 and 50 ms. The same count over a field without an index took 75 ms.
+- `TestEveryOpUndoes` undoes `entity.setStorage`; `TestMetadata` passes; the suites of `records`, `records/entities`, `records/nodes`, `records/tools`, `records/search` and `apps/*` pass.
+- Not run: `serve` in the browser (the Data Designer's switch was type-checked only), and the plan's full-text budget, which is LanceDB's.
+
+### Decisions to review after seeing it
+- Value, token and number columns rather than the plan's typed columns: exact agreement with KV, but the table is less readable by other SQL tools.
+- A grouped count is fast only over a field with a declared index.
+- A read waits up to 5 s for its table, then fails with `table_behind`.
+- `contains` on text is checked in Go: a large table searched that way reads every row (use `records.search`).
+- On Postgres, token columns need a `C` collation for SQL to order as KV does.

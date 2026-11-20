@@ -513,6 +513,22 @@ func commandSpecs() []spec {
 			},
 		},
 		{
+			id: "entity.setStorage", title: "Set how an entity type's records are kept", events: []string{EventStorageSet},
+			description: "Sets how an entity type's records are kept for queries. projection \"sql\" (a large table) also keeps them in a table of the tenant database, one column per field, which lists, counts, sorts and filters tens of thousands of records quickly; \"\" keeps them in the KV projection alone. Takes effect when published.",
+			args:        `{"type":"object","properties":{"storage":{"type":"object","description":"How the records are kept: {projection: \"sql\"} for a large table, {} for the default","properties":{"projection":{"type":"string","enum":["","sql"],"description":"sql for a large table; empty for the default"}}}},"required":["storage"]}`,
+			example:     `{"storage":{"projection":"sql"}}`,
+			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+				a, problems := args[struct{ Storage records.Storage }](c)
+				if problems != nil {
+					return nil, problems
+				}
+				if a.Storage == c.entity().Storage {
+					return nil, nil
+				}
+				return ev(EventStorageSet, map[string]any{"storage": a.Storage}), nil
+			},
+		},
+		{
 			id: "entity.publish", title: "Publish an entity type", events: []string{EventPublished}, action: "records.publish",
 			description: "Publishes the draft as a new version, which records follow from then on; it is also kept in the tenant database. rev is the draft's rev the publisher last saw: a change made since is not published unseen.",
 			args:        `{"type":"object","properties":{"rev":{"type":"integer","description":"The draft's rev as last seen (entity.* results and entity.describe give it)"}},"required":["rev"]}`,

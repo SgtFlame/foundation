@@ -144,6 +144,12 @@ func Summarize(args features.ServiceArgs, d Deps, q Aggregation) (Summary, error
 }
 
 func (a *aggregation) run(args features.ServiceArgs, d Deps) (Summary, error) {
+	if _, dry := d.Projections.(*sandbox); !dry && d.sql(a.p.e) {
+		s, ok, err := d.Tables.summarize(args, a)
+		if err != nil || ok {
+			return s, err
+		}
+	}
 	res, rows, err := a.p.read(args, d)
 	if err != nil {
 		return Summary{}, err

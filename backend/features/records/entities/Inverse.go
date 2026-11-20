@@ -90,6 +90,8 @@ func (c *decision) undo(command string, events []live.NewEvent) {
 				}
 			case EventAccessSet:
 				inv = op("entity.setAccess", map[string]any{"access": x.Access})
+			case EventStorageSet:
+				inv = op("entity.setStorage", map[string]any{"storage": x.Storage})
 			}
 		}
 		if inv.Command == "" {
