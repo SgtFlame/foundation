@@ -50,6 +50,7 @@ type Field struct {
 	Scale    *int            `json:"scale,omitempty"`    // decimal, money: digits after the point
 	Currency string          `json:"currency,omitempty"` // money: an ISO 4217 code; any when empty
 	Contract string          `json:"contract,omitempty"` // connection: only connections of types implementing it (id@version)
+	Kind     string          `json:"kind,omitempty"`     // principal: the kind of principal its records define (agent, the default)
 	Items    *Field          `json:"items,omitempty"`    // list: what each item is (its id and name are not used)
 	Fields   []Field         `json:"fields,omitempty"`   // object: its nested fields
 	Schema   json.RawMessage `json:"schema,omitempty"`   // json: the JSON Schema its values follow

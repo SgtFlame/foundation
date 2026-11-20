@@ -33,8 +33,9 @@ import AddIcon from '@mui/icons-material/Add'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DeleteIcon from '@mui/icons-material/Delete'
 import SaveIcon from '@mui/icons-material/Save'
+import SmartToyOutlined from '@mui/icons-material/SmartToyOutlined'
 import ToolbarAction from '../../components/folders/ToolbarAction.tsx'
-import { grantable, peopleFor, type Person } from '../../components/share/grants.ts'
+import { agentsFor, grantable, granteeOf, granteeRequest, peopleFor, type Person } from '../../components/share/grants.ts'
 import { Authz, type ActionClass, type Decision, type Grant, type ResourceType, type Role } from '../../services/Authz.ts'
 import { permissions, tenantOf, useCan } from '../../session/permissions.ts'
 import { useSession } from '../../session/session.ts'
@@ -206,7 +207,7 @@ function Grants({ role, people, fail }: { role: Role; people: Person[]; fail: (e
     Authz.grants({ roleId: role.id }).then((r) => setGrants(r.grants), fail)
   }, [role.id, fail])
   useEffect(load, [load])
-  const name = (id: string) => people.find((p) => p.id === id)?.name ?? `User ${id}`
+  const name = (id: string) => people.find((p) => p.id === id)?.name ?? (id.startsWith('agent:') ? `Agent ${id.slice(6)}` : `User ${id}`)
   const run = async (op: () => Promise<unknown>) => {
     try {
       await op()
@@ -222,13 +223,14 @@ function Grants({ role, people, fail }: { role: Role; people: Person[]; fail: (e
       <List dense disablePadding aria-label={`Holders of ${role.name}`}>
         {grants.map((g) => (
           <ListItemButton key={g.id} disableRipple sx={{ cursor: 'default' }}>
+            {g.agentId && <SmartToyOutlined fontSize="small" sx={{ mr: 1 }} aria-label="Agent" />}
             <ListItemText
-              primary={name(g.userId)}
+              primary={name(granteeOf(g))}
               secondary={`on ${g.resource}${g.expiresAt ? ` · until ${new Date(g.expiresAt).toLocaleDateString()}` : ''} · since ${new Date(g.createdAt).toLocaleDateString()}`}
             />
             <Tooltip title="Revoke">
               <span>
-                <IconButton aria-label={`Revoke from ${name(g.userId)}`} disabled={!can('grant.write', g.resource)} onClick={() => void run(() => Authz.revoke(g.id))}>
+                <IconButton aria-label={`Revoke from ${name(granteeOf(g))}`} disabled={!can('grant.write', g.resource)} onClick={() => void run(() => Authz.revoke(g.id))}>
                   <DeleteIcon fontSize="small" />
                 </IconButton>
               </span>
@@ -242,12 +244,15 @@ function Grants({ role, people, fail }: { role: Role; people: Person[]; fail: (e
         )}
       </List>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', flexWrap: 'wrap', rowGap: 1 }}>
-        <TextField select size="small" label="Person" value={user} onChange={(e) => setUser(e.target.value)} sx={{ minWidth: 200 }}>
-          {people.map((p) => (
-            <MenuItem key={p.id} value={p.id}>
-              {p.name}
-            </MenuItem>
-          ))}
+        <TextField select size="small" label="Person or agent" value={user} onChange={(e) => setUser(e.target.value)} sx={{ minWidth: 200 }}>
+          {people
+            .filter((p) => !p.agent || role.scope !== 'app')
+            .map((p) => (
+              <MenuItem key={p.id} value={p.id}>
+                {p.agent && <SmartToyOutlined fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} aria-label="Agent" />}
+                {p.name}
+              </MenuItem>
+            ))}
         </TextField>
         {role.scope === 'app' ? (
           <TextField size="small" label="Resource" value="app" disabled />
@@ -260,7 +265,7 @@ function Grants({ role, people, fail }: { role: Role; people: Person[]; fail: (e
           disabled={!user || !resource || !grantable(role, resource) || !can('grant.write', resource)}
           onClick={() =>
             void run(async () => {
-              await Authz.grant({ userId: user, roleId: role.id, resource, expiresAt: expires ? new Date(`${expires}T23:59:59`).toISOString() : undefined })
+              await Authz.grant({ ...granteeRequest(user), roleId: role.id, resource, expiresAt: expires ? new Date(`${expires}T23:59:59`).toISOString() : undefined })
               setUser('')
               setExpires('')
             })
@@ -288,13 +293,14 @@ function AccessChecker({ types, people }: { types: ResourceType[]; people: Perso
   return (
     <Stack spacing={2} sx={{ p: 2, maxWidth: 720 }}>
       <Typography variant="body2" color="text.secondary">
-        Pick a person, an action and a resource to see whether they may, and which grant decides it.
+        Pick a person or an agent, an action and a resource to see whether they may, and which grant decides it.
       </Typography>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', flexWrap: 'wrap', rowGap: 1 }}>
-        <TextField select size="small" label="Person" value={user} onChange={(e) => setUser(e.target.value)} sx={{ minWidth: 200 }}>
+        <TextField select size="small" label="Person or agent" value={user} onChange={(e) => setUser(e.target.value)} sx={{ minWidth: 200 }}>
           <MenuItem value="">You</MenuItem>
           {people.map((p) => (
             <MenuItem key={p.id} value={p.id}>
+              {p.agent && <SmartToyOutlined fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} aria-label="Agent" />}
               {p.name}
             </MenuItem>
           ))}
@@ -313,7 +319,7 @@ function AccessChecker({ types, people }: { types: ResourceType[]; people: Perso
           onClick={async () => {
             setError(undefined)
             try {
-              setDecision((await Authz.explain(action, resource, user || undefined)).decision)
+              setDecision((await Authz.explain(action, resource, granteeRequest(user).userId || undefined, granteeRequest(user).agentId)).decision)
             } catch (err) {
               setDecision(undefined)
               setError((err as Error).message)
@@ -367,8 +373,9 @@ function RolesEditor() {
     Promise.all([
       peopleFor('tenant', tenantId).catch(() => [] as Person[]),
       can('user.list', 'app') ? peopleFor('app', tenantId).catch(() => [] as Person[]) : Promise.resolve([] as Person[]),
-    ]).then(([members, users]) => {
-      const byId = new Map([...users, ...members].map((p) => [p.id, p]))
+      agentsFor(`tenant:${tenantId}`),
+    ]).then(([members, users, agents]) => {
+      const byId = new Map([...users, ...members, ...agents].map((p) => [p.id, p]))
       setPeople([...byId.values()].sort((a, b) => a.name.localeCompare(b.name)))
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps

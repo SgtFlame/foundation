@@ -3,6 +3,8 @@ package apptools
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -30,7 +32,22 @@ type TestArgs struct {
 	Inputs map[string]any `json:"inputs,omitempty"`
 	Event  string         `json:"event,omitempty"` // a prefab.logic graph's lifecycle event; the graph's first event when empty
 	As     string         `json:"as,omitempty"`    // a role of the graph's app
+	// Agent runs it as an agent the caller may use (sandbox.run, forge 07j).
+	Agent string `json:"agent,omitempty"`
+	// Stub is which External nodes are stubbed: all (the default),
+	// connectors (every one but model calls) or none.
+	Stub string `json:"stub,omitempty"`
+	// sandbox widens the kinds run to function and agent graphs
+	// (sandbox.run).
+	sandbox bool
 }
+
+// Stub modes of a sandboxed run.
+const (
+	StubAll        = "all"
+	StubConnectors = "connectors"
+	StubNone       = "none"
+)
 
 // TestEvent is an event a sandboxed run's commands would commit.
 type TestEvent struct {
@@ -77,6 +94,7 @@ type TestResult struct {
 	Failed   *TestFailure     `json:"failed,omitempty"`
 	Seeded   []string         `json:"seeded,omitempty"` // the ids of the records the inputs seeded
 	As       string           `json:"as,omitempty"`
+	Agent    string           `json:"agent,omitempty"`
 	runID    uint64
 }
 
@@ -118,10 +136,24 @@ func Test(args features.ServiceArgs, reg *extensions.Registry, d ForgeDeps, a Te
 	if !ok {
 		return TestResult{}, fmt.Errorf("there is no graph %q; list them with bp.list", a.Graph)
 	}
-	if !contains(testable, g.Kind) {
+	kinds := testable
+	if a.sandbox {
+		kinds = append(slices.Clone(testable), cognition.KindFunction, cognition.KindAgent, livenodes.KindTrigger)
+	}
+	stub, real := true, (func(cognition.NodeType) bool)(nil)
+	switch a.Stub {
+	case "", StubAll:
+	case StubConnectors:
+		real = engine.RealModels
+	case StubNone:
+		stub = false
+	default:
+		return TestResult{}, fmt.Errorf("stub is all, connectors or none, not %q", a.Stub)
+	}
+	if !contains(kinds, g.Kind) {
 		return TestResult{}, fmt.Errorf("forge.test runs %s graphs, not %s: test it with bp.test", strings.Join(testable, ", "), g.Kind)
 	}
-	out := TestResult{Graph: a.Graph, Kind: g.Kind, Events: []TestEvent{}, Commands: []bus.DryCommand{}, Problems: []live.Problem{}, Trace: []TraceStep{}, As: a.As}
+	out := TestResult{Graph: a.Graph, Kind: g.Kind, Events: []TestEvent{}, Commands: []bus.DryCommand{}, Problems: []live.Problem{}, Trace: []TraceStep{}, As: a.As, Agent: a.Agent}
 	inputs := cognition.Values{}
 	for k, v := range a.Inputs {
 		if k != "records" {
@@ -130,7 +162,7 @@ func Test(args features.ServiceArgs, reg *extensions.Registry, d ForgeDeps, a Te
 	}
 
 	dry := d.Bus.Dry()
-	args.Ctx = bus.WithDry(args.Context(), dry)
+	args.Ctx = engine.WithSandbox(bus.WithDry(args.Context(), dry), engine.Sandbox{Stub: stub, Real: real})
 	// The seeds are the user's, made before the run takes a role
 	seeds, err := seedsOf(a.Inputs["records"])
 	if err != nil {
@@ -168,6 +200,19 @@ func Test(args features.ServiceArgs, reg *extensions.Registry, d ForgeDeps, a Te
 		}
 	}
 
+	// An agent's run is held to the agent's roles (forge 07j)
+	if a.Agent != "" {
+		id, ok := authz.ParseAgent(a.Agent)
+		if !ok {
+			return TestResult{}, fmt.Errorf("agent %q is not an agent's id", a.Agent)
+		}
+		as, err := authz.AsAgent(args.Context(), args.Principal, id)
+		if err != nil {
+			return TestResult{}, err
+		}
+		args.Principal = as
+	}
+
 	cat := cognition.CatalogOf(reg)
 	event := a.Event
 	if event == "" {
@@ -183,7 +228,7 @@ func Test(args features.ServiceArgs, reg *extensions.Registry, d ForgeDeps, a Te
 	var report func() any
 	switch g.Kind {
 	case livenodes.KindCommand:
-		o := &livenodes.Observer{Tune: func(ra *engine.RunArgs) { ra.Stub, ra.Steps = true, true }}
+		o := &livenodes.Observer{Tune: func(ra *engine.RunArgs) { ra.Stub, ra.Real, ra.Steps = stub, real, true }}
 		cmd, err := livenodes.CommandOf(livenodes.Deps{Engine: d.Engine, Bus: d.Bus}, g.ID, &g, o)
 		if err != nil {
 			return TestResult{}, err
@@ -200,7 +245,7 @@ func Test(args features.ServiceArgs, reg *extensions.Registry, d ForgeDeps, a Te
 		dry.Decide(bus.Request{ServiceArgs: args, Type: cmd.ID, Target: target, Args: raw}, cmd)
 		run, runErr = o.Result, o.Err
 	default:
-		ra := engine.RunArgs{ServiceArgs: args, Graph: &g, Event: event, Inputs: inputs, Trigger: "forge.test", Trace: engine.TraceFailures, Stub: true, Steps: true}
+		ra := engine.RunArgs{ServiceArgs: args, Graph: &g, Event: event, Inputs: inputs, Trigger: "forge.test", Trace: engine.TraceFailures, Stub: stub, Real: real, Steps: true}
 		switch g.Kind {
 		case livenodes.KindQuery:
 			params, _ := inputs["params"].(map[string]any)
@@ -364,6 +409,70 @@ func ContributeTest(reg *extensions.Registry, deps func() ForgeDeps) {
 				summary += ", failed on " + out.Failed.Node
 			}
 			return tools.Result{Content: content, Summary: summary}, nil
+		},
+	})
+}
+
+// Sandbox runs a graph as forge.test does, for sandbox.run (forge 07j):
+// function, agent and trigger graphs too, maybe as an agent, its External
+// nodes stubbed by a.Stub. Nothing it decides is committed.
+func Sandbox(args features.ServiceArgs, reg *extensions.Registry, d ForgeDeps, a TestArgs) (TestResult, error) {
+	a.sandbox = true
+	return Test(args, reg, d, a)
+}
+
+// ContributeSandbox registers sandbox.run (forge 07j), the tool and the
+// live call an agent's Test panel uses.
+func ContributeSandbox(reg *extensions.Registry, deps func() ForgeDeps) {
+	const description = "Runs a graph once in a sandbox, like forge.test, and says what it would do without changing anything: its commands are decided over the app's records but never committed. Takes command, data.query, server.action, ui.handler, prefab.logic, app.trigger, function and agent graphs (inputs: a function's or agent's On call inputs by name). agent runs it as an agent (its id), held to the agent's own roles; stub says which nodes that reach outside are stubbed with a sample: all (the default), connectors (model calls run for real; connector calls, files and grants are stubbed) or none (everything external runs for real, commands still uncommitted). Gives the outputs, the events its commands would commit, the decided commands with their problems, and the trace."
+	input := json.RawMessage(`{"type":"object","properties":{
+  "graph":{"type":"string","description":"The graph's id"},
+  "inputs":{"type":"object","description":"What starts it, by kind (see forge.test); records seeds the sandbox: [{entity, id?, values}]"},
+  "event":{"type":"string","description":"The event node type to start from; the graph's first event when left out"},
+  "as":{"type":"string","description":"A role of the graph's app draft to run as"},
+  "agent":{"type":"string","description":"An agent's id to run as"},
+  "stub":{"type":"string","enum":["all","connectors","none"],"description":"Which External nodes are stubbed; all when left out"}},"required":["graph"]}`)
+	tools.Tools.Register(reg, tools.Tool{
+		Descriptor: extensions.Descriptor{ID: "sandbox.run", Source: "apps"}, Title: "Run in sandbox", Effect: tools.EffectExternal,
+		// Only a run that reaches outside for real asks first
+		Asks:        func(raw json.RawMessage) bool { var a TestArgs; _ = json.Unmarshal(raw, &a); return a.Stub == StubNone },
+		Description: description, Input: input,
+		Run: func(call tools.Call) (tools.Result, error) {
+			a, err := tools.Decode[TestArgs](call)
+			if err != nil {
+				return tools.Result{}, err
+			}
+			out, err := Sandbox(call.ServiceArgs, reg, deps(), a)
+			if err != nil {
+				return tools.Result{}, err
+			}
+			raw, _ := json.Marshal(out)
+			var content map[string]any
+			_ = json.Unmarshal(raw, &content)
+			summary := fmt.Sprintf("Ran %s in a sandbox: %d events", a.Graph, len(out.Events))
+			if out.Failed != nil {
+				summary += ", failed on " + out.Failed.Node
+			}
+			return tools.Result{Content: content, Summary: summary}, nil
+		},
+	})
+	live.Calls.Register(reg, live.Call{
+		Descriptor: extensions.Descriptor{ID: "sandbox.run", Source: "apps"}, Title: "Run in sandbox", Description: description,
+		Run: func(c live.CallRun) *features.ServiceResponse {
+			var a TestArgs
+			if err := json.Unmarshal(c.Args, &a); err != nil {
+				return c.Fail(http.StatusBadRequest, tools.Log.Code("bad_args").Wrap(err))
+			}
+			out, err := Sandbox(c.ServiceArgs, reg, deps(), a)
+			if err != nil {
+				status := uint16(http.StatusBadRequest)
+				if strings.Contains(err.Error(), "access_denied") || strings.Contains(err.Error(), "You may not") {
+					status = authz.Status
+				}
+				return c.Fail(status, tools.Log.Code("sandbox_failed").Public(err.Error()).Wrap(err))
+			}
+			c.Emit("result", out)
+			return nil
 		},
 	})
 }

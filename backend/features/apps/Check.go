@@ -76,6 +76,7 @@ func CheckManifest(m Manifest, env Env) []live.Problem {
 	c.settings()
 	c.triggers()
 	c.connectors()
+	c.tools()
 	c.requires()
 	return c.problems
 }

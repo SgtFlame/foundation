@@ -100,7 +100,7 @@ func fold(f live.Fold) (json.RawMessage, error) {
 	}
 	return json.Marshal(Entry{
 		Seq: seq, Decided: e.Op.Decided, Command: e.Op.Command, TargetType: e.Target.Type, Target: e.Op.Target, Args: e.Op.Args,
-		App: e.Op.App, Request: e.RequestID, CommandID: e.CommandID, Principal: e.UserID, Actor: e.Actor,
+		App: e.Op.App, Request: e.RequestID, CommandID: e.CommandID, Principal: principalOf(e), Actor: e.Actor,
 		Inverse: e.Op.Inverse, Irreversible: e.Op.Irreversible, Undoes: e.Op.Undoes, Time: e.Time,
 	})
 }
@@ -357,4 +357,13 @@ func settle(args features.ServiceArgs, store Store) error {
 		}
 	}
 	return nil
+}
+
+// principalOf is the user an op was made by or for: an agent's ops are
+// its user's (forge 07j), the agent named by the actor.
+func principalOf(e live.Event) uint64 {
+	if e.AgentID != 0 {
+		return e.OnBehalfOf
+	}
+	return e.UserID
 }

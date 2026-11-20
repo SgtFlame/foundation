@@ -2,7 +2,8 @@
 // holds which role on one resource (a Volume, the tenant, the
 // application), granting a role to a member with an optional expiry, and
 // revoking. Grants on the resource's ancestors apply too and are listed
-// below, read-only.
+// below, read-only. Agents (forge 07j) are offered beside people, with a
+// robot icon, and a page's Share button opens it on one record.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
@@ -23,8 +24,10 @@ import {
   Typography,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
+import SmartToyOutlined from '@mui/icons-material/SmartToyOutlined'
+import ListItemIcon from '@mui/material/ListItemIcon'
 import { Authz, type Grant, type Role } from '../../services/Authz.ts'
-import { ancestors, describeResource, grantable, peopleFor, type Person } from './grants.ts'
+import { agentsFor, ancestors, describeResource, grantable, granteeOf, granteeRequest, peopleFor, type Person } from './grants.ts'
 import { permissions, useCan } from '../../session/permissions.ts'
 import { useSession } from '../../session/session.ts'
 
@@ -36,7 +39,7 @@ function GrantRow({ grant, role, person, onRevoke, mayRevoke }: { grant: Grant; 
         onRevoke && (
           <Tooltip title={mayRevoke ? 'Revoke' : 'You cannot revoke this'}>
             <span>
-              <IconButton edge="end" aria-label={`Revoke ${role?.name ?? 'role'} from ${person?.name ?? grant.userId}`} disabled={!mayRevoke} onClick={onRevoke}>
+              <IconButton edge="end" aria-label={`Revoke ${role?.name ?? 'role'} from ${person?.name ?? granteeOf(grant)}`} disabled={!mayRevoke} onClick={onRevoke}>
                 <DeleteIcon fontSize="small" />
               </IconButton>
             </span>
@@ -44,7 +47,15 @@ function GrantRow({ grant, role, person, onRevoke, mayRevoke }: { grant: Grant; 
         )
       }
     >
-      <ListItemText primary={person?.name ?? `User ${grant.userId}`} secondary={`${role?.name ?? `Role ${grant.roleId}`}${expiry}`} />
+      {person?.agent || grant.agentId ? (
+        <ListItemIcon sx={{ minWidth: 32 }} aria-label="Agent">
+          <SmartToyOutlined fontSize="small" />
+        </ListItemIcon>
+      ) : null}
+      <ListItemText
+        primary={person?.name ?? (grant.agentId ? `Agent ${grant.agentId}` : `User ${grant.userId}`)}
+        secondary={`${role?.name ?? `Role ${grant.roleId}`}${expiry}`}
+      />
     </ListItem>
   )
 }
@@ -72,7 +83,7 @@ function ShareDialog({ resource, title, onClose }: { resource: string; title?: s
   useEffect(load, [load])
   useEffect(() => {
     Authz.roles().then((r) => setRoles(r.roles), fail)
-    peopleFor(resource, tenantId).then(setPeople, fail)
+    Promise.all([peopleFor(resource, tenantId), agentsFor(resource)]).then(([p, a]) => setPeople([...p, ...a]), fail)
   }, [resource, tenantId, fail])
 
   const roleById = useMemo(() => new Map(roles.map((r) => [r.id, r])), [roles])
@@ -96,11 +107,12 @@ function ShareDialog({ resource, title, onClose }: { resource: string; title?: s
       <DialogContent>
         <Stack spacing={2}>
           <Typography variant="body2" color="text.secondary">
-            A role here applies to {title ?? describeResource(resource)} and everything in it.
+            A role here applies to {title ?? describeResource(resource)} and everything in it
+            {/\/record:[^/]+$/.test(resource) ? ', and, through its row rules, to records related to it' : ''}.
           </Typography>
           <List dense disablePadding aria-label="Grants here">
             {grants.map((g) => (
-              <GrantRow key={g.id} grant={g} role={roleById.get(g.roleId)} person={personById.get(g.userId)} mayRevoke={mayGrant} onRevoke={() => void run(() => Authz.revoke(g.id))} />
+              <GrantRow key={g.id} grant={g} role={roleById.get(g.roleId)} person={personById.get(granteeOf(g))} mayRevoke={mayGrant} onRevoke={() => void run(() => Authz.revoke(g.id))} />
             ))}
             {grants.length === 0 && (
               <Typography variant="body2" color="text.secondary">
@@ -110,9 +122,10 @@ function ShareDialog({ resource, title, onClose }: { resource: string; title?: s
           </List>
           {mayGrant && (
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
-              <TextField select size="small" label="Person" value={user} onChange={(e) => setUser(e.target.value)} sx={{ minWidth: 180 }}>
+              <TextField select size="small" label="Person or agent" value={user} onChange={(e) => setUser(e.target.value)} sx={{ minWidth: 180 }}>
                 {people.map((p) => (
                   <MenuItem key={p.id} value={p.id}>
+                    {p.agent && <SmartToyOutlined fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} aria-label="Agent" />}
                     {p.name}
                   </MenuItem>
                 ))}
@@ -137,7 +150,7 @@ function ShareDialog({ resource, title, onClose }: { resource: string; title?: s
                 disabled={!user || !role}
                 onClick={() =>
                   void run(async () => {
-                    await Authz.grant({ userId: user, roleId: role, resource, expiresAt: expires ? new Date(`${expires}T23:59:59`).toISOString() : undefined })
+                    await Authz.grant({ ...granteeRequest(user), roleId: role, resource, expiresAt: expires ? new Date(`${expires}T23:59:59`).toISOString() : undefined })
                     setUser('')
                     setRole('')
                     setExpires('')
@@ -155,7 +168,7 @@ function ShareDialog({ resource, title, onClose }: { resource: string; title?: s
               </Typography>
               <List dense disablePadding aria-label="Inherited grants">
                 {inherited.map((g) => (
-                  <GrantRow key={g.id} grant={g} role={roleById.get(g.roleId)} person={personById.get(g.userId)} mayRevoke={false} />
+                  <GrantRow key={g.id} grant={g} role={roleById.get(g.roleId)} person={personById.get(granteeOf(g))} mayRevoke={false} />
                 ))}
               </List>
             </>

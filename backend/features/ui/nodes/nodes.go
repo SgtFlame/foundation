@@ -8,6 +8,7 @@ package uinodes
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/records"
 	"slices"
 
 	"github.com/SgtFlame/foundation/backend/features"
@@ -264,6 +265,7 @@ func node(reg *extensions.Registry, order int, t cognition.NodeType) {
 var configExamples = map[string]string{
 	"ui.openEditor": `{"kind":"task"}`,
 	"ui.confirm":    `{"message":"Reset the counter?","handler":"hello-onResetConfirmed"}`,
+	"ui.share":      `{"entity":"account"}`,
 }
 
 func then(in ...cognition.Pin) cognition.Pins {
@@ -572,6 +574,29 @@ func Contribute(reg *extensions.Registry) {
 				return fmt.Errorf("%q is not a route: a route starts with /", route)
 			}
 			h.Do(ui.Action{Type: "navigate", Page: route})
+			return nil
+		})
+	effect(318, "ui.share", "Share", "Opens the Share dialog on one record (or another resource): who holds which role on it, people and agents, granting and revoking as the user may (forge 07j)", "Share the account record the page shows, for its Share button",
+		`{"type":"object","properties":{"entity":{"type":"string","title":"Entity type","description":"The record's entity type"}}}`,
+		[]cognition.Pin{{ID: "record", Name: "Record", Type: "string", Optional: true, Description: "The record's id"},
+			{ID: "resource", Name: "Resource", Type: "string", Optional: true, Description: "A resource path in place of a record"},
+			{ID: "title", Name: "Title", Type: "string", Optional: true, Description: "What the dialog calls it, e.g. the record's title"}},
+		func(h Host, x *cognition.Exec, in cognition.Values) error {
+			var c struct{ Entity string }
+			if err := x.Config(&c); err != nil {
+				return err
+			}
+			resource := str(in, "resource", "")
+			if id := str(in, "record", ""); id != "" {
+				if c.Entity == "" {
+					return fmt.Errorf("Share needs the record's entity type")
+				}
+				resource = records.Resource(x.Principal, c.Entity) + "/record:" + id
+			}
+			if resource == "" {
+				return fmt.Errorf("Share needs a record or a resource")
+			}
+			h.Do(ui.Action{Type: "share", Resource: resource, Name: str(in, "title", "")})
 			return nil
 		})
 	effect(320, "ui.confirm", "Confirm", "Asks the user to confirm; their answer runs another handler graph with {confirmed}", "Confirm \"Reset the counter?\" then hello-onResetConfirmed",

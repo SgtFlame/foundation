@@ -1,13 +1,36 @@
 // Helpers for showing and granting roles on a resource, shared by the Share
 // dialog and the Role Editor
 
-import type { Role } from '../../services/Authz.ts'
+import { Authz, type Grant, type GrantRequest, type Role } from '../../services/Authz.ts'
 import { Tenants } from '../../services/Tenants.ts'
 import { Users } from '../../services/Users.ts'
 
+// Someone a role can be granted to: a person (id their user id) or an
+// agent (forge 07j; id "agent:<id>", agent set)
 export interface Person {
   id: string
   name: string
+  agent?: boolean
+}
+
+// The tenant's agents as grantees; none for "app" or when they cannot be read
+export async function agentsFor(resource: string): Promise<Person[]> {
+  if (resource === 'app') return []
+  try {
+    return (await Authz.agents(resource)).agents.map((a) => ({ id: `agent:${a.id}`, name: a.name, agent: true }))
+  } catch {
+    return []
+  }
+}
+
+// Whom a grant is to, as a Person's id
+export function granteeOf(g: Grant): string {
+  return g.agentId && g.agentId !== '0' ? `agent:${g.agentId}` : g.userId
+}
+
+// The grantee half of a grant request for a Person's id
+export function granteeRequest(id: string): Pick<GrantRequest, 'userId' | 'agentId'> {
+  return id.startsWith('agent:') ? { agentId: id.slice('agent:'.length) } : { userId: id }
 }
 
 // The people who may be given roles on resource: the application's users
@@ -38,5 +61,5 @@ export function describeResource(resource: string): string {
   if (resource === 'app') return 'the application'
   const last = resource.split('/').pop() ?? resource
   const [kind, id] = last.split(':')
-  return { tenant: 'the tenant', volume: `Volume ${id}`, kb: 'the knowledge base folders' }[kind] ?? last
+  return { tenant: 'the tenant', volume: `Volume ${id}`, kb: 'the knowledge base folders', record: `record ${id}` }[kind] ?? last
 }

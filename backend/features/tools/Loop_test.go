@@ -199,6 +199,18 @@ func TestLoopAsksBeforeWriting(t *testing.T) {
 	}
 }
 
+// An agent's run writes without asking (forge 07j): its own roles decide.
+func TestLoopLetsAnAgentWrite(t *testing.T) {
+	chat := &scriptChat{script: []chatservice.Message{calls(callOf("test_write", `{}`)), answer("ok")}}
+	loop, args := newLoop(t, chat)
+	args.Tools = []Tool{write}
+	args.Principal = features.AgentPrincipal(1, 50, 1)
+	out := loop.Run(args)
+	if got := out.Calls[0]; got.Status != StatusDone || got.Approval != ApprovalAgent {
+		t.Fatalf("call = %+v", got)
+	}
+}
+
 func TestLoopAlwaysAllowsLaterCalls(t *testing.T) {
 	chat := &scriptChat{script: []chatservice.Message{calls(callOf("test_write", `{}`)), calls(callOf("test_write", `{}`)), answer("ok")}}
 	loop, args := newLoop(t, chat)

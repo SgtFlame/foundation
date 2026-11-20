@@ -11,6 +11,7 @@ package toolsnodes
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features"
 	"slices"
 	"time"
 
@@ -68,10 +69,11 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Descriptor:  extensions.Descriptor{ID: AgentID, Order: 300, Source: "tools"},
 		Title:       "Agent",
 		Category:    "LLM",
-		Description: "Asks the model, letting it call tools until it answers: its Tools set when joined, else its config's. Tools that change data and ask first are denied: a run cannot ask for approval.",
+		Description: "Asks the model, letting it call tools until it answers: its Tools set when joined, else its config's. Tools that change data and ask first are denied (a run cannot ask for approval), unless the run is an agent's: then its own roles decide, and a call it lacks the rights for fails with forbidden.",
 		Example:     "Agent with the prompt \"Summarize the open tasks\" and the kb.search tool",
 		Effects:     true,
 		External:    true,
+		Model:       true,
 		Sample:      cognition.Values{"reply": "(the model's reply: not asked in a sandboxed run)", "calls": []any{}},
 		Config:      json.RawMessage(agentSchema),
 		Pins: cognition.Pins{
@@ -100,6 +102,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Example:     "Ask model at the chat section's title level to name the conversation from a Template of the exchange",
 		Effects:     true,
 		External:    true,
+		Model:       true,
 		Sample:      cognition.Values{"text": "(the model's answer: not asked in a sandboxed run)"},
 		Config: json.RawMessage(`{"type":"object","properties":{
 			"level":{"type":"string","title":"Level","ref":"ai.chat.levels#levels","description":"The level asked; the Level pin wins, else the default level"},
@@ -198,13 +201,15 @@ func runAgent(x *cognition.Exec, in cognition.Values, d Deps) (cognition.Values,
 		if err != nil {
 			return nil, "", err
 		}
-		offered = Resolve(x, set, tools.Tools.All(d.Registry), nil)
+		offered = Resolve(x, set, tools.Available(d.Registry, x.ServiceArgs), nil)
 	} else {
-		offered = tools.Enabled(tools.Tools.All(d.Registry), nil, settings)
+		offered = tools.Enabled(tools.Available(d.Registry, x.ServiceArgs), nil, settings)
 		// Writes listed by name are offered, and denied, so the trace says why
+		agent := x.Principal.Kind == features.PrincipalAgent
 		offered = slices.DeleteFunc(offered, func(t tools.Tool) bool {
 			if len(cfg.Tools) == 0 {
-				return t.Effect.Asks()
+				// An agent's writes are held to its roles, not asked (forge 07j)
+				return t.Effect.Asks() && !agent
 			}
 			return !slices.Contains(cfg.Tools, t.ID)
 		})

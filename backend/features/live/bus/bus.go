@@ -299,6 +299,9 @@ func ActorOf(r Request) string {
 	if r.Actor == "" && r.Principal.Kind == features.PrincipalApp {
 		return "app:" + r.Principal.App
 	}
+	if r.Actor == "" && r.Principal.Kind == features.PrincipalAgent {
+		return r.Principal.String() // forge 07j: an agent's commands show as its own
+	}
 	return r.Actor
 }
 
@@ -406,7 +409,7 @@ func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstre
 		if err != nil {
 			return res, false, err
 		}
-		e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: r.ID, RequestID: r.RequestID, UserID: r.Principal.UserID, Actor: ActorOf(r), TenantID: tenant, Time: now}
+		e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: r.ID, RequestID: r.RequestID, UserID: r.Principal.UserID, AgentID: r.Principal.AgentID, OnBehalfOf: r.Principal.OnBehalfOf, Actor: ActorOf(r), TenantID: tenant, Time: now}
 		if i == 0 {
 			e.Op, e.Jobs = op, jobs
 		}

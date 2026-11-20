@@ -37,7 +37,8 @@ export interface UiPatch {
 export interface UiAction {
   // dryRun: a command a dry run did not send (name its type, id its
   // target, params its args)
-  type: 'toast' | 'navigate' | 'openEditor' | 'focus' | 'download' | 'copy' | 'confirm' | 'rename' | 'dryRun'
+  // share: the Share dialog on resource (a record's path, forge 07j)
+  type: 'toast' | 'navigate' | 'openEditor' | 'focus' | 'download' | 'copy' | 'confirm' | 'rename' | 'dryRun' | 'share'
   message?: string
   severity?: 'success' | 'info' | 'warning' | 'error'
   kind?: string
@@ -51,6 +52,7 @@ export interface UiAction {
   text?: string
   fileName?: string
   handler?: string
+  resource?: string
 }
 
 export interface UiSubject {

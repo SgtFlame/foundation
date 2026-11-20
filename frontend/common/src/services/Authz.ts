@@ -46,7 +46,8 @@ export interface Role {
 
 export interface Grant {
   id: string
-  userId: string
+  userId: string // '0' for an agent's grant
+  agentId?: string // an agent's grant (forge 07j)
   roleId: string
   resource: string // 'app', 'tenant:1', 'tenant:1/volume:42'
   grantedBy: string
@@ -115,8 +116,26 @@ export interface GrantsRequest {
   roleId?: string
 }
 
+// An agent principal (forge 07j): defined by an app's record, whose id it
+// has, named by its title
+export interface Agent {
+  id: string
+  tenantId: string
+  name: string
+  entity: string
+  app?: string
+  createdBy: string
+  resource: string // its record's path, where agent.use is checked
+}
+
+export interface AgentsResponse extends ResponseStatus {
+  agents: Agent[]
+}
+
+// A grant goes to a person (userId) or an agent (agentId)
 export interface GrantRequest {
-  userId: string
+  userId?: string
+  agentId?: string
   roleId: string
   resource: string
   expiresAt?: string
@@ -157,8 +176,13 @@ export const Authz = {
     return (await http.post<ResponseStatus>('/authz/revoke', { grantId })).data
   },
 
-  // Whether a user (none: you) may do action on resource, and why
-  async explain(action: string, resource: string, userId?: string): Promise<ExplainResponse> {
-    return (await http.post<ExplainResponse>('/authz/explain', { action, resource, userId })).data
+  // The tenant's agents, for the Share dialog; needs grant.read on resource
+  async agents(resource?: string): Promise<AgentsResponse> {
+    return (await http.post<AgentsResponse>('/authz/agents', { resource })).data
+  },
+
+  // Whether a user (none: you), or an agent, may do action on resource, and why
+  async explain(action: string, resource: string, userId?: string, agentId?: string): Promise<ExplainResponse> {
+    return (await http.post<ExplainResponse>('/authz/explain', { action, resource, userId, agentId })).data
   },
 }

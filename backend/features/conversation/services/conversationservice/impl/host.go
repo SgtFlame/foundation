@@ -82,7 +82,7 @@ func (h *host) AddContext(system string, items []conversation.ContextItem, heade
 	return out, segments
 }
 
-func (h *host) ServerTools() []tools.Tool { return tools.Tools.All(h.s.registry) }
+func (h *host) ServerTools() []tools.Tool { return tools.Available(h.s.registry, h.args.ServiceArgs) }
 
 func (h *host) ClientTools() []tools.Tool { return h.args.ClientTools }
 

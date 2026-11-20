@@ -234,7 +234,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 				if err != nil {
 					return TransactResult{Result: Result{Common: *r.Fail(http.StatusInternalServerError, err)}}
 				}
-				e := live.Event{Type: ne.Type, Target: *ne.Target, Data: data, CommandID: r.ID, RequestID: r.RequestID, UserID: r.Principal.UserID, Actor: r.Actor, TenantID: tenant, Time: time.Now().UTC()}
+				e := live.Event{Type: ne.Type, Target: *ne.Target, Data: data, CommandID: r.ID, RequestID: r.RequestID, UserID: r.Principal.UserID, AgentID: r.Principal.AgentID, OnBehalfOf: r.Principal.OnBehalfOf, Actor: r.Actor, TenantID: tenant, Time: time.Now().UTC()}
 				for _, pr := range projectors {
 					if len(pr.Types) > 0 && !slices.Contains(pr.Types, e.Target.Type) {
 						continue
@@ -283,7 +283,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 				t := *ne.Target
 				data, _ := json.Marshal(ne.Data)
 				e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: fmt.Sprintf("%s.%d", r.ID, i), RequestID: r.RequestID,
-					UserID: r.Principal.UserID, Actor: ActorOf(r), TenantID: tenant, Time: now, Batch: &live.Batch{Index: len(msgs) + 1, Count: len(all)}}
+					UserID: r.Principal.UserID, AgentID: r.Principal.AgentID, OnBehalfOf: r.Principal.OnBehalfOf, Actor: ActorOf(r), TenantID: tenant, Time: now, Batch: &live.Batch{Index: len(msgs) + 1, Count: len(all)}}
 				if j == 0 {
 					e.Op, e.Jobs = p.op, p.jobs
 				}

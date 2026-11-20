@@ -44,8 +44,11 @@ type Manifest struct {
 	// Connectors are scripted connector types (forge 07d): contracts
 	// implemented in blueprints, installed as <appId>.<name>.
 	Connectors []Connector `json:"connectors"`
-	Requires   Requires    `json:"requires"`
-	Version    int         `json:"version"` // the published version; 0 in a draft never published
+	// Tools are tools the app gives the model (forge 07j), installed as
+	// <appId>.<name>.
+	Tools    []Tool   `json:"tools"`
+	Requires Requires `json:"requires"`
+	Version  int      `json:"version"` // the published version; 0 in a draft never published
 }
 
 // DefaultFrame is the prefab an app that names no frame is framed by:
@@ -227,6 +230,9 @@ func Normalize(m *Manifest) {
 	}
 	if m.Triggers == nil {
 		m.Triggers = []Trigger{}
+	}
+	if m.Tools == nil {
+		m.Tools = []Tool{}
 	}
 	if m.Connectors == nil {
 		m.Connectors = []Connector{}

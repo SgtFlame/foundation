@@ -130,11 +130,11 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		},
 	})
 	node(320, cognition.NodeType{
-		Descriptor:  extensions.Descriptor{ID: "chronicle.match"},
-		Example:     "Match context choosing up to Entries candidates for the reply",
-		Title:       "Match context",
-		Effects:     true,
-		External:    true, // a model call
+		Descriptor: extensions.Descriptor{ID: "chronicle.match"},
+		Example:    "Match context choosing up to Entries candidates for the reply",
+		Title:      "Match context",
+		Effects:    true,
+		External:   true, Model: true, // a model call
 		Description: "Stage 1: a fast model call chooses the candidates the reply needs; the checked entries are always kept. Its prompts are Go templates over topK, text, window and candidates.",
 		Config:      json.RawMessage(promptsSchema("topK, text (the message), window (each text, reply) and candidates (each id, type, title, summary, active)")),
 		Pins: cognition.Pins{
@@ -204,11 +204,11 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		},
 	})
 	node(350, cognition.NodeType{
-		Descriptor:  extensions.Descriptor{ID: "chronicle.update"},
-		Example:     "Update memory after On reply when Chronicle settings' Update is on",
-		Title:       "Update memory",
-		Effects:     true,
-		External:    true, // a model call
+		Descriptor: extensions.Descriptor{ID: "chronicle.update"},
+		Example:    "Update memory after On reply when Chronicle settings' Update is on",
+		Title:      "Update memory",
+		Effects:    true,
+		External:   true, Model: true, // a model call
 		Description: "The memory update: rewrites the summaries of the used entries the round adds facts to, and proposes new entries. Its prompts are Go templates over maxProposals, round, used, types and titles.",
 		Config:      json.RawMessage(promptsSchema("maxProposals, round (text, reply), used (each id, type, title, shortSummary, fullSummary), types (each id, description) and titles", `"maxProposals": {"type": "integer", "title": "Proposals", "min": 0, "max": 10, "description": "New entries proposed at most"}`)),
 		Pins: cognition.Pins{

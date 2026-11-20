@@ -287,6 +287,8 @@ func (l Loop) call(args RunArgs, step, n int, c chatservice.ToolCall, byWire map
 		switch {
 		case args.Allowed[tool.ID]:
 			rec.Approval = ApprovalAlways
+		case args.Gate == nil && args.Principal.Kind == features.PrincipalAgent:
+			rec.Approval = ApprovalAgent
 		case args.Gate == nil:
 			rec.Approval = ApprovalDenied
 			return end(StatusDenied, nil, "This tool changes the user's data and needs their approval, which this run cannot ask for.")

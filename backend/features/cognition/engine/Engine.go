@@ -190,6 +190,10 @@ type RunArgs struct {
 	// Stub runs External nodes as stubs that give their Sample (forge 06f:
 	// a sandboxed run), in the graphs it calls too.
 	Stub bool
+	// Real, with Stub, names External nodes that run for real all the same
+	// (forge 07j: an agent's Test panel asks the model for real and stubs
+	// connectors).
+	Real func(t cognition.NodeType) bool
 	// Steps keeps the run's steps in its Result, for a caller that reports
 	// them whether or not the trace is stored.
 	Steps bool
@@ -229,6 +233,11 @@ func untracedKey(args features.ServiceArgs, graphID string) string {
 // A run that fails returns the error of the node it failed on, with the
 // run's ID in Result so it can be found.
 func (e *Engine) Run(args RunArgs) (Result, error) {
+	// A run started inside a sandbox (by a tool an agent called there) is
+	// sandboxed as its starter is
+	if sb, ok := SandboxOf(args.Context()); ok && !args.Stub {
+		args.Stub, args.Real = sb.Stub, sb.Real
+	}
 	var g cognition.Graph
 	if args.Graph != nil {
 		g = *args.Graph
@@ -317,12 +326,15 @@ func (e *Engine) Run(args RunArgs) (Result, error) {
 }
 
 // call runs another graph from its On call event, for Call graph.
-func (e *Engine) call(parent *run, graphID string, inputs cognition.Values) (cognition.Values, error) {
+func (e *Engine) call(parent *run, graphID string, inputs cognition.Values, as *features.Principal) (cognition.Values, error) {
 	if parent.args.depth+1 >= parent.settings.MaxCallDepth {
 		return nil, log.Code("call_depth").Errorf("graphs called graphs more than %d deep", parent.settings.MaxCallDepth)
 	}
 	args := RunArgs{ServiceArgs: parent.args.ServiceArgs, GraphID: graphID, Event: cognition.EventCall, Inputs: inputs,
-		Trigger: "graph:" + strconv.FormatUint(parent.record.ID, 10), Host: parent.args.Host, Trace: parent.args.Trace, Stub: parent.args.Stub, Wall: parent.args.Wall, depth: parent.args.depth + 1}
+		Trigger: "graph:" + strconv.FormatUint(parent.record.ID, 10), Host: parent.args.Host, Trace: parent.args.Trace, Stub: parent.args.Stub, Real: parent.args.Real, Wall: parent.args.Wall, depth: parent.args.depth + 1}
+	if as != nil {
+		args.Principal = *as
+	}
 	res, err := e.Run(args)
 	return res.Outputs, err
 }

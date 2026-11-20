@@ -194,7 +194,7 @@ type Commander interface {
 
 // Action is a client action: an effect only the browser can perform.
 type Action struct {
-	Type     string `json:"type"` // toast, navigate, openEditor, focus, download, copy, confirm, rename, dryRun
+	Type     string `json:"type"` // toast, navigate, openEditor, focus, download, copy, confirm, rename, dryRun, share
 	Message  string `json:"message,omitempty"`
 	Severity string `json:"severity,omitempty"` // toast: success, info, warning, error
 	// openEditor
@@ -211,6 +211,9 @@ type Action struct {
 	FileName string   `json:"fileName,omitempty"`
 	// confirm: the answer is posted to Handler with {confirmed}
 	Handler string `json:"handler,omitempty"`
+	// share: the Share dialog on Resource (a record's path, forge 07j),
+	// titled Name
+	Resource string `json:"resource,omitempty"`
 	// dryRun: a command a dry run did not send, as Name (its type), ID
 	// (its target) and Params (its args)
 }
@@ -410,6 +413,12 @@ func (h *Handle) Toast(severity, message string) {
 func (h *Handle) OpenEditor(kind, id, name, helpText string, params any) {
 	raw, _ := json.Marshal(params)
 	h.Do(Action{Type: "openEditor", Kind: KindID(h.s.page.App, kind), ID: id, Name: name, HelpText: helpText, Params: raw})
+}
+
+// Share opens the Share dialog on a resource, such as one record's path
+// (forge 07j), for a page's Share button.
+func (h *Handle) Share(resource, title string) {
+	h.Do(Action{Type: "share", Resource: resource, Name: title})
 }
 
 // Render is what a render function reads through, so the session knows

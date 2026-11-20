@@ -55,6 +55,7 @@ func RoleFrom(r authz.Role) Role {
 type Grant struct {
 	ID        uint64     `json:"id,string"`
 	UserID    uint64     `json:"userId,string"`
+	AgentID   uint64     `json:"agentId,string,omitempty"` // an agent's grant (forge 07j); userId is then 0
 	RoleID    uint64     `json:"roleId,string"`
 	Resource  string     `json:"resource"`
 	GrantedBy uint64     `json:"grantedBy,string"`
@@ -63,7 +64,7 @@ type Grant struct {
 }
 
 func GrantFrom(g authz.RoleGrant) Grant {
-	return Grant{ID: g.ID, UserID: g.UserID, RoleID: g.RoleID, Resource: g.Resource, GrantedBy: g.GrantedBy, CreatedAt: g.CreatedAt, ExpiresAt: g.ExpiresAt}
+	return Grant{ID: g.ID, UserID: g.UserID, AgentID: g.AgentID, RoleID: g.RoleID, Resource: g.Resource, GrantedBy: g.GrantedBy, CreatedAt: g.CreatedAt, ExpiresAt: g.ExpiresAt}
 }
 
 func GrantsFrom(gs []authz.RoleGrant) []Grant {

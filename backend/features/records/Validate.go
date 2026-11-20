@@ -209,6 +209,20 @@ func checkType(f Field, p string, exists func(string) bool, e *EntityType) []liv
 				add(p+".formula", fmt.Sprintf("the formula does not type check: %v", err), "use the ids of the fields above it (a formula reads only those), e.g. \"quantity * price\"")
 			}
 		}
+	case "principal":
+		switch {
+		case e == nil:
+			add(p+".type", "a principal field belongs at the top level of an entity type", "")
+		case f.Kind != "" && f.Kind != PrincipalAgent:
+			add(p+".kind", fmt.Sprintf("there is no principal kind %q", f.Kind), `use "agent"`)
+		default:
+			for _, o := range e.Visible() {
+				if o.Type == "principal" && o.ID != f.ID {
+					add(p+".type", "an entity type has at most one principal field", "remove the other: "+o.ID)
+					break
+				}
+			}
+		}
 	case "autoNumber", "createdAt", "updatedAt", "createdBy":
 		if e == nil {
 			add(p+".type", fmt.Sprintf("a %s field belongs at the top level of an entity type", f.Type), "")

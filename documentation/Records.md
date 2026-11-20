@@ -539,3 +539,8 @@ Forge 05c ([Apps.md › Built in slice 33](Apps.md#built-in-slice-33)): `records
 
 ## Changed in slice 40
 Forge's part 6d ([Apps.md](Apps.md#built-in-slice-40)): every field type has a `title`, `tags` and `examples` (fields as `entity.addField` takes them), checked by `TestFieldTypesMetadata`; `entity.listFieldTypes` and `forge.describe {ref: "field:<type>"}` give them. Every `entity.*` command's fields are described.
+
+## Changed in slice 51
+For forge 07j ([RBAC.md › Built in slice 51](RBAC.md#built-in-slice-51)):
+- **The `principal` field type** (computed, `Field.Kind` `agent`, the default; at most one per entity type, at the top level): each record of the type defines an agent principal whose id is the record's own, written into the field by the create's decision (only for a numeric id); its name is the record's title and it is retired when the record is deleted. `recordsdata.Agents` is authz's directory of them (`records.PrincipalField`). Its value reads as `text`.
+- **Row rules** see `principal.agent`, `principal.onBehalfOf` and `principal.hasRole(role, record)` (`authz.HasRole`), and `principal.kind` is `agent` in an agent's runs.

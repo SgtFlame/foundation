@@ -98,6 +98,9 @@ func named(m apps.Manifest) map[string][]string {
 	for _, g := range m.ConnectorGraphs() {
 		add("graph", g)
 	}
+	for _, g := range m.ToolGraphs() {
+		add("graph", g)
+	}
 	for _, e := range m.Entities {
 		add("entity", e)
 	}

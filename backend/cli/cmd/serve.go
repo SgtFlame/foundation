@@ -34,6 +34,7 @@ import (
 	appimpl "github.com/SgtFlame/foundation/backend/features/apps/services/appservice/impl"
 	apptools "github.com/SgtFlame/foundation/backend/features/apps/tools"
 	"github.com/SgtFlame/foundation/backend/features/authz"
+	authznodes "github.com/SgtFlame/foundation/backend/features/authz/nodes"
 	"github.com/SgtFlame/foundation/backend/features/authz/rest/authzhandlers"
 	authzimpl "github.com/SgtFlame/foundation/backend/features/authz/services/authzservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/chronicle"
@@ -421,10 +422,11 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var conversationLive conversationservice.Service
 		var collabLive collabservice.Service
 		registry := extensions.NewRegistry()
-		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.Modes, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, authz.ResourceTypes,
+		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.Modes, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, tools.Sources, authz.ResourceTypes,
 			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents, connectors.Contracts, connectors.Types, connections.Validators, authz.ContributedRoles)
 		// Each feature declares its resource types and their actions
 		authz.Contribute(registry)
+		authz.ContributeAgents(registry) // agent (forge 07j)
 		identity.ContributeAccess(registry)
 		config.ContributeAccess(registry)
 		logs.ContributeAccess(registry)
@@ -494,10 +496,12 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// records they name
 		manifests.Contribute(registry, func() manifests.Deps { return appDeps })
 		installs.Contribute(registry, func() installs.Deps { return installDeps })
+		installs.ContributeTools(registry, func() installs.Deps { return installDeps }) // apps' manifest tools (forge 07j)
 		// Background jobs and the apps' triggers (forge 07a), after the
 		// installs whose triggers they run
 		jobs.Contribute(registry, func() jobs.Deps { return jobDeps })
 		jobsnodes.Contribute(registry, func() jobsnodes.Deps { return jobNodeDeps })
+		authznodes.Contribute(registry) // Grant role, Revoke role (forge 07j)
 		// Connectors (forge 07b): the registry's queries and the connector
 		// nodes; builtin contracts and types are contributed beside them
 		connectors.Contribute(registry, func() connectors.Deps { return connectorDeps })
@@ -514,6 +518,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		apptools.ContributeForge(registry, func() apptools.ForgeDeps { return forgeToolDeps }) // forge.catalog|describe|app|read (forge 06d)
 		apptools.ContributeApply(registry, func() apptools.ForgeDeps { return forgeToolDeps }) // forge.apply|changes|check|preview|undo (forge 06e)
 		apptools.ContributeTest(registry, func() apptools.ForgeDeps { return forgeToolDeps })  // forge.test (forge 06f)
+		apptools.ContributeSandbox(registry, func() apptools.ForgeDeps { return forgeToolDeps }) // sandbox.run (forge 07j)
 		presence.Contribute(registry, func() *presence.Presence { return livePresence })
 		uitools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
@@ -792,6 +797,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		}))
 		// An installed app's own entity types are under its path (forge 05c)
 		records.SetPlacement(installs.Placement(func() installs.Deps { return installDeps }))
+		authz.SetAgents(recordsdata.Agents{Deps: func() recordsdata.Deps { return recordDeps }}) // agents are records (forge 07j)
 		// This process runs its share of every tenant's jobs; other
 		// processes on the same JetStream share the queues (forge 07a)
 		jobDeps = jobs.Deps{Projections: projections, Bus: liveBus, Engine: cognitionEngine, Config: configService}

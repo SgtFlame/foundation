@@ -9,6 +9,7 @@ package cognitionnodes
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/authz"
 	"strconv"
 	"time"
 
@@ -20,7 +21,9 @@ const source = "cognition"
 
 // Node type IDs other packages refer to.
 const (
-	CallGraph   = "flow.callGraph"
+	CallGraph = "flow.callGraph"
+	// AsAgentPin is Call graph's input naming an agent to run as (forge 07j).
+	AsAgentPin  = "asAgent"
 	GetVariable = "data.getVariable"
 	SetVariable = "data.setVariable"
 	Reroute     = "flow.reroute"
@@ -85,8 +88,8 @@ func contributeKinds(reg *extensions.Registry) {
 	for i, k := range []cognition.Kind{
 		{Descriptor: extensions.Descriptor{ID: cognition.KindMode}, Title: "Chat mode", Events: []string{"event.userMessage"},
 			Description: "A chat mode, offered in the composer by the chat.modes settings: runs a whole chat round from On user message, gathering its context, building its prompt and tools with templates, streaming the reply with Stream reply, then naming the conversation and learning from the round",
-			Returns: "nothing: the round's events come from its Stream reply, Say, Set title and Emit followed nodes",
-			Spec:    json.RawMessage(modeSpecSchema)},
+			Returns:     "nothing: the round's events come from its Stream reply, Say, Set title and Emit followed nodes",
+			Spec:        json.RawMessage(modeSpecSchema)},
 		{Descriptor: extensions.Descriptor{ID: cognition.KindAgent}, Title: "Agent", Events: []string{cognition.EventCall},
 			Description: "A persona with its prompts, tools and level, called from other graphs with Call graph", Returns: "its declared outputs"},
 		{Descriptor: extensions.Descriptor{ID: cognition.KindFunction}, Title: "Function", Events: []string{cognition.EventCall},
@@ -302,7 +305,7 @@ func contributeFlow(reg *extensions.Registry) {
 		Descriptor:  extensions.Descriptor{ID: CallGraph},
 		Title:       "Call graph",
 		Category:    "Flow",
-		Description: "Runs another graph from its On call event with these inputs, and gives its outputs. Its pins follow the called graph's signature as it was when the node was set.",
+		Description: "Runs another graph from its On call event with these inputs, and gives its outputs. Its pins follow the called graph's signature as it was when the node was set. As agent runs it as an agent, held to the agent's own roles.",
 		Example:     "Call graph Format greeting with Name, then Set state greeting to its Text",
 		Config: json.RawMessage(`{"type":"object","properties":{"graph":{"type":"string","title":"Graph","description":"The id of the graph to call"},
 			"inputs":{"type":"array","title":"Inputs","readOnly":true},"outputs":{"type":"array","title":"Outputs","readOnly":true}}}`),
@@ -318,6 +321,8 @@ func contributeFlow(reg *extensions.Registry) {
 			for i := 1; i < len(in); i++ {
 				in[i].Exec = false
 			}
+			in = append(in, cognition.Pin{ID: AsAgentPin, Name: "As agent", Type: "string", Optional: true,
+				Description: "An agent's id to run the graph as (forge 07j); the run's principal must have made the agent or hold agent.use on it"})
 			out := append([]cognition.Pin{cognition.ExecPin(cognition.Then, "")}, c.Outputs...)
 			for i := 1; i < len(out); i++ {
 				out[i].Exec, out[i].Optional = false, false
@@ -349,6 +354,25 @@ func contributeFlow(reg *extensions.Registry) {
 			if c.Graph == "" {
 				return nil, "", fmt.Errorf("Call graph names no graph")
 			}
+			if s, _ := in[AsAgentPin].(string); s != "" {
+				id, ok := authz.ParseAgent(s)
+				if !ok {
+					return nil, "", fmt.Errorf("as agent %q is not an agent's id", s)
+				}
+				as, err := authz.AsAgent(x.Context(), x.Principal, id)
+				if err != nil {
+					return nil, "", err
+				}
+				inputs := cognition.Values{}
+				for k, v := range in {
+					if k != AsAgentPin {
+						inputs[k] = v
+					}
+				}
+				out, err := x.CallAs(c.Graph, inputs, as)
+				return out, cognition.Then, err
+			}
+			delete(in, AsAgentPin)
 			out, err := x.Call(c.Graph, in)
 			return out, cognition.Then, err
 		},

@@ -102,7 +102,7 @@ func contributeToolSets(reg *extensions.Registry, deps func() Deps) {
 				}
 			} else {
 				d := deps()
-				server, client := tools.Tools.All(d.Registry), []tools.Tool(nil)
+				server, client := tools.Available(d.Registry, x.ServiceArgs), []tools.Tool(nil)
 				if h, ok := x.Host.(Toolbox); ok {
 					server, client = h.ServerTools(), h.ClientTools()
 				}

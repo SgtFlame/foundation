@@ -81,6 +81,8 @@ var FieldTypes = []FieldType{
 		Tags: []string{"computed", "timestamp", "audit"}, Examples: example(`{"name":"Created","type":"createdAt"}`)},
 	{ID: "updatedAt", Title: "Updated at", Group: GroupComputed, Computed: true, Description: "When the record last changed",
 		Tags: []string{"computed", "timestamp", "audit"}, Examples: example(`{"name":"Updated","type":"updatedAt"}`)},
+	{ID: "principal", Title: "Principal", Group: GroupComputed, Computed: true, Description: "Makes each record a principal of kind (agent, the default; forge 07j): an agent that holds roles, named by the record's title, whose id (the record's) is the value; it is retired when the record is deleted. At most one per entity type",
+		Tags: []string{"computed", "agent", "access", "rbac"}, Examples: example(`{"name":"Principal","type":"principal","kind":"agent"}`)},
 	{ID: "createdBy", Title: "Created by", Group: GroupComputed, Computed: true, Description: "The user who made the record",
 		Tags: []string{"computed", "user", "audit"}, Examples: example(`{"name":"Creator","type":"createdBy"}`)},
 }

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/authz"
 	"slices"
 	"strings"
 	"sync"
@@ -39,11 +40,15 @@ func ColorOf(userID uint64) string { return Colors[userID%uint64(len(Colors))] }
 
 // Entry is one connection's presence in an object.
 type Entry struct {
-	Connection string          `json:"connection"`
-	UserID     uint64          `json:"userId,string"`
-	Name       string          `json:"name"`
-	Color      string          `json:"color"`
-	Actor      string          `json:"actor,omitempty"` // who is there for the user, not by hand: the chat's Builder ("builder", forge 06g)
+	Connection string `json:"connection"`
+	UserID     uint64 `json:"userId,string"`
+	Name       string `json:"name"`
+	Color      string `json:"color"`
+	Actor      string `json:"actor,omitempty"` // who is there for the user, not by hand: the chat's Builder ("builder", forge 06g)
+	// AgentName names an agent there for the user (forge 07j; Actor is
+	// agent:<id>), drawn as its own avatar in its own colour.
+	AgentName  string          `json:"agentName,omitempty"`
+	AgentColor string          `json:"agentColor,omitempty"`
 	State      json.RawMessage `json:"state,omitempty"` // selection, cursor, what it is editing
 	At         time.Time       `json:"at"`
 }
@@ -102,11 +107,22 @@ func (p *Presence) SetAs(ctx context.Context, principal features.Principal, obje
 	if err != nil {
 		return err
 	}
-	name := p.userName(principal.UserID)
-	if name == "" {
-		name = fmt.Sprintf("User %d", principal.UserID)
+	user := principal.UserID
+	e := Entry{Connection: conn, Actor: actor, State: state, At: time.Now().UTC()}
+	if principal.Kind == features.PrincipalAgent {
+		// An agent is present for whom its run acts, as an actor of its own
+		user, e.Actor = principal.OnBehalfOf, principal.String()
+		e.AgentName, e.AgentColor = fmt.Sprintf("Agent %d", principal.AgentID), ColorOf(principal.AgentID)
+		if a, ok, _ := authz.FindAgent(ctx, principal.TenantID, principal.AgentID); ok {
+			e.AgentName = a.Name
+		}
 	}
-	raw, _ := json.Marshal(Entry{Connection: conn, UserID: principal.UserID, Name: name, Color: ColorOf(principal.UserID), Actor: actor, State: state, At: time.Now().UTC()})
+	name := p.userName(user)
+	if name == "" {
+		name = fmt.Sprintf("User %d", user)
+	}
+	e.UserID, e.Name, e.Color = user, name, ColorOf(user)
+	raw, _ := json.Marshal(e)
 	_, err = kv.Put(ctx, object+"."+conn, raw)
 	return log.Wrap(err)
 }

@@ -23,10 +23,14 @@ type CustomRole struct {
 	Revision    int
 }
 
-// RoleGrant gives a principal a role on a resource and everything under it.
+// RoleGrant gives a principal a role on a resource and everything under it:
+// a user, or with AgentID an agent (forge 07j; UserID is then 0). A grant
+// on one record (".../entity:<type>/record:<id>") gives its role on the
+// record and, through the role's row rules, on records related to it.
 type RoleGrant struct {
 	db.Model
 	UserID    uint64 `gorm:"index;not null"`
+	AgentID   uint64 `gorm:"index"`
 	RoleID    uint64 `gorm:"index;not null"` // a built-in role's reserved ID, or a CustomRole
 	Resource  string `gorm:"index;not null"` // "app", "tenant:1", "tenant:1/volume:42"
 	GrantedBy uint64 // 0: the system (setup, migration)
@@ -46,6 +50,7 @@ type AccessAudit struct {
 	db.Model
 	Kind     string `gorm:"index"`
 	UserID   uint64 `gorm:"index"` // whose access: the grantee, or the denied principal
+	AgentID  uint64 `gorm:"index"` // an agent's access (forge 07j)
 	ActorID  uint64 // who granted or revoked
 	TenantID uint64
 	Action   string // the denied action, or the role's name

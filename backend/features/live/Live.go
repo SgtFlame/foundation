@@ -102,9 +102,13 @@ type Event struct {
 	RequestID string          `json:"requestId,omitempty"`
 	UserID    uint64          `json:"userId,string,omitempty"`
 	// Actor is who sent the command for the user, beside them: the chat.
-	Actor    string    `json:"actor,omitempty"`
-	TenantID uint64    `json:"tenantId,string"`
-	Time     time.Time `json:"time"`
+	Actor string `json:"actor,omitempty"`
+	// AgentID is the agent whose command it was (forge 07j), OnBehalfOf the
+	// user its run acted for; UserID is then 0.
+	AgentID    uint64    `json:"agentId,string,omitempty"`
+	OnBehalfOf uint64    `json:"onBehalfOf,string,omitempty"`
+	TenantID   uint64    `json:"tenantId,string"`
+	Time       time.Time `json:"time"`
 	// Batch is set on each event of a commit of several: they were
 	// committed together, as one atomic batch.
 	Batch *Batch `json:"batch,omitempty"`

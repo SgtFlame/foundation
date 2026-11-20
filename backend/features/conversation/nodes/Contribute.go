@@ -324,6 +324,7 @@ func Contribute(reg *extensions.Registry) {
 		Title:       "Stream reply",
 		Effects:     true,
 		External:    true,
+		Model:       true,
 		Sample:      cognition.Values{"reply": "(the model's reply: not asked in a sandboxed run)", "calls": []any{}},
 		Description: "Streams the round's reply: the model at the round's level with the system prompt, the messages and the tools, calling tools until it answers (writes ask the user, client tools run in the browser). It completes the round; leaves by Then when it replied, by Failed when stopped or failed.",
 		Example:     "Stream reply with Add context's System, Messages and the Tools selected, then Set title",

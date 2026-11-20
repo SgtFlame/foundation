@@ -63,7 +63,8 @@ const (
 )
 
 // checkRequest refuses a job that cannot be enqueued.
-func checkRequest(p features.Principal, r Request) []live.Problem {
+func checkRequest(d live.Decision, r Request) []live.Problem {
+	p := d.Principal
 	switch {
 	case !live.ValidToken(r.ID):
 		return problem("args.id", fmt.Sprintf("%q is not a job id", r.ID), "use letters, digits, - and _")
@@ -77,6 +78,19 @@ func checkRequest(p features.Principal, r Request) []live.Problem {
 		return problem("args.as", "a job runs as a principal", "")
 	case r.As.Kind == features.PrincipalApp && r.As.App == "":
 		return problem("args.as.app", "an app principal names its app", "")
+	case r.As.Kind == features.PrincipalAgent && r.As.AgentID == 0:
+		return problem("args.as.agentId", "an agent principal names its agent", "")
+	}
+	// A job may run as an agent its enqueuer may use (forge 07j)
+	if r.As.Kind == features.PrincipalAgent && p.Kind != features.PrincipalService && r.As != p.Ref() {
+		as, err := authz.AsAgent(d.Context(), p, r.As.AgentID)
+		if err != nil {
+			return problem("args.as", err.Error(), "use an agent you created or hold agent.use on")
+		}
+		if as.Ref() != r.As {
+			return problem("args.as.onBehalfOf", "an agent's job acts for whoever enqueues it", "leave onBehalfOf to the server")
+		}
+		return nil
 	}
 	// A job runs as whoever enqueues it; only the server's own work (the
 	// outbox, triggers) enqueues for another principal
@@ -118,7 +132,7 @@ func specs() []spec {
 					return nil, problem("args", err.Error(), "")
 				}
 				r.ID = d.Target.ID
-				if ps := checkRequest(d.Principal, r); ps != nil {
+				if ps := checkRequest(d, r); ps != nil {
 					return nil, ps
 				}
 				r.Queue = queueOf(r.Queue)
@@ -145,7 +159,7 @@ func specs() []spec {
 					}
 					r := *a.Job
 					r.ID, r.Queue = d.Target.ID, queueOf(r.Queue)
-					if ps := checkRequest(d.Principal, r); ps != nil {
+					if ps := checkRequest(d, r); ps != nil {
 						return nil, ps
 					}
 					j = &Job{Request: r, Status: StatusQueued, EnqueuedAt: time.Now().UTC(), Runs: []Run{}, Dispatch: 1}

@@ -63,6 +63,8 @@ func ValueField(f Field) Field {
 		v.Type = "dateTime"
 	case "createdBy":
 		v.Type = "user"
+	case "principal":
+		v.Type = "text"
 	case "formula", "rollup":
 		if f.Returns == "" {
 			return f
@@ -351,4 +353,18 @@ func toFloat(v any) (float64, bool) {
 func SearchableType(f Field) bool {
 	f = ValueField(f)
 	return slices.Contains([]string{"text", "longText", "richText", "enum", "multiEnum", "tags"}, f.Type)
+}
+
+// PrincipalAgent is the principal field's one kind: its records are agents
+// (forge 07j).
+const PrincipalAgent = "agent"
+
+// PrincipalField is the entity type's principal field, if it has one.
+func PrincipalField(e EntityType) (Field, bool) {
+	for _, f := range e.Visible() {
+		if f.Type == "principal" {
+			return f, true
+		}
+	}
+	return Field{}, false
 }

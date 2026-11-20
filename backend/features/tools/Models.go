@@ -30,6 +30,9 @@ const (
 	ApprovalApproved Approval = "approved" // the user approved this call
 	ApprovalAlways   Approval = "always"   // allowed for the conversation, now or earlier
 	ApprovalDenied   Approval = "denied"
+	// ApprovalAgent is a write an agent made on its own (forge 07j): no one
+	// is asked, and the agent's own roles decide what it may change.
+	ApprovalAgent Approval = "agent"
 )
 
 // ToolCall records one call, linked to its round or Cognition run, and is

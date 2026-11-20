@@ -2,6 +2,8 @@ package apptools_test
 
 import (
 	"encoding/json"
+	"github.com/SgtFlame/foundation/backend/features/authz"
+	authznodes "github.com/SgtFlame/foundation/backend/features/authz/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connectorstest"
@@ -66,8 +68,11 @@ func everything(t *testing.T) *extensions.Registry {
 	apptools.ContributeForge(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })
 	apptools.ContributeApply(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })
 	apptools.ContributeTest(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })
+	apptools.ContributeSandbox(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })
 	jobs.Contribute(reg, func() jobs.Deps { return jobs.Deps{} })
 	jobsnodes.Contribute(reg, func() jobsnodes.Deps { return jobsnodes.Deps{} })
+	authznodes.Contribute(reg)
+	authz.ContributeAgents(reg)
 	connectors.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
 	connectorsnodes.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
 	connections.Contribute(reg, func() connections.Deps { return connections.Deps{} })

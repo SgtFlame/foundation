@@ -20,8 +20,9 @@ export function initials(name: string): string {
 const actorNames: Record<string, string> = { builder: 'Builder' }
 
 // How a present connection is named: the user, or their actor for them
-export function presentName(u: Pick<PresentUser, 'name' | 'actor'>): string {
+export function presentName(u: Pick<PresentUser, 'name' | 'actor' | 'agentName'>): string {
   if (!u.actor) return u.name
+  if (u.agentName) return `${u.agentName}, for ${u.name}`
   return `${actorNames[u.actor] ?? u.actor}, for ${u.name}`
 }
 
@@ -48,7 +49,7 @@ export function PresenceAvatars({ users, max = 5 }: PresenceAvatarsProps) {
                 data-actor={user.actor}
                 sx={{ '& .MuiBadge-badge': { fontSize: 7, height: 12, minWidth: 12, px: 0.25, bgcolor: user.color, color: '#fff' } }}
               >
-                <Avatar alt={name} sx={{ bgcolor: 'background.paper', color: user.color, border: `1px solid ${user.color}` }}>
+                <Avatar alt={name} sx={{ bgcolor: 'background.paper', color: user.agentColor ?? user.color, border: `1px solid ${user.agentColor ?? user.color}` }}>
                   <SmartToyOutlined sx={{ fontSize: 15 }} />
                 </Avatar>
               </Badge>

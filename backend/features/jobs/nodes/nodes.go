@@ -12,6 +12,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/apps/installs"
+	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
@@ -54,7 +55,8 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				{ID: "key", Name: "Key", Type: "string", Optional: true, Description: "Jobs with the same key run one at a time, in order"},
 				{ID: "delay", Name: "Delay", Type: "string", Optional: true, Description: "How long to wait before it runs, such as 10s or 5m"},
 				{ID: "runAt", Name: "Run at", Type: "string", Optional: true, Description: "When it runs, RFC 3339, in place of a delay"},
-				{ID: "id", Name: "ID", Type: "string", Optional: true, Description: "The job's id: a job with an id already enqueued is not enqueued again; a new one when empty"}},
+				{ID: "id", Name: "ID", Type: "string", Optional: true, Description: "The job's id: a job with an id already enqueued is not enqueued again; a new one when empty"},
+				{ID: "as", Name: "As agent", Type: "string", Optional: true, Description: "An agent's id to run the job as, held to the agent's own roles; the run's principal must have made the agent or hold agent.use on it"}},
 			Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("id", "ID", "string", "The job's id, for Cancel job")},
 		},
 		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
@@ -99,6 +101,18 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				inputs, _ = json.Marshal(v)
 			}
 			app := appOf(x, d, c.Graph)
+			// Run as an agent the principal may use (forge 07j)
+			as := x.Principal
+			if s, _ := cognition.Get[string](in, "as"); s != "" {
+				id, ok := authz.ParseAgent(s)
+				if !ok {
+					return nil, "", fmt.Errorf("as %q is not an agent's id", s)
+				}
+				var err error
+				if as, err = authz.AsAgent(x.Context(), x.Principal, id); err != nil {
+					return nil, "", err
+				}
+			}
 			// In a command graph the job rides on the commit (the outbox)
 			if h, ok := x.Host.(*livenodes.CommandHost); ok && h.Decision != nil {
 				if bus.DryOf(x.Context()) == nil {
@@ -106,10 +120,10 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 						return nil, "", err
 					}
 				}
-				h.Decision.Enqueue(live.Job{ID: id, Graph: c.Graph, Inputs: inputs, Queue: c.Queue, Key: key, RunAt: runAt, App: app, As: x.Principal.Ref()})
+				h.Decision.Enqueue(live.Job{ID: id, Graph: c.Graph, Inputs: inputs, Queue: c.Queue, Key: key, RunAt: runAt, App: app, As: as.Ref()})
 				return cognition.Values{"id": id}, cognition.Then, nil
 			}
-			j, err := d.Runner.Enqueue(x.ServiceArgs, jobs.Request{ID: id, Graph: c.Graph, Inputs: inputs, Queue: c.Queue, Key: key, RunAt: runAt, App: app})
+			j, err := d.Runner.Enqueue(x.ServiceArgs, jobs.Request{ID: id, Graph: c.Graph, Inputs: inputs, Queue: c.Queue, Key: key, RunAt: runAt, App: app, As: as.Ref()})
 			if err != nil {
 				return nil, "", err
 			}

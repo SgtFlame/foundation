@@ -86,6 +86,10 @@ type NodeType struct {
 	// model, a tool, the object store, mail. A sandboxed run (forge.test,
 	// forge 06f) does not run them: it gives their Sample and lists them.
 	External bool
+	// Model is set on External nodes that call a model (Agent, Ask model,
+	// Stream reply), which a sandbox may run for real while it stubs
+	// connectors (forge 07j).
+	Model bool
 	// Sample is what a stubbed External node gives, by output pin; a data
 	// output left out gives nothing.
 	Sample Values
@@ -247,6 +251,9 @@ type ExecHooks struct {
 	// Call runs another graph from its On call event and returns its
 	// outputs.
 	Call func(graphID string, inputs Values) (Values, error)
+	// CallAs is Call with the called run as another principal (forge 07j:
+	// an agent the caller may use, already checked).
+	CallAs func(graphID string, inputs Values, as features.Principal) (Values, error)
 	// Setting reads a path of a configuration section as the run's
 	// principal sees it ("builder", "maxSteps"); an empty path is the
 	// whole section (forge 06i).
@@ -288,6 +295,14 @@ func (x *Exec) Call(graphID string, inputs Values) (Values, error) {
 		return nil, fmt.Errorf("%s needs the engine to call graph %s", x.Node.ID, graphID)
 	}
 	return x.Hooks.Call(graphID, inputs)
+}
+
+// CallAs runs another graph as another principal (see ExecHooks.CallAs).
+func (x *Exec) CallAs(graphID string, inputs Values, as features.Principal) (Values, error) {
+	if x.Hooks.CallAs == nil {
+		return nil, fmt.Errorf("%s needs the engine to call graph %s", x.Node.ID, graphID)
+	}
+	return x.Hooks.CallAs(graphID, inputs, as)
 }
 
 // Setting reads a configuration setting (see ExecHooks.Setting).

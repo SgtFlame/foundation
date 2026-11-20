@@ -782,6 +782,15 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Blockers**: none. Forge 07f questions 1 and 2 answered with their proposals before building (2026-11-12); 2 was the user's direction while building.
     - **Decisions to review after seeing it**: in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-3).
     - **Pending, carried forward**: IMAP and POP3 joining the `mail` group (7g, 7h).
+51. **Agent principals, record grants and app tools** (Forge iteration 7, part 7j, [forge 07j-AgentPrincipals.md](../../forge/documentation/plans/07j-AgentPrincipals.md)). *Built* ([RBAC.md](RBAC.md#built-in-slice-51), [Apps.md](Apps.md#changed-in-slice-51), [Records.md](Records.md#changed-in-slice-51)).
+    - **Built**:
+      - `features`/`authz`: the `agent` principal kind; agents read from their records (`authz.Agents`, `recordsdata.Agents`); agent grants (`RoleGrant.AgentID`); grants on one record reaching related types through row rules; `principal.hasRole`; `agent.use`, `MayUseAgent`, `AsAgent`; `authzservice` grants to and lists agents; *Grant role* and *Revoke role* (`authz/nodes`);
+      - `records`: the `principal` field type; `live`: events carry `agentId`/`onBehalfOf`, presence shows agents; `jobs`/`cognition`: runs as an agent (*Enqueue job*, *Call graph*); `tools`: `tools.Sources`, `tools.Available`, an agent's writes not asked;
+      - `apps`: manifest `tools` installed as `<appId>.<name>`; `sandbox.run` with `agent` and `stub`, the sandbox carried on the context (`engine.WithSandbox`, `NodeType.Model`);
+      - browser: agents in the Share dialog, the Role Editor and the Access checker; the `share` UI action and *Share* node.
+    - **Blockers**: none. Forge 07j questions 1 and 2 answered with their proposals before building (2026-11-20).
+    - **Decisions to review after seeing it**: in [RBAC.md](RBAC.md#decisions-to-review-after-seeing-it-1).
+    - **Pending, carried forward**: revoking a deleted agent's grants; agents' presence set by the Agents app's runner (7m).
 
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
@@ -840,3 +849,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 48. Scripted connectors (Forge 7d) | forge 07d 1 (no scripted contracts; 11-Zapier) and 2 (exported with the manifest), answered with their proposals | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-2), the Connectors tab once 7e defines contracts |
 | 49. Connector groups, roles, validators and refs (with Forge 7f) | forge 07f 1 (only listed addresses) and 2 (tenant mail domains in a section, a Mail administrator role, personal accounts off the tenant domains, tenant accounts at their domain), answered with their proposals | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-3), the Connection form for a mail account |
 | 50. Connections of type, Wait, own changes (with Forge 7i) | forge 07i 2 (a *Connections of type* node limited to the app's own types) and 4 (a *Wait* node; asked as promise-shaped, built as an exec node), the user's answers; a trigger's record read once the projection holds its change, found while testing | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-4) |
+| 51. Agent principals, record grants and app tools (Forge 7j) | forge 07j 1 (record grants) and 2 (agents by whoever may create the record, never above their granter), answered with their proposals | the decisions in [RBAC.md](RBAC.md#decisions-to-review-after-seeing-it-1), the Share dialog with agents once the Agents app uses it |

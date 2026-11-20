@@ -6,6 +6,7 @@ import (
 	"maps"
 	"math/big"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -78,6 +79,15 @@ func (c *decision) compute(events []live.NewEvent, create bool) ([]live.NewEvent
 				r[f.ID] = r[records.MetaOf(f)]
 			}
 			continue
+		case "principal":
+			// The record's own id: the agent it defines (forge 07j)
+			if r[f.ID] != nil {
+				continue
+			}
+			if _, err := strconv.ParseUint(c.Target.ID, 10, 64); err != nil {
+				continue // only a numeric id makes a principal
+			}
+			v = raw(c.Target.ID)
 		case "autoNumber":
 			if !create {
 				continue // records made before the field have no number

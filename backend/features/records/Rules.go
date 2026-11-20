@@ -19,15 +19,21 @@ import (
 //   - record is the record's values by field id, and its own data (_id,
 //     _createdBy, _updatedBy and the rest). A user is named by their id as
 //     text, as a relation to user holds it, so _createdBy is text too.
-//   - principal is {user, tenant, kind}: the user's and tenant's ids as
-//     text, and "user" or "service".
+//   - principal is {user, tenant, kind, app, agent, onBehalfOf}: ids as
+//     text, kind "user", "service", "app" or "agent", and hasRole(role,
+//     record), whether the principal holds the app role (its id in the
+//     manifest) on that record or above it (forge 07j), the record given
+//     as an id or a relation's value: principal.hasRole('mailSender',
+//     record.account).
 //
 // An empty rule allows every record. A rule that fails to run, or gives
 // something other than a bool (record values are not typed, so Check
 // cannot always tell), allows none.
 
 // ruleEnv is the shape every rule is compiled against.
-var ruleEnv = map[string]any{"record": map[string]any{}, "principal": map[string]any{}}
+var ruleEnv = map[string]any{"record": map[string]any{}, "principal": map[string]any{
+	"hasRole": func(role string, record any) bool { return false },
+}}
 
 var rules sync.Map // source → *vm.Program
 
@@ -67,9 +73,13 @@ func RuleEnv(record map[string]json.RawMessage, p features.Principal) map[string
 		kind = "service"
 	case features.PrincipalApp:
 		kind = "app" // an installed app's own principal (forge 07a)
+	case features.PrincipalAgent:
+		kind = "agent" // forge 07j
 	}
 	return map[string]any{"record": r, "principal": map[string]any{
 		"user": strconv.FormatUint(p.UserID, 10), "tenant": strconv.FormatUint(p.TenantID, 10), "kind": kind, "app": p.App,
+		"agent": strconv.FormatUint(p.AgentID, 10), "onBehalfOf": strconv.FormatUint(p.OnBehalfOf, 10),
+		"hasRole": func(role string, record any) bool { return authz.HasRole(context.Background(), p, role, record) },
 	}}
 }
 

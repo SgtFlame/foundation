@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features"
 	"strconv"
 	"strings"
 	"time"
@@ -185,7 +186,10 @@ func (r *run) exec(id string, node cognition.Node) *cognition.Exec {
 			return v, err
 		},
 		Call: func(graphID string, inputs cognition.Values) (cognition.Values, error) {
-			return r.engine.call(r, graphID, inputs)
+			return r.engine.call(r, graphID, inputs, nil)
+		},
+		CallAs: func(graphID string, inputs cognition.Values, as features.Principal) (cognition.Values, error) {
+			return r.engine.call(r, graphID, inputs, &as)
 		},
 		Setting: func(section, path string) (any, error) {
 			return r.engine.setting(r.args.ServiceArgs, section, path)
@@ -210,7 +214,7 @@ func (r *run) call(id string, in cognition.Values) (string, error) {
 	var pin string
 	var err error
 	switch {
-	case r.args.Stub && t.External:
+	case r.args.Stub && t.External && (r.args.Real == nil || !r.args.Real(t)):
 		out, pin = r.stub(id, t)
 	case t.Run != nil:
 		out, pin, err = t.Run(r.exec(id, node), in)

@@ -13,6 +13,10 @@ type Held struct {
 	Grant       RoleGrant
 	Role        Role
 	Permissions []string // "*" expanded to every declared permission
+	// Record is set on a grant on one record that reaches the checked
+	// resource through row rules (forge 07j), RecordEntity its type.
+	Record       string `json:"-"`
+	RecordEntity string `json:"-"`
 }
 
 // Effective is what a principal may do, for the browser to hide or disable
@@ -60,10 +64,8 @@ func (pol *Policy) EffectiveFor(p features.Principal) (Effective, error) {
 	if err != nil {
 		return e, err
 	}
-	var grants []RoleGrant
-	if p.Kind == features.PrincipalApp {
-		grants = AppGrants(roles, p.TenantID, p.App)
-	} else if grants, err = pol.GrantsOf(p.UserID); err != nil {
+	grants, err := pol.grantsFor(p, roles)
+	if err != nil {
 		return e, err
 	}
 	for _, g := range grants {

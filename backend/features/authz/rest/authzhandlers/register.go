@@ -23,4 +23,5 @@ func (ah *AuthzHandler) Register(router gin.IRouter, service authzservice.Servic
 	group.POST("/grant", ah.Grant)
 	group.POST("/revoke", ah.Revoke)
 	group.POST("/explain", ah.Explain)
+	group.POST("/agents", ah.Agents)
 }

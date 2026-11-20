@@ -7,7 +7,7 @@
 // the title and presence, so it has no header of its own.
 
 import { Alert, Box, Chip, CircularProgress, Snackbar, Stack, Typography } from '@mui/material'
-import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { live } from '../live/LiveConnection.ts'
 import { PresenceAvatars } from '../live/PresenceAvatars.tsx'
 import { usePresence, type PresentUser } from '../live/usePresence.ts'
@@ -20,6 +20,9 @@ import { onNavigateRequest, openAppAt } from './editorKinds.ts'
 import type { UiAction, UiNode } from './types.ts'
 import { UiHostContext, type UiHost } from './UiHostContext.ts'
 import UiRenderer from './UiRenderer.tsx'
+
+// The Share dialog a page's Share button opens on one record (forge 07j)
+const ShareDialog = lazy(() => import('../components/share/ShareDialog.tsx'))
 import { UiSession, type UiSessionState } from './UiSession.ts'
 
 const logger = log.In('ui').Tags('host')
@@ -70,6 +73,7 @@ export interface AppHostProps extends EditorProps<AppEditorObject> {
 
 function AppHost({ object, registry, tabId, page }: AppHostProps) {
   const [toast, setToast] = useState<{ message: string; severity: 'success' | 'info' | 'warning' | 'error' }>()
+  const [share, setShare] = useState<{ resource: string; title?: string }>()
 
   const perform = useCallback(
     (s: UiSession, actions: UiAction[]) => {
@@ -98,6 +102,9 @@ function AppHost({ object, registry, tabId, page }: AppHostProps) {
             link.click()
             break
           }
+          case 'share':
+            if (a.resource) setShare({ resource: a.resource, title: a.name || undefined })
+            break
           case 'confirm':
             if (a.handler) s.emit([], { handler: a.handler, payload: { confirmed: window.confirm(a.message ?? 'Are you sure?') } })
             break
@@ -189,6 +196,11 @@ function AppHost({ object, registry, tabId, page }: AppHostProps) {
           ) : null}
         </Box>
       </Stack>
+      {share && (
+        <Suspense fallback={null}>
+          <ShareDialog resource={share.resource} title={share.title} onClose={() => setShare(undefined)} />
+        </Suspense>
+      )}
       <Snackbar open={!!toast} autoHideDuration={4000} onClose={() => setToast(undefined)}>
         <Alert severity={toast?.severity ?? 'info'} onClose={() => setToast(undefined)} variant="filled">
           {toast?.message}
