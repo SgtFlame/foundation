@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -24,7 +25,11 @@ const (
 	SetVariable = "data.setVariable"
 	Reroute     = "flow.reroute"
 	Comment     = "note.comment"
+	Wait        = "flow.wait"
 )
+
+// MaxWait is the longest a Wait node pauses (forge 07i).
+const MaxWait = 5 * time.Minute
 
 // Contribute registers the core node and data types, conversions and kinds.
 func Contribute(reg *extensions.Registry) {
@@ -194,6 +199,42 @@ func contributeFlow(reg *extensions.Registry) {
 				}
 			}
 			return nil, "completed", nil
+		},
+	})
+
+	node(reg, 135, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: Wait},
+		Title:      "Wait",
+		Category:   "Flow",
+		Description: "Pauses the run for a number of seconds (at most 300), then continues by Then. " +
+			"Ending the run (a call's deadline, a cancelled job) ends the wait and the run with it, so nothing after it runs. " +
+			"For a test stub's latency or spacing out calls; a job's retry delay is the job runner's, not a Wait.",
+		Example:  "Wait the test mailbox's latency in seconds before answering a fetch",
+		Examples: cognition.ConfigExample(Wait, `{"seconds":1}`),
+		Effects:  true,
+		Config:   json.RawMessage(`{"type":"object","properties":{"seconds":{"type":"number","title":"Seconds","description":"How long to wait when Seconds is unconnected","min":0,"max":300}}}`),
+		Pins: cognition.Pins{
+			In: []cognition.Pin{cognition.ExecPin(cognition.Then, ""),
+				{ID: "seconds", Name: "Seconds", Type: "number", Optional: true, Description: "How long to wait, in seconds (fractions allowed); the config's when unconnected"}},
+			Out: []cognition.Pin{cognition.ExecPin(cognition.Then, "")},
+		},
+		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
+			var c struct{ Seconds float64 }
+			if err := x.Config(&c); err != nil {
+				return nil, "", err
+			}
+			secs := c.Seconds
+			if v, ok := in["seconds"]; ok && v != nil {
+				n, err := cognition.Get[float64](in, "seconds")
+				if err != nil {
+					return nil, "", fmt.Errorf("Wait's Seconds must be a number, not %v", v)
+				}
+				secs = n
+			}
+			if err := wait(x, secs); err != nil {
+				return nil, "", err
+			}
+			return nil, cognition.Then, nil
 		},
 	})
 
@@ -441,4 +482,20 @@ func pinsSchema(title string) string {
     }}}
   }
 }`
+}
+
+// wait pauses for secs seconds, capped at MaxWait, or until the run ends.
+func wait(x *cognition.Exec, secs float64) error {
+	if secs <= 0 {
+		return nil
+	}
+	d := min(time.Duration(secs*float64(time.Second)), MaxWait)
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return nil
+	case <-x.Context().Done():
+		return fmt.Errorf("the run ended during a wait of %s: %w", d, x.Context().Err())
+	}
 }

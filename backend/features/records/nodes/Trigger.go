@@ -21,6 +21,8 @@ const OnChanged = "records.onChanged"
 type onChangedConfig struct {
 	Entity string   `json:"entity"`
 	Events []string `json:"events,omitempty"`
+	// OwnChanges starts it on the app's own changes too (forge 07i)
+	OwnChanges bool `json:"ownChanges,omitempty"`
 }
 
 // changeEvents are the record events each change On record changed names
@@ -74,7 +76,13 @@ func contributeTrigger(reg *extensions.Registry, deps func() data.Deps) {
 			}
 			return live.AreaRecords, livenodes.EventSubjects(args.Principal.TenantID, live.AreaRecords, c.Entity, events), nil
 		},
-		// The record as the job's principal reads it when the job runs:
+		Own: func(config json.RawMessage) bool {
+			var c onChangedConfig
+			_ = json.Unmarshal(config, &c)
+			return c.OwnChanges
+		},
+		// The record as the job's principal reads it when the job runs, once
+		// the projection holds the change:
 		// nothing once deleted or when its read rule hides it
 		Inputs: func(args features.ServiceArgs, config json.RawMessage, e live.Event) (cognition.Values, error) {
 			var c onChangedConfig
@@ -87,7 +95,15 @@ func contributeTrigger(reg *extensions.Registry, deps func() data.Deps) {
 			if e.Type == data.EventDeleted {
 				return out, nil
 			}
-			r, _, err := data.Get(args, deps(), e.Target.Type, e.Target.ID)
+			// The job may start before the projector folds its event: settle
+			// first, or the record read is older than the change (forge 07i)
+			d := deps()
+			if d.Projections != nil {
+				if err := d.Projections.Settle(args.Context(), args.Principal.TenantID, data.Projector); err != nil {
+					return nil, err
+				}
+			}
+			r, _, err := data.Get(args, d, e.Target.Type, e.Target.ID)
 			if err != nil {
 				return nil, err
 			}

@@ -44,9 +44,16 @@ func ContributeAccess(reg *extensions.Registry) {
 
 // list reads every connection of the tenant.
 func list(ctx context.Context, d Deps, tenant uint64) ([]Connection, error) {
+	return All(ctx, d.Projections, tenant)
+}
+
+// All reads every connection of the tenant, by name, with no access
+// check: callers check (List) or limit what they give (scripted's
+// Connections of type).
+func All(ctx context.Context, store live.Store, tenant uint64) ([]Connection, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	entries, err := d.Projections.Watch(ctx, tenant, Projector, TargetType+".*")
+	entries, err := store.Watch(ctx, tenant, Projector, TargetType+".*")
 	if err != nil {
 		return nil, err
 	}

@@ -19,6 +19,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/apps/installs"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
+	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	livenodes "github.com/SgtFlame/foundation/backend/features/live/nodes"
 	"github.com/SgtFlame/foundation/backend/features/records/data"
 	"github.com/SgtFlame/foundation/backend/features/records/entities"
@@ -114,6 +115,32 @@ func TestTriggerOnRecordChanged(t *testing.T) {
 				t.Errorf("consumer %s is left after the uninstall", n)
 			}
 		}
+	}
+}
+
+// A trigger skips the records its own app made, unless its On record
+// changed asks for its own changes too (forge 07i).
+func TestTriggerOnItsAppsOwnChanges(t *testing.T) {
+	f := setup(t, fast)
+	f.notes(map[string]map[string]any{
+		"others": node("event", "records.onChanged", map[string]any{"entity": "note", "events": []string{"created"}}),
+		"all":    node("event", "records.onChanged", map[string]any{"entity": "note", "events": []string{"created"}, "ownChanges": true}),
+	})
+	f.start("a", time.Second)
+	asApp := features.ServiceArgs{Ctx: context.Background(), Principal: features.AppPrincipal(features.LocalTenantID, "notes")}
+	raw, _ := json.Marshal(map[string]any{"entity": "note", "values": map[string]any{"text": "by the app"}})
+	if res := f.bus.Execute(bus.Request{ServiceArgs: asApp, ID: "app-note", Type: "record.create", Target: "n1", Args: raw}); res.Common.Code >= 300 {
+		t.Fatalf("the app's note: %s %+v", res.Common.Message, res.Problems)
+	}
+	f.addNote("n2", "by a user")
+	f.hits.wait(t, "all", 2, 5*time.Second)
+	f.hits.wait(t, "others", 1, 5*time.Second)
+	time.Sleep(800 * time.Millisecond)
+	if got := f.hits.named("others"); len(got) != 1 || got[0].Value.(map[string]any)["text"] != "by a user" {
+		t.Errorf("the trigger without own changes ran %d times: %+v", len(got), got)
+	}
+	if n := len(f.hits.named("all")); n != 2 {
+		t.Errorf("the trigger with own changes ran %d times, want 2", n)
 	}
 }
 

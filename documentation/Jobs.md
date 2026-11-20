@@ -55,7 +55,7 @@ An app's triggers run as **the app's own principal** (`features.AppPrincipal(ten
   - *On schedule* `{every}` or `{at, timeZone}`.
   - *On webhook* still has no runs (forge 11).
 - Event trigger nodes register a `livenodes.TriggerEvent` (`live.triggerEvent`): its subjects for a config, checked as the app principal, and its outputs for an event, read as the job's principal. 7b's *On connector event* will register one too.
-- A trigger does not start on events its own app's principal committed, so a trigger that changes what it watches does not run forever.
+- A trigger does not start on events its own app's principal committed, so a trigger that changes what it watches does not run forever, unless its *On record changed* sets `ownChanges` ([Connectors.md › Built in slice 50](Connectors.md#built-in-slice-50)). Since slice 50, *On record changed*'s `record` is read once the records projection holds the change.
 - A trigger that cannot start yet keeps its app pending, and every discovery tries again. The usual reason is that the app's roles are not synced yet, by whichever process syncs them. The warning is logged once per reason.
 - Uninstalling deletes the app's trigger consumers and purges its schedules. Upgrading reconciles them: a kept trigger keeps its consumer's position, and a new one starts at the upgrade.
 

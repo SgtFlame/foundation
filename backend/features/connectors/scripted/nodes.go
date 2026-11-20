@@ -34,6 +34,9 @@ const source = "connectors"
 // NodeEmit is Emit connector event.
 const NodeEmit = "connector.emit"
 
+// NodeConnections is Connections of type (forge 07i).
+const NodeConnections = "connector.connections"
+
 // ErrorKey is the output a Return error node leaves the typed error in.
 const ErrorKey = "$error"
 
@@ -176,6 +179,36 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		},
 	})
 	cognition.Nodes.Register(reg, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: NodeConnections, Source: source, Order: 963}, Title: "Connections of type", Category: "Connectors", Volatile: true,
+		Description: "Lists the connections of the scripted connector types this app declares, with their settings and never their secrets: " +
+			"each {id, name, type, owner, status, settings}, by name. Only in the app's own graphs and only for its own types, as Emit connector event, " +
+			"so a stub app finds the connections to raise an event on without being granted every connection. Disabled and failed connections are listed with their status.",
+		Example:  "Connections of type imap, kept where settings.mailbox is the delivered message's mailbox, each given messageArrived",
+		Examples: cognition.ConfigExample(NodeConnections, `{"connector":"imap"}`),
+		Tags:     []string{"connector", "scripted", "connection"},
+		Config: json.RawMessage(`{"type":"object","properties":{
+			"connector":{"type":"string","title":"Connector","description":"The name of one of the app's connectors (its type is <appId>.<name>); every one of them when empty"}}}`),
+		Pins: cognition.Pins{
+			In: []cognition.Pin{{ID: "connector", Name: "Connector", Type: "string", Optional: true, Description: "The connector's name, over the config's"}},
+			Out: []cognition.Pin{cognition.DataPin("connections", "Connections", "json", "The connections, each {id, name, type, owner, status, settings}"),
+				cognition.DataPin("count", "Count", "number", "How many there are")},
+		},
+		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
+			var c struct{ Connector string }
+			if err := x.Config(&c); err != nil {
+				return nil, "", err
+			}
+			if v, _ := cognition.Get[string](in, "connector"); v != "" {
+				c.Connector = v
+			}
+			list, err := connectionsOf(x, deps(), c.Connector)
+			if err != nil {
+				return nil, "", err
+			}
+			return cognition.Values{"connections": list, "count": len(list)}, "", nil
+		},
+	})
+	cognition.Nodes.Register(reg, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: NodeEmit, Source: source, Order: 962}, Title: "Emit connector event", Category: "Connectors", Effects: true,
 		Kinds:       []string{livenodes.KindAction, livenodes.KindTrigger, apps.KindConnectorOp},
 		Description: "Raises an event of a contract on a connection of a scripted connector type the app declares, exactly as a builtin adapter's event source would: the payload is checked against the event's schema, and its id (from the event's id fields) makes an event raised twice start triggers once. Only in the graphs of the app that declares a type implementing the contract, for connections of that type.",
@@ -251,6 +284,55 @@ func emit(x *cognition.Exec, d Deps, contract func(string) (connectors.Contract,
 		return "", fmt.Errorf("there is no event stream here")
 	}
 	return id, connectors.PublishEvent(x.Context(), d.JS, tenant, conn, ct.Ref(), def.ID, id, payload, timeNow())
+}
+
+// ConnectionItem is one connection Connections of type gives.
+type ConnectionItem struct {
+	ID       string         `json:"id"`
+	Name     string         `json:"name"`
+	Type     string         `json:"type"`
+	Owner    string         `json:"owner"`
+	Status   string         `json:"status"`
+	Settings map[string]any `json:"settings"`
+}
+
+// connectionsOf lists the connections of the running app's own scripted
+// types, of one connector when named.
+func connectionsOf(x *cognition.Exec, d Deps, connector string) ([]ConnectionItem, error) {
+	app, ok := strings.CutPrefix(x.Owner, "app:")
+	if !ok {
+		return nil, fmt.Errorf("Connections of type runs only in an app's own graphs")
+	}
+	tenant := x.Principal.TenantID
+	in, running := installs.Running(x.Context(), d.Store, tenant, app)
+	if !running {
+		return nil, fmt.Errorf("the app %s is not installed and running", app)
+	}
+	types := map[string]bool{}
+	for _, k := range in.Version.Manifest.Connectors {
+		if connector == "" || k.Name == connector {
+			types[app+"."+k.Name] = true
+		}
+	}
+	if connector != "" && len(types) == 0 {
+		return nil, fmt.Errorf("the app %s declares no connector %q", app, connector)
+	}
+	all, err := connections.All(x.Context(), d.Store, tenant)
+	if err != nil {
+		return nil, err
+	}
+	out := []ConnectionItem{}
+	for _, cn := range all {
+		if !types[cn.Type] {
+			continue
+		}
+		settings := cn.Settings
+		if settings == nil {
+			settings = map[string]any{}
+		}
+		out = append(out, ConnectionItem{ID: cn.ID, Name: cn.Name, Type: cn.Type, Owner: cn.Owner, Status: cn.Status, Settings: settings})
+	}
+	return out, nil
 }
 
 func label(name string) string {

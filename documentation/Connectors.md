@@ -426,3 +426,39 @@ A type's settings field may carry Configuration's `ref` (`"<section>#<arrayPath>
 
 - Refs nested below the top level of a type's settings.
 - Refusing a section change that leaves connections naming a missing item.
+
+## Built in slice 50
+
+Built with Forge's part [7i](../../forge/documentation/MailTestServer.md), the Mail test server, the first app made of scripted connectors over its own records. It needed three generic additions, none of which knows about mail (the user's answers before building, 2026-11-20: 7i questions 2 and 4), and one fix found while testing it.
+
+### Connections of type
+
+*Connections of type* (`connector.connections`, `scripted.NodeConnections`, config `{connector?}`, input `connector`; outputs `connections` and `count`) lists the connections of the scripted types the running graph's own app declares, each `scripted.ConnectionItem {id, name, type, owner, status, settings}`, by name, with settings and never secrets. Disabled and failed connections are listed with their status. It refuses a graph no app owns, an app that is not installed and running, and a connector name the app does not declare. It is the rule *Emit connector event* already follows: an app raising events on its own types' connections must be able to find them, and its principal is granted no connection (an app's triggers run as the app, which holds only its own roles). A pure, volatile node, allowed in every kind. `connections.All(ctx, store, tenant)` is the unchecked read it uses (`List` checks `read` per connection).
+
+### Wait
+
+*Wait* (`flow.wait`, `cognitionnodes.Wait`, config `{seconds}`, input `seconds`) pauses the run, at most `MaxWait` (5 minutes), then continues by *Then*; ending the run (a call's deadline, a cancelled job) ends the wait and the run. It has `Effects`, so pure kinds (command, query) refuse it. The user asked whether it should be promise-shaped (a `Promise<type>` output with *Then* and *Catch*). It is an ordinary exec node instead: every node already resolves before its *Then* fires, and a typed failure leaves by an exit of its own, as *Call connector*'s *Error* does, so there is no pin type to add. A pin type for work started and awaited later is worth adding only when something runs in parallel.
+
+### Own changes in *On record changed*
+
+A trigger skips the events its own app committed, so a trigger that changes what it watches does not run forever. *On record changed* now takes `ownChanges` (*Own changes too*, off by default): set, it starts on the app's own changes as well. `livenodes.TriggerEvent.Own(config)` says so for any trigger event, and the runner's skip honours it. The Mail test server needs it because its connector operations run as the app: a message appended or moved through a test IMAP connection must still raise `messageArrived`. Nothing its triggers do writes records, so they cannot loop.
+
+### Fix: a trigger's record as of its change
+
+*On record changed*'s `record` was read from the projection when the job started, which can be before the projector folds the event: `record` came out `nil` for a new record, or as it was before an update. It now settles the records projection first (`Projections.Settle`), so the record read holds the change. The event's stream sequence is not in the job's inputs (`live.Event.Seq` is `json:"-"`), so waiting for that one sequence was not possible. The Mail test server's scenario failed about one run in four without it, and none in twelve with it.
+
+### Decisions to review after seeing it
+
+- Whether *Connections of type* should also be allowed to list, read-only, connections of other types an app is granted `use` on (not needed yet).
+- `ownChanges` on the other trigger events (*On event* is already the app's own events; schedules have no actor).
+- Settling the whole records projection before each record trigger's run costs a consumer-info round trip or two; a sequence carried in the job's inputs would make it one read.
+
+### Verification
+
+`go test ./features/connectors/... ./features/jobs/... ./features/cognition/... ./features/records/nodes/... ./features/live/... ./features/apps/... ./features/ui/...` pass (`records/search` builds only with `build.sh`):
+
+- `connections/scripted_test.go` `TestConnectionsOfTypeListsTheAppsOwnTypes`: the Stub app's action lists its two `stub.echo` connections (a user's own and a tenant one) by name, settings in, the secret out, and not the `test.secure` one; named `echo` it gives two, a connector it lacks and a graph no app owns are refused;
+- `cognition/nodes/wait_test.go` `TestWait`: the config's seconds, the input over the config, a negative wait, text refused, a cancelled context ending a 60 s wait at once;
+- `jobs/triggers_test.go` `TestTriggerOnItsAppsOwnChanges`: a note made by the app and one by a user start the `ownChanges` trigger twice and the other once, with the user's note;
+- `apps/tools` `TestMetadata` checks both new nodes;
+- the fix, in Forge: `TestIMAPAndPOP3` twelve times in a row and the Mail test server's package three times with `-race`.

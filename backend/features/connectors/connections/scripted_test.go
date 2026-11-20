@@ -343,3 +343,60 @@ func TestManifestOperationWithoutItsGraphIsRefused(t *testing.T) {
 		t.Fatalf("a Return without text: %+v", res.Problems)
 	}
 }
+
+// Connections of type (forge 07i) lists the connections of the app's own
+// scripted types, with their settings and no secrets, and nothing of
+// another type; it refuses a graph no app owns.
+func TestConnectionsOfTypeListsTheAppsOwnTypes(t *testing.T) {
+	f := setup(t)
+	f.serve(connectorstest.Options("a", nil))
+	f.serveScripted("scripted")
+	f.graph("stub-list", livenodes.KindAction,
+		[]any{node("call", cognition.EventCall, m{"outputs": []any{m{"id": "connector", "type": "string"}}}),
+			node("list", scripted.NodeConnections, nil), ret("connections:json", "count:number")},
+		[]any{edge("call", "then", "ret", "then"), edge("call", "connector", "list", "connector"),
+			edge("list", "connections", "ret", "connections"), edge("list", "count", "ret", "count")})
+	f.publishStub()
+	f.install("app.install", "stub", m{})
+	f.online("stub.echo")
+	f.online("test.secure")
+	mine := f.create(m{"type": "stub.echo", "name": "B mine", "settings": m{"user": "ada"}, "secrets": m{"password": "pw"}})
+	shared := f.create(m{"type": "stub.echo", "name": "A shared", "owner": "tenant", "settings": m{"user": "bo"}})
+	f.create(m{"type": "test.secure", "name": "Other", "settings": m{"user": "ada"}, "secrets": m{"password": "pw"}})
+
+	var g cognition.Graph
+	_ = json.Unmarshal(f.wait(drafts.PublishedProjector, "graph.stub-list", 0).Value, &g)
+	run := func(owner, connector string) (cognition.Values, error) {
+		g := g
+		g.ID, g.Owner = "stub-list", owner
+		as := features.ServiceArgs{Ctx: context.Background(), Principal: features.AppPrincipal(1, "stub")}
+		res, err := f.scripted.Engine.Run(engine.RunArgs{ServiceArgs: as, GraphID: g.ID, Graph: &g, Event: cognition.EventCall,
+			Inputs: cognition.Values{"connector": connector}})
+		if err != nil {
+			return nil, err
+		}
+		return res.Outputs, nil
+	}
+	out, err := run("app:stub", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(out["connections"])
+	var list []scripted.ConnectionItem
+	_ = json.Unmarshal(raw, &list)
+	if len(list) != 2 || list[0].ID != shared.ID || list[1].ID != mine.ID || list[1].Settings["user"] != "ada" || list[0].Owner != "tenant" {
+		t.Fatalf("connections: %s", raw)
+	}
+	if strings.Contains(string(raw), "password") || strings.Contains(string(raw), "pw") {
+		t.Fatalf("a secret was listed: %s", raw)
+	}
+	if out, err := run("app:stub", "echo"); err != nil || fmt.Sprint(out["count"]) != "2" {
+		t.Fatalf("named echo: %v %v", out, err)
+	}
+	if _, err := run("app:stub", "nope"); err == nil || !strings.Contains(err.Error(), `no connector "nope"`) {
+		t.Fatalf("a connector the app lacks: %v", err)
+	}
+	if _, err := run("", ""); err == nil || !strings.Contains(err.Error(), "only in an app's own graphs") {
+		t.Fatalf("a graph no app owns: %v", err)
+	}
+}

@@ -306,13 +306,17 @@ func (r *Runner) consume(t *tenant, in apps.Install, d desired) error {
 	}
 	app, trigger, graph, node, queue := in.App, d.trigger.ID, d.graph.ID, d.node.node, d.trigger.Queue
 	var accept func(live.Event) bool
-	if te, ok := triggerEvent(r.d.Engine, node); ok && te.Accept != nil {
+	own := false
+	if te, ok := triggerEvent(r.d.Engine, node); ok {
 		config := d.node.config
-		accept = func(e live.Event) bool {
-			return te.Accept(features.ServiceArgs{Ctx: r.ctx, Principal: features.AppPrincipal(t.id, app)}, config, e)
+		if te.Accept != nil {
+			accept = func(e live.Event) bool {
+				return te.Accept(features.ServiceArgs{Ctx: r.ctx, Principal: features.AppPrincipal(t.id, app)}, config, e)
+			}
 		}
+		own = te.Own != nil && te.Own(config)
 	}
-	cc, err := cons.Consume(func(msg jetstream.Msg) { r.onEvent(t, app, trigger, graph, node, queue, accept, msg) })
+	cc, err := cons.Consume(func(msg jetstream.Msg) { r.onEvent(t, app, trigger, graph, node, queue, own, accept, msg) })
 	if err != nil {
 		return log.Wrapf(err, "cannot consume %s", name)
 	}
@@ -332,8 +336,9 @@ func (r *Runner) stopTrigger(t *tenant, key string) {
 // onEvent enqueues a trigger's job for one event, then acknowledges it:
 // the job's id is the event's, so an event delivered twice is one job.
 // A trigger does not start on events its own app committed, so a trigger
-// that changes what it watches does not run forever.
-func (r *Runner) onEvent(t *tenant, app, trigger, graph, node, queue string, accept func(live.Event) bool, msg jetstream.Msg) {
+// that changes what it watches does not run forever, unless its event node
+// asks for them (own: On record changed's ownChanges).
+func (r *Runner) onEvent(t *tenant, app, trigger, graph, node, queue string, own bool, accept func(live.Event) bool, msg jetstream.Msg) {
 	md, err := msg.Metadata()
 	var e live.Event
 	if err == nil {
@@ -344,7 +349,7 @@ func (r *Runner) onEvent(t *tenant, app, trigger, graph, node, queue string, acc
 		_ = msg.Term()
 		return
 	}
-	if e.Actor == "app:"+app || (accept != nil && !accept(e)) {
+	if (e.Actor == "app:"+app && !own) || (accept != nil && !accept(e)) {
 		_ = msg.Ack()
 		return
 	}

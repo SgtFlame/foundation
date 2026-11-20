@@ -56,7 +56,7 @@ func Contribute(reg *extensions.Registry, deps func() data.Deps) {
 		Description: "Starts a trigger, in the background as the app's own principal, once for each record of an entity type created, changed or deleted, on a type the app may read (forge 07a)",
 		Example:     "On record changed for task, when done turns true, to email the task's creator",
 		Examples:    cognition.ConfigExample(OnChanged, `{"entity":"task","events":["updated"]}`),
-		Config:      json.RawMessage(`{"type":"object","properties":{` + entityConfig + `,"events":{"type":"array","title":"Events","items":{"type":"string","enum":["created","updated","deleted"]},"description":"The changes it starts on; every one when empty"}},"required":["entity"]}`),
+		Config:      json.RawMessage(`{"type":"object","properties":{` + entityConfig + `,"events":{"type":"array","title":"Events","items":{"type":"string","enum":["created","updated","deleted"]},"description":"The changes it starts on; every one when empty"},"ownChanges":{"type":"boolean","title":"Own changes too","description":"Also start on changes the app itself made (its triggers, jobs and connector operations); off by default, so a trigger that changes what it watches does not run forever"}},"required":["entity"]}`),
 		Pins: cognition.Pins{Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""),
 			cognition.DataPin("record", "Record", "json", "The record as it is when the run starts; nothing once deleted or hidden from the app"),
 			cognition.DataPin("old", "Old", "json", "The values the change replaced"),

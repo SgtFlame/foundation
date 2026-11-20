@@ -44,6 +44,10 @@ type TriggerEvent struct {
 	// starts the trigger; a refused event is skipped, with no job (a
 	// connection the app may not use).
 	Accept func(args features.ServiceArgs, config json.RawMessage, e live.Event) bool
+	// Own, when set, reports whether a trigger with this config starts on
+	// events its own app committed too; by default it does not, so a
+	// trigger that changes what it watches does not run forever (forge 07i).
+	Own func(config json.RawMessage) bool
 }
 
 // TriggerEvents are the event nodes that start triggers from events.
