@@ -17,7 +17,7 @@ func ContributeAccess(reg *extensions.Registry) {
 		Descriptor: extensions.Descriptor{ID: "job", Source: "jobs", Order: 94}, Title: "Background jobs", Parent: "tenant",
 		Actions: []authz.Action{
 			{Name: "read", Title: "See your own background jobs", Class: authz.ClassRead},
-			{Name: "create", Title: "Enqueue background jobs that run as you, and cancel or retry them", Class: authz.ClassExecute},
+			{Name: "create", Title: "Enqueue background jobs that run as you, and cancel or retry them", Class: authz.ClassExecute, Apps: true},
 			{Name: "manage", Title: "See, cancel and retry everyone's background jobs", Class: authz.ClassAdmin},
 		},
 	})

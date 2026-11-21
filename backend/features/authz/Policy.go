@@ -175,6 +175,9 @@ func (pol *Policy) decide(ctx context.Context, p features.Principal, action, res
 		return Decision{Allowed: true, Reason: "every signed-in user may"}
 	}
 	path := Split(resource)
+	if act.Apps && p.Kind == features.PrincipalApp && len(path) > 0 && path[0] == Resource("tenant", p.TenantID) {
+		return Decision{Allowed: true, Reason: "every app may in its tenant"}
+	}
 	if typ.Owned && p.Kind == features.PrincipalUser && OwnedBy(path, p.UserID) {
 		return Decision{Allowed: true, Reason: "you own it"}
 	}

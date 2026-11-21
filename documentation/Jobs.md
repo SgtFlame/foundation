@@ -145,3 +145,6 @@ In Forge (the user's app), on a fresh `serve` with Vite, a Playwright walk over 
 - **Per-record row rules on triggers.** A trigger starts on every change of a type its app may read. The record it reads is filtered by its rules when the run starts.
 - **Run time limits for jobs.** A job's run has the `cognition` section's wall time; a mail sync may need more.
 - *On webhook* (forge 11), cron expressions in the editor (forge 11), and *On connector event* starting triggers (the node is built in slice 46, [Connectors.md](Connectors.md#nodes); it runs from `CX_<tenant>` with 7c).
+
+## Changed in slice 54
+`job.create` is held by every app principal in its tenant (`authz.Action.Apps`, [Apps.md › Changed in slice 54](Apps.md#changed-in-slice-54)): a trigger, or a graph it calls, enqueues jobs that run as the app. Before, an app principal was refused it.

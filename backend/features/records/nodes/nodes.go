@@ -250,9 +250,10 @@ func contributeReads(reg *extensions.Registry, deps func() data.Deps) {
 		Description: "Reads one record by id, as records.get gives it (nothing when there is none or a row rule hides it); a query graph runs again when it changes",
 		Example:     "Get record task at the event's id, to check it is not done",
 		Examples:    cognition.ConfigExample("records.get", `{"entity":"task"}`),
-		Config:      json.RawMessage(`{"type":"object","properties":{` + entityConfig + `},"required":["entity"]}`),
+		Config:      json.RawMessage(`{"type":"object","properties":{` + entityConfig + `}}`),
 		Pins: cognition.Pins{
-			In: []cognition.Pin{cognition.DataPin("id", "ID", "string", "The record's id")},
+			In: []cognition.Pin{cognition.DataPin("id", "ID", "string", "The record's id"),
+				{ID: "entity", Name: "Entity", Type: "string", Optional: true, Description: "The entity type's id, in place of the config's (forge 7m: a library app's graph reading its host app's records)"}},
 			Out: []cognition.Pin{cognition.DataPin("record", "Record", "json", "Its values by field id, and _id, _seq and its other own data"),
 				cognition.DataPin("exists", "Exists", "bool", "Whether there is such a record")},
 		},
@@ -260,6 +261,12 @@ func contributeReads(reg *extensions.Registry, deps func() data.Deps) {
 			var c struct{ Entity string }
 			if err := x.Config(&c); err != nil {
 				return nil, "", err
+			}
+			if e, _ := cognition.Get[string](in, "entity"); e != "" {
+				c.Entity = e
+			}
+			if c.Entity == "" {
+				return nil, "", fmt.Errorf("Get record names no entity type: set it in the config or join Entity")
 			}
 			id, _ := cognition.Get[string](in, "id")
 			d := deps().For(x.ServiceArgs)

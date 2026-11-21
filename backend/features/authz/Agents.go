@@ -83,7 +83,8 @@ func ContributeAgents(reg *extensions.Registry) {
 }
 
 // MayUseAgent decides whether p may run work as the agent: its creator
-// may, and anyone holding agent.use on its record. It returns the agent.
+// may, the app whose entity type defines it (its triggers and jobs), and
+// anyone holding agent.use on its record. It returns the agent.
 func MayUseAgent(ctx context.Context, p features.Principal, id uint64) (AgentInfo, error) {
 	a, ok, err := FindAgent(ctx, p.TenantID, id)
 	if err != nil {
@@ -97,6 +98,10 @@ func MayUseAgent(ctx context.Context, p features.Principal, id uint64) (AgentInf
 	case p.Kind == features.PrincipalService:
 		return a, nil
 	case p.Kind == features.PrincipalUser && p.UserID == a.CreatedBy:
+		return a, nil
+	case p.Kind == features.PrincipalApp && p.App != "" && p.App == a.App:
+		// An app's triggers and jobs run the agents its own records define
+		// (forge 7m); the agent stays held to its own grants
 		return a, nil
 	case p.Kind == features.PrincipalAgent && p.AgentID == a.ID:
 		return a, nil

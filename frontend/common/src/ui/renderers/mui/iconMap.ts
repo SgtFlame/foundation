@@ -1,5 +1,17 @@
 // The Material icons server-described trees may name, by name
 import AddIcon from '@mui/icons-material/Add'
+import SmartToyIcon from '@mui/icons-material/SmartToy'
+import SupportAgentIcon from '@mui/icons-material/SupportAgent'
+import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber'
+import RateReviewIcon from '@mui/icons-material/RateReview'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import ContentCutIcon from '@mui/icons-material/ContentCut'
+import ContentPasteIcon from '@mui/icons-material/ContentPaste'
+import ShareIcon from '@mui/icons-material/Share'
+import ScienceIcon from '@mui/icons-material/Science'
+import ReplayIcon from '@mui/icons-material/Replay'
+import HistoryIcon from '@mui/icons-material/History'
+import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore'
 import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -76,6 +88,19 @@ export const icons: Record<string, ComponentType<SvgIconProps>> = {
   task_alt: TaskAltIcon,
   task: TaskIcon,
   table_rows: TableRowsIcon,
+  // The Agents app's (forge 7m)
+  smart_toy: SmartToyIcon,
+  support_agent: SupportAgentIcon,
+  confirmation_number: ConfirmationNumberIcon,
+  rate_review: RateReviewIcon,
+  content_copy: ContentCopyIcon,
+  content_cut: ContentCutIcon,
+  content_paste: ContentPasteIcon,
+  share: ShareIcon,
+  science: ScienceIcon,
+  replay: ReplayIcon,
+  history: HistoryIcon,
+  unfold_more: UnfoldMoreIcon,
 }
 
 // An icon by name, as a component for places that take one (the Editors view)

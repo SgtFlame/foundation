@@ -39,6 +39,10 @@ type Action struct {
 	// On is where a grant must be held for the action to apply: OnApp for
 	// tenant.create, OnTenant (the default) for content.
 	On string
+	// Apps is held by every app principal in its own tenant with no grant
+	// (forge 7m: job.create, so an app's triggers enqueue jobs that run as
+	// the app, as its roles allow).
+	Apps bool
 }
 
 // ResourceType is a kind of resource and its actions, contributed by the

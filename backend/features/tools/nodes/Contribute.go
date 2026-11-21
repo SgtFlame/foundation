@@ -32,6 +32,7 @@ const (
 	SelectID    = "tools.select"
 	DescribeID  = "tools.describe"
 	GraphToolID = "tools.graph"
+	CallToolID  = "tools.call"
 )
 
 // TypeToolSet is the data type of a tool set: []tools.Spec.
@@ -74,7 +75,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Effects:     true,
 		External:    true,
 		Model:       true,
-		Sample:      cognition.Values{"reply": "(the model's reply: not asked in a sandboxed run)", "calls": []any{}},
+		Sample:      cognition.Values{"reply": "(the model's reply: not asked in a sandboxed run)", "calls": []any{}, "usage": map[string]any{}},
 		Config:      json.RawMessage(agentSchema),
 		Pins: cognition.Pins{
 			In: []cognition.Pin{
@@ -83,11 +84,13 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				{ID: "system", Name: "System", Type: "string", Optional: true, Description: "The instructions"},
 				{ID: "maxSteps", Name: "Steps", Type: "number", Optional: true, Description: "How many times it may call tools before it must answer, in place of its config's"},
 				{ID: "tools", Name: "Tools", Type: TypeToolSet, Optional: true, Description: "The tools it may call, in place of its config's"},
+				{ID: "level", Name: "Level", Type: "string", Optional: true, Description: "An ai.chat.levels id, in place of its config's (forge 7m: an agent record's level)"},
 			},
 			Out: []cognition.Pin{
 				cognition.ExecPin(cognition.Then, ""),
 				cognition.DataPin("reply", "Reply", "string", "The model's answer"),
-				cognition.DataPin("calls", "Calls", "json", "The tool calls it made: name, status and summary"),
+				cognition.DataPin("calls", "Calls", "json", "The tool calls it made: name, status, summary, error, args and the result the model saw (cut like the tools section's maxResultKB)"),
+				cognition.DataPin("usage", "Usage", "json", "What the run cost: {steps, inputTokens, cachedTokens, outputTokens, thinkingTokens, costMicros, currency, level, model}, priced from ai.models as usage records are"),
 			},
 		},
 		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
@@ -149,6 +152,69 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		},
 	})
 	contributeToolSets(reg, deps)
+	cognition.Nodes.Register(reg, cognition.NodeType{
+		Descriptor:  extensions.Descriptor{ID: CallToolID, Order: 340, Source: "tools"},
+		Title:       "Call tool",
+		Category:    "Tools",
+		Description: "Calls one server tool by name with arguments, as the run's principal, and gives its result; leaves by Failed with the error when there is no such tool, the arguments do not fit, the principal may not, or it fails. A tool that asks first (a write) is refused unless the run is an agent's, whose own roles decide (forge 7m: an agent graph reads its subject through the host app's Describe subject tool).",
+		Example:     "Call tool mail.describeThread with {id} to put the thread's text in an agent's prompt",
+		Tags:        []string{"tools", "function calling"},
+		Effects:     true,
+		Pins: cognition.Pins{
+			In: []cognition.Pin{
+				cognition.ExecPin(cognition.Then, ""),
+				cognition.DataPin("name", "Name", "string", "The tool's name, such as tasks.readTask"),
+				{ID: "args", Name: "Args", Type: cognition.Any, Optional: true, Description: "Its arguments, an object"},
+			},
+			Out: []cognition.Pin{
+				cognition.ExecPin(cognition.Then, ""),
+				cognition.ExecPin("failed", "Failed"),
+				cognition.DataPin("result", "Result", "json", "The result's content"),
+				cognition.DataPin("summary", "Summary", "string", "The result's one line of markdown"),
+				cognition.DataPin("error", "Error", "string", "Why it failed, when it did"),
+			},
+		},
+		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
+			name, _ := cognition.Get[string](in, "name")
+			fail := func(msg string) (cognition.Values, string, error) {
+				return cognition.Values{"error": msg, "result": nil, "summary": ""}, "failed", nil
+			}
+			var tool tools.Tool
+			found := false
+			for _, t := range tools.Available(deps().Registry, x.ServiceArgs) {
+				if t.ID == name && !t.Client() {
+					tool, found = t, true
+					break
+				}
+			}
+			if !found {
+				return fail(fmt.Sprintf("there is no tool %q", name))
+			}
+			args := json.RawMessage("{}")
+			if v, ok := in["args"]; ok && v != nil {
+				raw, err := json.Marshal(v)
+				if err != nil {
+					return fail("the arguments cannot be read: " + err.Error())
+				}
+				args = raw
+			}
+			if err := tools.CheckArgs(tool.Input, args); err != nil {
+				return fail(err.Error())
+			}
+			if tool.AsksFor(args) && x.Principal.Kind != features.PrincipalAgent {
+				return fail(fmt.Sprintf("%s needs a person's approval, which a graph cannot ask for", name))
+			}
+			res, err := tool.Run(tools.Call{ServiceArgs: x.ServiceArgs, ID: fmt.Sprintf("%s-%s", x.Node.ID, name), Name: name, Args: args})
+			if err != nil {
+				return fail(err.Error())
+			}
+			content := map[string]any{}
+			for k, v := range res.Content {
+				content[k] = v
+			}
+			return cognition.Values{"result": content, "summary": res.Summary, "error": ""}, cognition.Then, nil
+		},
+	})
 }
 
 func cmpOr(a, b string) string {
@@ -180,6 +246,9 @@ func runAgent(x *cognition.Exec, in cognition.Values, d Deps) (cognition.Values,
 	}
 	if steps > 0 {
 		cfg.MaxSteps = int(steps)
+	}
+	if l, _ := cognition.Get[string](in, "level"); l != "" {
+		cfg.Level = l
 	}
 	if d.Chat == nil {
 		return nil, "", tools.Log.Code("agent_not_configured").New("the Agent node has no chat service")
@@ -225,17 +294,66 @@ func runAgent(x *cognition.Exec, in cognition.Values, d Deps) (cognition.Values,
 	if c := out.Response.Common; c.Code >= 300 {
 		return nil, "", tools.Log.Code("agent_failed").With("status", c.Code).Errorf("the model failed: %s", c.Message)
 	}
-	return cognition.Values{"reply": out.Reply, "calls": Calls(out.Calls)}, cognition.Then, nil
+	return cognition.Values{"reply": out.Reply, "calls": Calls(out.Calls), "usage": usageOf(x, d, cfg.Level, out)}, cognition.Then, nil
 }
 
-// Calls are a loop's calls as a node gives them: name, status, summary
-// and error.
+// Calls are a loop's calls as a node gives them: name, status, summary,
+// error, and (forge 7m, for an agent run's record) the arguments and the
+// result the model saw, each parsed from its JSON.
 func Calls(calls []tools.ToolCall) []map[string]any {
 	out := make([]map[string]any, len(calls))
 	for i, c := range calls {
-		out[i] = map[string]any{"name": c.Name, "status": c.Status, "summary": c.Summary, "error": c.Error}
+		out[i] = map[string]any{"name": c.Name, "status": c.Status, "summary": c.Summary, "error": c.Error,
+			"args": parsed(c.Args), "result": parsed(c.Result)}
 	}
 	return out
+}
+
+// parsed is a stored JSON value as data, the text itself when it is not
+// JSON (a result cut short), nil when empty.
+func parsed(raw string) any {
+	if raw == "" {
+		return nil
+	}
+	var v any
+	if json.Unmarshal([]byte(raw), &v) != nil {
+		return raw
+	}
+	return v
+}
+
+// usageOf sums a loop's model calls and prices them from the level's model
+// in ai.models, as conversation rounds and usage records are priced.
+func usageOf(x *cognition.Exec, d Deps, level string, out tools.Outcome) map[string]any {
+	var t aisettings.Tokens
+	for _, u := range out.Usage {
+		t.Input, t.Cached, t.Output, t.Thinking = t.Input+u.InputTokens, t.Cached+u.CachedTokens, t.Output+u.OutputTokens, t.Thinking+u.ThinkingTokens
+	}
+	res := map[string]any{"steps": out.Steps, "inputTokens": t.Input, "cachedTokens": t.Cached, "outputTokens": t.Output,
+		"thinkingTokens": t.Thinking, "costMicros": int64(0), "currency": "", "level": level, "model": out.Response.Model}
+	if d.Config == nil {
+		return res
+	}
+	levels, err := config.Read[aisettings.Levels](d.Config, x.ServiceArgs, aisettings.LevelsID)
+	if err != nil {
+		return res
+	}
+	l, ok := levels.Find(level)
+	if !ok {
+		return res
+	}
+	models, err := config.Read[aisettings.Models](d.Config, x.ServiceArgs, aisettings.ModelsID)
+	if err != nil {
+		return res
+	}
+	if m, ok := models.ByID(l.ModelRef); ok {
+		var cost int64
+		for _, u := range out.Usage {
+			cost += m.Pricing.CostMicros(aisettings.Tokens{Input: u.InputTokens, Cached: u.CachedTokens, Output: u.OutputTokens, Thinking: u.ThinkingTokens})
+		}
+		res["costMicros"], res["currency"] = cost, cmpOr(m.Pricing.Currency, "USD")
+	}
+	return res
 }
 
 // Settings are the tools section for the run, or its defaults.

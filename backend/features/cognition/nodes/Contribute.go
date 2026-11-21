@@ -305,9 +305,10 @@ func contributeFlow(reg *extensions.Registry) {
 		Descriptor:  extensions.Descriptor{ID: CallGraph},
 		Title:       "Call graph",
 		Category:    "Flow",
-		Description: "Runs another graph from its On call event with these inputs, and gives its outputs. Its pins follow the called graph's signature as it was when the node was set. As agent runs it as an agent, held to the agent's own roles.",
+		Description: "Runs another graph from its On call event with these inputs, and gives its outputs. Its pins follow the called graph's signature as it was when the node was set. As agent runs it as an agent, held to the agent's own roles. With Catch failures, a failed call leaves by Failed with the error instead of failing the run.",
 		Example:     "Call graph Format greeting with Name, then Set state greeting to its Text",
 		Config: json.RawMessage(`{"type":"object","properties":{"graph":{"type":"string","title":"Graph","description":"The id of the graph to call"},
+			"catch":{"type":"boolean","title":"Catch failures","description":"Leave by Failed, with the error, when the called graph fails (forge 7m), instead of failing this run"},
 			"inputs":{"type":"array","title":"Inputs","readOnly":true},"outputs":{"type":"array","title":"Outputs","readOnly":true}}}`),
 		Effects: true,
 		PinsFor: func(config json.RawMessage) (cognition.Pins, error) {
@@ -326,6 +327,9 @@ func contributeFlow(reg *extensions.Registry) {
 			out := append([]cognition.Pin{cognition.ExecPin(cognition.Then, "")}, c.Outputs...)
 			for i := 1; i < len(out); i++ {
 				out[i].Exec, out[i].Optional = false, false
+			}
+			if c.Catch {
+				out = append(out, cognition.ExecPin("failed", "Failed"), cognition.DataPin("error", "Error", "string", "Why the called graph failed, when it did"))
 			}
 			return cognition.Pins{In: in, Out: out}, nil
 		},
@@ -361,7 +365,7 @@ func contributeFlow(reg *extensions.Registry) {
 				}
 				as, err := authz.AsAgent(x.Context(), x.Principal, id)
 				if err != nil {
-					return nil, "", err
+					return caught(c, nil, err)
 				}
 				inputs := cognition.Values{}
 				for k, v := range in {
@@ -370,11 +374,11 @@ func contributeFlow(reg *extensions.Registry) {
 					}
 				}
 				out, err := x.CallAs(c.Graph, inputs, as)
-				return out, cognition.Then, err
+				return caught(c, out, err)
 			}
 			delete(in, AsAgentPin)
 			out, err := x.Call(c.Graph, in)
-			return out, cognition.Then, err
+			return caught(c, out, err)
 		},
 	})
 
@@ -404,6 +408,7 @@ func contributeFlow(reg *extensions.Registry) {
 
 type callConfig struct {
 	Graph   string          `json:"graph"`
+	Catch   bool            `json:"catch,omitempty"`
 	Inputs  []cognition.Pin `json:"inputs,omitempty"`
 	Outputs []cognition.Pin `json:"outputs,omitempty"`
 }
@@ -522,4 +527,22 @@ func wait(x *cognition.Exec, secs float64) error {
 	case <-x.Context().Done():
 		return fmt.Errorf("the run ended during a wait of %s: %w", d, x.Context().Err())
 	}
+}
+
+// caught is a Call graph's outcome: a failure leaves by Failed when the
+// node catches failures, else fails the run.
+func caught(c callConfig, out cognition.Values, err error) (cognition.Values, string, error) {
+	if err == nil {
+		if c.Catch {
+			if out == nil {
+				out = cognition.Values{}
+			}
+			out["error"] = ""
+		}
+		return out, cognition.Then, nil
+	}
+	if !c.Catch {
+		return out, cognition.Then, err
+	}
+	return cognition.Values{"error": err.Error()}, "failed", nil
 }

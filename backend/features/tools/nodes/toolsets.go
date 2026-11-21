@@ -83,6 +83,7 @@ func contributeToolSets(reg *extensions.Registry, deps func() Deps) {
 			In: []cognition.Pin{
 				{ID: "from", Name: "From", Type: TypeToolSet, Optional: true, Description: "The set to select from; the server's and browser's tools when not joined"},
 				{ID: "enabled", Name: "Enabled", Type: "bool", Optional: true, Description: "False gives no tools, e.g. the conversation's tools setting"},
+				{ID: "include", Name: "Include", Type: "json", Optional: true, Description: "Tool names or prefixes, in place of the config's include (forge 7m: an agent record's tools); when joined, an empty list selects nothing"},
 			},
 			Out: []cognition.Pin{outSet("The tools selected")},
 		},
@@ -93,6 +94,16 @@ func contributeToolSets(reg *extensions.Registry, deps func() Deps) {
 			}
 			if on, ok := in["enabled"].(bool); ok && !on {
 				return cognition.Values{"tools": []tools.Spec{}}, "", nil
+			}
+			if raw, joined := in["include"]; joined {
+				names, err := stringList(raw)
+				if err != nil {
+					return nil, "", fmt.Errorf("include: %v", err)
+				}
+				if len(names) == 0 {
+					return cognition.Values{"tools": []tools.Spec{}}, "", nil
+				}
+				c.Include = names
 			}
 			var from []tools.Spec
 			if _, joined := in["from"]; joined {
@@ -246,4 +257,21 @@ func contributeToolSets(reg *extensions.Registry, deps func() Deps) {
 			return cognition.Values{"tools": append(out, spec)}, "", nil
 		},
 	})
+}
+
+// stringList reads a list of names given as data: a JSON list of strings,
+// or nothing.
+func stringList(v any) ([]string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("not a list of names")
+	}
+	return out, nil
 }

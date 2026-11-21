@@ -416,15 +416,19 @@ func (c *docCheck) seed() {
 	}
 }
 
-// Used are the primitives a document's parts use, for an export to list.
+// Used are the primitives a document's parts use (its own, the tenant's
+// and its required apps'), for an export to list.
 func Used(d Document, env DocumentEnv) Primitives {
 	c := &docCheck{d: d, env: env, prefabs: map[string]ui.Prefab{}, graphs: map[string]cognition.Graph{}, entities: map[string]records.EntityType{}}
 	c.d.Primitives = Primitives{}
 	c.index()
 	c.listed()
-	for _, g := range groups[:2] {
+	// Every group, the required apps' parts too: the check reads them
+	// (forge 7m: a required library app's graphs use node types the app
+	// itself may not)
+	for _, g := range groups {
 		for _, p := range g.of(d).Prefabs {
-			c.prefab("", p.Prefab, false)
+			c.prefab("", p.Prefab, g.name == "appParts")
 		}
 		for _, p := range g.of(d).Graphs {
 			c.graph("", p.Graph)

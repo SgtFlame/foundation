@@ -579,6 +579,7 @@ func Contribute(reg *extensions.Registry) {
 	effect(318, "ui.share", "Share", "Opens the Share dialog on one record (or another resource): who holds which role on it, people and agents, granting and revoking as the user may (forge 07j)", "Share the account record the page shows, for its Share button",
 		`{"type":"object","properties":{"entity":{"type":"string","title":"Entity type","description":"The record's entity type"}}}`,
 		[]cognition.Pin{{ID: "record", Name: "Record", Type: "string", Optional: true, Description: "The record's id"},
+			{ID: "entity", Name: "Entity", Type: "string", Optional: true, Description: "The record's entity type, in place of the config's (forge 7m)"},
 			{ID: "resource", Name: "Resource", Type: "string", Optional: true, Description: "A resource path in place of a record"},
 			{ID: "title", Name: "Title", Type: "string", Optional: true, Description: "What the dialog calls it, e.g. the record's title"}},
 		func(h Host, x *cognition.Exec, in cognition.Values) error {
@@ -587,6 +588,7 @@ func Contribute(reg *extensions.Registry) {
 				return err
 			}
 			resource := str(in, "resource", "")
+			c.Entity = str(in, "entity", c.Entity)
 			if id := str(in, "record", ""); id != "" {
 				if c.Entity == "" {
 					return fmt.Errorf("Share needs the record's entity type")

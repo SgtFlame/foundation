@@ -421,8 +421,12 @@ func Sandbox(args features.ServiceArgs, reg *extensions.Registry, d ForgeDeps, a
 	return Test(args, reg, d, a)
 }
 
+// SandboxNode is the Run in sandbox node's type (forge 7m).
+const SandboxNode = "apps.sandbox"
+
 // ContributeSandbox registers sandbox.run (forge 07j), the tool and the
-// live call an agent's Test panel uses.
+// live call, and the Run in sandbox node an agent's Test panel uses
+// (forge 7m).
 func ContributeSandbox(reg *extensions.Registry, deps func() ForgeDeps) {
 	const description = "Runs a graph once in a sandbox, like forge.test, and says what it would do without changing anything: its commands are decided over the app's records but never committed. Takes command, data.query, server.action, ui.handler, prefab.logic, app.trigger, function and agent graphs (inputs: a function's or agent's On call inputs by name). agent runs it as an agent (its id), held to the agent's own roles; stub says which nodes that reach outside are stubbed with a sample: all (the default), connectors (model calls run for real; connector calls, files and grants are stubbed) or none (everything external runs for real, commands still uncommitted). Gives the outputs, the events its commands would commit, the decided commands with their problems, and the trace."
 	input := json.RawMessage(`{"type":"object","properties":{
@@ -454,6 +458,54 @@ func ContributeSandbox(reg *extensions.Registry, deps func() ForgeDeps) {
 				summary += ", failed on " + out.Failed.Node
 			}
 			return tools.Result{Content: content, Summary: summary}, nil
+		},
+	})
+	cognition.Nodes.Register(reg, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: SandboxNode, Order: 960, Source: "apps"}, Title: "Run in sandbox", Category: "Apps",
+		Description: "Runs a graph once in a sandbox, as sandbox.run does, from a page's handler or an action (forge 7m: an agent's Test panel): its commands are decided over the app's records and never committed. Model calls run for real with Stub connectors. Leaves by Failed with the error when the graph cannot run or fails.",
+		Example:     "Run in sandbox agents-test with the agent and the picked subject, stub connectors, then Set state result to its Outputs",
+		Examples:    cognition.ConfigExample(SandboxNode, `{"graph":"agents-test","stub":"connectors"}`),
+		Kinds:       []string{uinodes.KindHandler, livenodes.KindAction, cognition.KindFunction},
+		Effects:     true,
+		Config: json.RawMessage(`{"type":"object","properties":{
+  "graph":{"type":"string","title":"Graph","description":"The id of the graph to run"},
+  "stub":{"type":"string","title":"Stub","enum":["all","connectors","none"],"description":"Which External nodes are stubbed: all (the default), connectors (model calls run for real) or none"}},"required":["graph"]}`),
+		Pins: cognition.Pins{
+			In: []cognition.Pin{cognition.ExecPin(cognition.Then, ""),
+				{ID: "inputs", Name: "Inputs", Type: cognition.Any, Optional: true, Description: "What starts it, by kind (a function's or action's On call inputs by name)"},
+				{ID: "agent", Name: "Agent", Type: "string", Optional: true, Description: "An agent's id to run it as; the run's principal must have made the agent or hold agent.use on it"}},
+			Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.ExecPin("failed", "Failed"),
+				cognition.DataPin("outputs", "Outputs", "json", "The graph's outputs"),
+				cognition.DataPin("events", "Events", "json", "The events its commands would commit: [{target, type, data}]"),
+				cognition.DataPin("commands", "Commands", "json", "The commands it decided, with their problems"),
+				cognition.DataPin("error", "Error", "string", "Why it could not run or failed, when it did")},
+		},
+		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
+			var c struct{ Graph, Stub string }
+			if err := x.Config(&c); err != nil {
+				return nil, "", err
+			}
+			a := TestArgs{Graph: c.Graph, Stub: c.Stub}
+			if v, ok := in["inputs"].(map[string]any); ok {
+				a.Inputs = v
+			}
+			a.Agent, _ = in["agent"].(string)
+			out, err := Sandbox(x.ServiceArgs, reg, deps(), a)
+			if err == nil && out.Failed != nil {
+				err = fmt.Errorf("%s failed on %s: %s", c.Graph, out.Failed.Node, out.Failed.Error)
+			}
+			raw, _ := json.Marshal(map[string]any{"outputs": out.Outputs, "events": out.Events, "commands": out.Commands})
+			var res cognition.Values
+			_ = json.Unmarshal(raw, &res)
+			if res["outputs"] == nil {
+				res["outputs"] = map[string]any{}
+			}
+			if err != nil {
+				res["error"] = err.Error()
+				return res, "failed", nil
+			}
+			res["error"] = ""
+			return res, cognition.Then, nil
 		},
 	})
 	live.Calls.Register(reg, live.Call{

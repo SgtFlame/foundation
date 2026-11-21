@@ -226,3 +226,6 @@ Forge 07j, agent principals and roles granted on a record ([forge 07j-AgentPrinc
 - **An agent's writes run without asking** (`tools.ApprovalAgent`; the Agent node offers an agent its write tools): its roles are the control (iteration question 5).
 - **The grant nodes grant to agents only**; people are granted roles in the Share dialog and the Role Editor.
 - **`agent.use` is checked when work is started** (a job enqueued, a graph called), not again when a delayed job runs; the agent's own grants are checked at every step.
+
+## Changed in slice 54
+Forge 7m ([Apps.md › Changed in slice 54](Apps.md#changed-in-slice-54)): an app principal may use the agents its own entity types define (`MayUseAgent`, by `AgentInfo.App`), and holds every action marked `Action.Apps` in its own tenant with no grant (`job.create`, so its triggers enqueue jobs).

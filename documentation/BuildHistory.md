@@ -810,6 +810,18 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [forge ContentComponents.md](../../forge/documentation/ContentComponents.md#decisions-to-review-after-seeing-it).
     - **Pending, carried forward**: merging changes made to a markdown field outside its open room; rooms across processes; selecting more than the window holds.
 
+54. **What the Agents app needed** (Forge iteration 7, part 7m, [forge AgentsApp.md](../../forge/documentation/AgentsApp.md)). *Built* ([Apps.md](Apps.md#changed-in-slice-54)).
+    - **Built**:
+      - `tools/nodes`: the Agent node's `level` input and its calls' `args` and `result` and `usage` output (priced from `ai.models`); *Tools*' `include` input; *Call tool* (`tools.call`);
+      - `cognition/nodes`: *Call graph*'s `catch` (a *Failed* exit with the error);
+      - `records/nodes` and `ui/nodes`: an `entity` input on *Get record* and *Share*;
+      - `apps/tools`: the *Run in sandbox* node (`apps.sandbox`); `apps.Used` lists the primitives of required apps' parts too;
+      - `authz` and `jobs`: an app principal may use the agents its own records define, and holds actions marked `Apps` (`job.create`) in its tenant, so its triggers enqueue jobs;
+      - browser: the icons the Agents app names (`iconMap.ts`).
+    - **Blockers**: none. Forge's iteration questions 6, 8 and 13 and 7m's question 1 answered by the user before building (2026-11-21).
+    - **Decisions to review after seeing it**: in [forge AgentsApp.md](../../forge/documentation/AgentsApp.md#decisions-to-review-after-seeing-it).
+    - **Deferred failure**: `cognition/engine`'s `TestStepLimit` failed once in code this slice did not change ([forge 99-Cleanup.md](../../forge/documentation/plans/99-Cleanup.md#foundation-cognitionengine-teststeplimit)).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -870,3 +882,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 51. Agent principals, record grants and app tools (Forge 7j) | forge 07j 1 (record grants) and 2 (agents by whoever may create the record, never above their granter), answered with their proposals | the decisions in [RBAC.md](RBAC.md#decisions-to-review-after-seeing-it-1), the Share dialog with agents once the Agents app uses it |
 | 52. The relational projection (Forge 7k) | forge 07k 1 (GORM and portable SQL; full-text search behind `data.Searcher` on LanceDB, the user's answer) and 2 (a consumer per database, a gap found while reading, answered with its proposal) | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-8), the Data Designer's *Large table* switch |
 | 53. Content components (Forge 7l) | forge 07l 1 (`doc.markdown` as the field editor, for the new type), and gaps 2 (a `markdown` field type, not converted `richText`), 3 (rows held by the server in a window about three screens tall) and 4 (JSON rows and server-rendered rows), the user's answers | the decisions in [forge ContentComponents.md](../../forge/documentation/ContentComponents.md#decisions-to-review-after-seeing-it), `mui.htmlView` with real newsletters |
+| 54. What the Agents app needed (Forge 7m) | forge 07-Email 6 (an `engine` field), 8 (a per-agent cap) and 13 (both a library and the app's own records, with copy and paste), and 07m 1 (both filters), the user's answers | the decisions in [forge AgentsApp.md](../../forge/documentation/AgentsApp.md#decisions-to-review-after-seeing-it), the agent editor read by someone who is not a developer |
