@@ -20,6 +20,7 @@ type Conversation struct {
 	Title           string    // generated after the first round; empty until then
 	ContextSettings string    // JSON object: the chat.contextSettings values by contribution ID, as last sent
 	AllowedTools    string    // JSON array: the write tools the user chose "Always allow" for here
+	Mode            string    // the chat.modes id its rounds run in, as last sent (forge 06i)
 	LastRoundAt     time.Time `gorm:"index"`
 }
 
@@ -39,6 +40,7 @@ type Round struct {
 	FinishReason   string
 	Error          string // the failure's message, safe to show
 	Workbench      string // the workbench snapshot sent with the message, JSON
+	Mode           string // the chat.modes id it ran in (e.g. personal, builder)
 	InputTokens    int    // includes CachedTokens
 	CachedTokens   int
 	OutputTokens   int

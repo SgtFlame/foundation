@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
+	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
 	"github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -35,6 +36,13 @@ func WithConfig(reader config.Reader) Option {
 	}
 }
 
+// WithEngine sets the Cognition engine that runs each round's mode graph.
+func WithEngine(e *engine.Engine) Option {
+	return func(s *service) {
+		s.engine = e
+	}
+}
+
 // WithRegistry sets the registry holding the chat.contextProvider contributions.
 func WithRegistry(reg *extensions.Registry) Option {
 	return func(s *service) {
@@ -54,6 +62,12 @@ func CreateService(opts ...Option) conversationservice.Service {
 		instance = newService(opts...)
 	})
 	return instance
+}
+
+// New returns a service of its own, apart from the singleton, for tests
+// that run several stacks in one process (forge 06h's golden tests).
+func New(opts ...Option) conversationservice.Service {
+	return newService(opts...)
 }
 
 func newService(opts ...Option) *service {

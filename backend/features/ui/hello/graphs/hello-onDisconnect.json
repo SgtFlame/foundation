@@ -1,0 +1,116 @@
+{
+  "id": "hello-onDisconnect",
+  "name": "On disconnect",
+  "description": "Removes an edge of the shared graph.",
+  "kind": "ui.handler",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "ui.onEvent",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "id",
+            "type": "string",
+            "description": "The edge's id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.makeObject",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "config": {
+        "fields": [
+          "id"
+        ]
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 600,
+        "y": 0
+      },
+      "config": {
+        "command": "hello.disconnect",
+        "target": "main"
+      }
+    },
+    {
+      "id": "toast",
+      "type": "ui.toast",
+      "position": {
+        "x": 900,
+        "y": 120
+      },
+      "config": {
+        "severity": "error"
+      },
+      "title": "Toast the refusal"
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "args",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "object"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "toast",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "toast",
+        "pin": "message"
+      }
+    }
+  ]
+}

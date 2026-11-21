@@ -1,0 +1,29 @@
+{
+  "name": "test_echo_fail",
+  "description": "Fails with the typed error asked for, for testing error paths",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "code": {
+        "type": "string",
+        "enum": [
+          "auth",
+          "notFound",
+          "conflict",
+          "invalid",
+          "rateLimited",
+          "unavailable",
+          "notSupported"
+        ],
+        "description": "The error code to fail with"
+      },
+      "message": {
+        "type": "string",
+        "description": "The error's message"
+      }
+    },
+    "required": [
+      "code"
+    ]
+  }
+}

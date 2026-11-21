@@ -16,7 +16,7 @@ func (s *service) Reset(args configservice.ResetArgs) configservice.ResetRespons
 	if f != nil {
 		return configservice.ResetResponse{Common: *args.Fail(f.status, f.err)}
 	}
-	sec, f := s.section(args.Section)
+	sec, f := s.section(args.ServiceArgs, args.Section)
 	if f != nil {
 		return configservice.ResetResponse{Common: *args.Fail(f.status, f.err)}
 	}

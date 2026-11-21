@@ -1,0 +1,237 @@
+{
+  "id": "hello-onAddTask",
+  "name": "On add task",
+  "description": "Creates a task from the form: its title, due date and, when asked, the user as its assignee.",
+  "kind": "ui.handler",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "ui.onEvent",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "title",
+            "type": "any",
+            "description": "The title typed"
+          },
+          {
+            "id": "due",
+            "type": "any",
+            "description": "The due date picked, if any"
+          },
+          {
+            "id": "mine",
+            "type": "any",
+            "description": "Whether to assign it to the user"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "position": {
+        "x": 300,
+        "y": 250
+      },
+      "config": {
+        "expr": "trim(title ?? \"\") != \"\"",
+        "type": "bool"
+      },
+      "title": "Has a title?"
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 300,
+        "y": 0
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 300,
+        "y": 400
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 600,
+        "y": 250
+      },
+      "config": {
+        "expr": "{entity: \"task\", values: {title: trim(title), done: false, due: (due ?? \"\") == \"\" ? nil : due, assignee: mine == true && user != \"\" ? user : nil}}",
+        "type": "json"
+      },
+      "title": "Task"
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 900,
+        "y": 0
+      },
+      "config": {
+        "command": "record.create"
+      }
+    },
+    {
+      "id": "empty",
+      "type": "ui.toast",
+      "position": {
+        "x": 600,
+        "y": 100
+      },
+      "config": {
+        "severity": "warning",
+        "message": "Give the task a title."
+      },
+      "title": "No title"
+    },
+    {
+      "id": "toast",
+      "type": "ui.toast",
+      "position": {
+        "x": 900,
+        "y": 200
+      },
+      "config": {
+        "severity": "error"
+      },
+      "title": "Toast the refusal"
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "title"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "title"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "empty",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "title"
+      },
+      "to": {
+        "node": "args",
+        "pin": "title"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "due"
+      },
+      "to": {
+        "node": "args",
+        "pin": "due"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "mine"
+      },
+      "to": {
+        "node": "args",
+        "pin": "mine"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "args",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "toast",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "toast",
+        "pin": "message"
+      }
+    }
+  ]
+}

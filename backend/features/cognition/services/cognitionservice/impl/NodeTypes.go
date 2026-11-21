@@ -6,10 +6,12 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/cognition/services/cognitionservice"
 )
 
-// NodeTypes returns the node types and the data types.
+// NodeTypes returns the node types, the data types, the graph kinds and the
+// conversions edges may make.
 func (s *service) NodeTypes(args cognitionservice.NodeTypesArgs) cognitionservice.NodeTypesResponse {
 	if failed := check(args.ServiceArgs, "cognition.read", "node-types"); failed != nil {
 		return cognitionservice.NodeTypesResponse{Common: *failed}
 	}
-	return cognitionservice.NodeTypesResponse{Common: features.OK(), NodeTypes: s.engine.NodeTypes(), Types: cognition.Types.All(s.engine.Registry())}
+	cat := s.engine.Catalog()
+	return cognitionservice.NodeTypesResponse{Common: features.OK(), NodeTypes: cat.Types, Types: cognition.Types.All(s.engine.Registry()), Kinds: cat.Kinds, Conversions: cat.Conversions}
 }

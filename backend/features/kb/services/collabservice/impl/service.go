@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 )
 
@@ -14,7 +15,8 @@ type service struct {
 
 	mu     sync.Mutex
 	rooms  map[uint64]*room
-	byPath map[string]*room
+	byPath map[string]*room // by document key: a file's absolute path, doc:<key> for others
+	kinds  func(kind string) (collabservice.DocumentKind, bool)
 }
 
 func (s *service) room(id uint64) *room {
@@ -29,7 +31,8 @@ func (s *service) dropRoom(r *room) {
 	defer s.mu.Unlock()
 	if r.empty() && s.rooms[r.id] == r {
 		delete(s.rooms, r.id)
-		delete(s.byPath, r.file)
+		delete(s.byPath, r.doc.key())
+		r.drop()
 	}
 }
 

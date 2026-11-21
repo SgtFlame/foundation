@@ -1,0 +1,158 @@
+{
+  "id": "qry-hello-counter",
+  "name": "hello.counter",
+  "description": "A Hello counter's value: {value}.",
+  "kind": "data.query",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onQuery",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "id",
+            "type": "any",
+            "description": "The counter's id; main when left out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "key",
+      "type": "data.expression",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"counter.\" + (id ?? \"main\")",
+        "type": "string"
+      },
+      "title": "Key"
+    },
+    {
+      "id": "read",
+      "type": "live.readProjection",
+      "position": {
+        "x": 600,
+        "y": 200
+      },
+      "config": {
+        "projector": "hello.counter"
+      },
+      "title": "Get counter"
+    },
+    {
+      "id": "value",
+      "type": "data.expression",
+      "position": {
+        "x": 900,
+        "y": 200
+      },
+      "config": {
+        "expr": "exists ? value : {value: 0}",
+        "type": "json"
+      },
+      "title": "Or zero"
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 1200,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "result",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "key",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "key",
+        "pin": "value"
+      },
+      "to": {
+        "node": "read",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "read",
+        "pin": "value"
+      },
+      "to": {
+        "node": "value",
+        "pin": "value"
+      }
+    },
+    {
+      "from": {
+        "node": "read",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "value",
+        "pin": "exists"
+      }
+    },
+    {
+      "from": {
+        "node": "value",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "result"
+      }
+    }
+  ],
+  "spec": {
+    "query": "hello.counter",
+    "title": "A Hello counter",
+    "description": "A Hello counter's value: {value}.",
+    "params": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The object's id; main when left out"
+        }
+      }
+    },
+    "action": "hello.read"
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "name": "test_echo_echo",
+  "title": "Echo",
+  "description": "Gives the text back, repeated, with its length and the adapter instance that served it",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "The text to echo"
+      },
+      "repeat": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10,
+        "description": "How many times; once when left out"
+      },
+      "options": {
+        "type": "object",
+        "description": "Nested options, one pin",
+        "properties": {
+          "upper": {
+            "type": "boolean",
+            "description": "In capitals"
+          }
+        }
+      }
+    },
+    "required": [
+      "text"
+    ]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "The echoed text"
+      },
+      "length": {
+        "type": "integer",
+        "description": "Its length in bytes"
+      },
+      "by": {
+        "type": "string",
+        "description": "The adapter instance that served the call"
+      }
+    },
+    "required": [
+      "text",
+      "length"
+    ]
+  },
+  "annotations": {
+    "title": "Echo",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

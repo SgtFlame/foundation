@@ -1,0 +1,132 @@
+{
+  "id": "hello-onMove",
+  "name": "On move",
+  "description": "Moves a node of the shared graph where the user dropped it.",
+  "kind": "ui.handler",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "ui.onEvent",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "id",
+            "type": "string",
+            "description": "The node's id"
+          },
+          {
+            "id": "position",
+            "type": "json",
+            "description": "Where it was dropped: {x, y}"
+          }
+        ]
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.makeObject",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "config": {
+        "fields": [
+          "id",
+          "position"
+        ]
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 600,
+        "y": 0
+      },
+      "config": {
+        "command": "hello.moveNode",
+        "target": "main"
+      }
+    },
+    {
+      "id": "toast",
+      "type": "ui.toast",
+      "position": {
+        "x": 900,
+        "y": 120
+      },
+      "config": {
+        "severity": "error"
+      },
+      "title": "Toast the refusal"
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "args",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "position"
+      },
+      "to": {
+        "node": "args",
+        "pin": "position"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "object"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "toast",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "toast",
+        "pin": "message"
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "test_echo_check",
+  "description": "Signs in and does nothing: whether the connection's settings work",
+  "input_schema": {
+    "type": "object",
+    "properties": {}
+  }
+}

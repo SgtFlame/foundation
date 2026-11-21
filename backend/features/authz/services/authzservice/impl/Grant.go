@@ -27,7 +27,17 @@ func (s *service) Grant(args authzservice.GrantArgs) authzservice.GrantResponse 
 	if d := s.pol.MayGrant(args.Context(), args.Principal, role, args.Resource); !d.Allowed {
 		return authzservice.GrantResponse{Common: *args.Fail(authz.Status, d.Err("grant.write", args.Resource))}
 	}
-	if t := authz.TenantOf(args.Resource); t != 0 {
+	if args.AgentID != 0 {
+		if args.UserID != 0 {
+			return authzservice.GrantResponse{Common: *args.Fail(http.StatusBadRequest, log.Code("invalid_grant").Public("Grant to a person or an agent, not both").New("both a user and an agent"))}
+		}
+		if _, ok, err := authz.FindAgent(args.Context(), args.Principal.TenantID, args.AgentID); err != nil {
+			return authzservice.GrantResponse{Common: *internal(args.ServiceArgs, err)}
+		} else if !ok || authz.TenantOf(args.Resource) != args.Principal.TenantID {
+			return authzservice.GrantResponse{Common: *args.Fail(http.StatusBadRequest,
+				log.Code("not_member").Public("Only the tenant's agents can be given roles in it").New("no such agent in the tenant"))}
+		}
+	} else if t := authz.TenantOf(args.Resource); t != 0 {
 		member, err := s.member(t, args.UserID)
 		if err != nil {
 			return authzservice.GrantResponse{Common: *internal(args.ServiceArgs, err)}
@@ -41,7 +51,7 @@ func (s *service) Grant(args authzservice.GrantArgs) authzservice.GrantResponse 
 		return authzservice.GrantResponse{Common: *args.Fail(http.StatusBadRequest,
 			log.Code("invalid_grant").Public("The expiry must be in the future").New("expiry in the past"))}
 	}
-	g, err := s.pol.Grant(args.Context(), nil, authz.GrantArgs{UserID: args.UserID, RoleID: args.RoleID, Resource: args.Resource, By: args.Principal.UserID, ExpiresAt: args.ExpiresAt})
+	g, err := s.pol.Grant(args.Context(), nil, authz.GrantArgs{UserID: args.UserID, AgentID: args.AgentID, RoleID: args.RoleID, Resource: args.Resource, By: args.Principal.UserID, ExpiresAt: args.ExpiresAt})
 	if errors.Is(err, authz.ErrWrongScope) {
 		return authzservice.GrantResponse{Common: *args.Fail(http.StatusBadRequest,
 			log.Code("invalid_grant").Public("That role cannot be granted here").Wrap(err))}

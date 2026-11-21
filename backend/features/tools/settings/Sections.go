@@ -21,10 +21,11 @@ type Tools struct {
 	TimeoutSeconds       int      `json:"timeoutSeconds"`       // a server tool's run
 	ClientTimeoutSeconds int      `json:"clientTimeoutSeconds"` // a client tool's result, except those that wait for the user
 	Disabled             []string `json:"disabled"`             // tool names never offered
+	Retries              int      `json:"retries"`              // a model call the provider refuses as busy (429, 503) is tried again this many times
 }
 
 // Defaults are the section's defaults, also used when it cannot be read.
-var Defaults = Tools{MaxSteps: 8, MaxResultKB: 32, TimeoutSeconds: 30, ClientTimeoutSeconds: 30, Disabled: []string{}}
+var Defaults = Tools{MaxSteps: 8, MaxResultKB: 32, TimeoutSeconds: 30, ClientTimeoutSeconds: 30, Disabled: []string{}, Retries: 3}
 
 // Timeout is a server tool's time limit.
 func (t Tools) Timeout() time.Duration {
@@ -65,6 +66,7 @@ const schema = `{
     "maxResultKB": {"type": "integer", "title": "Largest result", "unit": "KB", "min": 1, "max": 1024, "description": "A tool result larger than this is cut short, and the model is told so"},
     "timeoutSeconds": {"type": "integer", "title": "Tool time limit", "unit": "seconds", "min": 1, "max": 600},
     "clientTimeoutSeconds": {"type": "integer", "title": "Browser tool time limit", "unit": "seconds", "min": 1, "max": 600, "description": "How long a tool that runs in the browser may take; asking you a question waits until you answer"},
+    "retries": {"type": "integer", "title": "Retries when busy", "min": 0, "max": 6, "description": "How many times a model call is tried again when the provider is busy (429 or 503), waiting 2, 4, 8… seconds between tries, before the round ends"},
     "disabled": {"type": "array", "title": "Turned off", "description": "Tool names never offered to the model, e.g. kb.edit", "items": {"type": "string"}}
   }
 }`

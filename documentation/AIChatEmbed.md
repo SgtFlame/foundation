@@ -164,6 +164,15 @@ Frontend clients: `src/services/Index.ts`, `Embed.ts` and `Chat.ts` (`Chat.strea
   2. Watches `backend/` with `inotifywait`, ignoring `out/`, `third_party/` and `.git`, for `*.go`, `go.mod` and `go.sum` changes. Without inotify-tools it polls every second.
   3. On a change it builds to `out/cli.next`. If that succeeds, it stops the server (SIGTERM, then a 5s grace period, during which `serve` shuts down cleanly and closes LanceDB), deletes `out/cli`, renames `out/cli.next` to `out/cli` and restarts. A failed build leaves the running server alone.
 
+### Since slice 13
+`POST /ai/chat/stream` is gone: streaming is the `ai.chat.stream` call on the live connection ([Live.md](Live.md)), with the same `delta` and `done` events, a failure ending the call with its status. `Chat.stream` keeps its signature.
+
+### Changed in slice 43
+Gemini's 503 (overloaded) and 429 (rate) are kept with their status and marked `providers.Error.Busy`, so their error code is `providers.BusyCode` (`provider_busy`) and the tool loop tries them again ([Tools.md › Changed in slice 43](Tools.md#changed-in-slice-43)). Before, an upstream 503 was reported as 502. A missing or wrong key stays 503, not busy.
+
+### Changed after slice 43
+For Forge's golden tests (part 6h, [forge GoldenTests.md](../../forge/documentation/GoldenTests.md)): `gemini.WithBaseURL(url)` sends the provider's calls to another address speaking the Gemini API, such as a test's stub server (`$GOOGLE_GEMINI_BASE_URL` still works without it), and `chatimpl.New(opts...)` makes a chat service apart from the `CreateService` singleton, for tests that run several stacks in one process.
+
 ## Verification
 1. `cd backend && scripts/build.sh` produces `out/cli`. `scripts/build.sh --test` runs every test, including LanceDB's (`lancestore`) and the index service's (with in-memory fakes).
 2. `GEMINI_API_KEY=… scripts/serve.sh`. On startup it migrates the database and queues existing volume files, and `.…md.index.json` sidecars appear.

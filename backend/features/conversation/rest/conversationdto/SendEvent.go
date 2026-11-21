@@ -43,3 +43,11 @@ type SendFollowed struct {
 	Summary  string          `json:"summary"`
 	Data     json.RawMessage `json:"data,omitempty"`
 }
+
+// SendRetry is the data of a "retry" event: the provider was busy (429 or
+// 503), and the step is tried again after waitMs.
+type SendRetry struct {
+	Try    int   `json:"try"`
+	WaitMs int64 `json:"waitMs"`
+	Status int   `json:"status"`
+}

@@ -1,6 +1,9 @@
 package features
 
-import "context"
+import (
+	"context"
+	"strconv"
+)
 
 // PrincipalKind tells a person apart from work running with no user present.
 type PrincipalKind string
@@ -11,6 +14,15 @@ const (
 	// PrincipalAnonymous is a request with no valid session once login is
 	// required; it may only sign in (documentation/MultiTenant.md).
 	PrincipalAnonymous PrincipalKind = "anonymous"
+	// PrincipalApp is an installed app's own principal in a tenant (forge
+	// 07a question 1): its triggers and background jobs run as it. It holds
+	// the app's roles in that tenant and nothing else, and has no user.
+	PrincipalApp PrincipalKind = "app"
+	// PrincipalAgent is an agent (forge 07j): a principal an app's record
+	// defines (records' principal field), holding roles as a user does but
+	// unable to sign in. Its runs carry the user who started them as
+	// OnBehalfOf; its access is its own grants, never theirs.
+	PrincipalAgent PrincipalKind = "agent"
 )
 
 // Principal is who a service operation runs for. It is filled from the
@@ -18,8 +30,14 @@ const (
 // every ServiceArgs.
 type Principal struct {
 	Kind     PrincipalKind
-	UserID   uint64 // 0 for a service or anonymous principal
+	UserID   uint64 // 0 for a service, app or anonymous principal
 	TenantID uint64
+	App      string // the app of an app principal
+	// AgentID is an agent principal's id: the id of the record defining it.
+	AgentID uint64
+	// OnBehalfOf is the user an agent's run acts for (who started it, or
+	// the agent's creator), for audit; it gives the agent no access.
+	OnBehalfOf uint64
 }
 
 // Single-user mode runs as one implicit tenant and user. Their IDs are
@@ -55,4 +73,49 @@ func ServicePrincipal(tenant uint64) Principal {
 // index worker, running as the local tenant's service principal.
 func BackgroundArgs(ctx context.Context) ServiceArgs {
 	return ServiceArgs{Ctx: ctx, Principal: ServicePrincipal(LocalTenantID)}
+}
+
+// AppPrincipal is an installed app's principal in tenant (forge 07a).
+func AppPrincipal(tenant uint64, app string) Principal {
+	return Principal{Kind: PrincipalApp, TenantID: tenant, App: app}
+}
+
+// AgentPrincipal is an agent's principal in tenant, acting for user.
+func AgentPrincipal(tenant, agent, onBehalfOf uint64) Principal {
+	return Principal{Kind: PrincipalAgent, TenantID: tenant, AgentID: agent, OnBehalfOf: onBehalfOf}
+}
+
+// String names the principal for logs and the Jobs view: user:<id>,
+// app:<id>, agent:<id>, service or anonymous.
+func (p Principal) String() string {
+	switch p.Kind {
+	case PrincipalUser:
+		return "user:" + strconv.FormatUint(p.UserID, 10)
+	case PrincipalApp:
+		return "app:" + p.App
+	case PrincipalAgent:
+		return "agent:" + strconv.FormatUint(p.AgentID, 10)
+	}
+	return string(p.Kind)
+}
+
+// PrincipalRef is a principal as data, for work that runs later as it (a
+// job): ids as JSON strings, the tenant left to where it is stored.
+type PrincipalRef struct {
+	Kind   PrincipalKind `json:"kind"`
+	UserID uint64        `json:"userId,string,omitempty"`
+	App    string        `json:"app,omitempty"`
+	// AgentID and OnBehalfOf are an agent principal's (forge 07j).
+	AgentID    uint64 `json:"agentId,string,omitempty"`
+	OnBehalfOf uint64 `json:"onBehalfOf,string,omitempty"`
+}
+
+// Ref is the principal as data.
+func (p Principal) Ref() PrincipalRef {
+	return PrincipalRef{Kind: p.Kind, UserID: p.UserID, App: p.App, AgentID: p.AgentID, OnBehalfOf: p.OnBehalfOf}
+}
+
+// In is the principal a reference names in tenant.
+func (r PrincipalRef) In(tenant uint64) Principal {
+	return Principal{Kind: r.Kind, UserID: r.UserID, TenantID: tenant, App: r.App, AgentID: r.AgentID, OnBehalfOf: r.OnBehalfOf}
 }

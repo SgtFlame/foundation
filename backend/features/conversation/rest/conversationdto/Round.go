@@ -19,7 +19,8 @@ type Round struct {
 	FinishReason   string          `json:"finishReason,omitempty"`
 	Error          string          `json:"error,omitempty"`
 	Workbench      json.RawMessage `json:"workbench,omitempty"`
-	InputTokens    int             `json:"inputTokens"` // includes cachedTokens
+	Mode           string          `json:"mode,omitempty"` // the mode it ran in, e.g. builder
+	InputTokens    int             `json:"inputTokens"`    // includes cachedTokens
 	CachedTokens   int             `json:"cachedTokens"`
 	OutputTokens   int             `json:"outputTokens"` // excludes thinkingTokens
 	ThinkingTokens int             `json:"thinkingTokens"`
@@ -33,7 +34,7 @@ type Round struct {
 
 func RoundFrom(r conversation.Round) Round {
 	out := Round{
-		ID: r.ID, ConversationID: r.ConversationID, Time: r.CreatedAt, Text: r.Text, Reply: r.Reply, Level: r.Level, Model: r.ModelName,
+		ID: r.ID, ConversationID: r.ConversationID, Time: r.CreatedAt, Text: r.Text, Reply: r.Reply, Level: r.Level, Model: r.ModelName, Mode: r.Mode,
 		Status: r.Status, FinishReason: r.FinishReason, Error: r.Error,
 		InputTokens: r.InputTokens, CachedTokens: r.CachedTokens, OutputTokens: r.OutputTokens, ThinkingTokens: r.ThinkingTokens,
 		CostMicros: r.CostMicros, Currency: r.Currency, LatencyMs: r.LatencyMs, Feedback: r.Feedback,

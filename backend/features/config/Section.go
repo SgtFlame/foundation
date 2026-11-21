@@ -6,6 +6,7 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -33,3 +34,27 @@ type Section struct {
 
 // Sections is the point backend settings sections are registered on.
 var Sections = extensions.NewPoint[Section]("config.section", "Settings sections the backend reads and validates")
+
+// SectionSource gives sections that exist per tenant rather than per
+// server, such as an installed app's (forge 05c: app.<appId>). Its
+// sections resolve, show and validate like registered ones, but their
+// resolved values are not cached, since the source may change them.
+type SectionSource struct {
+	extensions.Descriptor
+	// Sections are the tenant's sections from this source.
+	Sections func(ctx context.Context, tenant uint64) []Section
+}
+
+// SectionSources is the point per-tenant section sources are registered on.
+var SectionSources = extensions.NewPoint[SectionSource]("config.sectionSource", "Sources of settings sections that exist per tenant, such as installed apps'")
+
+// SectionsFor are the registered sections, then those the sources give
+// the tenant.
+func SectionsFor(ctx context.Context, reg *extensions.Registry, tenant uint64) (all []Section, sourced int) {
+	all = Sections.All(reg)
+	n := len(all)
+	for _, s := range SectionSources.All(reg) {
+		all = append(all, s.Sections(ctx, tenant)...)
+	}
+	return all, len(all) - n
+}

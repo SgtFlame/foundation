@@ -63,7 +63,7 @@ Editing is **multi-user and autosaved** with the common standard for shared text
 - **Wiring** in `backend/cli/cmd/serve.go`: `collabimpl.CreateService(collabimpl.WithRoot(...))` with the `--kb-root` flag, and `collabhandlers.CollabHandler{}.Register(api, svc)`.
 - **Dependency:** `go get github.com/coder/websocket`.
 
-## Frontend: shared pieces (`frontend/axiom`)
+## Frontend: shared pieces (`frontend/common`)
 - **Dependencies** (`yarn add`): `yjs`, `y-protocols`, `lib0`.
 - **Vite:** in `vite.config.ts`, change the proxy entry to `'/api/v1/kb': { target: 'http://localhost:8080', ws: true }`.
 - `src/services/Collab.ts`: the client for `collabservice`. It has DTOs that mirror `collabdto` (`fileId: string`) and `Collab.openFile(request)` through `http`. It also has `Collab.socketUrl(fileId)`, which builds a `ws(s)://` URL from `API_BASE` and `location`.
@@ -92,7 +92,7 @@ Editing is **multi-user and autosaved** with the common standard for shared text
 
 ## Common verification
 - `cd backend && go vet ./... && go test ./features/kb/...`, which runs the protocol and room tests.
-- `cd frontend/axiom && yarn build && yarn lint`.
+- `cd frontend/example && yarn build && yarn lint`.
 - Manual test:
   - Run `serve` and `yarn dev`, create a volume and a file, and double-click it. The Markdown tab should open with the status "ready".
   - Open the same file in a second browser window. Both should show two peers.
@@ -158,3 +158,20 @@ Editing is **multi-user and autosaved** with the common standard for shared text
 - **Verification:**
   - Format text with the toolbar. The Source tab should show the right markdown, and untouched list markers and emphasis styles should stay unchanged.
   - Edit at the same time in two windows (one WYSIWYG, one Source). Both should converge, and the file on disk should match after autosave.
+
+## Since slice 13
+A room is no longer its own WebSocket. It is a channel on the live connection ([Live.md](Live.md)).
+- **Joining**: the browser sends `collab.join {channel, fileId}`, and the room's y-websocket messages then travel as binary frames prefixed with the channel. `collab.leave` leaves it.
+- **Ending**: the room ends a channel with `collab.closed {channel, code, message}`, where 4000 + an HTTP status means for good (4404: open the file again) and 1000 means join again.
+- **The route**: `GET /kb/collab/files/:fileId` is gone. `collabhandlers.ContributeLive` adapts a channel to `collabservice.Conn`, and the default-tenant check moved there from `kbhandlers.InTenant`.
+- **The provider**: `CollabProvider(fileId, doc, awareness, events)` rejoins on a new channel whenever the connection comes back. Its events are unchanged, so the editors did not change.
+
+Two users edited one file this way in headless Chromium.
+
+## Changed in slice 53
+Forge's part 7l ([forge ContentComponents.md](../../forge/documentation/ContentComponents.md)): rooms edit text other than volume files, and a handed-over room no longer saves an empty document.
+- **Documents of a kind.** `collabservice.Document` (`Key`, `Name`, `Load`, `Save`, `Access`) is text a room edits other than a file. A `collabservice.DocumentKind` on the `collab.document` point opens it from a reference. `Service.OpenDoc {kind, ref}` (`POST /collab/docs/open`, outside the Volumes' default-tenant fence) returns its room's id, joined as a file's is. The records' kind `record` ([Records.md](Records.md#changed-in-slice-53)) is the first. `collabimpl.WithDocumentKinds` gives the service the point (`serve.go`, Foundation's and Forge's).
+- **A room's document** is `fileDoc` (the volume file, as before) or `otherDoc`. The room loads its seed as the new writer (`client.args`) and saves as the writer, so a record is changed by the person whose browser saves it. The default-tenant check moved from `collabhandlers.ContributeLive` into a file room's access check, so record rooms work in every tenant.
+- **Saves run in order on the room's own goroutine** (`saveLoop`), so a slow save (a command) never holds up the relay. A save overtaken by a later one is skipped.
+- **Fix: a seed no longer marks the room dirty** (`addUpdate`), and **a writer handed a dirty room saves once it has synced** (`CollabSession.saveWhenSynced`). Before, a writer that only seeded and left made the next writer save at once, before the room's log reached its document, which stored an empty text. File rooms had the same race. `TestASeedLeavesTheRoomClean` covers it.
+- **Remote cursors** carry the signed-in user's display name and presence colour (`localUser`), not a guest's.

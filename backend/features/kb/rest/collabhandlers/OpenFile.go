@@ -17,3 +17,14 @@ func (ch *CollabHandler) OpenFile(c *gin.Context) {
 	resp := ch.service.OpenFile(req.ToArgs(args))
 	c.JSON(int(resp.Common.Code), collabdto.OpenFileResponseFrom(resp))
 }
+
+// OpenDoc handles POST /api/v1/collab/docs/open.
+func (ch *CollabHandler) OpenDoc(c *gin.Context) {
+	var req collabdto.OpenDocRequest
+	args, ok := rest.Bind(c, &req)
+	if !ok {
+		return
+	}
+	resp := ch.service.OpenDoc(req.ToArgs(args))
+	c.JSON(int(resp.Common.Code), collabdto.OpenFileResponseFrom(resp))
+}

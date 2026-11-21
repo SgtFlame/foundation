@@ -3,6 +3,7 @@ package authz
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features"
 )
@@ -12,6 +13,10 @@ type Held struct {
 	Grant       RoleGrant
 	Role        Role
 	Permissions []string // "*" expanded to every declared permission
+	// Record is set on a grant on one record that reaches the checked
+	// resource through row rules (forge 07j), RecordEntity its type.
+	Record       string `json:"-"`
+	RecordEntity string `json:"-"`
 }
 
 // Effective is what a principal may do, for the browser to hide or disable
@@ -21,9 +26,10 @@ type Held struct {
 type Effective struct {
 	All         bool // a service principal, which may do anything
 	Grants      []Held
-	Self        []string // permissions every signed-in user has
-	OwnedTypes  []string // resource types the principal owns under "user:<id>"
-	Permissions []string // every declared permission, for expanding "*"
+	Self        []string          // permissions every signed-in user has
+	OwnedTypes  []string          // resource types the principal owns under "user:<id>"
+	Fences      map[string]string // resource type → the kind of segment it is fenced by (ResourceType.Fence)
+	Permissions []string          // every declared permission, for expanding "*"
 }
 
 // EffectiveFor is p's effective permissions.
@@ -32,6 +38,12 @@ func (pol *Policy) EffectiveFor(p features.Principal) (Effective, error) {
 	for _, t := range ResourceTypes.All(pol.registry) {
 		if t.Owned {
 			e.OwnedTypes = append(e.OwnedTypes, t.ID)
+		}
+		if t.Fence != "" {
+			if e.Fences == nil {
+				e.Fences = map[string]string{}
+			}
+			e.Fences[t.ID] = t.Fence
 		}
 		for _, a := range t.Actions {
 			perm := Permission(t.ID, a.Name)
@@ -48,11 +60,11 @@ func (pol *Policy) EffectiveFor(p features.Principal) (Effective, error) {
 	case features.PrincipalAnonymous:
 		return Effective{}, nil
 	}
-	grants, err := pol.GrantsOf(p.UserID)
+	roles, err := pol.Roles()
 	if err != nil {
 		return e, err
 	}
-	roles, err := pol.Roles()
+	grants, err := pol.grantsFor(p, roles)
 	if err != nil {
 		return e, err
 	}
@@ -87,11 +99,19 @@ func (pol *Policy) MayGrant(ctx context.Context, p features.Principal, role Role
 		}
 	}
 	for _, perm := range perms {
+		on := resource
+		// An app role's permission is held on its scope in the tenant
+		if scope, plain, ok := ScopedPermission(perm); ok {
+			if path := Split(resource); len(path) > 0 {
+				on = path[0] + "/" + strings.Join(scope, "/")
+			}
+			perm = plain
+		}
 		_, act, ok := actionOf(pol.registry, perm)
 		if !ok || act.Class == ClassSelf {
 			continue
 		}
-		if d := pol.Explain(ctx, p, perm, resource); !d.Allowed {
+		if d := pol.Explain(ctx, p, perm, on); !d.Allowed {
 			return Decision{Reason: fmt.Sprintf("you do not hold %s on %s yourself", perm, resource)}
 		}
 	}

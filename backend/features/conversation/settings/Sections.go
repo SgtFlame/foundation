@@ -21,8 +21,57 @@ type Chat struct {
 	TitleLevel    string `json:"titleLevel"`    // the level that names conversations; the default level when unknown
 }
 
-// Contribute registers the chat section, and a defaults section for every
-// chat.contextProvider, so it must run after the providers have registered.
+// ModesID is the chat.modes section's ID (forge 06i).
+const ModesID = "chat.modes"
+
+// Modes is the chat.modes section: the modes offered in the composer.
+type Modes struct {
+	Modes []Mode `json:"modes"`
+}
+
+// Mode is one mode of the chat.modes section.
+type Mode struct {
+	ID       string              `json:"id"`
+	Label    string              `json:"label"`
+	Icon     string              `json:"icon,omitempty"`
+	GraphRef string              `json:"graphRef"` // the mode graph's id
+	Default  bool                `json:"default,omitempty"`
+	Focus    *conversation.Focus `json:"focus,omitempty"`
+}
+
+// Find is the mode with the given ID; ok is false when there is none.
+func (m Modes) Find(id string) (Mode, bool) {
+	for _, mode := range m.Modes {
+		if mode.ID == id {
+			return mode, true
+		}
+	}
+	return Mode{}, false
+}
+
+// Default is the mode of a new conversation away from every focus: the
+// first marked default, else the first without a focus, else the first.
+func (m Modes) Default() (Mode, bool) {
+	for _, mode := range m.Modes {
+		if mode.Default {
+			return mode, true
+		}
+	}
+	for _, mode := range m.Modes {
+		if mode.Focus == nil {
+			return mode, true
+		}
+	}
+	if len(m.Modes) > 0 {
+		return m.Modes[0], true
+	}
+	return Mode{}, false
+}
+
+// Contribute registers the chat section, the chat.modes section from the
+// chat.mode contributions, and a defaults section for every
+// chat.contextProvider, so it must run after the providers and modes have
+// registered.
 func Contribute(reg *extensions.Registry) {
 	conversation.ContextProviders.Register(reg, conversation.ContextProvider{
 		Descriptor: extensions.Descriptor{ID: conversation.DebugID, Order: 900, Source: "conversation"},
@@ -38,6 +87,24 @@ func Contribute(reg *extensions.Registry) {
 		Scopes:      []string{"app", "tenant", "user"},
 		Schema:      json.RawMessage(chatSchema),
 		Defaults:    json.RawMessage(chatDefaults),
+		Version:     1,
+	})
+	var modes Modes
+	for _, m := range conversation.Modes.All(reg) {
+		modes.Modes = append(modes.Modes, Mode{ID: m.ID, Label: m.Label, Icon: m.Icon, GraphRef: m.GraphRef, Default: m.Default, Focus: m.Focus})
+	}
+	if modes.Modes == nil {
+		modes.Modes = []Mode{}
+	}
+	modeDefaults, _ := json.Marshal(modes)
+	config.Sections.Register(reg, config.Section{
+		Descriptor:  extensions.Descriptor{ID: ModesID, Order: 131, Source: "conversation"},
+		Title:       "Chat modes",
+		Description: "The modes offered beside the level in the chat's composer. Each runs a published mode graph for every round, which gathers the round's context, builds its prompt and tools and streams the reply; edit the graphs in the Cognition editor.",
+		Category:    []string{"AI", "Chat"},
+		Scopes:      []string{"app", "tenant", "user"},
+		Schema:      json.RawMessage(modesSchema),
+		Defaults:    modeDefaults,
 		Version:     1,
 	})
 	for i, p := range conversation.ContextProviders.All(reg) {
@@ -60,6 +127,23 @@ const chatSchema = `{
     "systemPrompt": {"type": "string", "title": "System prompt", "format": "multiline", "description": "The instructions every chat round starts with. Context, such as the workspace, is added after them."},
     "historyRounds": {"type": "integer", "title": "Window", "unit": "rounds", "min": 0, "max": 1000, "description": "How many earlier rounds of the conversation are sent with each message, and seen by Chronicle's context matching; 0 sends them all. Older rounds are remembered through Chronicle entries."},
     "titleLevel": {"type": "string", "title": "Title level", "ref": "ai.chat.levels#levels", "description": "The level that writes each conversation's title after its first round"}
+  }
+}`
+
+const modesSchema = `{
+  "type": "object",
+  "properties": {
+    "modes": {"type": "array", "title": "Modes", "items": {"type": "object", "properties": {
+      "id": {"type": "string", "title": "ID", "description": "Stored on each conversation and round"},
+      "label": {"type": "string", "title": "Label"},
+      "icon": {"type": "string", "title": "Icon", "description": "An emoji shown before the label"},
+      "graphRef": {"type": "string", "title": "Graph", "description": "The mode graph each round runs"},
+      "default": {"type": "boolean", "title": "Default", "description": "The mode of a new conversation away from every focus"},
+      "focus": {"type": "object", "title": "Focus", "description": "Offered only while the editor you were in is of one of these kinds or subject types, and chosen for a new conversation started there", "properties": {
+        "kinds": {"type": "array", "title": "Editor kinds", "items": {"type": "string"}},
+        "subjects": {"type": "array", "title": "Subject types", "items": {"type": "string"}}
+      }}
+    }, "required": ["id", "label", "graphRef"]}}
   }
 }`
 

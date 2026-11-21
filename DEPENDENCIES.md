@@ -11,6 +11,15 @@ curl -fsSL https://claude.ai/install.sh | bash
 ```bash
 go install github.com/spf13/cobra-cli@latest
 ```
+## Headless browser
+
+Playwright, installed globally at a version whose Chromium (revision 1248) is in `~/.cache/ms-playwright`, for screenshots and driving the app from scripts. `playwright install` fetches the browser if the cache is missing it, and `install-deps` the system libraries it needs.
+
+```bash
+npm i -g playwright@1.64.1
+playwright install chromium   # only if ~/.cache/ms-playwright has no chromium-1248
+```
+
 ## Backend
 
 `backend/scripts/build.sh` installs what it needs on first use, but these can be installed ahead of time:
@@ -22,6 +31,8 @@ go install github.com/spf13/cobra-cli@latest
 ```bash
 sudo apt-get install -y build-essential inotify-tools
 ```
+
+- **Test-only Go module**: `github.com/santhosh-tekuri/jsonschema/v6` validates the connector tool mappings against the MCP and OpenAPI 3.1 JSON Schemas kept in `features/connectors/testdata` (forge 07b); no production code imports it.
 
 - **`GEMINI_API_KEY`**: the Gemini API key for the AI services (or `serve --gemini-api-key`).
 

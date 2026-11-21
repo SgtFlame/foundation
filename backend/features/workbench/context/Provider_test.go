@@ -29,3 +29,25 @@ func TestRenderQuotesLabels(t *testing.T) {
 		t.Errorf("the chat itself is listed:\n%s", got)
 	}
 }
+
+// forge 06g: the Forge editors' subjects carry where the user is in them,
+// so "this button" resolves to the selected node
+func TestRenderForgeSelections(t *testing.T) {
+	got := Render(Snapshot{
+		Surface: "main", Focused: "chat:main", Previous: "prefab:contactCard",
+		Editors: []Editor{
+			{Tab: "prefab:contactCard", Kind: "prefab", Subject: &Subject{Type: "prefab", ID: "contactCard", Label: "Contact card"}, Selection: &Selection{Node: "root/actions/save"}},
+			{Tab: "forge-app:contacts", Kind: "forge-app", Subject: &Subject{Type: "app", ID: "contacts", Label: "Contacts"}, Selection: &Selection{Tab: "pages", Part: "/contacts"}},
+			{Tab: "entity:designer", Kind: "entity", Subject: &Subject{Type: "entity", ID: "contact", Label: "Contact"}, Selection: &Selection{Field: "email"}},
+		},
+	})
+	for _, want := range []string{
+		`- Focused just before the chat: "Contact card" (prefab contactCard), node "root/actions/save" selected`,
+		`  - "Contacts" (app contacts), on its "pages" tab, at "/contacts"`,
+		`  - "Contact" (entity contact), field "email" selected`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in\n%s", want, got)
+		}
+	}
+}

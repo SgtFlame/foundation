@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SgtFlame/foundation/backend/features"
 	"os"
 	"path/filepath"
 	"testing"
@@ -126,7 +127,7 @@ func TestRoomSeedRelaySaveHandover(t *testing.T) {
 
 	connect := func() *fakeConn {
 		conn := newFakeConn()
-		go s.Collaborate(collabservice.CollaborateArgs{Ctx: context.Background(), FileID: id, Conn: conn})
+		go s.Collaborate(collabservice.CollaborateArgs{ServiceArgs: features.ServiceArgs{Ctx: context.Background(), Principal: features.Principal{TenantID: features.LocalTenantID}}, FileID: id, Conn: conn})
 		return conn
 	}
 
@@ -165,6 +166,12 @@ func TestRoomSeedRelaySaveHandover(t *testing.T) {
 
 	// Only the writer may save
 	b.in <- controlMessage(control{Op: "save", Markdown: "nope"})
+	// b's connection reads on its own goroutine: let it handle the save
+	// while it is not the writer, before a leaves
+	time.Sleep(50 * time.Millisecond)
+	if content, _ := os.ReadFile(file); string(content) != "hello world" {
+		t.Fatalf("a reader saved: file holds %q", content)
+	}
 
 	// When the writer leaves, the next client takes over
 	close(a.in)
@@ -172,4 +179,32 @@ func TestRoomSeedRelaySaveHandover(t *testing.T) {
 	if content, _ := os.ReadFile(file); string(content) != "hello world" {
 		t.Fatalf("a reader saved: file holds %q", content)
 	}
+}
+
+// A writer that only seeded leaves nothing to save: the next writer is
+// not told the room is dirty, so it never saves before it has synced (a
+// save then would store an empty document).
+func TestASeedLeavesTheRoomClean(t *testing.T) {
+	root := t.TempDir()
+	volume := filepath.Join(root, "vol")
+	if err := os.MkdirAll(volume, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(volume, volumeservice.MarkerFile), []byte("{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(volume, "note.md"), []byte("hello"), 0o644)
+	s := newService(WithRoot(root), WithGracePeriod(time.Hour), WithFileEvents(volumeservice.NewFileEvents()))
+	path := kbservice.NewVolumePath().Folder("vol", "note")
+	id := s.OpenFile(collabservice.OpenFileArgs{Path: *path, Type: "markdown"}).FileID
+	args := features.ServiceArgs{Ctx: context.Background(), Principal: features.Principal{TenantID: features.LocalTenantID}}
+	a := newFakeConn()
+	go s.Collaborate(collabservice.CollaborateArgs{ServiceArgs: args, FileID: id, Conn: a})
+	a.expectControl(t, "writer role with seed", func(c control) bool { return c.Op == "role" && c.Writer && c.Seed != nil })
+	a.in <- syncMessage(syncUpdate, []byte{1, 2, 3})
+	a.in <- controlMessage(control{Op: "seeded"})
+	a.expectControl(t, "ready", func(c control) bool { return c.Op == "ready" })
+	close(a.in)
+	time.Sleep(50 * time.Millisecond)
+	b := newFakeConn()
+	go s.Collaborate(collabservice.CollaborateArgs{ServiceArgs: args, FileID: id, Conn: b})
+	b.expectControl(t, "a clean, ready writer role", func(c control) bool { return c.Op == "role" && c.Writer && c.Ready && !c.Dirty && c.Seed == nil })
 }

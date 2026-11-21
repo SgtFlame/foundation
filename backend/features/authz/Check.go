@@ -48,8 +48,11 @@ func Installed() *Policy { return installed.Load() }
 // resource or an ancestor, unless the action is of the self class or the
 // resource is theirs (a user-owned type under "user:<id>"). Before a policy
 // is installed (tests of other features) every principal but an anonymous
-// one is allowed.
+// one is allowed. A context made WithAs decides what its role covers.
 func Check(ctx context.Context, p features.Principal, action, resource string) Decision {
+	if as, allowed := asFor(ctx, p, action, resource); as != nil {
+		return Decision{Allowed: allowed, Reason: "as the role " + as.Name}
+	}
 	if pol := installed.Load(); pol != nil {
 		return pol.Decide(ctx, p, action, resource)
 	}

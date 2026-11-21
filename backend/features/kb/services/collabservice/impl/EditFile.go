@@ -48,6 +48,7 @@ func (s *service) EditFile(args collabservice.EditFileArgs) collabservice.EditFi
 	if r != nil && r.empty() {
 		delete(s.rooms, r.id)
 		delete(s.byPath, file)
+		r.drop()
 		r = nil
 	}
 	if r == nil {

@@ -19,6 +19,7 @@ var (
 // GrantArgs names a grant to make. By is the granting user (0: the system).
 type GrantArgs struct {
 	UserID    uint64
+	AgentID   uint64 // an agent's grant in place of a user's (forge 07j)
 	RoleID    uint64
 	Resource  string
 	By        uint64
@@ -47,18 +48,22 @@ func (pol *Policy) Grant(ctx context.Context, tx *gorm.DB, args GrantArgs) (Role
 	}
 	resource := Normalize(args.Resource)
 	var existing []RoleGrant
-	if err := tx.Where("user_id = ? AND role_id = ? AND resource = ?", args.UserID, args.RoleID, resource).Limit(1).Find(&existing).Error; err != nil {
+	user := args.UserID
+	if args.AgentID != 0 {
+		user = 0
+	}
+	if err := tx.Where("user_id = ? AND agent_id = ? AND role_id = ? AND resource = ?", user, args.AgentID, args.RoleID, resource).Limit(1).Find(&existing).Error; err != nil {
 		return RoleGrant{}, err
 	}
 	if len(existing) > 0 {
 		return existing[0], nil
 	}
-	g := RoleGrant{UserID: args.UserID, RoleID: args.RoleID, Resource: resource, GrantedBy: args.By, ExpiresAt: args.ExpiresAt}
+	g := RoleGrant{UserID: user, AgentID: args.AgentID, RoleID: args.RoleID, Resource: resource, GrantedBy: args.By, ExpiresAt: args.ExpiresAt}
 	if err := tx.Create(&g).Error; err != nil {
 		return RoleGrant{}, err
 	}
 	pol.Changed()
-	pol.auditIn(ctx, tx, AccessAudit{Kind: AuditGrant, UserID: args.UserID, ActorID: args.By, TenantID: tenantOf(resource), Action: role.Name, Resource: resource})
+	pol.auditIn(ctx, tx, AccessAudit{Kind: AuditGrant, UserID: user, AgentID: args.AgentID, ActorID: args.By, TenantID: tenantOf(resource), Action: role.Name, Resource: resource})
 	return g, nil
 }
 
@@ -71,7 +76,7 @@ func (pol *Policy) Revoke(ctx context.Context, tx *gorm.DB, grantID, by uint64) 
 	if err := tx.First(&g, grantID).Error; err != nil {
 		return RoleGrant{}, err
 	}
-	if g.RoleID == RoleSuperAdmin {
+	if g.RoleID == RoleSuperAdmin && g.AgentID == 0 {
 		n, err := pol.superAdmins(tx, g.UserID)
 		if err != nil {
 			return RoleGrant{}, err
@@ -85,7 +90,7 @@ func (pol *Policy) Revoke(ctx context.Context, tx *gorm.DB, grantID, by uint64) 
 	}
 	pol.Changed()
 	roles, _ := pol.Roles()
-	pol.auditIn(ctx, tx, AccessAudit{Kind: AuditRevoke, UserID: g.UserID, ActorID: by, TenantID: tenantOf(g.Resource), Action: roles[g.RoleID].Name, Resource: g.Resource})
+	pol.auditIn(ctx, tx, AccessAudit{Kind: AuditRevoke, UserID: g.UserID, AgentID: g.AgentID, ActorID: by, TenantID: tenantOf(g.Resource), Action: roles[g.RoleID].Name, Resource: g.Resource})
 	return g, nil
 }
 
@@ -99,7 +104,7 @@ func (pol *Policy) RevokeUnder(ctx context.Context, tx *gorm.DB, user uint64, re
 	resource = Normalize(resource)
 	q := tx.Where("(resource = ? OR resource LIKE ? ESCAPE '\\')", resource, escapeLike(resource)+"/%")
 	if user != 0 {
-		q = q.Where("user_id = ?", user)
+		q = q.Where("user_id = ? AND agent_id = 0", user)
 	}
 	var rows []RoleGrant
 	if err := q.Find(&rows).Error; err != nil {
@@ -123,7 +128,7 @@ func (pol *Policy) SuperAdmins(tx *gorm.DB) ([]uint64, error) {
 		tx = pol.db
 	}
 	var ids []uint64
-	err := tx.Model(&RoleGrant{}).Where("role_id = ? AND resource = ?", RoleSuperAdmin, OnApp).Distinct().Pluck("user_id", &ids).Error
+	err := tx.Model(&RoleGrant{}).Where("role_id = ? AND resource = ? AND agent_id = 0", RoleSuperAdmin, OnApp).Distinct().Pluck("user_id", &ids).Error
 	return ids, err
 }
 
@@ -163,8 +168,11 @@ func GrantableOn(role Role, resource string) bool {
 		return len(path) == 0
 	case len(path) == 0 || !strings.HasPrefix(path[0], "tenant:"):
 		return false
-	case role.TenantID != 0:
-		return path[0] == Resource("tenant", role.TenantID)
+	case role.TenantID != 0 && path[0] != Resource("tenant", role.TenantID):
+		return false
+	case role.App != "":
+		// An app's role: on the tenant, or on the app and below
+		return len(path) == 1 || path[1] == "app:"+role.App
 	}
 	return true
 }

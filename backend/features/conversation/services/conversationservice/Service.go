@@ -19,6 +19,7 @@ type Service interface {
 	Send(args SendArgs) *SendRequest
 	Feedback(args FeedbackArgs) FeedbackResponse
 	ContextProviders(args ContextProvidersArgs) ContextProvidersResponse
+	Modes(args ModesArgs) ModesResponse
 	Answer(args AnswerArgs) AnswerResponse
 }
 
@@ -56,6 +57,10 @@ type SendArgs struct {
 	ConversationID uint64 // 0 starts a new conversation
 	Text           string
 	Level          string // an ai.chat.levels ID; the default level when empty
+	// Mode is a chat.modes ID (forge 06i); empty keeps the conversation's,
+	// else the default mode. Switching it changes the next rounds' graph,
+	// not the history.
+	Mode string
 	// Workbench is the browser's workbench snapshot (WorkbenchContext.md),
 	// stored with the round; untrusted.
 	Workbench json.RawMessage
@@ -81,6 +86,7 @@ const (
 	EventTool     SendEventKind = "tool"     // ToolCall, each time a call changes status: awaiting and client calls wait for Answer
 	EventFollowed SendEventKind = "followed" // Follower and Followed: what a chat.roundFollower did after the reply
 	EventFailed   SendEventKind = "failed"   // Common: the message was refused before a round was stored
+	EventRetry    SendEventKind = "retry"    // Retry: the provider was busy, and the step is tried again after a wait
 )
 
 type SendEvent struct {
@@ -92,7 +98,15 @@ type SendEvent struct {
 	Follower     string // the chat.roundFollower's ID
 	Followed     *conversation.Followed
 	ToolCall     *tools.ToolCall
+	Retry        *Retry
 	Common       features.ServiceResponse
+}
+
+// Retry is a model call tried again because the provider was busy.
+type Retry struct {
+	Try    int // from 1
+	WaitMs int64
+	Status int // 429 or 503
 }
 
 // SendRequest delivers the round as it happens: started first (or failed,
@@ -131,6 +145,27 @@ type ContextProvidersResponse struct {
 type ProviderInfo struct {
 	ID    string
 	Title string
+}
+
+type ModesArgs struct {
+	features.ServiceArgs
+}
+
+// ModesResponse lists the chat.modes the principal sees, each with what its
+// mode graph says of itself, so the composer offers them and shows only
+// the context settings each uses.
+type ModesResponse struct {
+	Common features.ServiceResponse
+	Modes  []ModeInfo
+}
+
+type ModeInfo struct {
+	ID, Label, Icon, GraphRef string
+	Default                   bool
+	Focus                     *conversation.Focus
+	Description               string   // the graph's
+	Settings                  []string // the context settings it uses; empty uses them all
+	Missing                   bool     // its graph does not exist
 }
 
 // AnswerArgs answers a tool call its round is waiting on: the user's

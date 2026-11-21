@@ -37,7 +37,7 @@ func Contribute(reg *extensions.Registry, retriever func() retrievalservice.Serv
 		Descriptor: extensions.Descriptor{ID: ID, Order: 100, Source: "retrieval"},
 		Title:      "RAG Search",
 		Schema:     json.RawMessage(schema),
-		Defaults:   json.RawMessage(`{"enabled": true, "preset": "", "lexicalSemantic": 0, "chronicleLibrary": 0, "topK": 8, "sources": {"library": true, "chronicle": true}}`),
+		Defaults:   json.RawMessage(`{"enabled": true, "preset": "", "lexicalSemantic": 0, "chronicleLibrary": 0, "topK": 8, "sources": {"library": true, "chronicle": true, "records": false}}`),
 		Gather: func(args conversation.GatherArgs) ([]conversation.ContextItem, error) {
 			return gather(args, retriever())
 		},
@@ -96,7 +96,8 @@ const schema = `{
     "topK": {"type": "integer", "title": "Segments", "min": 1, "max": 50, "description": "How many passages are injected at most"},
     "sources": {"type": "object", "title": "Sources", "properties": {
       "library": {"type": "boolean", "title": "Volumes"},
-      "chronicle": {"type": "boolean", "title": "Chronicles"}
+      "chronicle": {"type": "boolean", "title": "Chronicles"},
+      "records": {"type": "boolean", "title": "Records", "description": "Applications' records, by their searchable fields"}
     }}
   }
 }`

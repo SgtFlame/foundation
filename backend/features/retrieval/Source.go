@@ -13,7 +13,7 @@ import (
 // Sources is the retrieval.source point: every place retrieval searches.
 var Sources = extensions.NewPoint[Source](
 	"retrieval.source",
-	"Where retrieval searches for a chat round's context: Volumes (library) and Chronicle memory (chronicle)",
+	"Where retrieval searches for a chat round's context: Volumes (library), Chronicle memory (chronicle) and searchable records (records, when switched on)",
 )
 
 // Axis is the side of the Chronicle ↔ Library dial a source is on.
@@ -30,8 +30,11 @@ const (
 // retrieval.
 type Source struct {
 	extensions.Descriptor
-	Title         string
-	Axis          Axis
+	Title string
+	Axis  Axis
+	// Optional sources are searched only when a retrieval names them, such
+	// as records (off unless RAG Search's switch turns them on).
+	Optional      bool
 	VectorSearch  func(ctx context.Context, vector []float32, k int, filter Filter) ([]Segment, error)
 	KeywordSearch func(ctx context.Context, query string, k int, filter Filter) ([]Segment, error)
 }
@@ -63,6 +66,8 @@ type Location struct {
 	StartLine int    `json:"startLine,omitempty"`
 	EndLine   int    `json:"endLine,omitempty"`
 	Heading   string `json:"heading,omitempty"`
+	Entity    string `json:"entity,omitempty"` // a record: its entity type and id
+	RecordID  string `json:"recordId,omitempty"`
 }
 
 // Scored is a segment as retrieval selected it, with every number that

@@ -14,7 +14,7 @@ type Edit struct {
 // ApplyEdits applies edits to text in order, each to the text the previous
 // ones left. Each Find must occur exactly once, so an edit never lands in
 // the wrong place; the browser's writer applies them the same way
-// (frontend/axiom/src/editors/markdown/collab/edits.ts).
+// (frontend/common/src/editors/markdown/collab/edits.ts).
 func ApplyEdits(text string, edits []Edit) (string, error) {
 	for i, e := range edits {
 		if e.Find == "" {

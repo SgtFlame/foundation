@@ -38,14 +38,15 @@ func (r GrantsRequest) ToArgs(args features.ServiceArgs) authzservice.GrantsArgs
 }
 
 type GrantRequest struct {
-	UserID    uint64     `json:"userId,string"`
+	UserID    uint64     `json:"userId,string,omitempty"`
+	AgentID   uint64     `json:"agentId,string,omitempty"` // an agent in place of a person (forge 07j)
 	RoleID    uint64     `json:"roleId,string"`
 	Resource  string     `json:"resource"`
 	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
 }
 
 func (r GrantRequest) ToArgs(args features.ServiceArgs) authzservice.GrantArgs {
-	return authzservice.GrantArgs{ServiceArgs: args, UserID: r.UserID, RoleID: r.RoleID, Resource: r.Resource, ExpiresAt: r.ExpiresAt}
+	return authzservice.GrantArgs{ServiceArgs: args, UserID: r.UserID, AgentID: r.AgentID, RoleID: r.RoleID, Resource: r.Resource, ExpiresAt: r.ExpiresAt}
 }
 
 type RevokeRequest struct {
@@ -56,12 +57,21 @@ func (r RevokeRequest) ToArgs(args features.ServiceArgs) authzservice.RevokeArgs
 	return authzservice.RevokeArgs{ServiceArgs: args, GrantID: r.GrantID}
 }
 
+type AgentsRequest struct {
+	Resource string `json:"resource,omitempty"`
+}
+
+func (r AgentsRequest) ToArgs(args features.ServiceArgs) authzservice.AgentsArgs {
+	return authzservice.AgentsArgs{ServiceArgs: args, Resource: r.Resource}
+}
+
 type ExplainRequest struct {
 	UserID   uint64 `json:"userId,string,omitempty"`
+	AgentID  uint64 `json:"agentId,string,omitempty"`
 	Action   string `json:"action"`
 	Resource string `json:"resource"`
 }
 
 func (r ExplainRequest) ToArgs(args features.ServiceArgs) authzservice.ExplainArgs {
-	return authzservice.ExplainArgs{ServiceArgs: args, UserID: r.UserID, Action: r.Action, Resource: r.Resource}
+	return authzservice.ExplainArgs{ServiceArgs: args, UserID: r.UserID, AgentID: r.AgentID, Action: r.Action, Resource: r.Resource}
 }

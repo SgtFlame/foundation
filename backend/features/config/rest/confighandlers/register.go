@@ -18,5 +18,4 @@ func (ch *ConfigHandler) Register(router gin.IRouter, service configservice.Serv
 	group.POST("/get", ch.Get)
 	group.POST("/set", ch.Set)
 	group.POST("/reset", ch.Reset)
-	group.GET("/events", ch.Events)
 }

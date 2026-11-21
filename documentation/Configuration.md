@@ -206,3 +206,11 @@ See [Secrets.md › Built in slice 12](Secrets.md#built-in-slice-12).
 - A value that could not be read from the store (Vault unreachable) is dropped from that read, and the resolved section is not cached, so it is read again next time.
 - `Config.set` in the browser is not captured in DevTools' Network tab when the patch carries a secret.
 
+## Since slice 13
+`GET /config/events` (SSE) is gone. Changes are the `config.changes` query on the live connection ([Live.md](Live.md)): an empty snapshot, then an `upsert` keyed by section with `{section, scope}` for each stored change. `Config.events(onChange, onResync)` follows it, and after a reconnect, when changes may have been missed, `configStore` refetches every section it holds. The `ui.layouts` section (user scope) keeps each user's arrangement of applications' docked sub-tabs ([ServerUI.md](ServerUI.md)), and the `live` section (app scope) holds the live connection's limits.
+
+## Since slice 33
+Forge 05c ([Apps.md › Built in slice 33](Apps.md#built-in-slice-33)): sections may also exist per tenant, given by a `config.SectionSource` on the `config.sectionSource` point (`config.SectionsFor`). `configservice` finds a section for the principal's tenant, lists them in `GET /config/sections`, and does not cache a sourced section's resolved value. Installed apps give `app.<appId>`, from their manifest's settings, under *Apps › <name>*.
+
+## Since slice 44
+`chat.modes` (forge 06i, [ChatCompletion.md › Built in slice 44](ChatCompletion.md#built-in-slice-44)): the modes the composer offers, `{modes: [{id, label, icon, graphRef, default, focus: {kinds, subjects}}]}`, its defaults built from the `chat.mode` contributions. Graphs read any section with the *Setting* node and templates' `setting`.
