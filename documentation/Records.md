@@ -473,7 +473,7 @@ Forge's part 3j ([forge 03j-RicherFields.md](../../forge/documentation/plans/03j
 
 ### Decisions
 Asked before building:
-- **Rich text is ProseMirror JSON** (forge 09-Notion question 1): a document `{type: "doc", content: [nodes]}` as TipTap and Milkdown save it. The records check its shape (every node has a type, a text node its text, `attrs` an object, `marks` a list of `{type}`, at most 64 deep), not a schema, which belongs to the editor; `records.PlainText` is its text, a line per block, for search and for a model.
+- **Rich text is ProseMirror JSON** (forge 25-Notion question 1): a document `{type: "doc", content: [nodes]}` as TipTap and Milkdown save it. The records check its shape (every node has a type, a text node its text, `attrs` an object, `marks` a list of `{type}`, at most 64 deep), not a schema, which belongs to the editor; `records.PlainText` is its text, a line per block, for search and for a model.
 - **Computed values are written by events** (forge 03-DataModel question 9). After a record command decides its change, the decision works out the record's computed fields as they will be and puts those that differ in the record's last event (`Change.Computed`), so they can be indexed and sorted, and a projection rebuilt from the stream equals the one it replaced. The internal `record.recompute` writes them again.
 - **Records are a retrieval source, off by default** (forge 03-DataModel question 10): `records`, searched only when RAG Search's *Records* switch is on, with row rules applied.
 
@@ -592,3 +592,10 @@ Decided while building:
 - A read waits up to 5 s for its table, then fails with `table_behind`.
 - `contains` on text is checked in Go: a large table searched that way reads every row (use `records.search`).
 - On Postgres, token columns need a `C` collation for SQL to order as KV does.
+
+## Changed in slice 53
+Forge's part 7l ([forge ContentComponents.md](../../forge/documentation/ContentComponents.md)).
+- **The `markdown` field type**: formatted text as a Markdown string (`FieldTypes`), checked as text, searchable, filterable by `prefix` and `contains` like `longText`, converted from and to text. It has no order, so it is not sortable or indexable. Set whole with `record.update`. The user chose it over converting `richText`'s ProseMirror JSON to and from Markdown (forge 07l question 2).
+- **The `record` document kind** (`data.ContributeCollab`, `records/data/Collab.go`): a collaboration room ([MarkdownEditor.md](MarkdownEditor.md#changed-in-slice-53)) over a record's markdown field, referenced by `{entity, id, field}` and keyed per tenant. Opening it checks `record.read` and the read rule; without `record.update` and the update rule, the room is read-only for that person. The seed is the field's value as the writer reads it. A save is `record.update {set: {field: text}}` as the writer, with a command id of its own; unchanged text commits nothing.
+- **The browser**: `record.fieldEditor` (and `record.form`, which passes the record's id) edits a saved record's markdown field with `doc.markdown`, and an unsaved one as plain text. `record.fieldValue` renders it as Markdown. Forge's Data Designer offers the type.
+- Tested by `TestARecordFieldIsEditedInARoom`.

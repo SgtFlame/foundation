@@ -3,7 +3,7 @@
 // the record's format (records.CheckValue): decimals as strings, enums as
 // option ids, dateTime in UTC, rich text as a ProseMirror document.
 
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import {
   Autocomplete,
   Box,
@@ -29,6 +29,9 @@ import { isComputed, same, type Field } from './fields.ts'
 import { FieldDisplay, titleOf } from './FieldValue.tsx'
 
 const str = (v: unknown) => (v === undefined || v === null ? '' : String(v))
+
+// A saved record's markdown field is edited together (forge 07l)
+const MarkdownField = lazy(() => import('../doc/DocMarkdown.tsx').then((m) => ({ default: m.MarkdownField })))
 
 export interface FieldInputProps {
   field: Field
@@ -198,6 +201,14 @@ export function FieldInput(props: FieldInputProps) {
       return text(true, str(value), (t) => (t === '' ? null : t))
     case 'richText':
       return text(true, plainText(value as RichTextDoc), (t) => (t === '' ? null : docFromText(t)))
+    case 'markdown':
+      // A record not saved yet has no room: its text goes with the form
+      if (!props.entity || !props.record) return text(true, str(value), (t) => (t === '' ? null : t))
+      return (
+        <Suspense fallback={null}>
+          <MarkdownField entity={props.entity} id={props.record} field={field.id} label={label} disabled={disabled} />
+        </Suspense>
+      )
     case 'number':
       return <NumberInput {...p} decimal={false} />
     case 'decimal':
@@ -268,10 +279,10 @@ export function RecordFieldEditor(p: RendererProps) {
     setOwn(server)
   }
   if (!field) return null
-  const textual = ['text', 'longText', 'richText', 'number', 'decimal', 'money', 'duration', 'user', 'json', 'list', 'object', 'volumeFile'].includes(field.type)
+  const textual = ['text', 'longText', 'markdown', 'richText', 'number', 'decimal', 'money', 'duration', 'user', 'json', 'list', 'object', 'volumeFile'].includes(field.type)
   return (
     <FieldInput field={field} value={own} label={p.props.label as string | undefined} problem={str(p.props.problem) || undefined}
-      disabled={!!p.props.disabled} entity={str(p.props.entity) || undefined}
+      disabled={!!p.props.disabled} entity={str(p.props.entity) || undefined} record={str(p.props.record) || undefined}
       onChange={(v) => {
         setOwn(v)
         if (!textual) p.emit('change', { value: v })

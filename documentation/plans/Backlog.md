@@ -7,7 +7,7 @@ Workbench surfaces and features that have come up but have no plan of their own 
 - **Conversation history**: search, reopen, rename, export and delete past conversations, beyond the continuous scroll in Chat ([ChatCompletion.md](ChatCompletion.md)).
 - **Audit log viewer**: configuration revisions, grant changes and denied access (`AccessAudit`), secret changes (`SecretAudit`), and tool-call approvals. It could be a saved view in the Log Explorer if audit records are also logged ([RBAC.md](RBAC.md), [Secrets.md](Secrets.md)).
 - **Index administration**: indexing health, files pending, failed files, reindex, and the effect of an embedding-model change ([AIChatEmbed.md](AIChatEmbed.md)).
-- **Tools and MCP manager**: tenant tool policies ([Tools.md](Tools.md)). MCP servers are connections and exposures, planned in Forge's iteration 15.
+- **Tools and MCP manager**: tenant tool policies ([Tools.md](Tools.md)). MCP servers are connections and exposures, planned in Forge's iteration 55.
 - **Runs and schedules**: Cognition runs across all graphs, and schedules, if background runs are approved ([Cognition.md](Cognition.md) question 3).
 - **Budgets**: limits and alerts per tenant and user ([Usage.md](Usage.md)).
 - **Notifications**: approvals waiting, runs finished, budget warnings, shares accepted.

@@ -76,7 +76,7 @@ func (c Context) Accepted(result json.RawMessage) error {
 // Tenant is the call's tenant.
 func (c Context) Tenant() uint64 { return c.Args.Principal.TenantID }
 
-// PutDiscovered stores the contract a connection discovered (15c).
+// PutDiscovered stores the contract a connection discovered (55c).
 func (c Context) PutDiscovered(connection string, contract connectors.Contract) (connectors.Discovered, error) {
 	return connectors.PutDiscovered(c, c.js, c.Tenant(), connection, contract)
 }
@@ -88,9 +88,9 @@ type Impl struct {
 	// connection changes or the adapter stops.
 	Open func(ctx Context, conn Connection) (Session, error)
 	// Receive, for a type with Receives, verifies a callback and turns it
-	// into events (15f; declared, not called in 07b).
+	// into events (55f; declared, not called in 07b).
 	Receive Receiver
-	// Register registers the hook URL with the service (15f; not called).
+	// Register registers the hook URL with the service (55f; not called).
 	Register Registrar
 }
 
@@ -120,21 +120,21 @@ type Watcher interface {
 	Watch(ctx Context, cursor json.RawMessage, emit func(Event) error) error
 }
 
-// Describer is optional, for a type that discovers its contract (15c,
-// 15e): called when the connection opens and when the service says its
+// Describer is optional, for a type that discovers its contract (55c,
+// 55e): called when the connection opens and when the service says its
 // list changed.
 type Describer interface {
 	Describe(ctx Context) (connectors.Contract, error)
 }
 
 // Receiver verifies a callback with the connection's secret and turns it
-// into events (15f). An error refuses it (4xx); the runtime publishes the
+// into events (55f). An error refuses it (4xx); the runtime publishes the
 // events, then replies 2xx.
 type Receiver interface {
 	Receive(ctx Context, conn Connection, cb Callback) ([]Event, error)
 }
 
-// Registrar registers the hook URL with the service itself (15f).
+// Registrar registers the hook URL with the service itself (55f).
 type Registrar interface {
 	Register(ctx Context, conn Connection, url string, events []string) (Registration, error)
 	Unregister(ctx Context, conn Connection, reg Registration) error
@@ -154,7 +154,7 @@ type Callback struct {
 	ReceivedAt   time.Time
 }
 
-// Surface is an inbound surface (15a): it listens on an outside endpoint
+// Surface is an inbound surface (55a): it listens on an outside endpoint
 // and calls the gateway on the bus, never Axiom's code in memory.
 type Surface struct {
 	ID     string // mcp.server, http.tools
@@ -162,28 +162,28 @@ type Surface struct {
 	Listen func(ctx context.Context, gw Gateway) error // returns when ctx ends
 }
 
-// Credential is who a surface's caller is (a client key, 15a).
+// Credential is who a surface's caller is (a client key, 55a).
 type Credential struct {
 	Kind  string `json:"kind"`
 	Token string `json:"-"`
 }
 
-// Gateway is the bus client a surface uses, implemented over cx.in (15a).
+// Gateway is the bus client a surface uses, implemented over cx.in (55a).
 type Gateway interface {
 	Request(ctx context.Context, cred Credential, exposure, method string, body json.RawMessage) (json.RawMessage, error)
 	Notify(ctx context.Context, session string, fn func(json.RawMessage)) (stop func(), err error)
 }
 
-// noGateway is the gateway until 15a: every request is not supported, and
+// noGateway is the gateway until 55a: every request is not supported, and
 // nothing is sent on cx.in.
 type noGateway struct{}
 
 func (noGateway) Request(context.Context, Credential, string, string, json.RawMessage) (json.RawMessage, error) {
-	return nil, connectors.Errorf(connectors.CodeNotSupported, "the gateway is not built yet (iteration 15)")
+	return nil, connectors.Errorf(connectors.CodeNotSupported, "the gateway is not built yet (iteration 55)")
 }
 
 func (noGateway) Notify(context.Context, string, func(json.RawMessage)) (func(), error) {
-	return nil, connectors.Errorf(connectors.CodeNotSupported, "the gateway is not built yet (iteration 15)")
+	return nil, connectors.Errorf(connectors.CodeNotSupported, "the gateway is not built yet (iteration 55)")
 }
 
 // Options are what an adapter serves.
@@ -344,7 +344,7 @@ func (s *server) run(ctx context.Context) error {
 		s.unsubscribe(subs)
 		return err
 	}
-	// Surfaces listen with a gateway that refuses every request until 15a
+	// Surfaces listen with a gateway that refuses every request until 55a
 	surfaces, stopSurfaces := context.WithCancel(ctx)
 	for _, sf := range s.o.Surfaces {
 		if sf.Listen == nil {

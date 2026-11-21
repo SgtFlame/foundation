@@ -372,7 +372,7 @@ export function MuiList(p: P) {
   )
 }
 
-interface Column {
+export interface Column {
   field: string
   title?: string
   width?: number
@@ -395,7 +395,7 @@ function at(row: Record<string, unknown>, path: string): unknown {
   return v
 }
 
-function TableCellValue({ column, row, rowKey, emit }: { column: Column; row: Record<string, unknown>; rowKey: string; emit: P['emit'] }) {
+export function TableCellValue({ column, row, rowKey, emit }: { column: Column; row: Record<string, unknown>; rowKey: string; emit: P['emit'] }) {
   const v = at(row, column.field)
   if (column.type === 'actions') {
     return (

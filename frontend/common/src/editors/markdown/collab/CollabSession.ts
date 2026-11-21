@@ -46,6 +46,9 @@ export class CollabSession {
   private synced = false
   private ready = false
   private lastSavedText?: string
+  // A writer handed a room with unsaved changes saves them once it has the
+  // room's document: saving before the sync would save what it lacks
+  private saveWhenSynced = false
   private saveTimer?: ReturnType<typeof setTimeout>
   private untrackCursor?: () => void
 
@@ -111,7 +114,7 @@ export class CollabSession {
         } else {
           this.ready = !!control.ready
         }
-        if (control.writer && control.dirty) this.save()
+        if (control.writer && control.dirty) this.saveWhenSynced = true
         this.updateStatus()
         break
       case 'ready':
@@ -196,6 +199,10 @@ export class CollabSession {
   private updateStatus() {
     if (this.state.status === 'closed' || this.state.status === 'offline') return
     const ready = this.synced && this.ready
+    if (ready && this.saveWhenSynced) {
+      this.saveWhenSynced = false
+      this.save()
+    }
     this.update({ status: ready ? 'ready' : 'syncing', loaded: this.state.loaded || ready })
   }
 

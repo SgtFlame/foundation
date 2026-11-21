@@ -35,6 +35,8 @@ var FieldTypes = []FieldType{
 		Tags: []string{"string", "notes", "multiline"}, Examples: example(`{"name":"Notes","type":"longText"}`)},
 	{ID: "richText", Title: "Rich text", Group: GroupBasic, Description: "Formatted text: a ProseMirror document {type: \"doc\", content: [blocks]}, saved whole by record.setRichText",
 		Tags: []string{"formatted", "document", "prosemirror"}, Examples: example(`{"name":"Body","type":"richText","searchable":true}`)},
+	{ID: "markdown", Title: "Markdown", Group: GroupBasic, Description: "Formatted text as a Markdown string, edited together in doc.markdown (Forge 07l); set it whole with record.update",
+		Tags: []string{"formatted", "document", "markdown", "collaborative"}, Examples: example(`{"name":"Body","type":"markdown","searchable":true}`)},
 	{ID: "number", Title: "Number", Group: GroupBasic, Description: "A floating-point number",
 		Tags: []string{"numeric", "float"}, Examples: example(`{"name":"Quantity","type":"number","default":1}`)},
 	{ID: "decimal", Title: "Decimal", Group: GroupBasic, Description: "An exact decimal number with scale digits after the point (2 when left out)",

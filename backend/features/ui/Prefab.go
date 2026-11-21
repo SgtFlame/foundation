@@ -502,6 +502,15 @@ func (c *prefabCheck) node(n *Node, parent []string) {
 			}
 		}
 	}
+	if Windowed(n.Type) {
+		// A virtualList's row template reads its record under as
+		as, _ := n.Props["as"].(string)
+		if as == "" {
+			as = "row"
+		}
+		c.rows = append(c.rows, as)
+		defer func() { c.rows = c.rows[:len(c.rows)-1] }()
+	}
 	seen := map[string]bool{}
 	visit := func(ch *Node) {
 		if ch.Key != "" && seen[ch.Key] {

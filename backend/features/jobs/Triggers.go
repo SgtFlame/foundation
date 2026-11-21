@@ -143,7 +143,7 @@ func (r *Runner) reconcile(t *tenant, in apps.Install) error {
 				}
 				d.schedule, d.zone = pattern, zone
 			case livenodes.OnWebhook:
-				continue // webhooks come with forge 11-Zapier
+				continue // webhooks come with forge 35-Zapier
 			default:
 				te, ok := triggerEvent(r.d.Engine, node.node)
 				if !ok {

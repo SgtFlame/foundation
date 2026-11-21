@@ -19,9 +19,21 @@ export interface OpenFileResponse extends ResponseStatus {
   readOnly?: boolean // you may read the Volume but not write it: the room drops your edits
 }
 
+// A document of a kind other than a volume file (forge 07l): for kind
+// record, ref is {entity, id, field}, a markdown field
+export interface OpenDocRequest {
+  kind: string
+  ref: Record<string, unknown>
+}
+
 export const Collab = {
   async openFile(request: OpenFileRequest): Promise<OpenFileResponse> {
     const response = await http.post<OpenFileResponse>('/kb/collab/files/open', request)
+    return response.data
+  },
+  // Its room, joined as a file's is; every tenant may open one
+  async openDoc(request: OpenDocRequest): Promise<OpenFileResponse> {
+    const response = await http.post<OpenFileResponse>('/collab/docs/open', request)
     return response.data
   },
 }

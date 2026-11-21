@@ -160,6 +160,8 @@ func (e *evaluator) expand(r *Render, sc *scope, n *Node, path []string, key str
 		return e.nodes(r, sc, branch[0], path, "")
 	case strings.HasPrefix(n.Type, PrefabPrefix):
 		return []*Node{e.instance(r, sc, n, path, key)}
+	case Windowed(n.Type):
+		return []*Node{e.window(r, sc, n, path, key)}
 	}
 	return []*Node{e.primitive(r, sc, n, path, key)}
 }

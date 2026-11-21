@@ -82,13 +82,13 @@ const (
 // Delivery is how an event arrives.
 const (
 	DeliveryWatch    = "watch"    // an adapter's Watch produces it
-	DeliveryCallback = "callback" // the service pushes it to Axiom's hook URL (15f)
+	DeliveryCallback = "callback" // the service pushes it to Axiom's hook URL (55f)
 )
 
 // Directions of types and surfaces.
 const (
 	Outbound = "outbound" // a type: serves cx.call requests by calling the outside service
-	Inbound  = "inbound"  // a surface: turns what arrives outside into cx.in requests (15a)
+	Inbound  = "inbound"  // a surface: turns what arrives outside into cx.in requests (55a)
 )
 
 // Sources of a type.
@@ -153,7 +153,7 @@ type Operation struct {
 	// Callbacks are the events that answer it later (an export's ready).
 	Callbacks []CallbackDef `json:"callbacks,omitempty"`
 	// Remote is the outside name a discovered operation was found under,
-	// which the adapter sends (15c).
+	// which the adapter sends (55c).
 	Remote string `json:"remote,omitempty"`
 }
 
@@ -223,7 +223,7 @@ type Type struct {
 	Group string `json:"group,omitempty"`
 }
 
-// SurfaceInfo is an inbound surface as the registry lists it (15a): an
+// SurfaceInfo is an inbound surface as the registry lists it (55a): an
 // outside endpoint that calls the gateway on the bus.
 type SurfaceInfo struct {
 	ID   string `json:"id"`

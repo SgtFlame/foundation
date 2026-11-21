@@ -5,6 +5,7 @@ import { Box, Chip, Link, Stack, Typography } from '@mui/material'
 import { fileUrl, plainText, type FileRef, type RichTextDoc } from '../../../services/Records.ts'
 import type { RendererProps } from '../../points.ts'
 import { shownAs, type Field } from './fields.ts'
+import MarkdownText from '../../../components/markdown/MarkdownText.tsx'
 
 const str = (v: unknown) => (v === undefined || v === null ? '' : String(v))
 
@@ -83,6 +84,7 @@ export function valueText(field: Field, value: unknown, expanded?: unknown): str
       return (value as FileRef).name ?? ''
     case 'text':
     case 'longText':
+    case 'markdown':
     case 'decimal':
     case 'duration':
       return str(value)
@@ -115,6 +117,8 @@ export function FieldDisplay({ field, value, expanded, entity, record }: FieldDi
       if (entity && record) return <Link href={fileUrl(entity, record, field.id, file.id)} target="_blank" rel="noopener" variant="body2">{file.name}</Link>
       return <Typography variant="body2">{file.name}</Typography>
     }
+    case 'markdown':
+      return <MarkdownText text={str(value)} />
     case 'longText':
     case 'richText':
       return <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{valueText(field, value)}</Typography>

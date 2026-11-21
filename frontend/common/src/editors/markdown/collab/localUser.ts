@@ -1,4 +1,7 @@
-// The name and colour other editors see for this browser, until users log in
+// The name and colour other editors see for this browser: the signed-in
+// user's name and presence colour, else a guest's kept in this browser
+import { live } from '../../../live/LiveConnection.ts'
+import { session } from '../../../session/session.ts'
 
 export interface LocalUser {
   name: string
@@ -12,6 +15,12 @@ const colors = ['#e53935', '#8e24aa', '#3949ab', '#039be5', '#00897b', '#7cb342'
 let cached: LocalUser | undefined
 
 export function localUser(): LocalUser {
+  const user = session.get().account?.user
+  if (user) return { name: user.displayName || user.username, color: live.getHello()?.color ?? guest().color }
+  return guest()
+}
+
+function guest(): LocalUser {
   if (cached) return cached
   try {
     const stored = localStorage.getItem(storageKey)

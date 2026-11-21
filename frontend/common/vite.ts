@@ -23,6 +23,7 @@ const routes = [
   'ui',
   'records',
   'apps',
+  'collab',
 ]
 
 // The Vite configuration every app built on common needs; an app with

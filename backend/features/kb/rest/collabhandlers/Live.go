@@ -7,10 +7,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
-	"github.com/SgtFlame/foundation/backend/features/kb/services/kbservice"
 	"github.com/SgtFlame/foundation/backend/features/live"
 )
 
@@ -74,11 +72,6 @@ func (cc *collabConn) Handle(frameType string, raw json.RawMessage) {
 
 func (cc *collabConn) join(f JoinFrame) {
 	args := cc.c.Args()
-	if !kbservice.InTenant(args.Principal) {
-		failed := args.Fail(authz.Status, kbservice.ErrOtherTenant())
-		cc.c.Send(ClosedFrame{Type: "collab.closed", Channel: f.Channel, Code: 4000 + int(failed.Code), Message: failed.Message})
-		return
-	}
 	ctx, cancel := context.WithCancel(args.Context())
 	cc.mu.Lock()
 	if old := cc.rooms[f.Channel]; old != nil {

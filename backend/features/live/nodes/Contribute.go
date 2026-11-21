@@ -74,7 +74,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				return h, func() any { return h }
 			}},
 		{Descriptor: extensions.Descriptor{ID: KindTrigger}, Title: "Trigger", Events: []string{OnEvent, OnSchedule, OnWebhook, "records.onChanged", "connector.on"},
-			Description: "Runs in the background, as its app's own principal, when an event is committed or on a schedule (webhooks come with forge 11-Zapier). Named by the app's manifest as a trigger, it runs only while the app is installed, each event or tick once, as a durable job (forge 07a).", Returns: "nothing"},
+			Description: "Runs in the background, as its app's own principal, when an event is committed or on a schedule (webhooks come with forge 35-Zapier). Named by the app's manifest as a trigger, it runs only while the app is installed, each event or tick once, as a durable job (forge 07a).", Returns: "nothing"},
 	} {
 		k.Order, k.Source = 100+i*10, source
 		cognition.Kinds.Register(reg, k)
@@ -307,7 +307,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	})
 	node(reg, 602, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: OnWebhook}, Title: "On webhook", Category: "Events", Event: true, Kinds: []string{KindTrigger},
-		Description: "Starts a trigger when its webhook is called (runs come with forge 11-Zapier)", Example: "On webhook from the payment provider",
+		Description: "Starts a trigger when its webhook is called (runs come with forge 35-Zapier)", Example: "On webhook from the payment provider",
 		Pins: cognition.Pins{Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("event", "Event", "json", "What started it")}},
 	})
 	contributeTriggers(reg)

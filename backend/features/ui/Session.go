@@ -90,6 +90,7 @@ type heldQuery struct {
 	owner  *instance                 // the prefab instance holding it, if one does
 	into   string                    // a subscription's: the state path its data is kept at
 	def    *Prefab                   // a prefab definition's, read once per change
+	quiet  bool                      // a window's page: its changes run no On query changed
 }
 
 // Session is one viewer's open page.
@@ -320,6 +321,10 @@ func (s *Session) Event(args features.ServiceArgs, handler string, path []string
 		return
 	}
 	args.Ctx = s.ctx
+	if statePath, ok := strings.CutPrefix(handler, windowHandler); ok {
+		s.windowEvent(statePath, payload)
+		return
+	}
 	if kp, name, ok := instanceHandler(handler); ok {
 		s.instanceEvent(args, kp, name, payload)
 		return
@@ -523,7 +528,7 @@ func (s *Session) queryChanged(name string, q *heldQuery) {
 		s.changed = append(s.changed, "state."+q.into)
 	default:
 		s.changed = append(s.changed, "query:"+name)
-		if q.owner != nil && q.owner.started {
+		if q.owner != nil && q.owner.started && !q.quiet {
 			s.runs = append(s.runs, lifecycle{inst: q.owner, event: onQueryChanged})
 		}
 	}

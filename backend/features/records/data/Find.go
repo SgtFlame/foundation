@@ -284,7 +284,7 @@ func compile(e records.EntityType, f Filter) (node, error) {
 			}
 			break
 		}
-		if field.Type != "text" && field.Type != "longText" {
+		if field.Type != "text" && field.Type != "longText" && field.Type != "markdown" {
 			return bad("%s is not text", field.Name)
 		}
 		var s string

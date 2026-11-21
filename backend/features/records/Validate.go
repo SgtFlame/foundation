@@ -114,7 +114,7 @@ func checkFields(fields []Field, path string, exists func(string) bool, e *Entit
 		typeProblems := checkType(f, p, exists, e)
 		problems = append(problems, typeProblems...)
 		if f.Searchable && !SearchableType(f) {
-			add(p+".searchable", fmt.Sprintf("%s is a %s field, which is not searched as text", f.Name, f.Type), "mark text, longText, richText, enum, multiEnum or tags fields searchable, or formulas giving text")
+			add(p+".searchable", fmt.Sprintf("%s is a %s field, which is not searched as text", f.Name, f.Type), "mark text, longText, markdown, richText, enum, multiEnum or tags fields searchable, or formulas giving text")
 		}
 		if len(typeProblems) == 0 && !IsNull(f.Default) {
 			if _, err := CheckValue(f, f.Default); err != nil {

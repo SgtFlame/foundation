@@ -49,7 +49,7 @@ func CheckValue(f Field, raw json.RawMessage) (json.RawMessage, error) {
 
 func checkValue(f Field, v any) (any, error) {
 	switch f.Type {
-	case "text", "longText":
+	case "text", "longText", "markdown":
 		s, ok := v.(string)
 		if !ok {
 			return nil, want("text", v)

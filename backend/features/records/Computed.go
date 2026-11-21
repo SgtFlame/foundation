@@ -87,7 +87,7 @@ func sample(f Field) any {
 		if f.Currency != "" {
 			return 0.0
 		}
-	case "text", "longText", "richText", "enum", "date", "dateTime", "duration", "user", "connection":
+	case "text", "longText", "markdown", "richText", "enum", "date", "dateTime", "duration", "user", "connection":
 		return ""
 	case "relation":
 		if f.Relation != nil && f.Relation.Many {
@@ -352,7 +352,7 @@ func toFloat(v any) (float64, bool) {
 // SearchableType reports whether a field's values can be searched as text.
 func SearchableType(f Field) bool {
 	f = ValueField(f)
-	return slices.Contains([]string{"text", "longText", "richText", "enum", "multiEnum", "tags"}, f.Type)
+	return slices.Contains([]string{"text", "longText", "markdown", "richText", "enum", "multiEnum", "tags"}, f.Type)
 }
 
 // PrincipalAgent is the principal field's one kind: its records are agents

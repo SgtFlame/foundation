@@ -486,6 +486,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Records: changed by record.* commands, converted when a field's
 		// type changes
 		recordsdata.Contribute(registry, func() recordsdata.Deps { return recordDeps })
+		recordsdata.ContributeCollab(registry, func() recordsdata.Deps { return recordDeps })
 		recordsnodes.Contribute(registry, func() recordsdata.Deps { return recordDeps })
 		recordstools.ContributeRecords(registry, func() recordservice.Service { return recordService })
 		// Prefabs: edited by prefab.* commands, published into the tenant
@@ -628,7 +629,14 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		fileEvents := volumeservice.NewFileEvents()
 		var kbOpts []kbimpl.Option
 		volumeOpts := []volumeimpl.Option{volumeimpl.WithFileEvents(fileEvents)}
-		collabOpts := []collabimpl.Option{collabimpl.WithFileEvents(fileEvents)}
+		collabOpts := []collabimpl.Option{collabimpl.WithFileEvents(fileEvents), collabimpl.WithDocumentKinds(func(kind string) (collabservice.DocumentKind, bool) {
+			for _, k := range collabservice.DocumentKinds.All(registry) {
+				if k.ID == kind {
+					return k, true
+				}
+			}
+			return collabservice.DocumentKind{}, false
+		})}
 		indexOpts := []indeximpl.Option{indeximpl.WithFileEvents(fileEvents)}
 		if serveKBRoot != "" {
 			kbOpts = append(kbOpts, kbimpl.WithRoot(serveKBRoot))
@@ -888,6 +896,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 
 		collabHandler := &collabhandlers.CollabHandler{}
 		collabHandler.Register(volumes, collabService)
+		collabHandler.RegisterDocs(api, collabService)
 
 		embedHandler := &embedhandlers.EmbedHandler{}
 		embedHandler.Register(api, embedService)

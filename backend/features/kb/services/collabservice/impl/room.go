@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 )
@@ -33,6 +34,7 @@ type client struct {
 	// and their saves ignored, and a writable connection takes the writer
 	// role from them.
 	readOnly bool
+	args     features.ServiceArgs // who it is, for loading and saving as them
 }
 
 func newClient(conn collabservice.Conn, cancel context.CancelFunc) *client {
@@ -62,14 +64,79 @@ func (c *client) queue(msg []byte) {
 	}
 }
 
-// room is one open file. The server relays the Yjs updates it receives and
+// document is what a room edits: a volume file, or a collabservice.Document
+// (a record's markdown field, forge 07l).
+type document interface {
+	key() string
+	name() string
+	load(args features.ServiceArgs) (string, error)
+	save(args features.ServiceArgs, text string) error
+}
+
+// fileDoc is a volume file, read and written as it is on disk.
+type fileDoc struct {
+	svc  *service
+	file string // absolute path
+}
+
+func (f fileDoc) key() string  { return f.file }
+func (f fileDoc) name() string { return f.svc.rel(f.file) }
+
+func (f fileDoc) load(features.ServiceArgs) (string, error) {
+	content, err := os.ReadFile(f.file)
+	if err != nil {
+		return "", log.With("file", f.name()).Wrapf(err, "cannot read %q", f.name())
+	}
+	return string(content), nil
+}
+
+// save writes the file atomically, through a dotted temp file.
+func (f fileDoc) save(_ features.ServiceArgs, text string) error {
+	tmp := filepath.Join(filepath.Dir(f.file), "."+filepath.Base(f.file)+".tmp")
+	err := os.WriteFile(tmp, []byte(text), 0o644)
+	if err == nil {
+		err = os.Rename(tmp, f.file)
+	}
+	if err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	f.svc.events.Publish(volumeservice.FileEvent{Op: volumeservice.FileChanged, File: f.file})
+	return nil
+}
+
+// otherDoc is a document of a contributed kind.
+type otherDoc struct{ d collabservice.Document }
+
+func (o otherDoc) key() string  { return "doc:" + o.d.Key() }
+func (o otherDoc) name() string { return o.d.Name() }
+func (o otherDoc) load(args features.ServiceArgs) (string, error) {
+	return o.d.Load(args)
+}
+func (o otherDoc) save(args features.ServiceArgs, text string) error {
+	return o.d.Save(args, text)
+}
+
+// saveRequest is one save the writer asked for.
+type saveRequest struct {
+	args features.ServiceArgs
+	text string
+	seq  uint64
+}
+
+// room is one open document. The server relays the Yjs updates it receives and
 // keeps them as an opaque log for clients that join later; it never decodes
 // the document. The writer (the oldest connection) seeds the document from the
-// file and saves it back.
+// file and saves it back. Saves run in order on the room's own goroutine, so
+// a slow one (a record's command) never holds up the relay.
 type room struct {
 	mu         sync.Mutex
 	id         uint64
-	file       string // absolute path
+	doc        document
+	access     func(args features.ServiceArgs) (readOnly bool, failed *features.ServiceResponse)
+	saves      chan saveRequest
+	dropped    bool   // its save loop has ended
+	saveSeq    uint64 // the last save asked for
 	svc        *service
 	clients    []*client // in join order
 	writer     *client
@@ -83,8 +150,35 @@ type room struct {
 	edits      map[string]chan control // edits sent to the writer, by ID, until it answers
 }
 
-func newRoom(svc *service, id uint64, file string) *room {
-	return &room{id: id, file: file, svc: svc, awareness: map[uint64]awarenessEntry{}, edits: map[string]chan control{}}
+func newRoom(svc *service, id uint64, doc document, access func(features.ServiceArgs) (bool, *features.ServiceResponse)) *room {
+	r := &room{id: id, doc: doc, access: access, svc: svc, awareness: map[uint64]awarenessEntry{}, edits: map[string]chan control{}, saves: make(chan saveRequest, 16)}
+	go r.saveLoop()
+	return r
+}
+
+// saveLoop stores the writer's saves in order, until the room is dropped.
+// A save overtaken by a later one is skipped.
+func (r *room) saveLoop() {
+	for req := range r.saves {
+		r.mu.Lock()
+		latest := req.seq == r.saveSeq
+		r.mu.Unlock()
+		if !latest {
+			continue
+		}
+		saved := control{Op: "saved", Code: http.StatusOK, At: time.Now().UnixMilli()}
+		if err := r.doc.save(req.args, req.text); err != nil {
+			log.With("file", r.doc.name()).Error(context.Background(), err, "cannot save %q", r.doc.name())
+			saved.Code = http.StatusInternalServerError
+			saved.Message = "cannot save " + r.doc.name() + ": " + err.Error()
+		}
+		r.mu.Lock()
+		if saved.Code == http.StatusOK && req.seq == r.saveSeq {
+			r.dirty = false
+		}
+		r.broadcast(nil, controlMessage(saved))
+		r.mu.Unlock()
+	}
 }
 
 // join adds c to the room, asks it for its state and tells it its role.
@@ -166,11 +260,10 @@ func (r *room) leave(c *client) {
 func (r *room) elect(c *client) error {
 	role := control{Op: "role", Writer: true, Ready: r.seeded, Dirty: r.dirty}
 	if !r.seeded {
-		content, err := os.ReadFile(r.file)
+		seed, err := r.doc.load(c.args)
 		if err != nil {
-			return log.With("file", r.svc.rel(r.file)).Wrapf(err, "cannot read %q", r.svc.rel(r.file))
+			return err
 		}
-		seed := string(content)
 		role.Seed = &seed
 	}
 	r.writer = c
@@ -234,7 +327,7 @@ func (r *room) handle(c *client, msg []byte) {
 			if c.readOnly {
 				return
 			}
-			r.save(ctl.Markdown)
+			r.save(c, ctl.Markdown)
 		case "edited":
 			if done, ok := r.edits[ctl.ID]; ok {
 				delete(r.edits, ctl.ID)
@@ -272,7 +365,9 @@ func (r *room) addUpdate(from *client, update []byte) {
 	update = bytes.Clone(update)
 	r.log = append(r.log, update)
 	r.logBytes += len(update)
-	r.dirty = true
+	// The writer's seed is what the document already holds: only later
+	// updates leave something to save
+	r.dirty = r.dirty || r.seeded
 	r.broadcast(from, syncMessage(syncUpdate, update))
 
 	if !r.compacting && r.writer != nil && (len(r.log) > compactEntries || r.logBytes > compactBytes) {
@@ -286,24 +381,19 @@ func (r *room) markSeeded() {
 	r.broadcast(nil, controlMessage(control{Op: "ready"}))
 }
 
-// save writes markdown to the file atomically and tells everyone the outcome.
-func (r *room) save(markdown string) {
-	saved := control{Op: "saved", Code: http.StatusOK, At: time.Now().UnixMilli()}
-	tmp := filepath.Join(filepath.Dir(r.file), "."+filepath.Base(r.file)+".tmp")
-	err := os.WriteFile(tmp, []byte(markdown), 0o644)
-	if err == nil {
-		err = os.Rename(tmp, r.file)
+// save queues the writer's text to be stored; everyone hears the outcome.
+// Called with the lock held.
+func (r *room) save(c *client, markdown string) {
+	if r.dropped {
+		return
 	}
-	if err != nil {
-		_ = os.Remove(tmp)
-		log.With("file", r.svc.rel(r.file)).Error(context.Background(), err, "cannot save %q", r.svc.rel(r.file))
-		saved.Code = http.StatusInternalServerError
-		saved.Message = "cannot save " + r.svc.rel(r.file)
-	} else {
-		r.dirty = false
-		r.svc.events.Publish(volumeservice.FileEvent{Op: volumeservice.FileChanged, File: r.file})
+	r.saveSeq++
+	select {
+	case r.saves <- saveRequest{args: c.args, text: markdown, seq: r.saveSeq}:
+	default:
+		// Saves are queued faster than they are stored: this one is
+		// dropped, and the next (of all the text) stands in for it
 	}
-	r.broadcast(nil, controlMessage(saved))
 }
 
 // broadcast queues msg for every client except skip.
@@ -342,6 +432,16 @@ func (r *room) forgetEdit(id string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.edits, id)
+}
+
+// drop ends the room's save loop.
+func (r *room) drop() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.dropped {
+		r.dropped = true
+		close(r.saves)
+	}
 }
 
 // empty reports whether the room has no clients.

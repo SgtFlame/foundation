@@ -14,7 +14,7 @@ import (
 // metadata, with a golden test over the test contract.
 
 // SourceConnector is a tools.Spec's source when it is a contract
-// operation (run through the dispatcher from iteration 15).
+// operation (run through the dispatcher from iteration 55).
 const SourceConnector = "connector"
 
 // MCPRevision is the MCP specification revision MCPTool follows.
@@ -134,7 +134,7 @@ const HookHeader = "Cx-Hook-Url"
 // typed error otherwise), its declared callbacks as the operation's
 // callbacks, and the contract's events as top-level webhooks. x-
 // extensions keep what OpenAPI has no word for (effect, destructive, key,
-// delivery, subscription, id fields, correlation), so 15e reads the
+// delivery, subscription, id fields, correlation), so 55e reads the
 // document back into the same contract.
 func OpenAPI(c Contract) json.RawMessage {
 	content := func(schema json.RawMessage) map[string]any {

@@ -167,3 +167,11 @@ A room is no longer its own WebSocket. It is a channel on the live connection ([
 - **The provider**: `CollabProvider(fileId, doc, awareness, events)` rejoins on a new channel whenever the connection comes back. Its events are unchanged, so the editors did not change.
 
 Two users edited one file this way in headless Chromium.
+
+## Changed in slice 53
+Forge's part 7l ([forge ContentComponents.md](../../forge/documentation/ContentComponents.md)): rooms edit text other than volume files, and a handed-over room no longer saves an empty document.
+- **Documents of a kind.** `collabservice.Document` (`Key`, `Name`, `Load`, `Save`, `Access`) is text a room edits other than a file. A `collabservice.DocumentKind` on the `collab.document` point opens it from a reference. `Service.OpenDoc {kind, ref}` (`POST /collab/docs/open`, outside the Volumes' default-tenant fence) returns its room's id, joined as a file's is. The records' kind `record` ([Records.md](Records.md#changed-in-slice-53)) is the first. `collabimpl.WithDocumentKinds` gives the service the point (`serve.go`, Foundation's and Forge's).
+- **A room's document** is `fileDoc` (the volume file, as before) or `otherDoc`. The room loads its seed as the new writer (`client.args`) and saves as the writer, so a record is changed by the person whose browser saves it. The default-tenant check moved from `collabhandlers.ContributeLive` into a file room's access check, so record rooms work in every tenant.
+- **Saves run in order on the room's own goroutine** (`saveLoop`), so a slow save (a command) never holds up the relay. A save overtaken by a later one is skipped.
+- **Fix: a seed no longer marks the room dirty** (`addUpdate`), and **a writer handed a dirty room saves once it has synced** (`CollabSession.saveWhenSynced`). Before, a writer that only seeded and left made the next writer save at once, before the room's log reached its document, which stored an empty text. File rooms had the same race. `TestASeedLeavesTheRoomClean` covers it.
+- **Remote cursors** carry the signed-in user's display name and presence colour (`localUser`), not a guest's.
