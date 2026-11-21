@@ -33,7 +33,7 @@ func (s Connections) TypeOf(args features.ServiceArgs, connection string) (strin
 	if !ok {
 		return "", connectors.Errorf(connectors.CodeNotFound, "there is no connection %s", connection)
 	}
-	if err := CheckAccess(args, c, "use"); err != nil {
+	if err := s.Deps().CheckUse(args, c); err != nil {
 		return "", connectors.Errorf(connectors.CodeAuth, "you may not use connection %s", c.Name)
 	}
 	testing, _ := args.Context().Value(testingKey{}).(bool)
@@ -161,7 +161,7 @@ func Test(args features.ServiceArgs, d Deps, id string) (TestResult, error) {
 	if !ok {
 		return TestResult{}, log.Code("connection_not_found").Errorf("there is no connection %s", id)
 	}
-	if err := CheckAccess(args, c, "use"); err != nil {
+	if err := d.CheckUse(args, c); err != nil {
 		return TestResult{}, err
 	}
 	contract, err := checkContract(args.Context(), d, args.Principal.TenantID, c.Type)

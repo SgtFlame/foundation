@@ -22,6 +22,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	livenodes "github.com/SgtFlame/foundation/backend/features/live/nodes"
+	"github.com/SgtFlame/foundation/backend/features/records/data"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -104,6 +105,7 @@ func Reconcile(ctx context.Context, d Deps, tenant uint64) error {
 		return err
 	}
 	want := map[string]connectors.Source{}
+	held := map[string]map[string]bool{} // app → the connections its records hold (forge 07n)
 	for _, c := range conns {
 		if c.Status != StatusOK || c.Options.Paused {
 			continue
@@ -122,7 +124,16 @@ func Reconcile(ctx context.Context, d Deps, tenant uint64) error {
 			}
 			as := features.ServiceArgs{Ctx: ctx, Principal: features.AppPrincipal(tenant, l.app)}
 			if CheckAccess(as, c, "use") != nil {
-				continue
+				h, ok := held[l.app]
+				if !ok {
+					if h, err = Held(ctx, d, tenant, l.app); err != nil {
+						return err
+					}
+					held[l.app] = h
+				}
+				if !h[c.ID] {
+					continue
+				}
 			}
 			contracts = append(contracts, l.contract)
 		}
@@ -179,6 +190,11 @@ func Reconcile(ctx context.Context, d Deps, tenant uint64) error {
 // connections' secrets.
 const Follower = "connectors.sources"
 
+// HoldersFollower makes the sources again when a record of a type with a
+// connection field changes, since an app may use the connections its own
+// records hold (forge 07n question 4).
+const HoldersFollower = "connectors.holders"
+
 // Start keeps each tenant's sources: a follower on connection and install
 // events (one durable consumer shared by every process) and a pass every
 // minute, until ctx ends. tenants lists the tenants to serve.
@@ -202,6 +218,14 @@ func Start(ctx context.Context, d func() Deps, tenants func() ([]uint64, error))
 			log.Error(ctx, err, "connections: cannot follow the connections of tenant %d", tenant)
 			return
 		}
+		// Only changes from now on: the minute's pass covers what came before
+		err = d().Projections.FollowNew(ctx, tenant, live.AreaRecords, HoldersFollower, []string{fmt.Sprintf("evt.%d.%s.>", tenant, live.AreaRecords)}, func(e live.Event) error {
+			return holderChanged(ctx, d(), tenant, e)
+		})
+		if err != nil {
+			log.Error(ctx, err, "connections: cannot follow the records holding connections in tenant %d", tenant)
+			return
+		}
 		served[tenant] = true
 	}
 	tick := time.NewTicker(time.Minute)
@@ -223,6 +247,28 @@ func Start(ctx context.Context, d func() Deps, tenants func() ([]uint64, error))
 		case <-tick.C:
 		}
 	}
+}
+
+// holderChanged makes the sources again after a change to a record of a
+// type with a connection field, once the projection has it.
+func holderChanged(ctx context.Context, d Deps, tenant uint64, e live.Event) error {
+	types, err := data.PublishedTypes(ctx, data.Deps{Projections: d.Projections}, tenant)
+	if err != nil {
+		return err
+	}
+	holds := false
+	for _, t := range types {
+		if t.ID == e.Target.Type {
+			holds = HoldsConnections(t)
+		}
+	}
+	if !holds {
+		return nil
+	}
+	if _, err := d.Projections.WaitFor(ctx, tenant, data.Projector, e.Target.Key(), e.Seq, 10*time.Second); err != nil {
+		return err
+	}
+	return Reconcile(ctx, d, tenant)
 }
 
 // followed handles one connection or install event: once the projection
@@ -328,7 +374,7 @@ func ContributeTrigger(reg *extensions.Registry, deps func() Deps) {
 				if !ok {
 					return "", nil, fmt.Errorf("there is no connection %s", c.Connection)
 				}
-				if CheckAccess(args, conn, "use") != nil {
+				if deps().CheckUse(args, conn) != nil {
 					return "", nil, fmt.Errorf("the app may not use connection %s, so a trigger cannot start on its events", conn.Name)
 				}
 			}
@@ -339,7 +385,7 @@ func ContributeTrigger(reg *extensions.Registry, deps func() Deps) {
 		},
 		Accept: func(args features.ServiceArgs, _ json.RawMessage, e live.Event) bool {
 			c, ok, err := Get(args.Context(), deps().Projections, args.Principal.TenantID, e.Target.ID)
-			return err == nil && ok && CheckAccess(args, c, "use") == nil
+			return err == nil && ok && deps().CheckUse(args, c) == nil
 		},
 		Inputs: func(_ features.ServiceArgs, config json.RawMessage, e live.Event) (cognition.Values, error) {
 			var payload map[string]any

@@ -53,7 +53,10 @@ type Context struct {
 	Connection string // the call's connection, "" for none
 	// Since is the event source's initial window, for a Watch with no
 	// cursor yet (07c); zero for none.
-	Since    time.Time
+	Since time.Time
+	// Files are file ids the dispatcher vouches the caller may use though
+	// it did not upload them (forge 07n question 3); see Vouched.
+	Files    []string
 	Log      logging.Builder
 	js       jetstream.JetStream
 	accepted *bool
@@ -72,6 +75,11 @@ func (c Context) Accepted(result json.RawMessage) error {
 	}
 	return connectors.LedgerPut(c, c.js, c.Tenant(), c.Connection, c.Operation, c.Key, connectors.LedgerEntry{Result: result, CallID: c.CallID})
 }
+
+// Vouched reports whether the dispatcher vouched that the caller may use
+// the file: one held by a record the caller may read, named by the
+// reference's heldBy (forge 07n question 3).
+func (c Context) Vouched(file string) bool { return file != "" && slices.Contains(c.Files, file) }
 
 // Tenant is the call's tenant.
 func (c Context) Tenant() uint64 { return c.Args.Principal.TenantID }
@@ -491,7 +499,7 @@ func (s *server) handle(m *nats.Msg) {
 	ctx = logging.WithContext(ctx, b)
 	args := features.ServiceArgs{Ctx: ctx, Principal: h.Principal.In(call.Tenant), Meta: h.Meta}
 	accepted := false
-	x := Context{Context: ctx, Args: args, CallID: h.CallID, Contract: h.Contract, Operation: call.Operation, Key: h.Key, Connection: call.Connection, Log: b, js: s.js, accepted: &accepted}
+	x := Context{Context: ctx, Args: args, CallID: h.CallID, Contract: h.Contract, Operation: call.Operation, Key: h.Key, Connection: call.Connection, Files: h.Files, Log: b, js: s.js, accepted: &accepted}
 	result, e := s.call(x, im, call, m.Data)
 	if e == nil && h.Key != "" && !accepted {
 		if err := x.Accepted(result); err != nil {

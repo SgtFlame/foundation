@@ -49,6 +49,11 @@ type Dispatcher struct {
 	// returned: an auth error commits the connection's error status, an
 	// unavailable one is recorded as its last error (07c).
 	Failed func(args features.ServiceArgs, connection string, e *Error)
+	// Files, when set, gives the file ids in a call's args that the caller
+	// may use though it did not upload them (records' HeldFiles: held by a
+	// record it may read, forge 07n question 3); the call carries them in
+	// its headers and the adapter lets the caller read them.
+	Files func(args features.ServiceArgs, callArgs json.RawMessage) ([]string, error)
 
 	once sync.Once
 	js   jetstream.JetStream
@@ -98,6 +103,13 @@ func (d *Dispatcher) Call(args features.ServiceArgs, c Call) (json.RawMessage, *
 		Meta: args.Meta, Trace: logging.TraceFrom(ctx)}
 	if op.Key != "" {
 		h.Key = KeyOf(op.Key, c.Args)
+	}
+	if d.Files != nil {
+		files, err := d.Files(args, c.Args)
+		if err != nil {
+			return nil, Errorf(CodeUnavailable, "the files of the call cannot be checked: %v", err)
+		}
+		h.Files = files
 	}
 	// The ledger: a key the outside service accepted already returns what
 	// it gave, with no request, whichever process sent it first (07c)

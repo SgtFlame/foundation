@@ -404,6 +404,29 @@ func TestFilesAreServedToReadersOnly(t *testing.T) {
 	if code, _ := read(7, up.File.ID); code != authz.Status {
 		t.Errorf("a user without a grant got %d", code)
 	}
+	// A connector call naming the record holding a file is vouched for
+	// only to those who may read the record (forge 07n question 3)
+	held := func(user uint64, record, field, file string) []string {
+		args, _ := json.Marshal(map[string]any{"message": map[string]any{"attachments": []any{map[string]any{"file": map[string]any{
+			"id": file, "name": "notes.txt", "heldBy": map[string]any{"entity": "doc", "record": record, "field": field}}}}}})
+		ids, err := data.HeldFiles(*f.deps)(as(user), args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ids
+	}
+	if ids := held(5, doc, "attachment", up.File.ID); len(ids) != 1 || ids[0] != up.File.ID {
+		t.Errorf("the reader's held files: %v", ids)
+	}
+	if ids := held(6, doc, "attachment", up.File.ID); len(ids) != 0 {
+		t.Errorf("held files vouched for to a user the row rule hides the record from: %v", ids)
+	}
+	if ids := held(7, doc, "attachment", up.File.ID); len(ids) != 0 {
+		t.Errorf("held files vouched for to a user without a grant: %v", ids)
+	}
+	if ids := held(5, doc, "title", up.File.ID); len(ids) != 0 {
+		t.Errorf("held files vouched for through a field that holds no file: %v", ids)
+	}
 	// Another file id on the same record is not served through it
 	other := svc.Upload(recordservice.UploadArgs{ServiceArgs: as(6), Entity: "doc", Name: "theirs.txt", Content: strings.NewReader("theirs")})
 	if code, _ := read(5, other.File.ID); code != 404 {
@@ -424,6 +447,12 @@ func TestFilesAreServedToReadersOnly(t *testing.T) {
 	f.get("doc", doc, res.Seq)
 	if code, body := read(6, up.File.ID); code != 200 || body != "the notes" {
 		t.Errorf("once shared, user 6 read %d %q", code, body)
+	}
+	if ids := held(6, doc, "attachment", up.File.ID); len(ids) != 1 {
+		t.Errorf("once shared, user 6's held files: %v", ids)
+	}
+	if ids := held(6, doc, "attachment", "123"); len(ids) != 0 {
+		t.Errorf("a file the record does not hold was vouched for: %v", ids)
 	}
 	if u := files.URL("doc", doc, "attachment", up.File.ID); u != "/api/v1/records/files/doc/"+doc+"/attachment/"+up.File.ID {
 		t.Errorf("URL = %s", u)

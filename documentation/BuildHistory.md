@@ -822,6 +822,16 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [forge AgentsApp.md](../../forge/documentation/AgentsApp.md#decisions-to-review-after-seeing-it).
     - **Deferred failure**: `cognition/engine`'s `TestStepLimit` failed once in code this slice did not change ([forge 99-Cleanup.md](../../forge/documentation/plans/99-Cleanup.md#foundation-cognitionengine-teststeplimit)).
 
+55. **What the Mail app's sync needed** (Forge iteration 7, part 7n, [forge MailApp.md](../../forge/documentation/MailApp.md)). *Built* ([Connectors.md](Connectors.md#built-in-slice-55)).
+    - **Built**:
+      - `connectors/connections`: connections held by an app's own records (`Held`, `Deps.CheckUse`, `UseConnection`), used by every `use` check an app meets, and the `connectors.holders` follower that reconciles event sources when such records change;
+      - `records/data`: `Deps.UseConnection` (setting a connection field checks its sender may use it) and `HeldFiles` (file references naming a holder record the caller may read);
+      - `connectors`: `Dispatcher.Files`, the `Cx-Files` header and `adapter.Context.Files`/`Vouched`;
+      - `serve.go` (Foundation's and Forge's): `UseConnection` and the dispatcher's `Files` wired.
+    - **Blockers**: none. Forge 07n questions 3 (files held by a readable record) and 4 (connections held by the app's records, a gap found while reading) answered by the user before building (2026-11-21).
+    - **Decisions to review after seeing it**: in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-5).
+    - **Deferred failure**: `records/data`'s known flake, seen again as `TestARecordFieldIsEditedInARoom` ([forge 99-Cleanup.md](../../forge/documentation/plans/99-Cleanup.md#foundation-recordsdata-the-package-fails-about-half-its-runs)).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -883,3 +893,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 52. The relational projection (Forge 7k) | forge 07k 1 (GORM and portable SQL; full-text search behind `data.Searcher` on LanceDB, the user's answer) and 2 (a consumer per database, a gap found while reading, answered with its proposal) | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-8), the Data Designer's *Large table* switch |
 | 53. Content components (Forge 7l) | forge 07l 1 (`doc.markdown` as the field editor, for the new type), and gaps 2 (a `markdown` field type, not converted `richText`), 3 (rows held by the server in a window about three screens tall) and 4 (JSON rows and server-rendered rows), the user's answers | the decisions in [forge ContentComponents.md](../../forge/documentation/ContentComponents.md#decisions-to-review-after-seeing-it), `mui.htmlView` with real newsletters |
 | 54. What the Agents app needed (Forge 7m) | forge 07-Email 6 (an `engine` field), 8 (a per-agent cap) and 13 (both a library and the app's own records, with copy and paste), and 07m 1 (both filters), the user's answers | the decisions in [forge AgentsApp.md](../../forge/documentation/AgentsApp.md#decisions-to-review-after-seeing-it), the agent editor read by someone who is not a developer |
+| 55. What the Mail app's sync needed (Forge 7n) | forge 07n 3 (files held by a record the caller may read) and 4 (connections held by the app's own records, a gap found while reading), the user's answers | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-5) |

@@ -267,6 +267,44 @@ type rollupRef struct {
 // isCounter reports whether a projection key is an autoNumber counter's.
 func isCounter(key string) bool { return strings.HasPrefix(key, CounterType+".") }
 
+// checkConnections refuses a connection set on a connection field that
+// the principal may not use (forge 07n question 4): an app may use the
+// connections its own records hold, so only someone who may use one puts
+// it there.
+func (c *decision) checkConnections(events []live.NewEvent) []live.Problem {
+	if c.deps.UseConnection == nil {
+		return nil
+	}
+	var fields []records.Field
+	for _, f := range c.entity.Visible() {
+		if f.Type == "connection" {
+			fields = append(fields, f)
+		}
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	r, err := c.after(events)
+	if err != nil || r == nil {
+		return nil
+	}
+	for _, f := range fields {
+		var id string
+		if records.IsNull(r[f.ID]) || json.Unmarshal(r[f.ID], &id) != nil || id == "" {
+			continue
+		}
+		var had string
+		_ = json.Unmarshal(c.record[f.ID], &had)
+		if had == id {
+			continue
+		}
+		if err := c.deps.UseConnection(c.ServiceArgs, id); err != nil {
+			return []live.Problem{{Code: "forbidden", Path: "args.values." + f.ID, Message: fmt.Sprintf("%s: %v", f.Name, err), Fix: "set a connection you may use (connections.list)"}}
+		}
+	}
+	return nil
+}
+
 // checkFiles refuses files set on the record that do not exist or that
 // someone else uploaded: a file's id alone gives no one its content.
 func (c *decision) checkFiles(events []live.NewEvent) []live.Problem {

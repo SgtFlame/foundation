@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -516,9 +517,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		ops.ContributeUndo(registry, func() ops.Deps { return opsDeps }) // ops.undo, ops.redo and ops.stack (forge 06b)
 		apptools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		apptools.ContributeTransfer(registry, func() appservice.Service { return appService })
-		apptools.ContributeForge(registry, func() apptools.ForgeDeps { return forgeToolDeps }) // forge.catalog|describe|app|read (forge 06d)
-		apptools.ContributeApply(registry, func() apptools.ForgeDeps { return forgeToolDeps }) // forge.apply|changes|check|preview|undo (forge 06e)
-		apptools.ContributeTest(registry, func() apptools.ForgeDeps { return forgeToolDeps })  // forge.test (forge 06f)
+		apptools.ContributeForge(registry, func() apptools.ForgeDeps { return forgeToolDeps })   // forge.catalog|describe|app|read (forge 06d)
+		apptools.ContributeApply(registry, func() apptools.ForgeDeps { return forgeToolDeps })   // forge.apply|changes|check|preview|undo (forge 06e)
+		apptools.ContributeTest(registry, func() apptools.ForgeDeps { return forgeToolDeps })    // forge.test (forge 06f)
 		apptools.ContributeSandbox(registry, func() apptools.ForgeDeps { return forgeToolDeps }) // sandbox.run (forge 07j)
 		presence.Contribute(registry, func() *presence.Presence { return livePresence })
 		uitools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
@@ -755,6 +756,10 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// auth reply marks the connection errored
 		connectionAccess := connections.Connections{Deps: func() connections.Deps { return connectionDeps }}
 		connectorDispatcher := &connectors.Dispatcher{NC: nats.Conn(), Registry: connectorRegistry, Connections: connectionAccess, Failed: connectionAccess.Failed}
+		// Files held by records the caller may read are vouched for (forge 07n)
+		connectorDispatcher.Files = func(args features.ServiceArgs, callArgs json.RawMessage) ([]string, error) {
+			return recordsdata.HeldFiles(recordDeps)(args, callArgs)
+		}
 		connectorDeps = connectors.Deps{Registry: connectorRegistry, Dispatcher: connectorDispatcher}
 		connectionDeps = connections.Deps{Projections: projections, Bus: liveBus, Registry: connectorRegistry, Secrets: secretStore, Dispatcher: connectorDispatcher, Config: configService, Extensions: registry}
 		scriptedDeps = scripted.Deps{Store: projections, Engine: cognitionEngine, JS: connectorRegistry.JetStream(), Reg: registry}
@@ -780,23 +785,26 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		if err != nil {
 			return err
 		}
-		recordDeps = recordsdata.Deps{Projections: projections, Bus: liveBus, Files: recordFiles, Search: recordSearch, Tables: recordTables, Settings: func(args features.ServiceArgs) recordssettings.Records {
-			settings, err := config.Read[recordssettings.Records](configService, args, recordssettings.ID)
-			if err != nil {
-				return recordssettings.Defaults
-			}
-			return settings
-		}, Users: func(tenant uint64, ids []uint64) map[uint64]recordsdata.User {
-			var users []identity.User
-			appDB.Select("users.id", "users.username", "users.display_name").
-				Joins("JOIN memberships ON memberships.user_id = users.id AND memberships.tenant_id = ?", tenant).
-				Where("users.id IN ?", ids).Find(&users)
-			out := map[uint64]recordsdata.User{}
-			for _, u := range users {
-				out[u.ID] = recordsdata.User{Username: u.Username, DisplayName: u.DisplayName}
-			}
-			return out
-		}}
+		recordDeps = recordsdata.Deps{Projections: projections, Bus: liveBus, Files: recordFiles, Search: recordSearch, Tables: recordTables,
+			// An app may use the connections its own records hold (forge 07n), so
+			// setting one checks its setter may use it
+			UseConnection: connections.UseConnection(func() connections.Deps { return connectionDeps }), Settings: func(args features.ServiceArgs) recordssettings.Records {
+				settings, err := config.Read[recordssettings.Records](configService, args, recordssettings.ID)
+				if err != nil {
+					return recordssettings.Defaults
+				}
+				return settings
+			}, Users: func(tenant uint64, ids []uint64) map[uint64]recordsdata.User {
+				var users []identity.User
+				appDB.Select("users.id", "users.username", "users.display_name").
+					Joins("JOIN memberships ON memberships.user_id = users.id AND memberships.tenant_id = ?", tenant).
+					Where("users.id IN ?", ids).Find(&users)
+				out := map[uint64]recordsdata.User{}
+				for _, u := range users {
+					out[u.ID] = recordsdata.User{Username: u.Username, DisplayName: u.DisplayName}
+				}
+				return out
+			}}
 		entityDeps = entities.Deps{Projections: projections, DB: gdb, OnPublish: func(args features.ServiceArgs) error { return recordsdata.Follow(args, recordDeps) }}
 		recordService = recordimpl.CreateService(recordimpl.WithRecords(liveBus, subscriptions, recordDeps), recordimpl.WithFiles(recordFiles))
 		entityService := entityimpl.CreateService(entityimpl.WithEntities(entityDeps))

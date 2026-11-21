@@ -122,4 +122,5 @@ const (
 	HeaderTrace     = "Cx-Trace"     // the trace id
 	HeaderDeadline  = "Cx-Deadline"  // RFC 3339 with nanoseconds
 	HeaderKey       = "Cx-Key"       // the idempotency key, when the operation has one
+	HeaderFiles     = "Cx-Files"     // file ids the dispatcher vouches the caller may use, comma separated (forge 07n)
 )

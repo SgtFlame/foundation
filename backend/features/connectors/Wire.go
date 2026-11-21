@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
@@ -30,6 +31,10 @@ type CallHeaders struct {
 	Trace     string
 	Deadline  time.Time
 	Key       string // the idempotency key, when the operation has one
+	// Files are file ids the dispatcher vouches the caller may use though
+	// it did not upload them: each held by a record the caller may read,
+	// named by the reference's heldBy (forge 07n question 3).
+	Files []string
 }
 
 // Set writes the headers onto a request.
@@ -49,11 +54,17 @@ func (h CallHeaders) Set(hdr nats.Header) {
 	if h.Key != "" {
 		hdr.Set(HeaderKey, h.Key)
 	}
+	if len(h.Files) > 0 {
+		hdr.Set(HeaderFiles, strings.Join(h.Files, ","))
+	}
 }
 
 // ReadCallHeaders reads a request's headers.
 func ReadCallHeaders(hdr nats.Header) (CallHeaders, error) {
 	h := CallHeaders{CallID: hdr.Get(HeaderCall), Contract: hdr.Get(HeaderContract), Trace: hdr.Get(HeaderTrace), Key: hdr.Get(HeaderKey)}
+	if f := hdr.Get(HeaderFiles); f != "" {
+		h.Files = strings.Split(f, ",")
+	}
 	if h.CallID == "" || h.Contract == "" {
 		return h, fmt.Errorf("the request has no call id or contract")
 	}

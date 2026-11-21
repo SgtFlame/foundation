@@ -200,7 +200,7 @@ func setup(t *testing.T) *fixture {
 	f := &fixture{t: t, srv: srv, reg: reg, p: p, bus: bus.New(p), subs: subscribe.New(p, reg), secrets: &memSecrets{values: map[string]string{}}, hits: h}
 	nodeDeps = livenodes.Deps{Engine: eng, Bus: f.bus, Subscriptions: f.subs, Store: p}
 	draftDeps = drafts.Deps{Engine: eng, Projections: p}
-	dataDeps = data.Deps{Projections: p, Bus: f.bus}
+	dataDeps = data.Deps{Projections: p, Bus: f.bus, UseConnection: connections.UseConnection(func() connections.Deps { return connDeps })}
 	entityDeps = entities.Deps{Projections: p, DB: gdb, OnPublish: func(args features.ServiceArgs) error { return data.Follow(args, dataDeps) }}
 	prefabDeps = prefabs.Deps{Projections: p, DB: gdb}
 	appDeps = manifests.Deps{Projections: p, DB: gdb}

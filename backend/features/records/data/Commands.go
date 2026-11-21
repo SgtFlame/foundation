@@ -65,6 +65,11 @@ type Deps struct {
 	// names, by id; those not found, or not in the tenant, are left out.
 	// Without it, such a relation expands to nothing.
 	Users func(tenant uint64, ids []uint64) map[uint64]User
+	// UseConnection checks that the principal may use a connection a
+	// record command sets on a connection field (forge 07n question 4: an
+	// app may then use the connections its own records hold). Without it,
+	// connection fields are not checked.
+	UseConnection func(args features.ServiceArgs, id string) error
 }
 
 // User is a tenant user as an expansion gives them.
@@ -279,6 +284,9 @@ func decideRecord(s spec, d live.Decision, deps Deps) ([]live.NewEvent, []live.P
 		return events, nil
 	}
 	if problems := c.checkFiles(events); problems != nil {
+		return nil, problems
+	}
+	if problems := c.checkConnections(events); problems != nil {
 		return nil, problems
 	}
 	return events, c.rules(s.action, events)

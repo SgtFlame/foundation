@@ -462,3 +462,36 @@ A trigger skips the events its own app committed, so a trigger that changes what
 - `jobs/triggers_test.go` `TestTriggerOnItsAppsOwnChanges`: a note made by the app and one by a user start the `ownChanges` trigger twice and the other once, with the user's note;
 - `apps/tools` `TestMetadata` checks both new nodes;
 - the fix, in Forge: `TestIMAPAndPOP3` twelve times in a row and the Mail test server's package three times with `-race`.
+
+## Built in slice 55
+
+Built with Forge's part [7n](../../forge/documentation/MailApp.md), the Mail app's sync and sending. The app's triggers and jobs run as its own principal against connections people put on its account records, and its outbox attaches files people uploaded to drafts. Two rules, answered by the user before building (forge 07n questions 3 and 4, 2026-11-21), make that possible without making the app a service principal.
+
+### Connections held by an app's records
+
+A connection set in a `connection` field of one of an installed app's own entity types may be used by that app's principal (`connections.Held`, `Deps.CheckUse`), a user's own connection included, until no record of those types holds it.
+
+- **Who lends it.** A record command that sets a connection field checks that its sender may use the connection (`data.Deps.UseConnection`, wired to `connections.UseConnection`; refused `forbidden` on `args.values.<field>`). So only someone who may use a connection lends it to the app: a user lends their own, and a holder of `connection.use` a tenant one.
+- **Where it counts.** Every `use` check that may concern an app goes through `CheckUse`: `Connections.TypeOf` (each call), `connection.test`, a trigger filtered to a connection (`Subjects`), an unfiltered trigger's `Accept`, and `Reconcile`, which starts the event source of a connection an app's record holds (memoizing `Held` per app for the pass).
+- **When it changes.** `connections.Start` adds a follower, `connectors.holders` (`FollowNew` on the `rec` stream, so only changes from its first start; the minute's pass covers the rest), that runs `Reconcile` after a change to a record of a type with a connection field (`HoldsConnections`), once the projection has it: a new account's POP3 source starts in about a second, and one whose field is cleared stops.
+- **How it reads.** `Held` reads the install's entity types with connection fields and scans their records in the KV projection each time. Accounts are few; a type with many holding records would want an index (TODO below).
+
+### Files held by a record the caller may read
+
+The connector dispatcher vouches for files: `Dispatcher.Files` (wired in `serve.go` to `data.HeldFiles(recordDeps)`) walks a call's args for file references that name their holder, `{id, …, heldBy: {entity, record, field}}`, and keeps those whose record the caller may read (`record.read` on its type, its row rule, and the field holding the file id). Their ids travel in the call's `Cx-Files` header (`CallHeaders.Files`), reach the adapter as `adapter.Context.Files`, and `Context.Vouched(id)` reports one. Forge's `mail.mime` `FileOpener` (compose's attachments, for the codec and `mail.smtp`) accepts a vouched file as one the caller uploaded. A reference whose holder does not check out is left out, so the adapter refuses the file as before.
+
+Record commands do not take `heldBy` yet: setting a file someone else uploaded on a record is still refused (TODO).
+
+### Decisions to review after seeing it
+
+- An app may use a held connection for anything the connection's type does, not only what the record's purpose suggests; narrowing it (per field, per operation) was not asked for.
+- `Held` scans on every check; fine for accounts, not for a type with thousands of holders.
+- Adapters trust the dispatcher's vouching as they trust its principal: an adapter in another process must be one the tenant trusts, as before.
+
+### Verification
+
+`go test ./features/connectors/... ./features/records/... ./features/apps/... ./features/jobs/...` pass, except `records/data`'s known flaky failure ([forge 99-Cleanup.md](../../forge/documentation/plans/99-Cleanup.md#foundation-recordsdata-the-package-fails-about-half-its-runs), seen again in `TestARecordFieldIsEditedInARoom`):
+
+- `connections/held_test.go` `TestAppUsesTheConnectionsItsRecordsHold`: the Holder app may not use user 1's own connection until a record of its type holds it; user 2 may not set it on a record, user 1 may; then the app calls it, its trigger's `Accept` takes its events and not another's, its event source starts within seconds and its events reach the trigger; cleared, the app may use it no more and the source stops;
+- `records/data/richer_test.go` `TestFilesAreServedToReadersOnly`: `HeldFiles` vouches for a file to the record's reader, not to a user the row rule hides it from, nor one without a grant, nor through a field that holds no file; once the record is shared, to user 6 too, and never for a file the record does not hold;
+- end to end in Forge (`features/starter/mail`): the Mail app ingests through a user's own POP3 connection its account holds, and composes a draft's attachment uploaded by a user only when the reference names the draft.
