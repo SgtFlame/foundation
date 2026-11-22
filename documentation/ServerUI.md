@@ -454,3 +454,6 @@ Forge 7o ([forge MailApp.md](../../forge/documentation/MailApp.md#built-in-part-
 - **Slot boxes**: the evaluator puts a slot's content in a `mui.box`; the `slot` node's other props (`fill`, `grow`, `sx`; checked by `ui.CheckPrefab`) now style that box, and `mui.box` takes `fill` (the height it is given). A frame's page slot with `fill` lets a page's `layout.flex` take the frame's height.
 - **`mui.list`** items take `count` (a trailing number; the item bold while it is above 0) and `header` (a section title, not selectable).
 - **`record.fieldEditor` on a list of files** (`type: list`, `items.type: file`): the files as chips with remove, and *Attach…* uploading one or more, each change sent at once.
+
+## Changed in forge 7p-5
+Forge 7p-5 ([forge MailApp.md](../../forge/documentation/MailApp.md#built-in-part-7p-5)): **`mui.list`** items take `indent` (0-3), nesting an item under the one above (Mail's queue for each agent under *Needs review*).

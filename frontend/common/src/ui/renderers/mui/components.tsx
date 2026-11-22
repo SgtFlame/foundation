@@ -356,7 +356,8 @@ export function MuiMenu(p: P) {
 }
 
 // A list item: a header is a section title, not clickable; count is a
-// trailing number (unread mail), bold when above 0 (forge 07o)
+// trailing number (unread mail), bold when above 0 (forge 07o); indent nests
+// an item under the one above (forge 7p-5)
 interface ListItemDef {
   id: string
   primary?: string
@@ -364,6 +365,7 @@ interface ListItemDef {
   icon?: string
   count?: number
   header?: boolean
+  indent?: number
 }
 
 export function MuiList(p: P) {
@@ -376,7 +378,13 @@ export function MuiList(p: P) {
             {i.primary ?? i.id}
           </ListSubheader>
         ) : (
-          <ListItemButton key={i.id} selected={p.props.selected === i.id} onClick={() => p.emit('select', { id: i.id })} onDoubleClick={() => p.emit('open', { id: i.id })}>
+          <ListItemButton
+            key={i.id}
+            selected={p.props.selected === i.id}
+            sx={i.indent ? { pl: 2 + 2 * Math.min(Math.max(i.indent, 0), 3) } : undefined}
+            onClick={() => p.emit('select', { id: i.id })}
+            onDoubleClick={() => p.emit('open', { id: i.id })}
+          >
             {i.icon && (
               <ListItemIcon sx={{ minWidth: 36 }}>
                 <NamedIcon name={i.icon} />
