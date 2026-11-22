@@ -161,6 +161,40 @@ function FileInput({ field, value, onChange, label, problem, disabled, entity, r
   )
 }
 
+// A list of files (forge 7o: a draft's attachments): each file shown with
+// Remove, and Attach… uploading one or more, each change sent at once
+function FilesInput({ field, value, onChange, label, problem, disabled, entity, record }: FieldInputProps) {
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState<string>()
+  const files = (Array.isArray(value) ? value : []) as FileRef[]
+  const one: Field = { ...(field.items ?? { id: 'item', name: 'File' }), id: field.id, type: 'file' }
+  return (
+    <FormControl error={!!problem || !!failed} fullWidth>
+      <Typography variant="caption" color="text.secondary">{label}</Typography>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        {files.length === 0 && <Typography variant="body2" color="text.secondary">No files</Typography>}
+        {files.map((f, i) => (
+          <Chip key={f.id ?? i} size="small" variant="outlined" disabled={disabled} label={<FieldDisplay field={one} value={f} entity={entity} record={record} />}
+            onDelete={() => onChange(files.filter((_, j) => j !== i))} />
+        ))}
+        <Button size="small" component="label" disabled={disabled || busy || !entity}>
+          {busy ? 'Uploading…' : 'Attach…'}
+          <input type="file" multiple hidden onChange={(e) => {
+            const picked = [...(e.target.files ?? [])]
+            if (picked.length === 0 || !entity) return
+            setBusy(true)
+            setFailed(undefined)
+            Promise.all(picked.map((f) => Records.upload(entity, f)))
+              .then((rs) => onChange([...files, ...rs.flatMap((r) => (r.file ? [r.file] : []))]), (err) => setFailed((err as Error).message))
+              .finally(() => setBusy(false))
+          }} />
+        </Button>
+      </Stack>
+      {(problem || failed) && <FormHelperText>{problem || failed}</FormHelperText>}
+    </FormControl>
+  )
+}
+
 function MoneyInput(props: FieldInputProps) {
   const { field, value, onChange, label, problem, disabled } = props
   if (field.currency) return <NumberInput {...props} decimal />
@@ -263,6 +297,7 @@ export function FieldInput(props: FieldInputProps) {
     case 'connection':
       return <ConnectionInput {...p} />
   }
+  if (field.type === 'list' && field.items?.type === 'file') return <FilesInput {...p} />
   // json, list, object, volumeFile and any type to come
   return <JsonInput {...p} />
 }
@@ -279,7 +314,8 @@ export function RecordFieldEditor(p: RendererProps) {
     setOwn(server)
   }
   if (!field) return null
-  const textual = ['text', 'longText', 'markdown', 'richText', 'number', 'decimal', 'money', 'duration', 'user', 'json', 'list', 'object', 'volumeFile'].includes(field.type)
+  const textual = ['text', 'longText', 'markdown', 'richText', 'number', 'decimal', 'money', 'duration', 'user', 'json', 'list', 'object', 'volumeFile'].includes(field.type) &&
+    !(field.type === 'list' && field.items?.type === 'file')
   return (
     <FieldInput field={field} value={own} label={p.props.label as string | undefined} problem={str(p.props.problem) || undefined}
       disabled={!!p.props.disabled} entity={str(p.props.entity) || undefined} record={str(p.props.record) || undefined}

@@ -53,6 +53,11 @@ export interface UiAction {
   fileName?: string
   handler?: string
   resource?: string
+  // toast: a button labelled label posting payload to handler while it is
+  // shown, for duration milliseconds (forge 07o)
+  label?: string
+  payload?: Record<string, unknown>
+  duration?: number
 }
 
 export interface UiSubject {

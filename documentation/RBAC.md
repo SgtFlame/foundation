@@ -229,3 +229,11 @@ Forge 07j, agent principals and roles granted on a record ([forge 07j-AgentPrinc
 
 ## Changed in slice 54
 Forge 7m ([Apps.md › Changed in slice 54](Apps.md#changed-in-slice-54)): an app principal may use the agents its own entity types define (`MayUseAgent`, by `AgentInfo.App`), and holds every action marked `Action.Apps` in its own tenant with no grant (`job.create`, so its triggers enqueue jobs).
+
+## Changed in slice 56
+Forge 7o ([forge MailApp.md](../../forge/documentation/MailApp.md#built-in-part-7o)): what the mail client's privacy and members needed.
+- **`principal.owner`** in row rules: whether the principal holds the tenant's *Owner* role on the tenant, or is the Super Administrator (`authz.IsOwner`, from the cached grants). An app's type-level access rule can let Owners read what Administrators may not: an Administrator's grants are not restricted by app roles' row rules, so only the type's own rule (which everyone is held to) can hide records from them.
+- **An app grants its own roles on its own records**: `Policy.MayGrant` allows an app's principal a role of that app (`Role.App`, its tenant) on a resource under `tenant:<t>/app:<appId>/…`, and nothing else (another app's role, a tenant role, the tenant itself, another tenant). The app's blueprints decide whom, after a command its roles allowed (Mail's trigger keeps an account's members' grants).
+- ***Grant role* and *Revoke role* take a `user`** (a user id, or `user:<id>`) in place of an `agent`; revoking matches the grant's user and agent both.
+- **The *Has role* node** (`authz.hasRole`, config or input `role`, input `record`, output `has`), in command and query graphs as well as actions, triggers, handlers, function and agent graphs: whether the run's principal holds an app role on a record or above it, as `principal.hasRole` tells in a rule. A command refuses what only a role allows with it (Mail's `draft.send` and *Mail sender*).
+- Tests: `authz` `TestAppGrantsItsOwnRolesAndOwner`; Forge's `starter/mail` `TestPrivacyAndMembers` and `TestMailSender` over the nodes and rules.

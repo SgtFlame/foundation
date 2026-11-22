@@ -38,6 +38,10 @@ type SearchQuery struct {
 	Text            string `json:"text"`
 	Limit           int    `json:"limit,omitempty"` // 20 when left out, at most 100
 	LexicalSemantic int    `json:"lexicalSemantic,omitempty"`
+	// Filter keeps the hits whose fields match, as records.find's filter
+	// does; it needs Entity (forge 07o: mail searched by account, folder,
+	// sender and date)
+	Filter *Filter `json:"filter,omitempty"`
 }
 
 // SearchHit is one record the index found.
@@ -69,23 +73,48 @@ func SearchRecords(args features.ServiceArgs, d Deps, q SearchQuery) (SearchResu
 		q.Limit = 20
 	}
 	q.Limit = min(q.Limit, 100)
+	var keep func(Record) bool
+	if q.Filter != nil {
+		if q.Entity == "" {
+			return out, log.Code("bad_filter").Errorf("a search's filter needs its entity type")
+		}
+		e, problems := Entity(args, d.Projections, q.Entity)
+		if problems != nil {
+			return out, log.Code("entity_not_found").Errorf("%s", problems[0].Message)
+		}
+		n, err := compile(e, *q.Filter)
+		if err != nil {
+			return out, log.Code("bad_filter").Errorf("%s", err.Error())
+		}
+		keep = n.match
+	}
 	if err := Follow(args, d); err != nil {
 		return out, err
 	}
-	// Ask for more than the page: some may be hidden from the principal
+	// Ask for more than the page: some may be hidden from the principal,
+	// and more when a filter drops some
 	ask := q
+	ask.Filter = nil
 	ask.Limit = q.Limit * 3
+	if keep != nil {
+		ask.Limit = min(q.Limit*20, 1000)
+	}
 	hits, err := d.Search.Search(args, ask)
 	if err != nil {
 		return out, err
 	}
-	out.Records = Visible(args, d, hits, q.Limit)
+	out.Records = visible(args, d, hits, q.Limit, keep)
 	return out, nil
 }
 
 // Visible are the records hits name that exist and the principal may
 // read, at most limit, each with its _score.
 func Visible(args features.ServiceArgs, d Deps, hits []SearchHit, limit int) []Record {
+	return visible(args, d, hits, limit, nil)
+}
+
+// visible is Visible keeping only the records keep matches, when given.
+func visible(args features.ServiceArgs, d Deps, hits []SearchHit, limit int, keep func(Record) bool) []Record {
 	out := []Record{}
 	types := map[string]*records.EntityType{}
 	for _, h := range hits {
@@ -110,6 +139,9 @@ func Visible(args features.ServiceArgs, d Deps, hits []SearchHit, limit int) []R
 		if err != nil || !ok || v.Value == nil || json.Unmarshal(v.Value, &r) != nil || !records.Allows(first(e.RuleFor(args.Context(), args.Principal, "read")), r, args.Principal) {
 			continue
 		}
+		if keep != nil && !keep(r) {
+			continue
+		}
 		r["_score"] = raw(h.Score)
 		out = append(out, r)
 		if len(out) == limit {
@@ -123,8 +155,8 @@ func Visible(args features.ServiceArgs, d Deps, hits []SearchHit, limit int) []R
 func contributeSearch(reg *extensions.Registry, deps func() Deps) {
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "records.search", Source: "records"}, Title: "Search records",
-		Description: "Records whose searchable fields match a text, best first, that stays current: {records}, each record with its _score. entity limits it to one entity type (every type you may read when left out); limit is how many (20, at most 100); lexicalSemantic (-5 … 5) leans to exact words or to meaning, as RAG Search's dial does. Only fields marked searchable are searched. It runs again, debounced, as the search index changes, sending insert, update, move and remove on the records list, keyed <entity>.<id>. Records a row rule hides are never shown.",
-		Params:      json.RawMessage(`{"type":"object","properties":{"entity":{"type":"string","description":"An entity type's id; every type when left out"},"text":{"type":"string"},"limit":{"type":"integer"},"lexicalSemantic":{"type":"integer","minimum":-5,"maximum":5}},"required":["text"]}`),
+		Description: "Records whose searchable fields match a text, best first, that stays current: {records}, each record with its _score. entity limits it to one entity type (every type you may read when left out); limit is how many (20, at most 100); lexicalSemantic (-5 … 5) leans to exact words or to meaning, as RAG Search's dial does. Only fields marked searchable are searched. It runs again, debounced, as the search index changes, sending insert, update, move and remove on the records list, keyed <entity>.<id>. Records a row rule hides are never shown. filter, with entity, keeps only the hits matching it, as records.find's filter does.",
+		Params:      json.RawMessage(`{"type":"object","properties":{"entity":{"type":"string","description":"An entity type's id; every type when left out"},"text":{"type":"string"},"limit":{"type":"integer"},"lexicalSemantic":{"type":"integer","minimum":-5,"maximum":5},"filter":{"type":"object","description":"With entity: {field, op, value} or {and|or: [filters]}, as records.find's, keeping only the hits that match"}},"required":["text"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"entity":"page","text":"quarterly plan"}`)},
 		Action:      "record.read", Resource: func(p features.Principal, params json.RawMessage) string {
 			var q struct{ Entity string }

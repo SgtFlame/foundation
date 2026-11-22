@@ -240,3 +240,29 @@ func RecordResource(entityResource, id string) string {
 func recordRule(id string) string {
 	return fmt.Sprintf("record._id == %q", id)
 }
+
+// IsOwner tells whether p is a user holding the tenant's Owner role on its
+// tenant, or the Super Administrator (forge 07o: row rules test it with
+// principal.owner, so an app can let Owners read what Administrators may
+// not without a grant).
+func IsOwner(ctx context.Context, p features.Principal) bool {
+	pol := installed.Load()
+	if pol == nil || p.Kind != features.PrincipalUser {
+		return false
+	}
+	grants, err := pol.GrantsOf(p.UserID)
+	if err != nil {
+		return false
+	}
+	tenant := Resource("tenant", p.TenantID)
+	for _, g := range grants {
+		path := Split(g.Resource)
+		switch {
+		case g.RoleID == RoleSuperAdmin:
+			return true
+		case g.RoleID == RoleOwner && len(path) == 1 && path[0] == tenant:
+			return true
+		}
+	}
+	return false
+}

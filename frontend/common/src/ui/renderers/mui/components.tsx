@@ -34,6 +34,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  ListSubheader,
   Menu,
   MenuItem,
   Select,
@@ -91,7 +92,7 @@ export function MuiGrid(p: P) {
 }
 
 export function MuiBox(p: P) {
-  return <Box sx={{ ...growOf(p), ...sxOf(p) }}>{p.children}</Box>
+  return <Box sx={{ height: p.props.fill ? '100%' : undefined, ...growOf(p), ...sxOf(p) }}>{p.children}</Box>
 }
 
 export function MuiCard(p: P) {
@@ -354,20 +355,42 @@ export function MuiMenu(p: P) {
   )
 }
 
+// A list item: a header is a section title, not clickable; count is a
+// trailing number (unread mail), bold when above 0 (forge 07o)
+interface ListItemDef {
+  id: string
+  primary?: string
+  secondary?: string
+  icon?: string
+  count?: number
+  header?: boolean
+}
+
 export function MuiList(p: P) {
-  const items = (p.props.items as { id: string; primary?: string; secondary?: string; icon?: string }[]) ?? []
+  const items = (p.props.items as ListItemDef[]) ?? []
   return (
     <List dense={!!p.props.dense} disablePadding>
-      {items.map((i) => (
-        <ListItemButton key={i.id} selected={p.props.selected === i.id} onClick={() => p.emit('select', { id: i.id })} onDoubleClick={() => p.emit('open', { id: i.id })}>
-          {i.icon && (
-            <ListItemIcon>
-              <NamedIcon name={i.icon} />
-            </ListItemIcon>
-          )}
-          <ListItemText primary={i.primary ?? i.id} secondary={i.secondary} />
-        </ListItemButton>
-      ))}
+      {items.map((i) =>
+        i.header ? (
+          <ListSubheader key={i.id} disableSticky sx={{ bgcolor: 'transparent', lineHeight: 2.5, mt: 1 }}>
+            {i.primary ?? i.id}
+          </ListSubheader>
+        ) : (
+          <ListItemButton key={i.id} selected={p.props.selected === i.id} onClick={() => p.emit('select', { id: i.id })} onDoubleClick={() => p.emit('open', { id: i.id })}>
+            {i.icon && (
+              <ListItemIcon sx={{ minWidth: 36 }}>
+                <NamedIcon name={i.icon} />
+              </ListItemIcon>
+            )}
+            <ListItemText primary={i.primary ?? i.id} secondary={i.secondary} slotProps={{ primary: { noWrap: true, sx: { fontWeight: i.count ? 600 : undefined } } }} />
+            {!!i.count && (
+              <Typography variant="caption" sx={{ fontWeight: 600, ml: 1 }} data-count>
+                {i.count}
+              </Typography>
+            )}
+          </ListItemButton>
+        ),
+      )}
     </List>
   )
 }

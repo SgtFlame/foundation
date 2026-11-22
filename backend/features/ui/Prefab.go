@@ -664,9 +664,21 @@ func (c *prefabCheck) slotNode(n *Node, path string) {
 	if _, ok := c.p.Slots[s]; !ok {
 		c.add(path+".props.name", fmt.Sprintf("there is no slot %q", s), "declare it with prefab.setInterface {slots}, and name it in props.name")
 	}
-	for k := range n.Props {
-		if k != "name" {
-			c.add(path+".props."+k, fmt.Sprintf("a slot has no prop %q", k), "a slot takes only name")
+	// Besides its name, a slot takes the props of the box its content is
+	// put in (forge 7o)
+	for k, v := range n.Props {
+		switch k {
+		case "name":
+		case "fill", "grow":
+			if _, ok := v.(bool); !ok {
+				c.add(path+".props."+k, fmt.Sprintf("a slot's %s is true or false", k), "set it to true or leave it out")
+			}
+		case "sx":
+			for _, m := range CheckSx(v) {
+				c.add(path+".props.sx", m, SxTokens)
+			}
+		default:
+			c.add(path+".props."+k, fmt.Sprintf("a slot has no prop %q", k), "a slot takes name, and fill, grow and sx for the box its content is put in")
 		}
 	}
 	if len(n.Children) > 0 || len(n.Slots) > 0 {

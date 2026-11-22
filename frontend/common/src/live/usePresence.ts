@@ -2,7 +2,7 @@
 // returns everyone present, from the live.presence query
 // (documentation/Live.md › Presence).
 
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { live } from './LiveConnection.ts'
 import { useQuery } from './useQuery.ts'
 
@@ -33,14 +33,18 @@ export interface Presence {
 // doing there (undefined keeps it present with no state)
 export function usePresence(object: string | undefined, state?: Record<string, unknown>): Presence {
   const stateKey = JSON.stringify(state ?? {})
+  const held = useRef<ReturnType<typeof live.holdPresence>>(undefined)
   useEffect(() => {
     if (!object) return
-    live.setPresence(object, JSON.parse(stateKey))
-  }, [object, stateKey])
-  useEffect(() => {
-    if (!object) return
-    return () => live.setPresence(object, undefined)
+    held.current = live.holdPresence(object, JSON.parse(stateKey))
+    return () => {
+      held.current?.release()
+      held.current = undefined
+    }
+    // the state follows below without leaving and joining again
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [object])
+  useEffect(() => held.current?.update(JSON.parse(stateKey)), [stateKey])
   const me = useSyncExternalStore(
     (l) => live.onStatus(l),
     () => live.getHello()?.connection,

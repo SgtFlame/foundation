@@ -1,5 +1,25 @@
 // The Material icons server-described trees may name, by name
 import AddIcon from '@mui/icons-material/Add'
+// Mail (forge 7o)
+import AllInboxIcon from '@mui/icons-material/AllInbox'
+import AssignmentIndIcon from '@mui/icons-material/AssignmentInd'
+import DraftsIcon from '@mui/icons-material/Drafts'
+import ArchiveIcon from '@mui/icons-material/Archive'
+import LabelIcon from '@mui/icons-material/Label'
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
+import ForumIcon from '@mui/icons-material/Forum'
+import MarkEmailUnreadIcon from '@mui/icons-material/MarkEmailUnread'
+import AttachFileIcon from '@mui/icons-material/AttachFile'
+import EditNoteIcon from '@mui/icons-material/EditNote'
+import UnfoldLessIcon from '@mui/icons-material/UnfoldLess'
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser'
+import ReplyIcon from '@mui/icons-material/Reply'
+import ReplyAllIcon from '@mui/icons-material/ReplyAll'
+import ForwardIcon from '@mui/icons-material/Forward'
+import ReportIcon from '@mui/icons-material/Report'
+import GroupIcon from '@mui/icons-material/Group'
+import LinkIcon from '@mui/icons-material/Link'
+import UndoIcon from '@mui/icons-material/Undo'
 import SmartToyIcon from '@mui/icons-material/SmartToy'
 import SupportAgentIcon from '@mui/icons-material/SupportAgent'
 import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber'
@@ -101,6 +121,25 @@ export const icons: Record<string, ComponentType<SvgIconProps>> = {
   replay: ReplayIcon,
   history: HistoryIcon,
   unfold_more: UnfoldMoreIcon,
+  all_inbox: AllInboxIcon,
+  assignment_ind: AssignmentIndIcon,
+  drafts: DraftsIcon,
+  archive: ArchiveIcon,
+  label: LabelIcon,
+  manage_accounts: ManageAccountsIcon,
+  forum: ForumIcon,
+  mark_email_unread: MarkEmailUnreadIcon,
+  attach_file: AttachFileIcon,
+  edit_note: EditNoteIcon,
+  unfold_less: UnfoldLessIcon,
+  verified_user: VerifiedUserIcon,
+  reply: ReplyIcon,
+  reply_all: ReplyAllIcon,
+  forward: ForwardIcon,
+  report: ReportIcon,
+  group: GroupIcon,
+  link: LinkIcon,
+  undo: UndoIcon,
 }
 
 // An icon by name, as a component for places that take one (the Editors view)

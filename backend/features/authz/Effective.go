@@ -86,6 +86,17 @@ func (pol *Policy) EffectiveFor(p features.Principal) (Effective, error) {
 // grant.write there and must hold every permission of the role there, so
 // no one gives away more than they have.
 func (pol *Policy) MayGrant(ctx context.Context, p features.Principal, role Role, resource string) Decision {
+	// An app grants its own roles on its own resources (forge 07o: Mail
+	// keeps an account's members' grants in step with its members), as
+	// its blueprints decide after a command its roles allowed
+	if p.Kind == features.PrincipalApp {
+		path := Split(resource)
+		if p.App != "" && role.App == p.App && role.TenantID == p.TenantID && len(path) >= 2 &&
+			path[0] == Resource("tenant", p.TenantID) && path[1] == "app:"+p.App {
+			return Decision{Allowed: true, Reason: "an app grants its own roles on its own records"}
+		}
+		return Decision{Reason: "an app grants only its own roles, on its own records"}
+	}
 	if d := pol.Explain(ctx, p, "grant.write", resource); !d.Allowed {
 		return d
 	}

@@ -832,6 +832,16 @@ Each slice ends with something to look at, and the ★ marks where a decision is
     - **Decisions to review after seeing it**: in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-5).
     - **Deferred failure**: `records/data`'s known flake, seen again as `TestARecordFieldIsEditedInARoom` ([forge 99-Cleanup.md](../../forge/documentation/plans/99-Cleanup.md#foundation-recordsdata-the-package-fails-about-half-its-runs)).
 
+56. **What the mail client needed** (Forge iteration 7, part 7o, [forge MailApp.md](../../forge/documentation/MailApp.md#built-in-part-7o)). *Built* ([RBAC.md](RBAC.md#changed-in-slice-56), [Records.md](Records.md#changed-in-slice-56), [ServerUI.md](ServerUI.md#changed-in-slice-56)).
+    - **Built**:
+      - `authz` and `records`: `principal.owner` in row rules (`authz.IsOwner`); an app's principal grants its own roles on its own records (`Policy.MayGrant`); *Grant role*/*Revoke role* take a user; the *Has role* node (`authz.hasRole`, in command and query graphs too);
+      - `records/data`: `records.search` takes `filter` (with `entity`);
+      - `ui`: `ui.toast`'s action (`action`, `handler`, `payload`, `duration`; `Handle.HandlerName`); a `slot` node's `fill`/`grow`/`sx` style its box, and `mui.box` takes `fill`; `mui.list` items' `count` and `header`; `presence.avatars`' `state`; `doc.markdown`'s `typingIn`/`typingState`;
+      - browser: `live.holdPresence` (several holders of one object's presence, states merged; `usePresence` and `presence.avatars` use it), the toast's action button in `AppHost`, `record.fieldEditor` on a list of files, Mail's icons.
+    - **Blockers**: none. Forge's iteration question 7 (privacy of personal accounts) and 07o question 1 (members' grants, a gap found while reading) answered by the user before building (2026-11-21).
+    - **Decisions to review after seeing it**: in [forge MailApp.md](../../forge/documentation/MailApp.md#decisions-to-review-after-seeing-it-1).
+    - **Deferred failure**: `ui/hello` failed once ([forge 99-Cleanup.md](../../forge/documentation/plans/99-Cleanup.md#foundation-uihello-failed-once)); the large tables' SQL followers log `database is locked` under a burst ([forge 99-Cleanup.md](../../forge/documentation/plans/99-Cleanup.md#foundation-large-tables-database-is-locked-in-the-sql-followers)).
+
 Slices 10 and 11 can move earlier at any point, because the seams from slice 1 keep everything after them unchanged. Move them up if multi-user use is needed sooner.
 
 ## Questions by slice
@@ -894,3 +904,4 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 53. Content components (Forge 7l) | forge 07l 1 (`doc.markdown` as the field editor, for the new type), and gaps 2 (a `markdown` field type, not converted `richText`), 3 (rows held by the server in a window about three screens tall) and 4 (JSON rows and server-rendered rows), the user's answers | the decisions in [forge ContentComponents.md](../../forge/documentation/ContentComponents.md#decisions-to-review-after-seeing-it), `mui.htmlView` with real newsletters |
 | 54. What the Agents app needed (Forge 7m) | forge 07-Email 6 (an `engine` field), 8 (a per-agent cap) and 13 (both a library and the app's own records, with copy and paste), and 07m 1 (both filters), the user's answers | the decisions in [forge AgentsApp.md](../../forge/documentation/AgentsApp.md#decisions-to-review-after-seeing-it), the agent editor read by someone who is not a developer |
 | 55. What the Mail app's sync needed (Forge 7n) | forge 07n 3 (files held by a record the caller may read) and 4 (connections held by the app's own records, a gap found while reading), the user's answers | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-5) |
+| 56. What the mail client needed (Forge 7o) | forge 07-Email 7 (Owners read all mail, Administrators only when granted, reading marks nothing read) and 07o 1 (members' grants kept by the app, a gap found while reading), the user's answers | the decisions in [forge MailApp.md](../../forge/documentation/MailApp.md#decisions-to-review-after-seeing-it-1), the thread with summary, labels and presence |

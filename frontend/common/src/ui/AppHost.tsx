@@ -6,7 +6,7 @@
 // handlers return. An app's main tab is drawn in its frame, which shows
 // the title and presence, so it has no header of its own.
 
-import { Alert, Box, Chip, CircularProgress, Snackbar, Stack, Typography } from '@mui/material'
+import { Alert, Box, Button, Chip, CircularProgress, Snackbar, Stack, Typography } from '@mui/material'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { live } from '../live/LiveConnection.ts'
 import { PresenceAvatars } from '../live/PresenceAvatars.tsx'
@@ -72,7 +72,18 @@ export interface AppHostProps extends EditorProps<AppEditorObject> {
 }
 
 function AppHost({ object, registry, tabId, page }: AppHostProps) {
-  const [toast, setToast] = useState<{ message: string; severity: 'success' | 'info' | 'warning' | 'error' }>()
+  // A toast, with an action button (Undo) that runs a handler while it is
+  // shown (forge 07o); key makes a new toast restart its timer
+  const [toast, setToast] = useState<{
+    message: string
+    severity: 'success' | 'info' | 'warning' | 'error'
+    label?: string
+    handler?: string
+    payload?: Record<string, unknown>
+    duration?: number
+    session?: UiSession
+    key: number
+  }>()
   const [share, setShare] = useState<{ resource: string; title?: string }>()
 
   const perform = useCallback(
@@ -80,7 +91,7 @@ function AppHost({ object, registry, tabId, page }: AppHostProps) {
       for (const a of actions) {
         switch (a.type) {
           case 'toast':
-            setToast({ message: a.message ?? '', severity: a.severity ?? 'info' })
+            setToast({ message: a.message ?? '', severity: a.severity ?? 'info', label: a.label, handler: a.handler, payload: a.payload, duration: a.duration, session: s, key: Date.now() })
             break
           case 'openEditor':
             if (a.kind && a.id) registry.edit(new AppEditorObject({ kind: a.kind, id: a.id, name: a.name, helpText: a.helpText, params: a.params }))
@@ -201,8 +212,31 @@ function AppHost({ object, registry, tabId, page }: AppHostProps) {
           <ShareDialog resource={share.resource} title={share.title} onClose={() => setShare(undefined)} />
         </Suspense>
       )}
-      <Snackbar open={!!toast} autoHideDuration={4000} onClose={() => setToast(undefined)}>
-        <Alert severity={toast?.severity ?? 'info'} onClose={() => setToast(undefined)} variant="filled">
+      <Snackbar
+        key={toast?.key}
+        open={!!toast}
+        autoHideDuration={toast?.duration ?? (toast?.label ? 6000 : 4000)}
+        onClose={(_, reason) => reason !== 'clickaway' && setToast(undefined)}
+      >
+        <Alert
+          severity={toast?.severity ?? 'info'}
+          onClose={() => setToast(undefined)}
+          variant="filled"
+          action={
+            toast?.label && toast.handler ? (
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => {
+                  toast.session?.emit([], { handler: toast.handler!, payload: toast.payload ?? {} })
+                  setToast(undefined)
+                }}
+              >
+                {toast.label}
+              </Button>
+            ) : undefined
+          }
+        >
           {toast?.message}
         </Alert>
       </Snackbar>

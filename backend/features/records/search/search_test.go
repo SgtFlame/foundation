@@ -146,6 +146,18 @@ func TestSearchFollowsTheRecords(t *testing.T) {
 	if got := f.found(1, data.SearchQuery{Text: "giraffe"}); len(got) != 0 {
 		t.Errorf("an unsearchable field was searched: %v", got)
 	}
+	// A filter keeps the hits whose fields match, as records.find's does
+	// (forge 7o); it needs the entity type
+	giraffe := &data.Filter{Field: "note", Op: "eq", Value: json.RawMessage(`"giraffe"`)}
+	if got := f.found(1, data.SearchQuery{Entity: "page", Text: "zebra", Filter: giraffe}); !slices.Equal(got, []string{zebra}) {
+		t.Errorf("zebra with note giraffe found %v", got)
+	}
+	if got := f.found(1, data.SearchQuery{Entity: "page", Text: "zebra", Filter: &data.Filter{Field: "note", Op: "eq", Value: json.RawMessage(`"okapi"`)}}); len(got) != 0 {
+		t.Errorf("zebra with note okapi found %v", got)
+	}
+	if _, err := data.SearchRecords(as(1), f.deps, data.SearchQuery{Text: "zebra", Filter: giraffe}); err == nil {
+		t.Error("a filter without an entity type was taken")
+	}
 	// The row rule hides user 2's page from user 1, and user 1's from 2
 	if got := f.found(2, data.SearchQuery{Text: "zebra"}); !slices.Equal(got, []string{other}) {
 		t.Errorf("user 2 found %v", got)

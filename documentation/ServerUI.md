@@ -446,3 +446,11 @@ Decided while building:
 
 ### Decisions to review after seeing it
 In [forge ContentComponents.md](../../forge/documentation/ContentComponents.md#decisions-to-review-after-seeing-it).
+
+## Changed in slice 56
+Forge 7o ([forge MailApp.md](../../forge/documentation/MailApp.md#built-in-part-7o)): what the mail client's pages needed.
+- **A toast with an action**: *Toast* (`ui.toast`) takes `action` (a button's label, *Undo*), `handler` (the running prefab's own handler by its graphs' name, made `prefab:<kp>#<name>` by `Handle.HandlerName`, else a graph id), a `payload` input (what the handler gets) and `duration` (milliseconds, 6000 when there is an action). `ui.Action` carries `label`, `payload` and `duration`; `AppHost` shows the button and runs the handler while the toast is shown.
+- **Presence with state**: `presence.avatars` takes `state`, what this window is doing in the object it joins (others read it in each entry's `state`); `doc.markdown` takes `typingIn` (an object this window is present in while the editor is shown) and `typingState` (its state there while this window typed in the last four seconds; `{typing: true}` when left out). In the browser several parts of a page can hold one object's presence (`live.holdPresence(object, state)` → `{update, release}`): their states are merged, and the window leaves the object when the last is released. `usePresence` uses it too. Mail's thread view reads the others' `state.editing` from a `live.presence` query to say *Ana is replying*.
+- **Slot boxes**: the evaluator puts a slot's content in a `mui.box`; the `slot` node's other props (`fill`, `grow`, `sx`; checked by `ui.CheckPrefab`) now style that box, and `mui.box` takes `fill` (the height it is given). A frame's page slot with `fill` lets a page's `layout.flex` take the frame's height.
+- **`mui.list`** items take `count` (a trailing number; the item bold while it is above 0) and `header` (a section title, not selectable).
+- **`record.fieldEditor` on a list of files** (`type: list`, `items.type: file`): the files as chips with remove, and *Attach…* uploading one or more, each change sent at once.

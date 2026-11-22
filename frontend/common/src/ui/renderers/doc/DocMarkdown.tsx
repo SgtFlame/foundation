@@ -5,6 +5,7 @@
 // writer) a second after typing pauses. The view is Foundation's Live
 // Preview (CodeMirror 6) with a formatting toolbar.
 
+import { live } from '../../../live/LiveConnection.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { defaultKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
@@ -45,6 +46,11 @@ export interface MarkdownFieldProps {
   label?: string
   // The text, a second after it stops changing
   onChange?(value: string): void
+  // An object ("<type>.<id>") this window is present in while the editor
+  // is shown, its state typingState while this window typed in the last
+  // few seconds (forge 07o: "Ana is replying" on a mail thread)
+  typingIn?: string
+  typingState?: Record<string, unknown>
 }
 
 export function DocMarkdown(p: RendererProps) {
@@ -54,7 +60,8 @@ export function DocMarkdown(p: RendererProps) {
   return (
     <MarkdownField entity={str(p.props.entity)} id={str(p.props.id)} field={str(p.props.field)} placeholder={str(p.props.placeholder) || undefined}
       toolbar={p.props.toolbar !== false} minHeight={p.props.minHeight as number | undefined} maxHeight={p.props.maxHeight as number | undefined}
-      disabled={!!p.props.disabled} onChange={p.handles('change') ? onChange : undefined} />
+      disabled={!!p.props.disabled} onChange={p.handles('change') ? onChange : undefined}
+      typingIn={str(p.props.typingIn) || undefined} typingState={p.props.typingState as Record<string, unknown> | undefined} />
   )
 }
 
@@ -134,6 +141,7 @@ function DocEditor({ fileId, readOnly, p, onClosed }: { fileId: string; readOnly
   }, [state.status])
 
   useChange(session, p)
+  useTyping(session, p.typingIn, p.typingState)
 
   const toolbar = p.toolbar !== false && !readOnly
   const minHeight = p.minHeight ?? 120
@@ -187,6 +195,33 @@ function useChange(session: CollabSession, p: MarkdownFieldProps) {
       session.ytext.unobserve(observer)
     }
   }, [session, handles])
+}
+
+// How long after the last keystroke this window still counts as typing
+const typingMs = 4000
+
+// Presence in typingIn while shown, with typingState while this window
+// typed (a local change to the text) in the last typingMs
+function useTyping(session: CollabSession, object: string | undefined, state: Record<string, unknown> | undefined) {
+  const stateKey = JSON.stringify(state ?? { typing: true })
+  useEffect(() => {
+    if (!object) return
+    const typing = JSON.parse(stateKey) as Record<string, unknown>
+    const held = live.holdPresence(object, {})
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const observer = (_: unknown, tx: Y.Transaction) => {
+      if (!tx.local) return
+      held.update(typing)
+      clearTimeout(timer)
+      timer = setTimeout(() => held.update({}), typingMs)
+    }
+    session.ytext.observe(observer)
+    return () => {
+      clearTimeout(timer)
+      session.ytext.unobserve(observer)
+      held.release()
+    }
+  }, [session, object, stateKey])
 }
 
 // Wraps the selection in marks, or puts a prefix at the start of its lines

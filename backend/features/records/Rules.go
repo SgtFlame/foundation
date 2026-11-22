@@ -24,7 +24,9 @@ import (
 //     record), whether the principal holds the app role (its id in the
 //     manifest) on that record or above it (forge 07j), the record given
 //     as an id or a relation's value: principal.hasRole('mailSender',
-//     record.account).
+//     record.account); and owner, whether the principal holds the
+//     tenant's Owner role on the tenant (or is the Super Administrator,
+//     forge 07o).
 //
 // An empty rule allows every record. A rule that fails to run, or gives
 // something other than a bool (record values are not typed, so Check
@@ -32,7 +34,7 @@ import (
 
 // ruleEnv is the shape every rule is compiled against.
 var ruleEnv = map[string]any{"record": map[string]any{}, "principal": map[string]any{
-	"hasRole": func(role string, record any) bool { return false },
+	"hasRole": func(role string, record any) bool { return false }, "owner": false,
 }}
 
 var rules sync.Map // source → *vm.Program
@@ -80,6 +82,7 @@ func RuleEnv(record map[string]json.RawMessage, p features.Principal) map[string
 		"user": strconv.FormatUint(p.UserID, 10), "tenant": strconv.FormatUint(p.TenantID, 10), "kind": kind, "app": p.App,
 		"agent": strconv.FormatUint(p.AgentID, 10), "onBehalfOf": strconv.FormatUint(p.OnBehalfOf, 10),
 		"hasRole": func(role string, record any) bool { return authz.HasRole(context.Background(), p, role, record) },
+		"owner":   authz.IsOwner(context.Background(), p),
 	}}
 }
 

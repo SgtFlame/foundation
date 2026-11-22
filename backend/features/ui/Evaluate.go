@@ -137,6 +137,13 @@ func (e *evaluator) expand(r *Render, sc *scope, n *Node, path []string, key str
 			return nil
 		}
 		box := N("mui.box", key)
+		// The slot's other props style the box its content is put in
+		// (forge 7o: fill, so a frame's page takes its height)
+		for k, v := range n.Props {
+			if k != "name" {
+				box.P(k, v)
+			}
+		}
 		inner := append(slices.Clone(path), key)
 		for _, c := range content {
 			box.Children = append(box.Children, e.nodes(r, sc.outer, c, inner, "")...)

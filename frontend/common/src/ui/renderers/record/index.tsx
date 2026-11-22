@@ -1,7 +1,7 @@
 // The renderers of the starter library's primitives (forge 04e): the
 // record.* family, presence.avatars, mui.breadcrumbs and connection.form
 
-import { useEffect, useSyncExternalStore, type ComponentType } from 'react'
+import { useEffect, useRef, useSyncExternalStore, type ComponentType } from 'react'
 import { Breadcrumbs, Link, Typography } from '@mui/material'
 import { live } from '../../../live/LiveConnection.ts'
 import { PresenceAvatars } from '../../../live/PresenceAvatars.tsx'
@@ -16,13 +16,23 @@ const str = (v: unknown) => (v === undefined || v === null ? '' : String(v))
 
 // presence.avatars: who is in an object, from its users prop (a presence:
 // binding); with join, this window is in that object while it is shown
+// (with state, forge 07o: what this window is doing there, merged with
+// what other parts of the page say)
 function PresenceAvatarsRenderer(p: RendererProps) {
   const join = str(p.props.join)
+  const stateKey = JSON.stringify(p.props.state ?? {})
+  const held = useRef<ReturnType<typeof live.holdPresence>>(undefined)
   useEffect(() => {
     if (!join) return
-    live.setPresence(join, {})
-    return () => live.setPresence(join, undefined)
+    held.current = live.holdPresence(join, JSON.parse(stateKey))
+    return () => {
+      held.current?.release()
+      held.current = undefined
+    }
+    // the state follows below without leaving and joining again
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [join])
+  useEffect(() => held.current?.update(JSON.parse(stateKey)), [stateKey])
   const me = useSyncExternalStore((l) => live.onStatus(l), () => live.getHello()?.connection)
   const users = ((p.props.users as PresentUser[] | undefined) ?? []).filter((u) => p.props.self || u.connection !== me)
   return <PresenceAvatars users={users} max={(p.props.max as number) ?? 5} />

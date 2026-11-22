@@ -530,18 +530,34 @@ func Contribute(reg *extensions.Registry) {
 			},
 		})
 	}
-	effect(300, "ui.toast", "Toast", "Shows the user a short message", "Toast success \"Counter reset\"",
-		`{"type":"object","properties":{"severity":{"type":"enum","title":"Severity","enum":["success","info","warning","error"]},"message":{"type":"string","title":"Message","description":"Used when the input is unconnected"}}}`,
-		[]cognition.Pin{{ID: "message", Name: "Message", Type: "string", Optional: true, Description: "The message; the config's when unconnected"}},
+	effect(300, "ui.toast", "Toast", "Shows the user a short message; with an action, a button on it (Undo) runs a handler with the payload while it is shown", "Toast success \"Sent\" with Undo running onUndo for 10 seconds",
+		`{"type":"object","properties":{"severity":{"type":"enum","title":"Severity","enum":["success","info","warning","error"]},"message":{"type":"string","title":"Message","description":"Used when the input is unconnected"},"action":{"type":"string","title":"Action","description":"The button's label, e.g. Undo; no button when empty"},"handler":{"type":"string","title":"Handler","description":"What the button runs: a handler of the prefab running this graph (its graphs' name), or a ui.handler graph's id; it gets the payload"},"duration":{"type":"integer","title":"Duration","description":"Milliseconds the toast stays, 6000 when left out"}}}`,
+		[]cognition.Pin{{ID: "message", Name: "Message", Type: "string", Optional: true, Description: "The message; the config's when unconnected"},
+			{ID: "payload", Name: "Payload", Type: "json", Optional: true, Description: "What the action's handler gets, an object"},
+			{ID: "duration", Name: "Duration", Type: "number", Optional: true, Description: "Milliseconds it stays; the config's when unconnected"}},
 		func(h Host, x *cognition.Exec, in cognition.Values) error {
-			var c struct{ Severity, Message string }
+			var c struct {
+				Severity, Message, Action, Handler string
+				Duration                           int
+			}
 			if err := x.Config(&c); err != nil {
 				return err
 			}
 			if c.Severity == "" {
 				c.Severity = "info"
 			}
-			h.Do(ui.Action{Type: "toast", Severity: c.Severity, Message: str(in, "message", c.Message)})
+			a := ui.Action{Type: "toast", Severity: c.Severity, Message: str(in, "message", c.Message), Duration: c.Duration}
+			if d, ok := in["duration"].(float64); ok && d > 0 {
+				a.Duration = int(d)
+			}
+			if c.Action != "" && c.Handler != "" {
+				a.Label, a.Handler = c.Action, c.Handler
+				if n, ok := h.(interface{ HandlerName(string) string }); ok {
+					a.Handler = n.HandlerName(c.Handler)
+				}
+				a.Payload, _ = in["payload"].(map[string]any)
+			}
+			h.Do(a)
 			return nil
 		})
 	effect(310, "ui.openEditor", "Open editor", "Opens one of the app's pages as its own top-level tab, of an editor kind", "Open editor item with the list item's id",

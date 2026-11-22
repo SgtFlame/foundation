@@ -216,6 +216,11 @@ type Action struct {
 	Resource string `json:"resource,omitempty"`
 	// dryRun: a command a dry run did not send, as Name (its type), ID
 	// (its target) and Params (its args)
+	// toast: a button labelled Label that posts Payload to Handler while
+	// the toast is shown, for Duration milliseconds (forge 07o: Undo send)
+	Label    string         `json:"label,omitempty"`
+	Payload  map[string]any `json:"payload,omitempty"`
+	Duration int            `json:"duration,omitempty"`
 }
 
 // Handle is what a handler gets: the event's payload, the session's view
@@ -255,6 +260,16 @@ func (h *Handle) Set(path string, v any) {
 	}
 	setPath(h.s.state, path, v)
 	h.s.changed = append(h.s.changed, "state."+path)
+}
+
+// HandlerName is what an action names to run the handler called name: the
+// running prefab instance's own handler (its graphs' name), else name, a
+// graph id.
+func (h *Handle) HandlerName(name string) string {
+	if h.inst == nil || h.inst.prefab.Graphs[name] == "" {
+		return name
+	}
+	return InstanceHandler(h.inst.kp, name)
 }
 
 // Prop reads the instance's props at a dotted path; nil outside a prefab.

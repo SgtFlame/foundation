@@ -137,6 +137,8 @@ export class LiveConnection {
   private readonly subs = new Map<string, Subscription>()
   private readonly calls = new Map<string, Call>()
   private readonly presence = new Map<string, unknown>()
+  // holdPresence's holders: object → holder → its state
+  private readonly presenceHolders = new Map<string, Map<string, Record<string, unknown>>>()
   private readonly frameListeners = new Map<string, Set<(frame: Frame) => void>>()
   private readonly openListeners = new Set<() => void>()
   private readonly statusListeners = new Set<() => void>()
@@ -253,6 +255,42 @@ export class LiveConnection {
     }
     this.presence.set(object, state)
     this.send({ type: 'presence', object, state })
+  }
+
+  // Holds this window's presence in an object for one part of the page
+  // (forge 07o): several holders of one object share it, its state their
+  // states merged, and the window leaves it when the last is released. A
+  // presence.avatars bar and an editor saying "typing" can both be there.
+  holdPresence(object: string, state: Record<string, unknown> = {}): { update(state: Record<string, unknown>): void; release(): void } {
+    const key = newId('p')
+    let holders = this.presenceHolders.get(object)
+    if (!holders) {
+      holders = new Map()
+      this.presenceHolders.set(object, holders)
+    }
+    const send = () => {
+      const all = this.presenceHolders.get(object)
+      if (!all || all.size === 0) return
+      this.setPresence(object, Object.assign({}, ...all.values()))
+    }
+    holders.set(key, state)
+    send()
+    return {
+      update: (s) => {
+        const all = this.presenceHolders.get(object)
+        if (!all?.has(key) || JSON.stringify(all.get(key)) === JSON.stringify(s)) return
+        all.set(key, s)
+        send()
+      },
+      release: () => {
+        const all = this.presenceHolders.get(object)
+        if (!all?.delete(key)) return
+        if (all.size === 0) {
+          this.presenceHolders.delete(object)
+          this.setPresence(object, undefined)
+        } else send()
+      },
+    }
   }
 
   // Runs a call, giving each event to onEvent, until it ends; aborting

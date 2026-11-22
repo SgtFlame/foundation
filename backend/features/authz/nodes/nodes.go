@@ -1,6 +1,8 @@
 // Package authznodes is access control's Cognition nodes (forge 07j):
-// Grant role and Revoke role give an agent a role on a resource (often one
-// record), as the run's principal, who needs the right to grant it.
+// Grant role and Revoke role give an agent (or, forge 07o, a user) a role
+// on a resource (often one record), as the run's principal, who needs the
+// right to grant it; Has role tells whether the run's principal holds an
+// app role on a record.
 package authznodes
 
 import (
@@ -21,15 +23,17 @@ const source = "authz"
 
 // Node type ids.
 const (
-	GrantID  = "authz.grantRole"
-	RevokeID = "authz.revokeRole"
+	GrantID   = "authz.grantRole"
+	RevokeID  = "authz.revokeRole"
+	HasRoleID = "authz.hasRole"
 )
 
 var kinds = []string{livenodes.KindAction, livenodes.KindTrigger, uinodes.KindHandler, cognition.KindFunction, cognition.KindAgent}
 
 var inPins = []cognition.Pin{
 	cognition.ExecPin(cognition.Then, ""),
-	cognition.DataPin("agent", "Agent", "string", "The agent's id (its record's id), or agent:<id>"),
+	{ID: "agent", Name: "Agent", Type: "string", Optional: true, Description: "The agent's id (its record's id), or agent:<id>"},
+	{ID: "user", Name: "User", Type: "string", Optional: true, Description: "A user's id, in place of an agent (forge 07o)"},
 	cognition.DataPin("role", "Role", "string", "The role: an app role's id in its manifest (mailSender), or a role's id"),
 	{ID: "entity", Name: "Entity", Type: "string", Optional: true, Description: "With Record, the entity type of the one record it is granted on"},
 	{ID: "record", Name: "Record", Type: "string", Optional: true, Description: "The id of the one record it is granted on, e.g. a mail account"},
@@ -40,7 +44,7 @@ var inPins = []cognition.Pin{
 func Contribute(reg *extensions.Registry) {
 	cognition.Nodes.Register(reg, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: GrantID, Source: source, Order: 960}, Title: "Grant role", Category: "Access",
-		Description: "Gives an agent a role on one record (or another resource), as the run's principal, who needs grant.write there and every permission of the role: an agent never holds more than its granter could give. Granting it again changes nothing. Leaves by Failed with the reason when refused.",
+		Description: "Gives an agent, or a user, a role on one record (or another resource), as the run's principal, who needs grant.write there and every permission of the role: no one holds more than their granter could give. An app's own principal (its triggers and jobs) may grant the app's own roles on the app's own records. Granting it again changes nothing. Leaves by Failed with the reason when refused.",
 		Example:     "Grant role mailSender to the triage agent on the support account's record",
 		Examples:    cognition.ConfigExample(GrantID, `{}`),
 		Tags:        []string{"rbac", "agent", "share", "permission"},
@@ -59,7 +63,7 @@ func Contribute(reg *extensions.Registry) {
 			if d := pol.MayGrant(x.Context(), x.Principal, a.role, a.resource); !d.Allowed {
 				return cognition.Values{"error": d.Err("grant.write", a.resource).Error()}, "failed", nil
 			}
-			g, err := pol.Grant(x.Context(), nil, authz.GrantArgs{AgentID: a.agent, RoleID: a.role.ID, Resource: a.resource, By: grantor(x.Principal)})
+			g, err := pol.Grant(x.Context(), nil, authz.GrantArgs{UserID: a.user, AgentID: a.agent, RoleID: a.role.ID, Resource: a.resource, By: grantor(x.Principal)})
 			if err != nil {
 				return cognition.Values{"error": err.Error()}, "failed", nil
 			}
@@ -68,7 +72,7 @@ func Contribute(reg *extensions.Registry) {
 	})
 	cognition.Nodes.Register(reg, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: RevokeID, Source: source, Order: 961}, Title: "Revoke role", Category: "Access",
-		Description: "Takes a role an agent holds on one record (or another resource) away, as the run's principal, with the same right as Grant role; the agent's next check fails. Leaves by Failed when refused or when the agent does not hold it there.",
+		Description: "Takes a role an agent or a user holds on one record (or another resource) away, as the run's principal, with the same right as Grant role; their next check fails. Leaves by Failed when refused or when they do not hold it there.",
 		Example:     "Revoke role mailSender from the triage agent on the support account's record",
 		Examples:    cognition.ConfigExample(RevokeID, `{}`),
 		Tags:        []string{"rbac", "agent", "share", "permission"},
@@ -91,14 +95,40 @@ func Contribute(reg *extensions.Registry) {
 				return nil, "", err
 			}
 			for _, g := range grants {
-				if g.AgentID == a.agent && g.RoleID == a.role.ID {
+				if g.AgentID == a.agent && g.UserID == a.user && g.RoleID == a.role.ID {
 					if _, err := pol.Revoke(x.Context(), nil, g.ID, grantor(x.Principal)); err != nil {
 						return cognition.Values{"error": err.Error()}, "failed", nil
 					}
 					return cognition.Values{}, cognition.Then, nil
 				}
 			}
-			return cognition.Values{"error": "the agent does not hold that role there"}, "failed", nil
+			return cognition.Values{"error": "they do not hold that role there"}, "failed", nil
+		},
+	})
+	cognition.Nodes.Register(reg, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: HasRoleID, Source: source, Order: 962}, Title: "Has role", Category: "Access",
+		Description: "Whether the run's principal (the command's sender in a command graph) holds an app role on one record, or above it on the app or the tenant, as a row rule's principal.hasRole tells (forge 07o): a command refuses what only a role allows, such as sending from a mail account without Mail sender.",
+		Example:     "Has role mailSender on the draft's account, else Reject",
+		Examples:    cognition.ConfigExample(HasRoleID, `{"role":"sender"}`),
+		Tags:        []string{"rbac", "role", "permission", "check"},
+		Kinds:       append([]string{livenodes.KindCommand, livenodes.KindQuery}, kinds...),
+		Config:      []byte(`{"type":"object","properties":{"role":{"type":"string","title":"Role","description":"An app role's id in its manifest, used when the input is unconnected"}}}`),
+		Sample:      cognition.Values{"has": true},
+		Pins: cognition.Pins{In: []cognition.Pin{
+			{ID: "role", Name: "Role", Type: "string", Optional: true, Description: "The app role's id in its manifest; the config's when unconnected"},
+			cognition.DataPin("record", "Record", "string", "The record's id, e.g. a mail account's"),
+		}, Out: []cognition.Pin{cognition.DataPin("has", "Has", "bool", "Whether the principal holds the role there")}},
+		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
+			var c struct{ Role string }
+			if err := x.Config(&c); err != nil {
+				return nil, "", err
+			}
+			role, _ := cognition.Get[string](in, "role")
+			if role == "" {
+				role = c.Role
+			}
+			record, _ := cognition.Get[string](in, "record")
+			return cognition.Values{"has": authz.HasRole(x.Context(), x.Principal, role, record)}, "", nil
 		},
 	})
 }
@@ -106,6 +136,7 @@ func Contribute(reg *extensions.Registry) {
 // grantArgs are a node's inputs, resolved.
 type grantArgs struct {
 	agent    uint64
+	user     uint64
 	role     authz.Role
 	resource string
 }
@@ -130,14 +161,26 @@ func prepare(x *cognition.Exec, in cognition.Values) (*authz.Policy, grantArgs, 
 		return nil, a, fail("access control is not installed")
 	}
 	s, _ := cognition.Get[string](in, "agent")
-	id, ok := authz.ParseAgent(s)
-	if !ok {
-		return nil, a, fail("%q is not an agent's id", s)
+	u, _ := cognition.Get[string](in, "user")
+	switch {
+	case s != "" && u != "":
+		return nil, a, fail("give an agent or a user, not both")
+	case u != "":
+		id, err := strconv.ParseUint(strings.TrimPrefix(strings.TrimSpace(u), "user:"), 10, 64)
+		if err != nil || id == 0 {
+			return nil, a, fail("%q is not a user's id", u)
+		}
+		a.user = id
+	default:
+		id, ok := authz.ParseAgent(s)
+		if !ok {
+			return nil, a, fail("%q is not an agent's id", s)
+		}
+		if _, found, err := authz.FindAgent(x.Context(), x.Principal.TenantID, id); err != nil || !found {
+			return nil, a, fail("there is no agent %d", id)
+		}
+		a.agent = id
 	}
-	if _, found, err := authz.FindAgent(x.Context(), x.Principal.TenantID, id); err != nil || !found {
-		return nil, a, fail("there is no agent %d", id)
-	}
-	a.agent = id
 
 	a.resource = authz.Tenant(x.Principal)
 	entity, _ := cognition.Get[string](in, "entity")
