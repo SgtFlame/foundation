@@ -261,17 +261,30 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	})
 	node(reg, 555, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "live.currentUser"}, Title: "Current user", Category: "Data",
-		Description: "Who the run is for: the user who sent the event, command or query (ids as text, as a relation to user holds them); no user for background work",
+		Description: "Who the run is for: the user who sent the event, command or query (ids as text, as a relation to user holds them); no user for background work. Also what kind of principal it is, the agent's id when an agent runs it, and that agent run's reach: the subjects it was started on, which a host's tools confine its writes to (forge 7p-3)",
 		Example:     "Current user's id as a new task's assignee",
 		Pins: cognition.Pins{Out: []cognition.Pin{
 			cognition.DataPin("user", "User", "string", "The user's id; empty for background work"),
-			cognition.DataPin("tenant", "Tenant", "string", "The tenant's id")}},
+			cognition.DataPin("tenant", "Tenant", "string", "The tenant's id"),
+			cognition.DataPin("kind", "Kind", "string", "user, app, agent, service or anonymous"),
+			cognition.DataPin("agent", "Agent", "string", "The agent's id (its record's) when an agent runs it; else empty"),
+			cognition.DataPin("reach", "Reach", "json", "An agent run's subjects, [{entity, id}], when its run is confined to them; else an empty list (not confined)")}},
 		Run: func(x *cognition.Exec, _ cognition.Values) (cognition.Values, string, error) {
-			user := ""
-			if x.Principal.Kind == features.PrincipalUser {
-				user = strconv.FormatUint(x.Principal.UserID, 10)
+			p := x.Principal
+			user, agent := "", ""
+			if p.Kind == features.PrincipalUser {
+				user = strconv.FormatUint(p.UserID, 10)
 			}
-			return cognition.Values{"user": user, "tenant": strconv.FormatUint(x.Principal.TenantID, 10)}, "", nil
+			if p.Kind == features.PrincipalAgent {
+				agent = strconv.FormatUint(p.AgentID, 10)
+			}
+			reach := []any{}
+			for _, k := range p.ReachKeys() {
+				if e, id, ok := strings.Cut(k, ":"); ok {
+					reach = append(reach, map[string]any{"entity": e, "id": id})
+				}
+			}
+			return cognition.Values{"user": user, "tenant": strconv.FormatUint(p.TenantID, 10), "kind": string(p.Kind), "agent": agent, "reach": reach}, "", nil
 		},
 	})
 	node(reg, 560, cognition.NodeType{

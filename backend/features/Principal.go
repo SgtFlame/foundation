@@ -3,6 +3,7 @@ package features
 import (
 	"context"
 	"strconv"
+	"strings"
 )
 
 // PrincipalKind tells a person apart from work running with no user present.
@@ -38,6 +39,18 @@ type Principal struct {
 	// OnBehalfOf is the user an agent's run acts for (who started it, or
 	// the agent's creator), for audit; it gives the agent no access.
 	OnBehalfOf uint64
+	// Reach is what an agent's run is about (forge 7p-3): the subjects it
+	// was started on, as record keys "<entity>:<id>" separated by spaces;
+	// empty when the run is not confined. It grants nothing: a host's
+	// tools read it (Current user's reach) and refuse writes outside it.
+	// Set by Call graph's Reach when it runs a graph As agent; work an
+	// agent starts keeps its reach (authz.AsAgent), so it never widens.
+	Reach string
+}
+
+// ReachKeys is the principal's reach as record keys ("<entity>:<id>").
+func (p Principal) ReachKeys() []string {
+	return strings.Fields(p.Reach)
 }
 
 // Single-user mode runs as one implicit tenant and user. Their IDs are
@@ -108,14 +121,16 @@ type PrincipalRef struct {
 	// AgentID and OnBehalfOf are an agent principal's (forge 07j).
 	AgentID    uint64 `json:"agentId,string,omitempty"`
 	OnBehalfOf uint64 `json:"onBehalfOf,string,omitempty"`
+	// Reach is an agent run's reach (forge 7p-3), kept by work it enqueues.
+	Reach string `json:"reach,omitempty"`
 }
 
 // Ref is the principal as data.
 func (p Principal) Ref() PrincipalRef {
-	return PrincipalRef{Kind: p.Kind, UserID: p.UserID, App: p.App, AgentID: p.AgentID, OnBehalfOf: p.OnBehalfOf}
+	return PrincipalRef{Kind: p.Kind, UserID: p.UserID, App: p.App, AgentID: p.AgentID, OnBehalfOf: p.OnBehalfOf, Reach: p.Reach}
 }
 
 // In is the principal a reference names in tenant.
 func (r PrincipalRef) In(tenant uint64) Principal {
-	return Principal{Kind: r.Kind, UserID: r.UserID, TenantID: tenant, App: r.App, AgentID: r.AgentID, OnBehalfOf: r.OnBehalfOf}
+	return Principal{Kind: r.Kind, UserID: r.UserID, TenantID: tenant, App: r.App, AgentID: r.AgentID, OnBehalfOf: r.OnBehalfOf, Reach: r.Reach}
 }

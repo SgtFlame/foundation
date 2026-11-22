@@ -123,7 +123,12 @@ func AsAgent(ctx context.Context, p features.Principal, id uint64) (features.Pri
 	case features.PrincipalService, features.PrincipalApp:
 		by = a.CreatedBy
 	}
-	return features.AgentPrincipal(p.TenantID, a.ID, by), nil
+	as := features.AgentPrincipal(p.TenantID, a.ID, by)
+	if p.Kind == features.PrincipalAgent {
+		// An agent's run keeps its reach in whatever it starts (forge 7p-3)
+		as.Reach = p.Reach
+	}
+	return as, nil
 }
 
 // ParseAgent reads an agent's id from "agent:<id>" or "<id>".

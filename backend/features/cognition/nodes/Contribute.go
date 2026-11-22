@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/SgtFlame/foundation/backend/features/authz"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/cognition"
@@ -23,7 +24,10 @@ const source = "cognition"
 const (
 	CallGraph = "flow.callGraph"
 	// AsAgentPin is Call graph's input naming an agent to run as (forge 07j).
-	AsAgentPin  = "asAgent"
+	AsAgentPin = "asAgent"
+	// ReachPin is Call graph's input confining an agent's run to subjects
+	// (forge 7p-3), used only with As agent.
+	ReachPin    = "reach"
 	GetVariable = "data.getVariable"
 	SetVariable = "data.setVariable"
 	Reroute     = "flow.reroute"
@@ -323,7 +327,9 @@ func contributeFlow(reg *extensions.Registry) {
 				in[i].Exec = false
 			}
 			in = append(in, cognition.Pin{ID: AsAgentPin, Name: "As agent", Type: "string", Optional: true,
-				Description: "An agent's id to run the graph as (forge 07j); the run's principal must have made the agent or hold agent.use on it"})
+				Description: "An agent's id to run the graph as (forge 07j); the run's principal must have made the agent or hold agent.use on it"},
+				cognition.Pin{ID: ReachPin, Name: "Reach", Type: "json", Optional: true,
+					Description: "With As agent: what the agent's run is about, the subjects {entity, id} (one, or a list) its host's tools confine its writes to (forge 7p-3); Current user gives it as reach. An agent's own reach is kept, never widened"})
 			out := append([]cognition.Pin{cognition.ExecPin(cognition.Then, "")}, c.Outputs...)
 			for i := 1; i < len(out); i++ {
 				out[i].Exec, out[i].Optional = false, false
@@ -367,9 +373,19 @@ func contributeFlow(reg *extensions.Registry) {
 				if err != nil {
 					return caught(c, nil, err)
 				}
+				reach, err := ReachOf(in[ReachPin])
+				if err != nil {
+					return caught(c, nil, err)
+				}
+				if reach != "" {
+					if as.Reach != "" && as.Reach != reach {
+						return caught(c, nil, fmt.Errorf("an agent's run cannot change its reach"))
+					}
+					as.Reach = reach
+				}
 				inputs := cognition.Values{}
 				for k, v := range in {
-					if k != AsAgentPin {
+					if k != AsAgentPin && k != ReachPin {
 						inputs[k] = v
 					}
 				}
@@ -377,6 +393,7 @@ func contributeFlow(reg *extensions.Registry) {
 				return caught(c, out, err)
 			}
 			delete(in, AsAgentPin)
+			delete(in, ReachPin)
 			out, err := x.Call(c.Graph, in)
 			return caught(c, out, err)
 		},
@@ -545,4 +562,62 @@ func caught(c callConfig, out cognition.Values, err error) (cognition.Values, st
 		return out, cognition.Then, err
 	}
 	return cognition.Values{"error": err.Error()}, "failed", nil
+}
+
+// ReachOf reads a reach (forge 7p-3) as features.Principal holds it: a
+// subject {entity, id}, a list of them, or "<entity>:<id>" keys, as
+// space-separated keys; nil or empty gives "".
+func ReachOf(v any) (string, error) {
+	if v == nil {
+		return "", nil
+	}
+	if s, ok := v.(string); ok {
+		return strings.Join(strings.Fields(s), " "), nil
+	}
+	if s, ok := v.(json.RawMessage); ok {
+		var x any
+		if err := json.Unmarshal(s, &x); err != nil {
+			return "", err
+		}
+		return ReachOf(x)
+	}
+	var items []any
+	switch t := v.(type) {
+	case []any:
+		items = t
+	case map[string]any:
+		items = []any{t}
+	default:
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return "", err
+		}
+		var x any
+		if err := json.Unmarshal(raw, &x); err != nil {
+			return "", err
+		}
+		if _, ok := x.([]any); !ok {
+			if _, ok := x.(map[string]any); !ok {
+				return "", fmt.Errorf("a reach is a subject {entity, id} or a list of them")
+			}
+		}
+		return ReachOf(x)
+	}
+	var keys []string
+	for _, it := range items {
+		switch t := it.(type) {
+		case string:
+			keys = append(keys, strings.Fields(t)...)
+		case map[string]any:
+			e, _ := t["entity"].(string)
+			id := fmt.Sprint(t["id"])
+			if e == "" || t["id"] == nil || id == "" || strings.ContainsAny(e+id, " :") {
+				return "", fmt.Errorf("a reach's subject needs an entity and an id")
+			}
+			keys = append(keys, e+":"+id)
+		default:
+			return "", fmt.Errorf("a reach is a subject {entity, id} or a list of them")
+		}
+	}
+	return strings.Join(keys, " "), nil
 }
