@@ -9,6 +9,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 )
 
@@ -180,5 +181,15 @@ func TestCallTool(t *testing.T) {
 	}
 	if len(by) != 1 || by[0].Kind != features.PrincipalUser {
 		t.Errorf("the read ran as %v", by)
+	}
+}
+
+// An agent run numbers its passages across calls, as a chat round does.
+func TestAgentCitesInOrder(t *testing.T) {
+	cite := citeInOrder()
+	first := cite([]retrieval.Scored{{Segment: retrieval.Segment{SourceID: "library", Title: "a"}}, {Segment: retrieval.Segment{Title: "b"}}})
+	second := cite([]retrieval.Scored{{Segment: retrieval.Segment{Title: "c"}}})
+	if first[0].Number != 1 || first[1].Number != 2 || second[0].Number != 3 {
+		t.Fatalf("numbers: %d %d %d", first[0].Number, first[1].Number, second[0].Number)
 	}
 }

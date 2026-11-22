@@ -70,8 +70,15 @@ func info(tenant uint64, t records.EntityType, r Record) (authz.AgentInfo, bool)
 	}
 	p := features.ServicePrincipal(tenant)
 	app, _ := ownerApp(t.Owner)
+	values := make(map[string]any, len(r))
+	for k, raw := range r {
+		var v any
+		if json.Unmarshal(raw, &v) == nil {
+			values[k] = v
+		}
+	}
 	return authz.AgentInfo{ID: id, TenantID: tenant, Name: name, Entity: t.ID, App: app, CreatedBy: by,
-		Resource: authz.RecordResource(records.Resource(p, t.ID), value)}, true
+		Resource: authz.RecordResource(records.Resource(p, t.ID), value), Record: values}, true
 }
 
 func ownerApp(owner string) (string, bool) {

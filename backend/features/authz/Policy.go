@@ -81,7 +81,7 @@ func (pol *Policy) Roles() (map[uint64]Role, error) {
 // RoleFrom is a custom role as a Role.
 func RoleFrom(c CustomRole) Role {
 	r := Role{ID: c.ID, Name: c.Name, Description: c.Description, Scope: OnTenant, TenantID: c.TenantID, Revision: c.Revision, Permissions: []string{},
-		App: c.AppID, AppRole: c.AppRole}
+		App: c.AppID, AppRole: c.AppRole, AgentWarning: c.AgentWarning}
 	_ = json.Unmarshal([]byte(c.Permissions), &r.Permissions)
 	if c.Rules != "" {
 		_ = json.Unmarshal([]byte(c.Rules), &r.Rules)

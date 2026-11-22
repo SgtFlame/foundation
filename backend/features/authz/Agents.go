@@ -30,6 +30,10 @@ type AgentInfo struct {
 	CreatedBy uint64 `json:"createdBy,string"`
 	// Resource is the record's authz path, where agent.use is checked.
 	Resource string `json:"resource"`
+	// Record is the defining record's values, read as the system: what
+	// Current user's agentRecord gives the agent itself (an agent may always
+	// know its own definition, forge 7p-4). Never sent in listings.
+	Record map[string]any `json:"-"`
 }
 
 // Agents finds the agents of a tenant: the records feature's directory.

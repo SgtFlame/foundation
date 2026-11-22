@@ -45,11 +45,14 @@ type Role struct {
 	App     string            `json:"app,omitempty"`
 	AppRole string            `json:"appRole,omitempty"`
 	Rules   map[string]string `json:"rules,omitempty"`
+	// AgentWarning is what the Share dialog says when the role is granted
+	// to an agent (forge 7p-4).
+	AgentWarning string `json:"agentWarning,omitempty"`
 }
 
 func RoleFrom(r authz.Role) Role {
 	return Role{ID: r.ID, Name: r.Name, Description: r.Description, Scope: r.Scope, BuiltIn: r.BuiltIn, Permissions: r.Permissions, Revision: r.Revision,
-		App: r.App, AppRole: r.AppRole, Rules: r.Rules}
+		App: r.App, AppRole: r.AppRole, Rules: r.Rules, AgentWarning: r.AgentWarning}
 }
 
 type Grant struct {

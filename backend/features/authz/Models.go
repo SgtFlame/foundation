@@ -20,7 +20,10 @@ type CustomRole struct {
 	Rules       string // an app role's row rules, JSON {key: expression}
 	AppID       string `gorm:"index"`
 	AppRole     string
-	Revision    int
+	// AgentWarning is an app role's caution, shown when it is granted to
+	// an agent (forge 7p-4).
+	AgentWarning string
+	Revision     int
 }
 
 // RoleGrant gives a principal a role on a resource and everything under it:

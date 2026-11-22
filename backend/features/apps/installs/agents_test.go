@@ -103,6 +103,10 @@ func TestAgentPrincipals(t *testing.T) {
 	if info, _, _ = authz.FindAgent(context.Background(), 1, agentID); info.Name != "Triage bot" {
 		t.Errorf("the agent was not renamed: %q", info.Name)
 	}
+	// Its record's values come with it, for Current user's agentRecord
+	if info.Record["name"] != "Triage bot" || info.Record["principal"] != made.Target {
+		t.Errorf("the agent's record: %v", info.Record)
+	}
 
 	t1 := f.doAs(owner, "record.create", "", map[string]any{"entity": "task", "values": map[string]any{"title": "Support", "assignee": "1"}})
 	t2 := f.doAs(owner, "record.create", "", map[string]any{"entity": "task", "values": map[string]any{"title": "Billing", "assignee": "1"}})

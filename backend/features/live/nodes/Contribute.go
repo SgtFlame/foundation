@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
@@ -261,13 +262,14 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	})
 	node(reg, 555, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "live.currentUser"}, Title: "Current user", Category: "Data",
-		Description: "Who the run is for: the user who sent the event, command or query (ids as text, as a relation to user holds them); no user for background work. Also what kind of principal it is, the agent's id when an agent runs it, and that agent run's reach: the subjects it was started on, which a host's tools confine its writes to (forge 7p-3)",
+		Description: "Who the run is for: the user who sent the event, command or query (ids as text, as a relation to user holds them); no user for background work. Also what kind of principal it is, the agent's id when an agent runs it, that agent's own record (an agent may always read its own definition, such as its autonomy, forge 7p-4), and that agent run's reach: the subjects it was started on, which a host's tools confine its writes to (forge 7p-3)",
 		Example:     "Current user's id as a new task's assignee",
 		Pins: cognition.Pins{Out: []cognition.Pin{
 			cognition.DataPin("user", "User", "string", "The user's id; empty for background work"),
 			cognition.DataPin("tenant", "Tenant", "string", "The tenant's id"),
 			cognition.DataPin("kind", "Kind", "string", "user, app, agent, service or anonymous"),
 			cognition.DataPin("agent", "Agent", "string", "The agent's id (its record's) when an agent runs it; else empty"),
+			cognition.DataPin("agentRecord", "Agent record", "json", "The record defining the agent when an agent runs it (its fields by id, with _id and _entity), read whatever the agent's own grants; else null"),
 			cognition.DataPin("reach", "Reach", "json", "An agent run's subjects, [{entity, id}], when its run is confined to them; else an empty list (not confined)")}},
 		Run: func(x *cognition.Exec, _ cognition.Values) (cognition.Values, string, error) {
 			p := x.Principal
@@ -275,8 +277,21 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			if p.Kind == features.PrincipalUser {
 				user = strconv.FormatUint(p.UserID, 10)
 			}
+			var record any
 			if p.Kind == features.PrincipalAgent {
 				agent = strconv.FormatUint(p.AgentID, 10)
+				info, ok, err := authz.FindAgent(x.Context(), p.TenantID, p.AgentID)
+				if err != nil {
+					return nil, "", err
+				}
+				if ok {
+					r := make(map[string]any, len(info.Record)+1)
+					for k, v := range info.Record {
+						r[k] = v
+					}
+					r["_entity"] = info.Entity
+					record = r
+				}
 			}
 			reach := []any{}
 			for _, k := range p.ReachKeys() {
@@ -284,7 +299,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 					reach = append(reach, map[string]any{"entity": e, "id": id})
 				}
 			}
-			return cognition.Values{"user": user, "tenant": strconv.FormatUint(p.TenantID, 10), "kind": string(p.Kind), "agent": agent, "reach": reach}, "", nil
+			return cognition.Values{"user": user, "tenant": strconv.FormatUint(p.TenantID, 10), "kind": string(p.Kind), "agent": agent, "agentRecord": record, "reach": reach}, "", nil
 		},
 	})
 	node(reg, 560, cognition.NodeType{

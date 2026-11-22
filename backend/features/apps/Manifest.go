@@ -126,6 +126,10 @@ type Role struct {
 	// Installer marks the role whoever installs the app is given; without
 	// one, it is the first role.
 	Installer bool `json:"installer,omitempty"`
+	// AgentWarning is shown when someone grants the role to an agent, in the
+	// Share dialog (forge 7p-4: Mail sender lets an agent act on mail from
+	// anyone who can write to the account).
+	AgentWarning string `json:"agentWarning,omitempty"`
 }
 
 // Settings become the configuration section app.<id> when the app is

@@ -83,12 +83,19 @@ function ShareDialog({ resource, title, onClose }: { resource: string; title?: s
   useEffect(load, [load])
   useEffect(() => {
     Authz.roles().then((r) => setRoles(r.roles), fail)
-    Promise.all([peopleFor(resource, tenantId), agentsFor(resource)]).then(([p, a]) => setPeople([...p, ...a]), fail)
+    // People and agents load apart, so a failed people lookup (a server
+    // without tenant members) still lists the agents (forge 7p-4)
+    Promise.allSettled([peopleFor(resource, tenantId), agentsFor(resource)]).then(([p, a]) => {
+      setPeople([...(p.status === 'fulfilled' ? p.value : []), ...(a.status === 'fulfilled' ? a.value : [])])
+      if (p.status === 'rejected') fail(p.reason)
+    })
   }, [resource, tenantId, fail])
 
   const roleById = useMemo(() => new Map(roles.map((r) => [r.id, r])), [roles])
   const personById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people])
   const offered = roles.filter((r) => grantable(r, resource))
+  // A role's caution for agents, when one is about to get it (forge 7p-4)
+  const agentWarning = personById.get(user)?.agent ? roleById.get(role)?.agentWarning : undefined
 
   const run = async (op: () => Promise<unknown>) => {
     setError(undefined)
@@ -160,6 +167,11 @@ function ShareDialog({ resource, title, onClose }: { resource: string; title?: s
                 Grant
               </Button>
             </Stack>
+          )}
+          {mayGrant && agentWarning && (
+            <Alert severity="warning" aria-label="Granting to an agent">
+              {agentWarning}
+            </Alert>
           )}
           {inherited.length > 0 && (
             <>

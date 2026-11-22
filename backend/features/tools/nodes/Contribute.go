@@ -20,6 +20,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 	"github.com/SgtFlame/foundation/backend/features/tools/settings"
 	"gorm.io/gorm"
@@ -290,11 +291,28 @@ func runAgent(x *cognition.Exec, in cognition.Values, d Deps) (cognition.Values,
 			Messages: []chatservice.Message{{Role: chatservice.RoleUser, Content: prompt}}},
 		Tools:    offered,
 		Settings: settings,
+		Cite:     citeInOrder(),
 	})
 	if c := out.Response.Common; c.Code >= 300 {
 		return nil, "", tools.Log.Code("agent_failed").With("status", c.Code).Errorf("the model failed: %s", c.Message)
 	}
 	return cognition.Values{"reply": out.Reply, "calls": Calls(out.Calls), "usage": usageOf(x, d, cfg.Level, out)}, cognition.Then, nil
+}
+
+// citeInOrder numbers the run's passages [1], [2], … in the order its tools
+// found them, as a chat round numbers its citations (forge 7p-4), so the
+// model cites them by number and a host reads them back from the calls.
+func citeInOrder() func([]retrieval.Scored) []retrieval.Scored {
+	n := 0
+	return func(segments []retrieval.Scored) []retrieval.Scored {
+		out := make([]retrieval.Scored, len(segments))
+		for i, s := range segments {
+			n++
+			s.Number = n
+			out[i] = s
+		}
+		return out
+	}
 }
 
 // Calls are a loop's calls as a node gives them: name, status, summary,

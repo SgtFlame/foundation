@@ -40,6 +40,9 @@ type Role struct {
 	// Rules are an app role's row rules by key (an entity type's id),
 	// expressions the owning feature runs (records); see RowRules.
 	Rules map[string]string
+	// AgentWarning is shown when the role is granted to an agent (an app
+	// role's, from its manifest; forge 7p-4).
+	AgentWarning string
 }
 
 // Holds tells whether the role contains permission.

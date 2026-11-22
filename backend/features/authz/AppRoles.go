@@ -19,6 +19,8 @@ type AppRole struct {
 	Description string
 	Permissions []string
 	Rules       map[string]string
+	// AgentWarning is shown when the role is granted to an agent.
+	AgentWarning string
 }
 
 // SyncAppRoles makes an app's roles in the tenant what roles says, as the
@@ -43,7 +45,7 @@ func (pol *Policy) SyncAppRoles(ctx context.Context, tenant uint64, app string, 
 			}
 			i := slices.IndexFunc(rows, func(c CustomRole) bool { return c.AppRole == r.ID })
 			if i < 0 {
-				row := CustomRole{TenantID: tenant, AppID: app, AppRole: r.ID, Name: r.Name, Description: r.Description, Permissions: string(encoded), Rules: rules, Revision: 1}
+				row := CustomRole{TenantID: tenant, AppID: app, AppRole: r.ID, Name: r.Name, Description: r.Description, Permissions: string(encoded), Rules: rules, AgentWarning: r.AgentWarning, Revision: 1}
 				if err := tx.Create(&row).Error; err != nil {
 					return err
 				}
@@ -52,10 +54,10 @@ func (pol *Policy) SyncAppRoles(ctx context.Context, tenant uint64, app string, 
 			}
 			row := rows[i]
 			ids[r.ID] = row.ID
-			if row.Name == r.Name && row.Description == r.Description && row.Permissions == string(encoded) && row.Rules == rules {
+			if row.Name == r.Name && row.Description == r.Description && row.Permissions == string(encoded) && row.Rules == rules && row.AgentWarning == r.AgentWarning {
 				continue
 			}
-			row.Name, row.Description, row.Permissions, row.Rules, row.Revision = r.Name, r.Description, string(encoded), rules, row.Revision+1
+			row.Name, row.Description, row.Permissions, row.Rules, row.AgentWarning, row.Revision = r.Name, r.Description, string(encoded), rules, r.AgentWarning, row.Revision+1
 			if err := tx.Save(&row).Error; err != nil {
 				return err
 			}

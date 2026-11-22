@@ -47,7 +47,7 @@ func AppRoles(v Version) []authz.AppRole {
 	m := v.Manifest
 	out := make([]authz.AppRole, 0, len(m.Roles))
 	for _, r := range m.Roles {
-		ar := authz.AppRole{ID: r.ID, Name: firstNonEmpty(r.Title, r.ID), Description: r.Description, Permissions: []string{}, Rules: r.RowRules}
+		ar := authz.AppRole{ID: r.ID, Name: firstNonEmpty(r.Title, r.ID), Description: r.Description, Permissions: []string{}, Rules: r.RowRules, AgentWarning: r.AgentWarning}
 		if ar.Description == "" {
 			ar.Description = "A role of the app " + m.Name
 		}

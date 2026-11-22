@@ -412,6 +412,9 @@ func withPassages(content map[string]any, segments []retrieval.Scored) map[strin
 	passages := make([]map[string]any, 0, len(segments))
 	for _, s := range segments {
 		p := map[string]any{"title": s.Title, "text": s.Text}
+		if s.SourceID != "" {
+			p["source"] = s.SourceID
+		}
 		if s.Number > 0 {
 			p["cite"] = "[" + strconv.Itoa(s.Number) + "]"
 		}

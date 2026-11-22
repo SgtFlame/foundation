@@ -24,11 +24,17 @@ func TestAppRoles(t *testing.T) {
 		return features.Principal{Kind: features.PrincipalUser, UserID: id, TenantID: 1}
 	}
 	ids, err := pol.SyncAppRoles(ctx, 1, "tasks", []AppRole{
-		{ID: "manager", Name: "Manager", Permissions: []string{"app:tasks/entity:task/record.read", "app:tasks/entity:task/record.update"}},
+		{ID: "manager", Name: "Manager", Permissions: []string{"app:tasks/entity:task/record.read", "app:tasks/entity:task/record.update"}, AgentWarning: "It changes everyone's tasks."},
 		{ID: "member", Name: "Member", Permissions: []string{"app:tasks/entity:task/record.read"}, Rules: map[string]string{"task": "record.assignee == principal.user"}},
 	})
 	if err != nil || len(ids) != 2 {
 		t.Fatal(ids, err)
+	}
+	// A role's caution for agents is kept with it (forge 7p-4)
+	if roles, err := pol.Roles(); err != nil {
+		t.Fatal(err)
+	} else if roles[ids["manager"]].AgentWarning != "It changes everyone's tasks." || roles[ids["member"]].AgentWarning != "" {
+		t.Errorf("agent warnings: %q %q", roles[ids["manager"]].AgentWarning, roles[ids["member"]].AgentWarning)
 	}
 	grant := func(u, role uint64, res string) {
 		if _, err := pol.Grant(ctx, nil, GrantArgs{UserID: u, RoleID: role, Resource: res}); err != nil {
@@ -132,11 +138,11 @@ func TestAppPrincipal(t *testing.T) {
 		action, res string
 		want        bool
 	}{
-		{tasks, "record.read", "tenant:1/app:tasks/entity:task", true},     // its own role
-		{tasks, "record.update", "tenant:1/app:tasks/entity:task", false},  // not in its role (tenant 2's app role has it)
-		{tasks, "record.update", "tenant:1/app:notes/entity:note", false},  // another app's role
-		{tasks, "record.read", "tenant:1/records/entity:note", false},      // the tenant's records: no tenant role
-		{tasks, "record.read", "tenant:2/app:tasks/entity:task", false},    // another tenant
+		{tasks, "record.read", "tenant:1/app:tasks/entity:task", true},    // its own role
+		{tasks, "record.update", "tenant:1/app:tasks/entity:task", false}, // not in its role (tenant 2's app role has it)
+		{tasks, "record.update", "tenant:1/app:notes/entity:note", false}, // another app's role
+		{tasks, "record.read", "tenant:1/records/entity:note", false},     // the tenant's records: no tenant role
+		{tasks, "record.read", "tenant:2/app:tasks/entity:task", false},   // another tenant
 		{features.AppPrincipal(1, ""), "record.read", "tenant:1/app:tasks/entity:task", false},
 	} {
 		if d := Check(ctx, c.p, c.action, c.res); d.Allowed != c.want {

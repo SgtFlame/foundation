@@ -41,6 +41,9 @@ export interface Role {
   // appRole is its id in the manifest, rules its row rules by entity type
   app?: string
   appRole?: string
+  // What the Share dialog says when the role is granted to an agent (an app
+  // role's, from its manifest; forge 7p-4)
+  agentWarning?: string
   rules?: Record<string, string>
 }
 
