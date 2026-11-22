@@ -12,8 +12,14 @@ import (
 // entity:task.* all four.
 var RecordActions = []string{"read", "create", "update", "delete"}
 
+// AgentUse is the action a role names to let its holders run work as the
+// agents an entity type with a principal field defines: entity:<id>.use,
+// agent.use on its records (forge 7p-2). entity:<id>.* does not include it.
+const AgentUse = "use"
+
 // EntityAction splits an action a role or a command names,
-// entity:<id>.<action>, into the entity type and its record actions.
+// entity:<id>.<action>, into the entity type and its record actions (or
+// AgentUse).
 func EntityAction(a string) (entity string, actions []string, ok bool) {
 	res, act, ok := strings.Cut(a, ".")
 	entity, isEntity := strings.CutPrefix(res, "entity:")
@@ -22,7 +28,7 @@ func EntityAction(a string) (entity string, actions []string, ok bool) {
 		return "", nil, false
 	case act == "*":
 		return entity, RecordActions, true
-	case slices.Contains(RecordActions, act):
+	case slices.Contains(RecordActions, act), act == AgentUse:
 		return entity, []string{act}, true
 	}
 	return "", nil, false
@@ -52,6 +58,9 @@ func AppRoles(v Version) []authz.AppRole {
 			}
 			for _, act := range acts {
 				p := Path(m.ID, entity) + "/" + authz.Permission("record", act)
+				if act == AgentUse {
+					p = Path(m.ID, entity) + "/" + authz.Permission("agent", act)
+				}
 				if !slices.Contains(ar.Permissions, p) {
 					ar.Permissions = append(ar.Permissions, p)
 				}

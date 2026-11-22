@@ -282,7 +282,7 @@ func (c *check) entities() {
 func (c *check) action(path, a string) {
 	entity, _, ok := EntityAction(a)
 	if !ok {
-		c.add(path, fmt.Sprintf("%q is not an action", a), "use entity:<id>.<action>, the action read, create, update, delete or *, such as entity:task.update or entity:task.*")
+		c.add(path, fmt.Sprintf("%q is not an action", a), "use entity:<id>.<action>, the action read, create, update, delete or *, such as entity:task.update or entity:task.* (or use, for a role whose holders run the agents a type defines)")
 		return
 	}
 	if !slices.Contains(c.m.Entities, entity) {
@@ -310,6 +310,8 @@ func (c *check) commands() {
 		c.graph(path+".graph", cmd.Graph, "command", "command", cmd.Type)
 		if _, acts, ok := EntityAction(cmd.Action); ok && len(acts) > 1 {
 			c.add(path+".action", fmt.Sprintf("a command needs one action, and %s is every one", cmd.Action), "name the one it does, such as entity:task.update")
+		} else if ok && acts[0] == AgentUse {
+			c.add(path+".action", "a command's action is a record action, not use", "name read, create, update or delete")
 		} else if cmd.Action != "" {
 			c.action(path+".action", cmd.Action)
 		}
