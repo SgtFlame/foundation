@@ -9,7 +9,7 @@ import (
 )
 
 // Rich text (Records.md › Built in slice 24) is a ProseMirror document as
-// TipTap and Milkdown save it (Forge 25-Notion question 1): {type: "doc",
+// TipTap and Milkdown save it (Forge 35-Docs question 1): {type: "doc",
 // content: [nodes]}, each node {type, attrs?, content?, marks?} and text
 // nodes {type: "text", text, marks?}. The records check its shape, not its
 // schema, which belongs to the editor; PlainText is its text for search

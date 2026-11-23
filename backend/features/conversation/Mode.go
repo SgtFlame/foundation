@@ -3,6 +3,7 @@ package conversation
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -33,10 +34,16 @@ type ModeEntry struct {
 }
 
 // Focus is where a mode is offered: the editor the user was in has one of
-// Kinds, or a subject of one of Subjects.
+// Kinds, or a subject of one of Subjects. A kind ending in * matches every
+// kind it begins (app:* is any installed app's tab, forge 7p-6).
 type Focus struct {
 	Kinds    []string `json:"kinds,omitempty"`
 	Subjects []string `json:"subjects,omitempty"`
+	// OfferOnly offers the mode in the focus without choosing it for a new
+	// conversation started there (forge 7p-6: the Agent Builder on any
+	// app's tab, where the default mode stays the one a conversation
+	// starts in).
+	OfferOnly bool `json:"offerOnly,omitempty"`
 }
 
 // Matches reports whether an editor of kind, with a subject of type
@@ -45,7 +52,16 @@ func (f *Focus) Matches(kind, subject string) bool {
 	if f == nil {
 		return true
 	}
-	return slices.Contains(f.Kinds, kind) || (subject != "" && slices.Contains(f.Subjects, subject))
+	return slices.ContainsFunc(f.Kinds, func(k string) bool { return KindMatches(k, kind) }) || (subject != "" && slices.Contains(f.Subjects, subject))
+}
+
+// KindMatches reports whether an editor kind matches a focus's kind, which
+// may end in * to match every kind it begins.
+func KindMatches(pattern, kind string) bool {
+	if prefix, ok := strings.CutSuffix(pattern, "*"); ok {
+		return kind != "" && strings.HasPrefix(kind, prefix)
+	}
+	return pattern == kind
 }
 
 // Host is what a mode graph's chat nodes act on: the round Send runs the

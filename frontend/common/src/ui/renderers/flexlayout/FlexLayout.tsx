@@ -5,7 +5,7 @@
 // the ui.layouts setting and used while its tabs are the server's.
 
 import { Actions, Layout, Model, TabNode, type IJsonModel, type IJsonRowNode } from 'flexlayout-react'
-import { useEffect, useMemo, useRef } from 'react'
+import { Suspense, useEffect, useMemo, useRef } from 'react'
 import { Config } from '../../../services/Config.ts'
 import { useSetting } from '../../../settings/configStore.ts'
 import { log } from '../../../logging/index.ts'
@@ -104,7 +104,14 @@ function FlexLayout(p: RendererProps) {
     <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 240 }}>
       <Layout
         model={model}
-        factory={(node) => <div style={{ height: '100%', overflow: 'auto' }}>{p.renderChild(node.getId())}</div>}
+        // Each tab waits for its own lazy renderers (a doc.markdown editor's
+        // chunk): suspending to the page's boundary hid the whole layout,
+        // which flexlayout never drew again (forge 7p-6)
+        factory={(node) => (
+          <div style={{ height: '100%', overflow: 'auto' }}>
+            <Suspense fallback={null}>{p.renderChild(node.getId())}</Suspense>
+          </div>
+        )}
         onAction={(action) => {
           if (action.type === Actions.SELECT_TAB) p.emit('select', { id: action.data.tabNode })
           else if (action.type === Actions.DELETE_TAB) p.emit('close', { id: action.data.node })

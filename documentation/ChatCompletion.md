@@ -186,3 +186,6 @@ Forge's chat modes, part 6i ([forge 06i-ChatModes.md](../../forge/documentation/
 ### Decisions to review after seeing it
 - The mode select: its place beside the level, the descriptions in its menu, and hiding it where only one mode is offered.
 - Builder rounds no longer use Chronicle memory (its graph gathers the workbench and Volumes only).
+
+## Changed in forge 7p-6
+A mode's **focus** (`conversation.Focus`, the `chat.modes` section's `focus`) takes kind patterns: a kind ending in `*` matches every kind it begins (`app:*`, any installed app's tab; `conversation.KindMatches`, and `kindMatches` in the browser's `components/chat/modes.ts`). **`offerOnly`** offers the mode in its focus without choosing it for a new conversation started there (`startingMode` skips it), so the default mode stays the one a conversation starts in. Forge's 🤖 Agent Builder is offered this way on app tabs ([forge ChatModes.md › The Agent Builder](../../forge/documentation/ChatModes.md#the-agent-builder)); Forge's Builder became the 🛠️ App Builder (mode `appBuilder`). Test: `conversation`'s `TestFocusMatchesKindPatterns`.

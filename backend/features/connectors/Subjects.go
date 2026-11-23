@@ -83,13 +83,13 @@ func DiscoveredSubject(tenant uint64, connection string) string {
 	return fmt.Sprintf("cx.discovered.%d.%s", tenant, connection)
 }
 
-// InSubject is reserved for the inbound direction (55a): a surface's
+// InSubject is reserved for the inbound direction (75a): a surface's
 // request to the gateway. Nothing in 07b subscribes to cx.in.>.
 func InSubject(tenant uint64, exposure, method string) string {
 	return fmt.Sprintf("cx.in.%d.%s.%s", tenant, Token(exposure), Token(method))
 }
 
-// InNotifySubject is reserved for 55a: what the gateway pushes to a
+// InNotifySubject is reserved for 75a: what the gateway pushes to a
 // surface's session.
 func InNotifySubject(session string) string { return "cx.in.notify." + session }
 
@@ -99,14 +99,14 @@ const (
 	// surface.<surface>.<instance>, refreshed by each adapter instance.
 	AdaptersBucket = "cx_adapters"
 	// HooksBucket maps a callback's hook id to its tenant, connection and
-	// type (55f): <hookId> → Hook.
+	// type (20b): <hookId> → Hook.
 	HooksBucket = "cx_hooks"
 )
 
 // DiscoveredBucket holds a tenant's discovered contracts, by connection.
 func DiscoveredBucket(tenant uint64) string { return fmt.Sprintf("cx_discovered_%d", tenant) }
 
-// Hook is a cx_hooks value (55f).
+// Hook is a cx_hooks value (20b).
 type Hook struct {
 	Tenant     uint64 `json:"tenant,string"`
 	Connection string `json:"connection"`

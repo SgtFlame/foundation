@@ -92,6 +92,11 @@ type EditorKind struct {
 type Subject struct {
 	Type  string `json:"type,omitempty"`
 	Label string `json:"label,omitempty"`
+	// Details are more of what the tab shows, by name, each a template over
+	// the page's data like Label, also reading the page prefab's state
+	// (forge 7p-6: Mail's thread tab gives {account: "{record.account}",
+	// message: "{state.message}"}); one that fills empty is left out.
+	Details map[string]string `json:"details,omitempty"`
 }
 
 // Command is one of the app's own commands, beyond the record.* ones every

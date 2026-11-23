@@ -497,7 +497,7 @@ func TestQueriesAndBothDirections(t *testing.T) {
 		Meta: connectors.Meta{Title: "Test surface", Description: "Listens nowhere", Tags: []string{"test"}},
 		Listen: func(ctx context.Context, gw adapter.Gateway) error {
 			if _, err := gw.Request(ctx, adapter.Credential{}, "x", "tools.list", nil); err == nil {
-				t.Error("the gateway answered before iteration 55")
+				t.Error("the gateway answered before iteration 75")
 			}
 			close(listening)
 			<-ctx.Done()

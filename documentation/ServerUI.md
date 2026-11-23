@@ -457,3 +457,6 @@ Forge 7o ([forge MailApp.md](../../forge/documentation/MailApp.md#built-in-part-
 
 ## Changed in forge 7p-5
 Forge 7p-5 ([forge MailApp.md](../../forge/documentation/MailApp.md#built-in-part-7p-5)): **`mui.list`** items take `indent` (0-3), nesting an item under the one above (Mail's queue for each agent under *Needs review*).
+
+## Changed in forge 7p-6
+**`layout.flex` waits per tab**: each tab's content renders inside its own `Suspense` (no fallback). A lazily loaded renderer in a tab (a `doc.markdown` editor's chunk, the first time) suspended to `AppHost`'s boundary, which hid the whole layout; flexlayout then never drew its tabs again, and the page stayed blank with no error (Forge's Mail thread tab and inbox reading pane holding a draft's composer, found in forge 7p-6's walk). `ui.Subject` gains `Details` ([Apps.md › Changed in forge 7p-6](Apps.md#changed-in-forge-7p-6)), and the browser's `UiSubject` `details`.

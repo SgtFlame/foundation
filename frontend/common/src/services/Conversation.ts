@@ -202,8 +202,9 @@ export interface ContextProvidersResponse extends ResponseStatus {
 // A chat mode as GET /conversation/modes gives it (forge 06i): each runs a
 // mode graph for every round.
 export interface ModeFocus {
-  kinds?: string[]
+  kinds?: string[] // a kind ending in * matches every kind it begins (app:*, forge 7p-6)
   subjects?: string[]
+  offerOnly?: boolean // offered there, never chosen for a new conversation started there
 }
 
 export interface ChatMode {

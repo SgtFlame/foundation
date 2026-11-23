@@ -300,7 +300,22 @@ func kindPage(page ui.Page, v apps.Version, k apps.EditorKind) ui.Page {
 		if k.Subject != nil && k.Subject.Label != "" {
 			label = firstOf(fill(k.Subject.Label, data), title)
 		}
-		return title, subjectOf(page.App, apps.FillRoute(k.Page, asStrings(params)), entityOf(m, &k, params), params, label)
+		sub := subjectOf(page.App, apps.FillRoute(k.Page, asStrings(params)), entityOf(m, &k, params), params, label)
+		if k.Subject != nil && len(k.Subject.Details) > 0 {
+			// Details also read the page prefab's own state (forge 7p-6)
+			if st, ok := r.State("instances.root").(map[string]any); ok {
+				data["state"] = st
+			}
+			for name, tmpl := range k.Subject.Details {
+				if v := fill(tmpl, data); v != "" {
+					if sub.Details == nil {
+						sub.Details = map[string]string{}
+					}
+					sub.Details[name] = v
+				}
+			}
+		}
+		return title, sub
 	}
 	return out
 }

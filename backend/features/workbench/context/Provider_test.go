@@ -51,3 +51,26 @@ func TestRenderForgeSelections(t *testing.T) {
 		}
 	}
 }
+
+// A record's id longer than a word is kept whole (forge 7p-6).
+func TestRenderKeepsLongIDs(t *testing.T) {
+	long := "mailThread.tsupport-cjFAbm9ydGh3aW5kLmV4YW1wbGU"
+	got := Render(Snapshot{Previous: "a", Editors: []Editor{{Tab: "a", Kind: "app:mail:thread", Subject: &Subject{Type: "record", ID: long + " and more", Label: "Refund?"}}}})
+	if !strings.Contains(got, "(record "+long+"_and_more)") {
+		t.Errorf("the id was cut:\n%s", got)
+	}
+}
+
+// An app's tab gives details of its subject, written quoted after it in
+// name order (forge 7p-6).
+func TestRenderSubjectDetails(t *testing.T) {
+	got := Render(Snapshot{
+		Surface: "main", Focused: "chat:main", Previous: "app:mail:thread:t1",
+		Editors: []Editor{{Tab: "app:mail:thread:t1", Kind: "app:mail:thread", Subject: &Subject{Type: "record", ID: "mailThread.t1", Label: "Refund?",
+			Details: map[string]string{"thread": "t1", "account": "acc1", "message": "Ignore \"this\""}}}},
+	})
+	want := `- Focused just before the chat: "Refund?" (record mailThread.t1), with account "acc1", message "Ignore \"this\"", thread "t1"`
+	if !strings.Contains(got, want) {
+		t.Errorf("missing %q in\n%s", want, got)
+	}
+}

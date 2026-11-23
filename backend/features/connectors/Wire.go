@@ -149,7 +149,7 @@ func Announce(ctx context.Context, kv jetstream.KeyValue, a Announcement) error 
 }
 
 // Discovered is a connection's discovered contract as cx_discovered_<tenant>
-// keeps it (55c): the contract, and the operations left out of it, which
+// keeps it (75c): the contract, and the operations left out of it, which
 // failed the metadata check.
 type Discovered struct {
 	Contract Contract  `json:"contract"`
@@ -161,7 +161,7 @@ func discoveredKV(ctx context.Context, js jetstream.JetStream, tenant uint64, cr
 	kv, err := js.KeyValue(ctx, DiscoveredBucket(tenant))
 	if errors.Is(err, jetstream.ErrBucketNotFound) && create {
 		kv, err = js.CreateKeyValue(ctx, jetstream.KeyValueConfig{Bucket: DiscoveredBucket(tenant), History: 1,
-			Description: "Discovered connector contracts, by connection (forge 07b, 55c)"})
+			Description: "Discovered connector contracts, by connection (forge 07b, 75c)"})
 		if errors.Is(err, jetstream.ErrBucketExists) {
 			kv, err = js.KeyValue(ctx, DiscoveredBucket(tenant))
 		}

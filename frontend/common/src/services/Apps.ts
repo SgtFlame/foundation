@@ -29,7 +29,7 @@ export interface AppEditorKind {
   page: string // a page's route
   title: string // a template over the page's data, such as {record.title}
   icon?: string
-  subject?: { type?: string; label?: string }
+  subject?: { type?: string; label?: string; details?: Record<string, string> } // details: templates by name (forge 7p-6)
 }
 
 export interface AppCommand {

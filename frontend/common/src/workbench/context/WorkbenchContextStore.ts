@@ -10,6 +10,7 @@ export interface SubjectRef {
   id: string // TSID as a string
   label: string // "Plan.md"
   summary?: string // one short line: "/projects/Plan.md"
+  details?: Record<string, string> // more of what it shows, by name (forge 7p-6: a mail thread's account and selected message)
 }
 
 // A line range in a text editor (from 1), or the selected rows; the Forge

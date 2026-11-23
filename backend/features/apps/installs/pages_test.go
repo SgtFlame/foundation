@@ -141,6 +141,8 @@ func TestAppRuntime(t *testing.T) {
 	seq := f.ok("prefab.insertNode", "myTasks", map[string]any{"parentPath": "root", "node": map[string]any{"type": "mui.button", "key": "open",
 		"props": map[string]any{"label": "Open"}, "on": map[string]any{"click": map[string]any{"handler": "onOpen"}}}}).Seq
 	f.publishPrefab("myTasks", seq)
+	// Its own state, which the kind's subject details read (forge 7p-6)
+	f.ok("prefab.setInterface", "taskDetail", map[string]any{"state": map[string]any{"view": map[string]any{"type": "string", "default": "summary"}}})
 	seq = f.ok("prefab.insertNode", "taskDetail", map[string]any{"node": map[string]any{"type": "mui.text", "key": "id", "bind": map[string]any{"text": `="Task " + props.id`}}}).Seq
 	f.publishPrefab("taskDetail", seq)
 	// The default frame, as Forge's starter App frame declares it
@@ -157,7 +159,8 @@ func TestAppRuntime(t *testing.T) {
 	seq = f.ok("prefab.insertNode", "appFrame", map[string]any{"parentPath": "root", "node": map[string]any{"type": "slot", "key": "page", "props": map[string]any{"name": "page"}}}).Seq
 	f.publishPrefab("appFrame", seq)
 	f.publishRest()
-	f.ok("app.updateEditorKind", "tasks", map[string]any{"kind": "task", "subject": map[string]any{"type": "task", "label": "Task {record.title}"}})
+	f.ok("app.updateEditorKind", "tasks", map[string]any{"kind": "task", "subject": map[string]any{"type": "task", "label": "Task {record.title}",
+		"details": map[string]any{"task": "{params.id}", "titled": "{record.title}", "view": "{state.view}", "none": "{record.nothing}"}}})
 	seq = f.ok("app.setNav", "tasks", map[string]any{"nav": []any{map[string]any{"title": "My tasks", "route": "/mine", "icon": "person"}}}).Seq
 	f.publish(seq)
 	f.lifecycle("app.install", "tasks", map[string]any{})
@@ -216,6 +219,11 @@ func TestAppRuntime(t *testing.T) {
 	tab.until("titled by its record", func(p *page) bool { return p.shows("Task t1") && p.title == "Write docs" })
 	if tab.sub == nil || tab.sub.Label != "Task Write docs" || tab.sub.Object != "record_task.t1" {
 		t.Errorf("tab subject %+v", tab.sub)
+	}
+	// Its details, from the params, the record and the prefab's state; one
+	// that fills empty is left out (forge 7p-6)
+	if d := tab.sub.Details; d["task"] != "t1" || d["titled"] != "Write docs" || d["view"] != "summary" || len(d) != 3 {
+		t.Errorf("tab subject details %+v", d)
 	}
 	f.ok("record.update", "t1", map[string]any{"entity": "task", "set": map[string]any{"title": "Write the docs"}})
 	tab.until("retitled", func(p *page) bool { return p.title == "Write the docs" && p.sub.Label == "Task Write the docs" })

@@ -140,8 +140,9 @@ const modesSchema = `{
       "graphRef": {"type": "string", "title": "Graph", "description": "The mode graph each round runs"},
       "default": {"type": "boolean", "title": "Default", "description": "The mode of a new conversation away from every focus"},
       "focus": {"type": "object", "title": "Focus", "description": "Offered only while the editor you were in is of one of these kinds or subject types, and chosen for a new conversation started there", "properties": {
-        "kinds": {"type": "array", "title": "Editor kinds", "items": {"type": "string"}},
-        "subjects": {"type": "array", "title": "Subject types", "items": {"type": "string"}}
+        "kinds": {"type": "array", "title": "Editor kinds", "items": {"type": "string"}, "description": "A kind ending in * matches every kind it begins: app:* is any installed app's tab"},
+        "subjects": {"type": "array", "title": "Subject types", "items": {"type": "string"}},
+        "offerOnly": {"type": "boolean", "title": "Offer only", "description": "Offered there without being chosen for a new conversation started there"}
       }}
     }, "required": ["id", "label", "graphRef"]}}
   }

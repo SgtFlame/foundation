@@ -248,6 +248,13 @@ func (c *check) editorKinds() {
 		if strings.TrimSpace(k.Title) == "" {
 			c.add(path+".title", "an editor kind needs a title", "a template over the page's data, such as {record.title}")
 		}
+		if k.Subject != nil {
+			for name := range k.Subject.Details {
+				if !live.ValidToken(name) {
+					c.add(path+".subject.details."+name, fmt.Sprintf("%q is not a detail's name", name), "use letters, digits, _ and -, such as account")
+				}
+			}
+		}
 	}
 }
 

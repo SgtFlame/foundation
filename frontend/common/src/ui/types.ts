@@ -65,6 +65,7 @@ export interface UiSubject {
   id: string
   label: string
   object?: string // the presence object its viewers are in, "<type>.<id>"
+  details?: Record<string, string> // more of what it shows, from the editor kind's subject details (forge 7p-6)
 }
 
 // Applies one patch, copying only the nodes on its path, so unchanged

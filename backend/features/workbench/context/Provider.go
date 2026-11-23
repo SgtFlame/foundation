@@ -6,6 +6,7 @@ package workbenchcontext
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -44,6 +45,9 @@ type Subject struct {
 	ID      string `json:"id"`
 	Label   string `json:"label"`
 	Summary string `json:"summary"`
+	// Details are more of what it shows, by name (forge 7p-6: an app's
+	// thread tab gives its account and the message selected in it)
+	Details map[string]string `json:"details"`
 }
 
 // Selection is a line range in a text editor, or the selected rows; the
@@ -169,23 +173,61 @@ func describe(e Editor) string {
 }
 
 func subject(s Subject) string {
-	out := fmt.Sprintf("%s (%s %s)", strconv.Quote(s.Label), word(s.Type), word(s.ID))
+	out := fmt.Sprintf("%s (%s %s)", strconv.Quote(s.Label), word(s.Type), id(s.ID))
 	if s.Summary != "" {
 		out += ": " + strconv.Quote(s.Summary)
+	}
+	if len(s.Details) > 0 {
+		names := make([]string, 0, len(s.Details))
+		for name := range s.Details {
+			names = append(names, name)
+		}
+		slices.Sort(names)
+		if len(names) > maxDetails {
+			names = names[:maxDetails]
+		}
+		parts := make([]string, len(names))
+		for i, name := range names {
+			v := s.Details[name]
+			if len(v) > 200 {
+				v = v[:200]
+			}
+			parts[i] = word(name) + " " + strconv.Quote(v)
+		}
+		out += ", with " + strings.Join(parts, ", ")
 	}
 	return out
 }
 
+// maxDetails is how many of a subject's details are written.
+const maxDetails = 8
+
+// id keeps an unquoted id to one token, longer than a word: a record's
+// "<entity>.<id>" may run past 40 characters (forge 7p-6: a Mail thread's
+// id is made from its account and Message-ID), and a cut id is wrong.
+func id(s string) string {
+	s = token(s)
+	if len(s) > 120 {
+		s = s[:120]
+	}
+	return s
+}
+
 // word keeps an unquoted field to one short token, so it cannot carry text.
 func word(s string) string {
-	s = strings.Map(func(r rune) rune {
+	s = token(s)
+	if len(s) > 40 {
+		s = s[:40]
+	}
+	return s
+}
+
+// token replaces white space, so a field stays one token.
+func token(s string) string {
+	return strings.Map(func(r rune) rune {
 		if r == ' ' || r == '\n' || r == '\r' || r == '\t' {
 			return '_'
 		}
 		return r
 	}, s)
-	if len(s) > 40 {
-		s = s[:40]
-	}
-	return s
 }

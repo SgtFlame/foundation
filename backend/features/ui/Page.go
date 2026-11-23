@@ -92,6 +92,9 @@ type Subject struct {
 	ID     string `json:"id"`
 	Label  string `json:"label"`
 	Object string `json:"object,omitempty"`
+	// Details are more of what it shows, by name (forge 7p-6: an app's
+	// thread tab gives its account and selected message), as plain text.
+	Details map[string]string `json:"details,omitempty"`
 }
 
 // Page is one page. Its Descriptor's ID is "<appId>/<page>".

@@ -473,7 +473,7 @@ Forge's part 3j ([forge 03j-RicherFields.md](../../forge/documentation/plans/03j
 
 ### Decisions
 Asked before building:
-- **Rich text is ProseMirror JSON** (forge 25-Notion question 1): a document `{type: "doc", content: [nodes]}` as TipTap and Milkdown save it. The records check its shape (every node has a type, a text node its text, `attrs` an object, `marks` a list of `{type}`, at most 64 deep), not a schema, which belongs to the editor; `records.PlainText` is its text, a line per block, for search and for a model.
+- **Rich text is ProseMirror JSON** (forge 35-Docs question 1): a document `{type: "doc", content: [nodes]}` as TipTap and Milkdown save it. The records check its shape (every node has a type, a text node its text, `attrs` an object, `marks` a list of `{type}`, at most 64 deep), not a schema, which belongs to the editor; `records.PlainText` is its text, a line per block, for search and for a model.
 - **Computed values are written by events** (forge 03-DataModel question 9). After a record command decides its change, the decision works out the record's computed fields as they will be and puts those that differ in the record's last event (`Change.Computed`), so they can be indexed and sorted, and a projection rebuilt from the stream equals the one it replaced. The internal `record.recompute` writes them again.
 - **Records are a retrieval source, off by default** (forge 03-DataModel question 10): `records`, searched only when RAG Search's *Records* switch is on, with row rules applied.
 

@@ -42,11 +42,11 @@ These pure functions of the metadata each have golden files in `connectors/testd
 - `ToolSpec(contract, op)`: a `tools.Spec` named `<contract>.<operation>`, with source `connector` and the effect mapped (`ToolEffect`: `read`→`read`, `write`→`write`, `send`→`external`).
 - `MCPTool(contract, op)`: an MCP `Tool` of revision `MCPRevision` (2025-11-25). It has the wire name (`.`→`_`), `inputSchema` and `outputSchema`, and `annotations`: `readOnlyHint` for read, `destructiveHint` for a destructive write, `idempotentHint` for a keyed or read operation, `openWorldHint` for send. Each test operation's tool validates against the MCP schema's `#/$defs/Tool` (`testdata/mcp-2025-11-25.schema.json`). `MCPError` gives a typed error as a failed tool result (`isError`).
 - `FunctionSpec(contract, op, vendor)`: Gemini's `functionDeclarations` entry, Claude's tool (`input_schema`) and OpenAI's function tool, for `gemini`, `anthropic` and `openai`.
-- `OpenAPI(contract)`: an OpenAPI 3.1 document. Each operation is `POST /<operation>`, its args the request body, its result the 200 and a typed `Error` the default response. Its callbacks are operation `callbacks`, keyed by `{$request.header.Cx-Hook-Url}`. The contract's events are top-level `webhooks`. `x-effect`, `x-destructive`, `x-idempotency-key`, `x-errors`, `x-delivery`, `x-id-fields`, `x-subscription`, `x-correlate`, `x-contract` and `x-tags` keep what OpenAPI has no word for, so 55e can read the document back. The test contract's document validates against the OpenAPI 3.1 schema (`testdata/openapi-3.1.schema.json`).
+- `OpenAPI(contract)`: an OpenAPI 3.1 document. Each operation is `POST /<operation>`, its args the request body, its result the 200 and a typed `Error` the default response. Its callbacks are operation `callbacks`, keyed by `{$request.header.Cx-Hook-Url}`. The contract's events are top-level `webhooks`. `x-effect`, `x-destructive`, `x-idempotency-key`, `x-errors`, `x-delivery`, `x-id-fields`, `x-subscription`, `x-correlate`, `x-contract` and `x-tags` keep what OpenAPI has no word for, so 75e can read the document back. The test contract's document validates against the OpenAPI 3.1 schema (`testdata/openapi-3.1.schema.json`).
 
 ### The connector bus: protocol
 
-The bus is plain NATS with JSON bodies, so an adapter could be written in any language (07b question 5). This is the protocol in full; iteration 55 adds the `cx.in` subjects to it.
+The bus is plain NATS with JSON bodies, so an adapter could be written in any language (07b question 5). This is the protocol in full; iteration 75 adds the `cx.in` subjects to it.
 
 **Tokens.** An id in a subject is its token: `.` replaced by `_` (`mail.imap` → `mail_imap`).
 
@@ -58,7 +58,7 @@ The bus is plain NATS with JSON bodies, so an adapter could be written in any la
 | `cx.event.<tenant>.<connection>.<contract>.<event>` | JetStream, `CX_<tenant>` | A connector event (7c), pushed or polled alike |
 | `cx.changed.<tenant>.<connection>` | plain | A connection changed: drop its sessions |
 | `cx.discovered.<tenant>.<connection>` | plain | A connection's discovered contract changed |
-| `cx.in.<tenant>.<exposure>.<method>`, `cx.in.notify.<session>` | reserved | The inbound gateway (55a). Nothing subscribes to `cx.in.>` yet. |
+| `cx.in.<tenant>.<exposure>.<method>`, `cx.in.notify.<session>` | reserved | The inbound gateway (75a). Nothing subscribes to `cx.in.>` yet. |
 
 **Queue groups.** Every instance serving a type subscribes to `cx.call.*.<type>.>` in the queue group `cx.<type>`, so NATS gives each call to one instance. An adapter serving some tenants subscribes to `cx.call.<tenant>.<type>.>` instead.
 
@@ -82,7 +82,7 @@ The request body is the operation's args, a JSON object.
 
 **Discovered contracts.** KV `cx_discovered_<tenant>` maps `<connection>` to `{contract, problems, at}`. The adapter writes it through `Context.PutDiscovered`, which leaves out the operations and events failing the check (listing them as `problems`) and publishes `cx.discovered.<tenant>.<connection>`. The contract's id is `conn.<connection>`.
 
-**Callbacks.** KV `cx_hooks` (55f) maps `<hookId>` to `connectors.Hook{tenant, connection, type}`; only its shape is fixed here.
+**Callbacks.** KV `cx_hooks` (20b) maps `<hookId>` to `connectors.Hook{tenant, connection, type}`; only its shape is fixed here.
 
 Slice 47 adds `cx.resolve`, `cx.status`, the ledger, locks, event sources and `CX_<tenant>` to the protocol: see [Built in slice 47 › Protocol additions](#protocol-additions).
 
@@ -136,7 +136,7 @@ A call no adapter serves gets NATS's *no responders* at once and returns retryab
 - **Calls.** `Session.Call(ctx, op, args)` runs one. A `*connectors.Error` is replied as it is; any other error, or a panic, is `unavailable`.
 - **`adapter.Context`** carries the caller's `ServiceArgs` (principal in the subject's tenant, Meta), the call id, contract, operation and key, and a logger carrying the trace. The tenant's file store and the ledger writer join it with 7c.
 - **Announcements** are written at once and every `AnnounceEvery`. A stop unsubscribes, waits for running calls, deletes its announcements and closes its sessions.
-- **Surfaces.** `Surfaces` are announced, and each `Listen` runs with a `Gateway` that refuses every request (`notSupported`) until 55a. `Watcher` is run by 7c, `Describer` by 55c, and `Receiver`/`Registrar` by 55f; they are declared only.
+- **Surfaces.** `Surfaces` are announced, and each `Listen` runs with a `Gateway` that refuses every request (`notSupported`) until 75a. `Watcher` is run by 7c, `Describer` by 75c, and `Receiver`/`Registrar` by 20b; they are declared only.
 
 `serve.go` (Foundation's and Forge's) makes the registry and dispatcher. It starts an in-process adapter from `connectorImpls()` when that lists implementations: none in Foundation's; Forge's lists `mail.mime` (7e).
 
@@ -155,7 +155,7 @@ A call no adapter serves gets NATS's *no responders* at once and returns retryab
 
 ### Decisions
 
-Answered before building (2026-11-11), each with its proposal: questions 1 (nested objects as one pin), 2 (versions side by side), 4 (`cx.resolve` in 7c), 5 (the protocol written here, the Go runtime only), 6 (the bidirectional shapes here, the gateway and adapters in 55), 7 (claiming declared contracts in 55c), 8 (`destructive`), 9 (no durable wait for a callback) and 10 (callback metadata and interfaces here, the endpoint in 55f). Question 3 (always through NATS) was the user's direction.
+Answered before building (2026-11-11), each with its proposal: questions 1 (nested objects as one pin), 2 (versions side by side), 4 (`cx.resolve` in 7c), 5 (the protocol written here, the Go runtime only), 6 (the bidirectional shapes here, the gateway and adapters in 55), 7 (claiming declared contracts in 75c), 8 (`destructive`), 9 (no durable wait for a callback) and 10 (callback metadata and interfaces here, the endpoint in 20b). Question 3 (always through NATS) was the user's direction.
 
 Decided while building:
 
@@ -171,7 +171,7 @@ Decided while building:
 ### Decisions to review after seeing it
 
 - The *Connectors* palette, and how a call node with many pins reads (07b ★).
-- Whether a discovered contract's operations read well beside declared ones (first seen with 55c).
+- Whether a discovered contract's operations read well beside declared ones (first seen with 75c).
 - Retryable errors failing the run by default (decision 5).
 
 ### Verification
@@ -218,7 +218,7 @@ In Forge, the Blueprint Editor was checked in headless Chromium. The setup was a
 - ~~Scripted types in the registry (7d)~~: built in slice 48. ~~The mail contracts (7e)~~: built in Forge ([MailConnectors.md](../../forge/documentation/MailConnectors.md#built-in-part-7e)); the SMTP, IMAP and POP3 types are 7f to 7h.
 - `bp.check` re-normalizing nodes when an announced contract changes, and the editor redrawing pins at once. A change shows when the node's config is next set or the graph is imported.
 - A *Call connector* in a chat tool asking for approval by its operation's effect (graph tools ask by their own `asks`).
-- The gateway, exposures, MCP and tool adapters, discovery, the hook endpoint and registration (iteration 55).
+- The gateway, exposures, MCP and tool adapters, discovery, the hook endpoint and registration (iteration 75).
 - Authorization between processes (per-adapter NATS users).
 
 ## Built in slice 47
@@ -311,7 +311,7 @@ In Forge, in headless Chromium, with a scratch NATS server running the test adap
 ### Not built
 
 - The *Connection* picker in *Call connector*'s details panel, and a *Connections* administration view (apps embed the form).
-- Pushed events at a hook URL, registration with the service and backfill after a gap (55f).
+- Pushed events at a hook URL, registration with the service and backfill after a gap (20b).
 - Several sessions per connection in one instance (one session serves concurrent calls).
 - Authorization between processes, which `cx.resolve` waits for.
 
@@ -349,7 +349,7 @@ An operation of its contracts with no graph is a **warning** of `forge.check` (`
 
 ### Decisions
 
-Answered before building (the user, 2026-11-11), each as proposed: question 1 (no scripted contracts here; 35-Zapier adds them) and 2 (the types travel with the manifest in an export).
+Answered before building (the user, 2026-11-11), each as proposed: question 1 (no scripted contracts here; 50-Workflows adds them) and 2 (the types travel with the manifest in an export).
 
 Decided while building:
 

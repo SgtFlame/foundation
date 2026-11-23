@@ -35,7 +35,14 @@ export function editorBefore(state: WorkbenchState, chatTab: string): { kind?: s
 export function inFocus(mode: ChatMode, editor: { kind?: string; subject?: string }): boolean {
   const { focus } = mode
   if (!focus) return true
-  return (!!editor.kind && !!focus.kinds?.includes(editor.kind)) || (!!editor.subject && !!focus.subjects?.includes(editor.subject))
+  const { kind } = editor
+  return (!!kind && !!focus.kinds?.some((k) => kindMatches(k, kind))) || (!!editor.subject && !!focus.subjects?.includes(editor.subject))
+}
+
+// A focus's kind matches an editor kind; one ending in * matches every
+// kind it begins (app:* is any installed app's tab, forge 7p-6)
+export function kindMatches(pattern: string, kind: string): boolean {
+  return pattern.endsWith('*') ? kind.startsWith(pattern.slice(0, -1)) : pattern === kind
 }
 
 // The modes offered where the user is: those without a focus, and those
@@ -44,8 +51,8 @@ export function offeredModes(modes: readonly ChatMode[], editor: { kind?: string
   return modes.filter((m) => inFocus(m, editor))
 }
 
-// A new conversation's mode: the first whose focus the editor matches,
-// else the default
+// A new conversation's mode: the first whose focus the editor matches and
+// chooses (not offerOnly), else the default
 export function startingMode(modes: readonly ChatMode[], editor: { kind?: string; subject?: string }): ChatMode | undefined {
-  return modes.find((m) => m.focus && inFocus(m, editor)) ?? modes.find((m) => m.default) ?? modes[0]
+  return modes.find((m) => m.focus && !m.focus.offerOnly && inFocus(m, editor)) ?? modes.find((m) => m.default) ?? modes[0]
 }

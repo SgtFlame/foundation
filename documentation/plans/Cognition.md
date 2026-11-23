@@ -83,6 +83,7 @@ type NodeType interface {
 
 ### Nexus
 The **Nexus** is the Cognition component where agents collaborate: a shared, structured store that every agent in a run can read, write and reconcile against.
+- **Widened** (the user, 2026-11-23): the Nexus is **multi-agent, multi-user and multi-service**: the shared space where agents, people and outside services (through connectors and adapters such as Slack, Discord and Teams) collaborate. Forge's [20-MessagingNexus.md](../../../forge/documentation/plans/20-MessagingNexus.md) builds its people and services side: channels are Nexus streams people see, with agents and connectors as members. The agents' side below (streams, components, `Reconcile`) is unchanged.
 - **Streams**: a Nexus holds named **streams** (*Product Owner*, *Data Model*, *UI/UX*, *Features/…*). Each stream is a markdown document split into **components**, which are the sections under its headings.
 - **Proposal: streams are Volume files.** Each Nexus is a folder in a Volume, and each stream is a markdown file in it. This gives four things for free:
   - humans can read and edit streams in the Markdown Editor, collaboratively;
@@ -195,8 +196,8 @@ The **Nexus** is the Cognition component where agents collaborate: a shared, str
 
 ## TODO
 ### Open questions
-1. **Nexus storage**: the proposal is streams as markdown files in a Volume (see [Nexus](#nexus)). Or should they be database rows only? This must be answered **before** the Nexus slice (slice 9, skipped for now: its plan is not fleshed out yet). *Decision*:
-3. **Background runs**: can graphs run without a chat (schedules, Nexus triggers), and should they be durable across server restarts? A durable job queue would revive the NATS question. Forge's plans propose JetStream durable consumers on an embedded NATS server for this ([Forge 07-Email.md](../../../forge/documentation/plans/07-Email.md), [35-Zapier.md](../../../forge/documentation/plans/35-Zapier.md), [03-DataModel.md](../../../forge/documentation/plans/03-DataModel.md)). *Decision*: yes, durable on JetStream: the job runner of slice 45 ([Jobs.md](../Jobs.md#built-in-slice-45), forge 07a) runs published graphs as jobs, once, retried, across restarts and several processes, and installed apps' triggers on events and schedules; Nexus triggers can enqueue jobs when the Nexus is built (forge 07-Email question 9, 2026-11-11).
+1. **Nexus storage**: the proposal is streams as markdown files in a Volume (see [Nexus](#nexus)). Or should they be database rows only? This must be answered **before** the Nexus slice (slice 9, skipped for now: its plan is not fleshed out yet). Forge's Messaging Nexus may settle it first: its question 5 proposes channels as records that the Nexus tools read and write. *Decision*:
+3. **Background runs**: can graphs run without a chat (schedules, Nexus triggers), and should they be durable across server restarts? A durable job queue would revive the NATS question. Forge's plans propose JetStream durable consumers on an embedded NATS server for this ([Forge 07-Email.md](../../../forge/documentation/plans/07-Email.md), [50-Workflows.md](../../../forge/documentation/plans/50-Workflows.md), [03-DataModel.md](../../../forge/documentation/plans/03-DataModel.md)). *Decision*: yes, durable on JetStream: the job runner of slice 45 ([Jobs.md](../Jobs.md#built-in-slice-45), forge 07a) runs published graphs as jobs, once, retried, across restarts and several processes, and installed apps' triggers on events and schedules; Nexus triggers can enqueue jobs when the Nexus is built (forge 07-Email question 9, 2026-11-11).
 
 (Questions 2, 4 and 5 are decided; see [Cognition.md › Decisions](../Cognition.md#decisions). Question 2 was revised before slice 14: drafts are changed by commands.)
 
