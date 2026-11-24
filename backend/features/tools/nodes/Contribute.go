@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"github.com/SgtFlame/foundation/backend/features"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
@@ -34,6 +35,8 @@ const (
 	DescribeID  = "tools.describe"
 	GraphToolID = "tools.graph"
 	CallToolID  = "tools.call"
+	// RunPassagesID gives an agent run's numbered passages (forge 15a).
+	RunPassagesID = "tools.runPassages"
 )
 
 // TypeToolSet is the data type of a tool set: []tools.Spec.
@@ -86,6 +89,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				{ID: "maxSteps", Name: "Steps", Type: "number", Optional: true, Description: "How many times it may call tools before it must answer, in place of its config's"},
 				{ID: "tools", Name: "Tools", Type: TypeToolSet, Optional: true, Description: "The tools it may call, in place of its config's"},
 				{ID: "level", Name: "Level", Type: "string", Optional: true, Description: "An ai.chat.levels id, in place of its config's (forge 7m: an agent record's level)"},
+				{ID: "retrieval", Name: "Retrieval", Type: "json", Optional: true, Description: "How kb.search searches during the run (forge 15a): {sources, lexicalSemantic, chronicleLibrary, topK, volumeIds}, from an agent's record, never from the model; empty searches the Volumes alone as before. Whose memory the chronicle source reads is the run's principal's (Call graph's Memory of)"},
 			},
 			Out: []cognition.Pin{
 				cognition.ExecPin(cognition.Then, ""),
@@ -153,6 +157,32 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		},
 	})
 	contributeToolSets(reg, deps)
+	cognition.Nodes.Register(reg, cognition.NodeType{
+		Descriptor:  extensions.Descriptor{ID: RunPassagesID, Order: 345, Source: "tools"},
+		Title:       "Run passages",
+		Category:    "Tools",
+		Description: "The passages the agent run this graph is part of has numbered so far (forge 15a), as its tools found them: [{number, sourceId, key, title, entryId, volumeId, path, startLine, endLine}], numbers as the run's replies cite them. A tool an agent calls reads them to see what a text it is given cites, such as a draft citing a person's private memory (sourceId chronicle). Empty outside an agent's run.",
+		Example:     "Run passages, then refuse to send a draft whose cited numbers name a chronicle passage",
+		Tags:        []string{"tools", "citations", "agents", "retrieval"},
+		Pins: cognition.Pins{Out: []cognition.Pin{
+			cognition.DataPin("passages", "Passages", "json", "The run's numbered passages, in order; empty outside an agent's run"),
+		}},
+		Run: func(x *cognition.Exec, _ cognition.Values) (cognition.Values, string, error) {
+			out := []any{}
+			for _, s := range tools.PassagesFrom(x.Context()).All() {
+				p := map[string]any{"number": s.Number, "sourceId": s.SourceID, "key": s.Key, "title": s.Title, "path": s.Location.Path,
+					"startLine": s.Location.StartLine, "endLine": s.Location.EndLine, "entryId": "", "volumeId": ""}
+				if s.Location.EntryID != 0 {
+					p["entryId"] = strconv.FormatUint(s.Location.EntryID, 10)
+				}
+				if s.Location.VolumeID != 0 {
+					p["volumeId"] = strconv.FormatUint(s.Location.VolumeID, 10)
+				}
+				out = append(out, p)
+			}
+			return cognition.Values{"passages": out}, "", nil
+		},
+	})
 	cognition.Nodes.Register(reg, cognition.NodeType{
 		Descriptor:  extensions.Descriptor{ID: CallToolID, Order: 340, Source: "tools"},
 		Title:       "Call tool",
@@ -286,12 +316,25 @@ func runAgent(x *cognition.Exec, in cognition.Values, d Deps) (cognition.Values,
 	}
 	sa := x.ServiceArgs
 	sa.Meta = sa.Meta.WithFeature("agent")
+	if o, set, err := retrieval.ParseOptions(in["retrieval"]); err != nil {
+		return nil, "", tools.Log.Code("bad_retrieval").Wrap(err)
+	} else if set {
+		sa.Ctx = retrieval.WithOptions(sa.Context(), o)
+	}
+	// The tools it calls see what the run has numbered (forge 15a)
+	var kept *tools.Passages
+	sa.Ctx, kept = tools.WithPassages(sa.Context())
+	cite := citeInOrder()
 	out := tools.Loop{DB: d.DB, Chat: d.Chat}.Run(tools.RunArgs{
 		CompleteArgs: chatservice.CompleteArgs{ServiceArgs: sa, Level: cfg.Level, System: system,
 			Messages: []chatservice.Message{{Role: chatservice.RoleUser, Content: prompt}}},
 		Tools:    offered,
 		Settings: settings,
-		Cite:     citeInOrder(),
+		Cite: func(segments []retrieval.Scored) []retrieval.Scored {
+			numbered := cite(segments)
+			kept.Add(numbered)
+			return numbered
+		},
 	})
 	if c := out.Response.Common; c.Code >= 300 {
 		return nil, "", tools.Log.Code("agent_failed").With("status", c.Code).Errorf("the model failed: %s", c.Message)

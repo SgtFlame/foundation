@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -404,7 +405,9 @@ func (l Loop) cap(settings toolssettings.Tools, content map[string]any) (json.Ra
 }
 
 // withPassages adds the segments to content as "passages", each with its
-// citation when it has one.
+// citation when it has one, and (forge 15a) what a chat round's segment
+// has: its source, feedback key, Volume, lines, memory entry and the scores
+// that chose it, so a host can keep them as a round keeps its segments.
 func withPassages(content map[string]any, segments []retrieval.Scored) map[string]any {
 	if content == nil {
 		content = map[string]any{}
@@ -414,23 +417,39 @@ func withPassages(content map[string]any, segments []retrieval.Scored) map[strin
 		p := map[string]any{"title": s.Title, "text": s.Text}
 		if s.SourceID != "" {
 			p["source"] = s.SourceID
+			p["sourceId"] = s.SourceID
+		}
+		if s.Key != "" {
+			p["key"] = s.Key
 		}
 		if s.Number > 0 {
 			p["cite"] = "[" + strconv.Itoa(s.Number) + "]"
+		}
+		if s.Location.VolumeID != 0 {
+			p["volumeId"] = strconv.FormatUint(s.Location.VolumeID, 10)
 		}
 		if s.Location.Path != "" {
 			p["path"] = s.Location.Path
 		}
 		if s.Location.StartLine > 0 {
 			p["lines"] = fmt.Sprintf("%d-%d", s.Location.StartLine, s.Location.EndLine)
+			p["startLine"], p["endLine"] = s.Location.StartLine, s.Location.EndLine
 		}
 		if s.Location.EntryID != 0 {
 			p["entryId"] = strconv.FormatUint(s.Location.EntryID, 10)
+		}
+		if s.Score != 0 {
+			p["score"] = round4(s.Score)
+			p["rrf"], p["axisMult"], p["grounding"] = round4(s.RRF), round4(s.AxisMult), round4(s.Grounding)
 		}
 		passages = append(passages, p)
 	}
 	content["passages"] = passages
 	return content
+}
+
+func round4(f float64) float64 {
+	return math.Round(f*1e4) / 1e4
 }
 
 // argsOf is a call's arguments, {} when it has none.

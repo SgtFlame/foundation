@@ -96,6 +96,7 @@ import (
 	kbimpl "github.com/SgtFlame/foundation/backend/features/kb/services/kbservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 	volumeimpl "github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice/impl"
+	kblive "github.com/SgtFlame/foundation/backend/features/kb/live"
 	kbtools "github.com/SgtFlame/foundation/backend/features/kb/tools"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
@@ -462,6 +463,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		toolssettings.Contribute(registry)
 		toolsbuiltin.Contribute(registry)
 		kbtools.Contribute(registry, func() kbtools.Deps { return kbToolDeps })
+		kblive.Contribute(registry, func() string { return kbToolDeps.Root })
 		chronicletools.Contribute(registry, func() chronicletools.Deps { return chronicleToolDeps })
 		toolscontext.Contribute(registry)
 		toolsnodes.Contribute(registry, func() toolsnodes.Deps { return agentDeps })

@@ -46,6 +46,13 @@ type Principal struct {
 	// Set by Call graph's Reach when it runs a graph As agent; work an
 	// agent starts keeps its reach (authz.AsAgent), so it never widens.
 	Reach string
+	// MemoryOf is the person whose Chronicle memory an agent's run may
+	// search (forge 15a): the person who started it, else the owner the
+	// host named for its subject, else none (0). It grants nothing else; set
+	// only by Call graph's memoryOf when it runs a graph As agent, from the
+	// caller or the host's dispatch, never from a model or a tool's
+	// arguments; work an agent starts keeps it (authz.AsAgent).
+	MemoryOf uint64
 }
 
 // ReachKeys is the principal's reach as record keys ("<entity>:<id>").
@@ -123,14 +130,16 @@ type PrincipalRef struct {
 	OnBehalfOf uint64 `json:"onBehalfOf,string,omitempty"`
 	// Reach is an agent run's reach (forge 7p-3), kept by work it enqueues.
 	Reach string `json:"reach,omitempty"`
+	// MemoryOf is an agent run's memory owner (forge 15a), kept likewise.
+	MemoryOf uint64 `json:"memoryOf,string,omitempty"`
 }
 
 // Ref is the principal as data.
 func (p Principal) Ref() PrincipalRef {
-	return PrincipalRef{Kind: p.Kind, UserID: p.UserID, App: p.App, AgentID: p.AgentID, OnBehalfOf: p.OnBehalfOf, Reach: p.Reach}
+	return PrincipalRef{Kind: p.Kind, UserID: p.UserID, App: p.App, AgentID: p.AgentID, OnBehalfOf: p.OnBehalfOf, Reach: p.Reach, MemoryOf: p.MemoryOf}
 }
 
 // In is the principal a reference names in tenant.
 func (r PrincipalRef) In(tenant uint64) Principal {
-	return Principal{Kind: r.Kind, UserID: r.UserID, TenantID: tenant, App: r.App, AgentID: r.AgentID, OnBehalfOf: r.OnBehalfOf, Reach: r.Reach}
+	return Principal{Kind: r.Kind, UserID: r.UserID, TenantID: tenant, App: r.App, AgentID: r.AgentID, OnBehalfOf: r.OnBehalfOf, Reach: r.Reach, MemoryOf: r.MemoryOf}
 }

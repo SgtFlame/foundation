@@ -114,7 +114,9 @@ func MayUseAgent(ctx context.Context, p features.Principal, id uint64) (AgentInf
 }
 
 // AsAgent is the principal p runs work as when it names agent id: the
-// agent, acting for p's user (or for whom p acts), once p may use it.
+// agent, acting for p's user (or for whom p acts), once p may use it. An
+// agent caller's reach and MemoryOf are kept; MemoryOf is otherwise unset,
+// for the caller to set with MayRemember.
 func AsAgent(ctx context.Context, p features.Principal, id uint64) (features.Principal, error) {
 	a, err := MayUseAgent(ctx, p, id)
 	if err != nil {
@@ -129,8 +131,9 @@ func AsAgent(ctx context.Context, p features.Principal, id uint64) (features.Pri
 	}
 	as := features.AgentPrincipal(p.TenantID, a.ID, by)
 	if p.Kind == features.PrincipalAgent {
-		// An agent's run keeps its reach in whatever it starts (forge 7p-3)
-		as.Reach = p.Reach
+		// An agent's run keeps its reach (forge 7p-3) and whose memory it
+		// may search (forge 15a) in whatever it starts
+		as.Reach, as.MemoryOf = p.Reach, p.MemoryOf
 	}
 	return as, nil
 }
@@ -274,4 +277,32 @@ func IsOwner(ctx context.Context, p features.Principal) bool {
 		}
 	}
 	return false
+}
+
+// MayRemember tells whether p may start an agent's run that searches the
+// Chronicle memory of user (forge 15a): a person only their own, an agent
+// only what its own run may already (never widened), and an app or the
+// service any person's, as a host names its subject's owner. Zero is no
+// one's memory, which anyone may ask.
+func MayRemember(p features.Principal, user uint64) error {
+	if user == 0 {
+		return nil
+	}
+	switch p.Kind {
+	case features.PrincipalUser:
+		if p.UserID == user {
+			return nil
+		}
+		return log.Code("memory_not_yours").Public("A person may only let an agent search their own memory").
+			Errorf("user %d cannot let an agent search user %d's memory", p.UserID, user)
+	case features.PrincipalAgent:
+		if p.MemoryOf == user {
+			return nil
+		}
+		return log.Code("memory_widened").Public("An agent's run cannot change whose memory it searches").
+			Errorf("agent %d's run searches user %d's memory, not %d's", p.AgentID, p.MemoryOf, user)
+	case features.PrincipalApp, features.PrincipalService:
+		return nil
+	}
+	return log.Code("memory_refused").Public("No one's memory may be searched here").Errorf("a %s principal cannot name whose memory an agent searches", p.Kind)
 }

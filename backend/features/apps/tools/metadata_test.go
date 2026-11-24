@@ -11,6 +11,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
+	kblive "github.com/SgtFlame/foundation/backend/features/kb/live"
 	"slices"
 	"strings"
 	"testing"
@@ -73,6 +74,7 @@ func everything(t *testing.T) *extensions.Registry {
 	jobsnodes.Contribute(reg, func() jobsnodes.Deps { return jobsnodes.Deps{} })
 	authznodes.Contribute(reg)
 	authz.ContributeAgents(reg)
+	kblive.Contribute(reg, func() string { return "" })
 	connectors.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
 	connectorsnodes.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
 	connections.Contribute(reg, func() connections.Deps { return connections.Deps{} })

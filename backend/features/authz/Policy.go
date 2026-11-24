@@ -178,6 +178,20 @@ func (pol *Policy) decide(ctx context.Context, p features.Principal, action, res
 	if act.Apps && p.Kind == features.PrincipalApp && len(path) > 0 && path[0] == Resource("tenant", p.TenantID) {
 		return Decision{Allowed: true, Reason: "every app may in its tenant"}
 	}
+	if act.Agents && p.Kind == features.PrincipalAgent && len(path) > 0 && path[0] == Resource("tenant", p.TenantID) {
+		return Decision{Allowed: true, Reason: "every agent may in its tenant"}
+	}
+	if act.AsMaker && p.Kind == features.PrincipalAgent {
+		// The person the run acts for decides, never the agent's own grants
+		// (forge 15a)
+		if p.OnBehalfOf == 0 {
+			return Decision{Reason: "the agent's run acts for no one"}
+		}
+		maker := features.Principal{Kind: features.PrincipalUser, UserID: p.OnBehalfOf, TenantID: p.TenantID}
+		d := pol.decide(ctx, maker, action, resource, audit)
+		d.Reason = fmt.Sprintf("as user %d, for whom the agent acts: %s", p.OnBehalfOf, d.Reason)
+		return d
+	}
 	if typ.Owned && p.Kind == features.PrincipalUser && OwnedBy(path, p.UserID) {
 		return Decision{Allowed: true, Reason: "you own it"}
 	}

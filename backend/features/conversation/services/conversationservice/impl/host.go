@@ -16,6 +16,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/conversation"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
+	retrievalcontext "github.com/SgtFlame/foundation/backend/features/retrieval/context"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 	"github.com/SgtFlame/foundation/backend/features/tools/settings"
 )
@@ -154,6 +155,8 @@ func (h *host) Reply(a conversation.ReplyArgs) (conversation.ReplyOutcome, error
 	}
 	call := args.ServiceArgs
 	call.Meta = features.Meta{Feature: "chat", Level: level.ID, ConversationID: r.conversation.ID, RoundID: r.round.ID, Debug: r.debug}
+	// kb.search searches as the round's RAG Search does (forge 15a)
+	call.Ctx = retrieval.WithOptions(call.Context(), retrievalcontext.OptionsOf(h.Settings(retrievalcontext.ID)))
 	start := time.Now()
 	c := &citer{s: h.s, args: args, r: r, emit: h.emit}
 	out := tools.Loop{DB: h.s.db, Chat: h.s.chat}.Run(tools.RunArgs{

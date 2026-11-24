@@ -43,6 +43,15 @@ type Action struct {
 	// (forge 7m: job.create, so an app's triggers enqueue jobs that run as
 	// the app, as its roles allow).
 	Apps bool
+	// Agents is held by every agent principal in its own tenant with no
+	// grant (forge 15a: retrieval.read, so an agent can search at all;
+	// what it finds stays held to its other checks).
+	Agents bool
+	// AsMaker is decided for an agent principal by the grants of the
+	// person its run acts for (Principal.OnBehalfOf), not its own (forge
+	// 15a: volume.read, so an agent never reads a Volume its maker could
+	// not; a run's own Volume list narrows it further).
+	AsMaker bool
 }
 
 // ResourceType is a kind of resource and its actions, contributed by the

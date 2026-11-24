@@ -62,3 +62,9 @@ func newService(opts ...Option) *service {
 	}
 	return s
 }
+
+// New returns a new service, not the singleton: for tests and for tools
+// that need their own (forge 15a: the Forge fixtures run a real kb.search).
+func New(opts ...Option) retrievalservice.Service {
+	return newService(opts...)
+}

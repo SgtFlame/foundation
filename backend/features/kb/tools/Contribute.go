@@ -53,10 +53,10 @@ func register(reg *extensions.Registry, t tools.Tool) {
 
 // Contribute registers the kb tools.
 func Contribute(reg *extensions.Registry, deps func() Deps) {
-	register(reg, tools.Tool{
+	tools.Tools.Register(reg, tools.Tool{
 		Descriptor:  extensions.Descriptor{ID: "kb.search", Order: 100, Source: source},
 		Title:       "Search Volumes",
-		Description: "Searches the user's Volumes (their knowledge base of markdown files) by meaning and keywords. Returns the best passages, each with its path, lines and a [n] to cite it by. Use it when the context you were given does not answer the question.",
+		Description: "Searches the user's Volumes (their knowledge base of markdown files) by meaning and keywords, and, where this conversation or agent allows, Chronicle memory. Returns the best passages, each with its source, path or memory entry, lines and a [n] to cite it by. Use it when the context you were given does not answer the question.",
 		Input:       json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","minLength":1,"description":"What to look for, in words likely to appear in the text"},"count":{"type":"integer","minimum":1,"maximum":20,"description":"How many passages, 6 by default"}},"required":["query"]}`),
 		Effect:      tools.EffectRead,
 		Run: func(call tools.Call) (tools.Result, error) {
@@ -67,10 +67,11 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			if err != nil {
 				return tools.Result{}, err
 			}
-			if args.Count == 0 {
-				args.Count = 6
+			req := searchArgs(call, args.Query, args.Count)
+			if !kbservice.InTenant(call.Principal) && onlyLibrary(req.Sources) {
+				return tools.Result{}, errors.New("Volumes are only available in the default tenant for now")
 			}
-			resp := deps().Retrieval.Retrieve(retrievalservice.RetrieveArgs{ServiceArgs: call.ServiceArgs, Query: args.Query, TopK: args.Count, Sources: []string{"library"}})
+			resp := deps().Retrieval.Retrieve(req)
 			if resp.Common.Code >= 300 {
 				return tools.Result{}, errors.New(resp.Common.Message)
 			}
@@ -198,6 +199,40 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			return tools.Result{Content: map[string]any{"edited": rel, "edits": len(args.Edits), "live": resp.Live}, Summary: summary}, nil
 		},
 	})
+}
+
+// searchArgs is how kb.search runs (forge 15a): the model gives only the
+// query and how many; the sources, dials, Top-K and Volumes come from the
+// options on the call's context (a chat round's RAG Search settings, an
+// agent run's record), never from the model. Without options it searches
+// the Volumes alone with the dials at 0, as it always has. The options'
+// Top-K, when set, wins over the model's count.
+func searchArgs(call tools.Call, query string, count int) retrievalservice.RetrieveArgs {
+	out := retrievalservice.RetrieveArgs{ServiceArgs: call.ServiceArgs, Query: query, TopK: count, Sources: []string{"library"}}
+	if o, ok := retrieval.OptionsFrom(call.Context()); ok {
+		out.Sources, out.LexicalSemantic, out.ChronicleLibrary, out.VolumeIDs = o.Sources, o.LexicalSemantic, o.ChronicleLibrary, o.VolumeIDs
+		if o.TopK > 0 {
+			out.TopK = o.TopK
+		}
+	}
+	if out.TopK == 0 {
+		out.TopK = 6
+	}
+	return out
+}
+
+// onlyLibrary tells whether sources name the Volumes and nothing else that
+// could answer.
+func onlyLibrary(sources []string) bool {
+	if len(sources) == 0 {
+		return false
+	}
+	for _, s := range sources {
+		if s != "library" && s != "none" {
+			return false
+		}
+	}
+	return true
 }
 
 // resolve turns a path relative to the root ("veritas/notes.md", the

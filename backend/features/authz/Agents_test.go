@@ -129,3 +129,94 @@ func TestAgentGrants(t *testing.T) {
 		t.Error("a retired agent was allowed")
 	}
 }
+
+// An agent searches as its maker may (forge 15a): every agent holds
+// retrieval.read in its own tenant, and its volume.read is decided by the
+// grants of the person its run acts for, never its own.
+func TestAgentRetrievalAccess(t *testing.T) {
+	ctx := context.Background()
+	pol := testPolicy(t)
+	ResourceTypes.Register(pol.registry, ResourceType{
+		Descriptor: extensions.Descriptor{ID: "retrieval"}, Parent: "tenant",
+		Actions: []Action{{Name: "read", Class: ClassRead, Agents: true}},
+	})
+	ResourceTypes.Register(pol.registry, ResourceType{
+		Descriptor: extensions.Descriptor{ID: "volume"}, Parent: "tenant",
+		Actions: []Action{{Name: "read", Class: ClassRead, AsMaker: true}},
+	})
+	ContributeAgents(pol.registry)
+	Install(pol)
+	SetAgents(fakeAgents{50: {ID: 50, TenantID: 1, Name: "Reply", Entity: "agent", CreatedBy: 2, Resource: "tenant:1/entity:agent/record:50"}})
+	t.Cleanup(func() { Install(nil); SetAgents(nil) })
+
+	// Ana (2) may read the Support Volume (7), not HR (8)
+	if _, err := pol.Grant(ctx, nil, GrantArgs{UserID: 2, RoleID: RoleViewer, Resource: "tenant:1/volume:7"}); err != nil {
+		t.Fatal(err)
+	}
+	// A grant to the agent itself on HR gives it nothing
+	if _, err := pol.Grant(ctx, nil, GrantArgs{AgentID: 50, RoleID: RoleViewer, Resource: "tenant:1/volume:8"}); err != nil {
+		t.Fatal(err)
+	}
+	forAna := features.AgentPrincipal(1, 50, 2)
+	if d := Check(ctx, forAna, "retrieval.read", "tenant:1"); !d.Allowed {
+		t.Errorf("an agent may not search: %s", d.Reason)
+	}
+	if Check(ctx, features.AgentPrincipal(1, 50, 2), "retrieval.read", "tenant:9").Allowed {
+		t.Error("an agent searched another tenant")
+	}
+	if d := Check(ctx, forAna, "volume.read", "tenant:1/volume:7"); !d.Allowed {
+		t.Errorf("the agent cannot read what Ana can: %s", d.Reason)
+	}
+	if Check(ctx, forAna, "volume.read", "tenant:1/volume:8").Allowed {
+		t.Error("the agent read a Volume Ana cannot, by its own grant")
+	}
+	if Check(ctx, features.AgentPrincipal(1, 50, 3), "volume.read", "tenant:1/volume:7").Allowed {
+		t.Error("acting for Bo, who cannot read it, the agent read Support")
+	}
+	if Check(ctx, features.AgentPrincipal(1, 50, 0), "volume.read", "tenant:1/volume:7").Allowed {
+		t.Error("a run acting for no one read a Volume")
+	}
+}
+
+// Whose memory an agent's run searches is set by its caller and never
+// widened (forge 15a): a person names only themselves, an app any person,
+// an agent's run keeps its own in what it starts.
+func TestMemoryOfNeverWidens(t *testing.T) {
+	ctx := context.Background()
+	pol := testPolicy(t)
+	ContributeAgents(pol.registry)
+	Install(pol)
+	SetAgents(fakeAgents{50: {ID: 50, TenantID: 1, App: "mail", CreatedBy: 2, Resource: "tenant:1/entity:agent/record:50"},
+		51: {ID: 51, TenantID: 1, App: "mail", CreatedBy: 2, Resource: "tenant:1/entity:agent/record:51"}})
+	t.Cleanup(func() { Install(nil); SetAgents(nil) })
+
+	ana := features.Principal{Kind: features.PrincipalUser, UserID: 2, TenantID: 1}
+	app := features.AppPrincipal(1, "mail")
+	if MayRemember(ana, 2) != nil || MayRemember(ana, 0) != nil {
+		t.Error("Ana may let an agent search her own memory, or none")
+	}
+	if MayRemember(ana, 3) == nil {
+		t.Error("Ana let an agent search Bo's memory")
+	}
+	if MayRemember(app, 3) != nil {
+		t.Error("a host app names its subject's owner")
+	}
+	run, err := AsAgent(ctx, app, 50)
+	if err != nil || run.MemoryOf != 0 {
+		t.Fatalf("an app's AsAgent: %+v %v", run, err)
+	}
+	run.MemoryOf = 2
+	nested, err := AsAgent(ctx, run, 50)
+	if err != nil || nested.MemoryOf != 2 {
+		t.Fatalf("a nested run lost its memory owner: %+v %v", nested, err)
+	}
+	if MayRemember(nested, 3) == nil {
+		t.Error("a nested run widened its memory to Bo's")
+	}
+	if MayRemember(nested, 2) != nil {
+		t.Error("a nested run may keep its own memory owner")
+	}
+	if ref := nested.Ref(); ref.In(1).MemoryOf != 2 {
+		t.Error("a job an agent's run enqueues lost its memory owner")
+	}
+}

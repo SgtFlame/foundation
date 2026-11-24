@@ -28,6 +28,9 @@ const (
 	// ReachPin is Call graph's input confining an agent's run to subjects
 	// (forge 7p-3), used only with As agent.
 	ReachPin    = "reach"
+	// MemoryOfPin is Call graph's input naming the person whose Chronicle
+	// memory an agent's run may search (forge 15a), used only with As agent.
+	MemoryOfPin = "memoryOf"
 	GetVariable = "data.getVariable"
 	SetVariable = "data.setVariable"
 	Reroute     = "flow.reroute"
@@ -329,7 +332,9 @@ func contributeFlow(reg *extensions.Registry) {
 			in = append(in, cognition.Pin{ID: AsAgentPin, Name: "As agent", Type: "string", Optional: true,
 				Description: "An agent's id to run the graph as (forge 07j); the run's principal must have made the agent or hold agent.use on it"},
 				cognition.Pin{ID: ReachPin, Name: "Reach", Type: "json", Optional: true,
-					Description: "With As agent: what the agent's run is about, the subjects {entity, id} (one, or a list) its host's tools confine its writes to (forge 7p-3); Current user gives it as reach. An agent's own reach is kept, never widened"})
+					Description: "With As agent: what the agent's run is about, the subjects {entity, id} (one, or a list) its host's tools confine its writes to (forge 7p-3); Current user gives it as reach. An agent's own reach is kept, never widened"},
+				cognition.Pin{ID: MemoryOfPin, Name: "Memory of", Type: "string", Optional: true,
+					Description: "With As agent: the user id whose Chronicle memory the agent's run may search with kb.search (forge 15a); empty searches none. A person may name only themselves, an agent's run keeps its own, and an app (a host's trigger) may name its subject's owner"})
 			out := append([]cognition.Pin{cognition.ExecPin(cognition.Then, "")}, c.Outputs...)
 			for i := 1; i < len(out); i++ {
 				out[i].Exec, out[i].Optional = false, false
@@ -383,9 +388,19 @@ func contributeFlow(reg *extensions.Registry) {
 					}
 					as.Reach = reach
 				}
+				if m, _ := in[MemoryOfPin].(string); strings.TrimSpace(m) != "" {
+					user, err := strconv.ParseUint(strings.TrimSpace(m), 10, 64)
+					if err != nil {
+						return caught(c, nil, fmt.Errorf("memory of %q is not a user's id", m))
+					}
+					if err := authz.MayRemember(x.Principal, user); err != nil {
+						return caught(c, nil, err)
+					}
+					as.MemoryOf = user
+				}
 				inputs := cognition.Values{}
 				for k, v := range in {
-					if k != AsAgentPin && k != ReachPin {
+					if k != AsAgentPin && k != ReachPin && k != MemoryOfPin {
 						inputs[k] = v
 					}
 				}
@@ -394,6 +409,7 @@ func contributeFlow(reg *extensions.Registry) {
 			}
 			delete(in, AsAgentPin)
 			delete(in, ReachPin)
+			delete(in, MemoryOfPin)
 			out, err := x.Call(c.Graph, in)
 			return caught(c, out, err)
 		},

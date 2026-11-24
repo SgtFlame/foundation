@@ -7,10 +7,12 @@ package retrievalcontext
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 
 	"github.com/SgtFlame/foundation/backend/features/conversation"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/logging"
+	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	"github.com/SgtFlame/foundation/backend/features/retrieval/services/retrievalservice"
 )
 
@@ -80,6 +82,36 @@ func gather(args conversation.GatherArgs, service retrievalservice.Service) ([]c
 		})
 	}
 	return items, nil
+}
+
+// OptionsOf are a conversation's RAG Search settings as the options its
+// round's tools search with (forge 15a): the sources switched on, the two
+// dials and Top-K. kb.search in a chat round searches as the round's own
+// retrieval does.
+func OptionsOf(settings json.RawMessage) retrieval.Options {
+	var s Settings
+	if len(settings) > 0 {
+		_ = json.Unmarshal(settings, &s)
+	}
+	o := retrieval.Options{LexicalSemantic: clamp(s.LexicalSemantic, -5, 5), ChronicleLibrary: clamp(s.ChronicleLibrary, -5, 5), TopK: clamp(s.TopK, 0, 50)}
+	if len(s.Sources) > 0 {
+		o.Sources = []string{"none"} // every source turned off searches nothing
+		for _, id := range sortedKeys(s.Sources) {
+			if s.Sources[id] {
+				o.Sources = append(o.Sources, id)
+			}
+		}
+	}
+	return o
+}
+
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func clamp(v, lo, hi int) int {
