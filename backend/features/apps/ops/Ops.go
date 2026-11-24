@@ -367,3 +367,14 @@ func principalOf(e live.Event) uint64 {
 	}
 	return e.UserID
 }
+
+// SummaryOf is the op a definition event's first event carries in a few
+// words, as ops.list names it (Add a page (tasks /mine)): a person's
+// activity names their definition changes so (forge 15c). "" for an event
+// that carries no op.
+func SummaryOf(reg *extensions.Registry, e live.Event) string {
+	if e.Op == nil {
+		return ""
+	}
+	return describe(Entry{Command: e.Op.Command, TargetType: e.Target.Type, Target: e.Op.Target, Args: e.Op.Args, App: e.Op.App}, titles(reg))
+}

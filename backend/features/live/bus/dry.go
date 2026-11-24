@@ -340,7 +340,7 @@ func (d *Dry) decide(rp *Request, cmd live.Command) Result {
 		if err != nil {
 			return Result{Common: *r.Fail(http.StatusInternalServerError, err)}
 		}
-		e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: r.ID, RequestID: r.RequestID, UserID: r.Principal.UserID, AgentID: r.Principal.AgentID, OnBehalfOf: r.Principal.OnBehalfOf, Actor: r.Actor, TenantID: tenant, Time: now}
+		e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: r.ID, Command: r.Type, App: r.App, RequestID: r.RequestID, UserID: r.Principal.UserID, AgentID: r.Principal.AgentID, OnBehalfOf: r.Principal.OnBehalfOf, Actor: r.Actor, TenantID: tenant, Time: now}
 		if err := d.over.Apply(e, func(projector string, t live.Target) (json.RawMessage, error) {
 			return d.value(ctx, tenant, projector, t)
 		}); err != nil {

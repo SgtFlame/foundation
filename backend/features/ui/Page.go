@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -173,6 +174,20 @@ func AppPage(build func(r *Render) *Node) Page {
 	}}
 }
 
+// appID is the app the page belongs to: its App, else the first part of
+// its id ("<appId>/<page>"); "" for a draft run (the app id draft is
+// reserved).
+func (p Page) appID() string {
+	app := p.App
+	if app == "" {
+		app, _, _ = strings.Cut(p.ID, "/")
+	}
+	if !live.ValidToken(app) || app == "draft" {
+		return ""
+	}
+	return app
+}
+
 // Command is a command type as the live core knows it: an app's own
 // commands are scoped by the app.
 func (p Page) Command(typ string) string {
@@ -192,7 +207,19 @@ func (p Page) Query(name string) string {
 
 // Commander decides commands for handlers (the live bus).
 type Commander interface {
-	Execute(args features.ServiceArgs, id, typ, target, request string, raw json.RawMessage) ([]live.Problem, *features.ServiceResponse)
+	Execute(args features.ServiceArgs, c CommandRequest) ([]live.Problem, *features.ServiceResponse)
+}
+
+// CommandRequest is a command a handler sends: its id, type, target,
+// arguments, the request of the event that sent it (so a click and the
+// commands it caused share one), and the page's app (forge 15c).
+type CommandRequest struct {
+	ID      string
+	Type    string
+	Target  string
+	Request string
+	App     string
+	Args    json.RawMessage
 }
 
 // Action is a client action: an effect only the browser can perform.
@@ -388,7 +415,7 @@ func (h *Handle) Command(typ, target string, args any) ([]live.Problem, *feature
 		h.Do(Action{Type: "dryRun", Name: typ, ID: target, Params: raw})
 		return nil, nil
 	}
-	problems, fail := h.s.o.Commander.Execute(h.ServiceArgs, "ui-"+newID(), typ, target, h.request, raw)
+	problems, fail := h.s.o.Commander.Execute(h.ServiceArgs, CommandRequest{ID: "ui-" + newID(), Type: typ, Target: target, Request: h.request, App: h.s.page.appID(), Args: raw})
 	return problems, fail
 }
 

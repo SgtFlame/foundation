@@ -2,6 +2,7 @@ package apptools_test
 
 import (
 	"encoding/json"
+	"github.com/SgtFlame/foundation/backend/features/activity"
 	"github.com/SgtFlame/foundation/backend/features/authz"
 	authznodes "github.com/SgtFlame/foundation/backend/features/authz/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors"
@@ -69,6 +70,7 @@ func everything(t *testing.T) *extensions.Registry {
 	manifests.Contribute(reg, func() manifests.Deps { return manifests.Deps{} })
 	installs.Contribute(reg, func() installs.Deps { return installs.Deps{} })
 	ops.Contribute(reg)
+	activity.Contribute(reg, activity.NewRecorder(func() activity.Deps { return activity.Deps{} }))
 	ops.ContributeUndo(reg, func() ops.Deps { return ops.Deps{} })
 	apptools.ContributeForge(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })
 	apptools.ContributeApply(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })

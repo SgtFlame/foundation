@@ -14,11 +14,12 @@ import (
 var log = ui.Log.Tags("session")
 
 type service struct {
-	reg    *extensions.Registry
-	bus    *bus.Bus
-	subs   *subscribe.Subscriptions
-	store  ui.SessionStore
-	graphs ui.HandlerRunner
+	reg      *extensions.Registry
+	bus      *bus.Bus
+	subs     *subscribe.Subscriptions
+	store    ui.SessionStore
+	graphs   ui.HandlerRunner
+	recorder ui.Recorder
 
 	mu       sync.Mutex
 	sessions map[string]*ui.Session // open in this instance
@@ -39,6 +40,10 @@ func WithSubscriptions(subs *subscribe.Subscriptions) Option {
 
 // WithGraphs runs the handlers that are graphs (uinodes.Runner in serve).
 func WithGraphs(g ui.HandlerRunner) Option { return func(s *service) { s.graphs = g } }
+
+// WithRecorder hears people's events on pages, for their activity
+// history (forge 15c: activity.Recorder).
+func WithRecorder(r ui.Recorder) Option { return func(s *service) { s.recorder = r } }
 
 // WithStore keeps the sessions' records (ui.KVSessions in serve).
 func WithStore(store ui.SessionStore) Option { return func(s *service) { s.store = store } }

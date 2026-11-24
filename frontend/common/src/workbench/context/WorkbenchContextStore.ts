@@ -122,6 +122,12 @@ export class WorkbenchContextStore {
     this.changed()
   }
 
+  // What the focused editor is editing, if it said
+  focusedSubject(): SubjectRef | undefined {
+    const { focused, editors } = this.state
+    return editors.find((e) => e.tab === focused)?.subject
+  }
+
   // Records that the user edited or created the subject a tab is editing
   touch(tab: string, event: RecentEvent) {
     const subject = this.reports.get(tab)?.subject

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/activity"
 	"gorm.io/gorm"
 	"net/http"
 	"net/url"
@@ -409,6 +410,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var appDeps manifests.Deps
 		var installDeps installs.Deps
 		var opsDeps ops.Deps
+		var activityDeps activity.Deps
+		activityRecorder := activity.NewRecorder(func() activity.Deps { return activityDeps })
 		var appService appservice.Service
 		var recordService recordservice.Service
 		var liveSubscriptions *subscribe.Subscriptions
@@ -438,6 +441,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		conversation.ContributeAccess(registry)
 		chronicle.ContributeAccess(registry)
 		retrieval.ContributeAccess(registry)
+		activity.ContributeAccess(registry) // a person's own recent activity (forge 15c)
 		cognition.ContributeAccess(registry)
 		kbservice.ContributeAccess(registry)
 		ui.ContributeAccess(registry)
@@ -477,6 +481,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		livesettings.Contribute(registry)
 		recordssettings.Contribute(registry)
 		jobs.ContributeSettings(registry)
+		activity.ContributeSettings(registry)
 		uisettings.Contribute(registry)
 		if err := uicomponents.Contribute(registry); err != nil {
 			return err
@@ -522,6 +527,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		scripted.Contribute(registry, func() scripted.Deps { return scriptedDeps })
 		ops.Contribute(registry)                                         // the operation log: ops.log and ops.list
 		ops.ContributeUndo(registry, func() ops.Deps { return opsDeps }) // ops.undo, ops.redo and ops.stack (forge 06b)
+		activity.Contribute(registry, activityRecorder)                  // activity.mine and its calls (forge 15c)
 		apptools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		apptools.ContributeTransfer(registry, func() appservice.Service { return appService })
 		apptools.ContributeForge(registry, func() apptools.ForgeDeps { return forgeToolDeps })   // forge.catalog|describe|app|read (forge 06d)
@@ -845,13 +851,18 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			return ids, nil
 		}
 		go jobRunner.Start(tenantIDs)
+		// What people do by hand, followed in every tenant: each process
+		// shares the followers' consumers (forge 15c)
+		activityDeps = activity.Deps{Projections: projections, Store: activity.NewStore(nats.JS()), Config: configService, Bus: liveBus}
+		go activityRecorder.Start(ctx, tenantIDs)
+		activity.WatchSettings(ctx, configChanges, func() activity.Deps { return activityDeps })
 		// Every process keeps cx_sources, the connections a trigger listens
 		// to, which adapters' instances lease and run (forge 07c)
 		go connections.Start(ctx, func() connections.Deps { return connectionDeps }, tenantIDs)
 		// Scripted connector types (forge 07d), served in this process too
 		go scripted.Serve(ctx, nats.Conn(), func() scripted.Deps { return scriptedDeps }, tenantIDs, scripted.Options{})
 		prefabService := prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
-		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())),
+		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())), uiimpl.WithRecorder(activityRecorder),
 			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))
 		liveService := liveimpl.CreateService(liveimpl.WithBus(liveBus), liveimpl.WithSubscriptions(subscriptions), liveimpl.WithPresence(livePresence), liveimpl.WithRegistry(registry),
 			liveimpl.WithMaxSubscriptions(func() int {

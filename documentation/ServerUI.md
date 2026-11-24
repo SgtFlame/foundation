@@ -466,3 +466,14 @@ Forge 7p-5 ([forge MailApp.md](../../forge/documentation/MailApp.md#built-in-par
 - **`ui.openLink`** (*Open link*, an effect node in handlers and prefab logic) sends the `openLink` action with a `workbench:<type>/<id>?<where>` link; `AppHost` opens it through the subject openers (`openWorkbenchLink`) and toasts when nothing opens it.
 - **`UiHost.registry`**: the tab's editor registry, for a renderer that opens an editor.
 - **`SchemaField`'s slider** (`Schema.widget: "slider"`, also on the server's `config.Schema`): an integer or number with `min` and `max` shows as a slider with marks, *Inherited* while unset, and *Clear*. Forge's node settings form uses it for the retrieval dials.
+
+## Changed in forge 15c
+- **One gesture is one request.** `Session.Event` makes the request id before it runs the handler: a page's Go handler, a graph, or a prefab instance's graph. Every command the handler sends goes under that id, now as a `ui.CommandRequest {ID, Type, Target, Request, App, Args}` with the page's app. `Commander.Execute(args, CommandRequest)` replaces the positional form.
+- **`Options.Recorder`** (`ui.Recorder`, `uiimpl.WithRecorder`) hears each person's event on a page that is not dry, as a `ui.Gesture`:
+  - request, page, app, the tab's title and subject;
+  - the handler, and the component event naming it on the node;
+  - the node's key path and type;
+  - `ui.VisibleLabel` (its `label`, `text`, `title`, `primary`, `tooltip`, `header`, `placeholder` or `name` prop, else a descendant's).
+
+  It never hears the payload, nor `window:` events. The activity feature records them ([Activity.md](Activity.md#built-in-forge-15c)).
+- **The graph renderer** (`renderers/graph/GraphCanvas.tsx`) sends `select` only when the selection changes. React Flow reported an empty selection each time the canvas mounted or showed again.

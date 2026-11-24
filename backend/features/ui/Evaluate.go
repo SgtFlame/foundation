@@ -867,13 +867,13 @@ func (s *Session) runLogic(run lifecycle) []Action {
 
 // instanceEvent runs an instance's handler graph for an event of its
 // template.
-func (s *Session) instanceEvent(args features.ServiceArgs, kp, name string, payload map[string]any) {
+func (s *Session) instanceEvent(args features.ServiceArgs, request, kp, name string, payload map[string]any) {
 	inst := s.instances[kp]
 	if inst == nil {
 		s.sendTree(true)
 		return
 	}
-	h := &Handle{ServiceArgs: args, Payload: payload, Params: s.params, s: s, request: newID(), inst: inst}
+	h := &Handle{ServiceArgs: args, Payload: payload, Params: s.params, s: s, request: request, inst: inst}
 	if err := s.runInstanceHandler(h, name); err != nil {
 		s.handlerFailed(args, name, err)
 	}

@@ -99,8 +99,13 @@ type Event struct {
 	Target    Target          `json:"target"`
 	Data      json.RawMessage `json:"data,omitempty"`
 	CommandID string          `json:"commandId"`
-	RequestID string          `json:"requestId,omitempty"`
-	UserID    uint64          `json:"userId,string,omitempty"`
+	// Command is the command type that committed it, as the bus knew it
+	// (an installed app's <appId>.<name>), and App the app the request
+	// was made for (forge 15c: a person's activity names both).
+	Command   string `json:"command,omitempty"`
+	App       string `json:"app,omitempty"`
+	RequestID string `json:"requestId,omitempty"`
+	UserID    uint64 `json:"userId,string,omitempty"`
 	// Actor is who sent the command for the user, beside them: the chat.
 	Actor string `json:"actor,omitempty"`
 	// AgentID is the agent whose command it was (forge 07j), OnBehalfOf the

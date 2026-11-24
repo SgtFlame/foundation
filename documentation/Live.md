@@ -216,3 +216,6 @@ For Forge's Builder in presence ([Apps.md › Changed in slice 43](Apps.md#chang
 
 ## Changed in slice 46
 `natsd.Server.Connect(name)` opens another connection to the same server, as another process would (in-process to the embedded server, else to the external URL), and `ClientURL()` is where another process connects; `natsd.StartTestListening(t)` starts a test server with a TCP listener on a free port. The connector tests use them for adapters on their own connections and in another process ([Connectors.md](Connectors.md#verification)).
+
+## Changed in forge 15c
+Every committed event carries **`command`**, the command type that committed it as the bus knew it (an installed app's `<appId>.<name>`), and **`app`**, the app the request was made for (`live.Event.Command`, `App`), from `bus.Execute`, `bus.Transact` and dry runs. A person's recent activity names them ([Activity.md](Activity.md#built-in-forge-15c)).

@@ -73,7 +73,7 @@ func (s *service) Open(args uiservice.OpenArgs) uiservice.OpenResponse {
 		}
 	}
 	sess, f := ui.Open(args.ServiceArgs, args.Session, *page, args.Params, rec, ui.Options{
-		Catalog: ui.Catalog(s.reg), Commander: commander{s.bus}, Graphs: s.graphs, Subs: s.subs, Store: s.store, Send: args.Send,
+		Catalog: ui.Catalog(s.reg), Commander: commander{s.bus}, Graphs: s.graphs, Subs: s.subs, Store: s.store, Send: args.Send, Recorder: s.recorder,
 	})
 	if f != nil {
 		return fail(f)
@@ -87,11 +87,11 @@ func (s *service) Open(args uiservice.OpenArgs) uiservice.OpenResponse {
 // commander decides a handler's commands on the bus.
 type commander struct{ b *bus.Bus }
 
-func (c commander) Execute(args features.ServiceArgs, id, typ, target, request string, raw json.RawMessage) ([]live.Problem, *features.ServiceResponse) {
+func (c commander) Execute(args features.ServiceArgs, r ui.CommandRequest) ([]live.Problem, *features.ServiceResponse) {
 	if c.b == nil {
 		return nil, args.Fail(http.StatusServiceUnavailable, log.New("commands are not available"))
 	}
-	res := c.b.Execute(bus.Request{ServiceArgs: args, ID: id, Type: typ, Target: target, RequestID: request, Args: raw})
+	res := c.b.Execute(bus.Request{ServiceArgs: args, ID: r.ID, Type: r.Type, Target: r.Target, RequestID: r.Request, App: r.App, Args: r.Args})
 	if res.Common.Code >= 300 {
 		return res.Problems, &res.Common
 	}

@@ -139,6 +139,32 @@ type Options struct {
 	Subs      *subscribe.Subscriptions
 	Store     SessionStore
 	Send      func(frame any) // to the session's live connection
+	// Recorder, when set, hears a person's events on the page, for their
+	// activity history (forge 15c); nil records nothing.
+	Recorder Recorder
+}
+
+// Recorder hears the gestures people make on pages (forge 15c, the
+// activity feature). It must not block: the session holds its lock.
+type Recorder interface {
+	Gesture(args features.ServiceArgs, g Gesture)
+}
+
+// Gesture is one event a person sent on a page, as their activity keeps
+// it: never the event's payload, only where it happened and what the
+// clicked node showed.
+type Gesture struct {
+	Request string   // the request its commands are sent under
+	Page    string   // the page's id
+	App     string   // the page's app
+	Title   string   // the tab's title as last sent
+	Subject *Subject // what the tab shows, as last sent
+	Handler string   // the handler the event ran
+	Event   string   // the component event (click, select, change…), when known
+	Path    []string // the node's key path
+	Node    string   // the node's type
+	Label   string   // the node's visible label: its text, label or title
+	Time    time.Time
 }
 
 // Open opens a page for args.Principal as session id, resuming its view
@@ -325,12 +351,16 @@ func (s *Session) Event(args features.ServiceArgs, handler string, path []string
 		s.windowEvent(statePath, payload)
 		return
 	}
+	// One gesture is one request: the event's commands are sent under it,
+	// and a person's activity groups them with the event (forge 15c)
+	request := newID()
+	s.record(args, request, handler, path)
 	if kp, name, ok := instanceHandler(handler); ok {
-		s.instanceEvent(args, kp, name, payload)
+		s.instanceEvent(args, request, kp, name, payload)
 		return
 	}
 	fn := s.page.Handlers[handler]
-	h := &Handle{ServiceArgs: args, Payload: payload, Params: s.params, s: s, request: newID()}
+	h := &Handle{ServiceArgs: args, Payload: payload, Params: s.params, s: s, request: request}
 	if fn == nil && s.o.Graphs != nil {
 		fn = func(h *Handle) error {
 			found, err := s.o.Graphs.RunHandler(h, handler)
@@ -351,6 +381,63 @@ func (s *Session) Event(args features.ServiceArgs, handler string, path []string
 		s.handlerFailed(args, handler, err)
 	}
 	s.flush(h.actions)
+}
+
+// record tells the recorder about a person's event: the handler, the
+// node's key path and type, the component event that names the handler
+// there, and what the node shows (forge 15c question 5); never the
+// payload. A dry page (the Prefab Editor's canvas) records nothing.
+func (s *Session) record(args features.ServiceArgs, request, handler string, path []string) {
+	if s.o.Recorder == nil || s.page.Dry || args.Principal.Kind != features.PrincipalUser {
+		return
+	}
+	g := Gesture{Request: request, Page: s.page.ID, App: s.page.appID(), Title: s.title, Subject: s.subject, Handler: handler, Path: slices.Clone(path), Time: time.Now().UTC()}
+	if n := s.tree.At(path); n != nil {
+		g.Node = n.Type
+		for event, on := range n.On {
+			if on.Handler == handler && (g.Event == "" || event < g.Event) {
+				g.Event = event
+			}
+		}
+		g.Label = VisibleLabel(n)
+	}
+	if _, name, ok := instanceHandler(handler); ok {
+		g.Handler = name // a prefab instance's handler: the graph's name in its prefab
+	}
+	s.o.Recorder.Gesture(args, g)
+}
+
+// labelProps are the props that hold what a node shows as its name, in
+// the order they are tried.
+var labelProps = []string{"label", "text", "title", "primary", "tooltip", "header", "placeholder", "name"}
+
+// VisibleLabel is what a node shows as its name, from its own props or,
+// for a container (a list row, a button around an icon and text), the
+// first of its descendants' within three levels, cut to 80 characters;
+// "" when none shows text.
+func VisibleLabel(n *Node) string {
+	var find func(n *Node, depth int) string
+	find = func(n *Node, depth int) string {
+		if n == nil || depth > 3 {
+			return ""
+		}
+		for _, p := range labelProps {
+			if v, ok := n.Props[p].(string); ok && strings.TrimSpace(v) != "" {
+				return v
+			}
+		}
+		for _, c := range n.Children {
+			if v := find(c, depth+1); v != "" {
+				return v
+			}
+		}
+		return ""
+	}
+	v := strings.Join(strings.Fields(find(n, 0)), " ")
+	if r := []rune(v); len(r) > 80 {
+		v = string(r[:79]) + "…"
+	}
+	return v
 }
 
 // handlerFailed tells the browser a handler is missing or failed.

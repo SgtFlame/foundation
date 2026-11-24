@@ -6,6 +6,7 @@ import { onOpenLogs } from '../../editors/logs/openLogs.ts'
 import { fromSearch } from '../../editors/logs/view.ts'
 import WorkbenchContextProvider from '../../workbench/context/WorkbenchContextProvider.tsx'
 import { workbenchContext } from '../../workbench/context/WorkbenchContextStore.ts'
+import { startActivityFocus } from '../../workbench/context/activityFocus.ts'
 import { extensions } from '../../workbench/extensions/index.ts'
 import { editors } from '../../workbench/points.ts'
 import { session } from '../../session/session.ts'
@@ -114,6 +115,8 @@ function Workbench() {
     if (linked) registry.edit(logsOn(linked))
     return onOpenLogs((view) => registry.edit(logsOn(view)))
   }, [registry])
+  // The focused tab's subject, for the person's recent activity (forge 15c)
+  useEffect(() => startActivityFocus(), [])
   // App deep links (/workbench?app=<appId>&route=/task/123)
   useEffect(() => openDeepLink(registry, location.search), [registry])
   // An app uninstalled, or an editor kind an upgrade removed: its tabs close

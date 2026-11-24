@@ -167,9 +167,10 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 			return v.Value, nil
 		}
 		type planned struct {
-			events []live.NewEvent
-			op     *live.LoggedOp
-			jobs   []live.Job
+			events  []live.NewEvent
+			op      *live.LoggedOp
+			jobs    []live.Job
+			command string
 		}
 		var plan []planned
 		var decided []Decided
@@ -234,7 +235,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 				if err != nil {
 					return TransactResult{Result: Result{Common: *r.Fail(http.StatusInternalServerError, err)}}
 				}
-				e := live.Event{Type: ne.Type, Target: *ne.Target, Data: data, CommandID: r.ID, RequestID: r.RequestID, UserID: r.Principal.UserID, AgentID: r.Principal.AgentID, OnBehalfOf: r.Principal.OnBehalfOf, Actor: r.Actor, TenantID: tenant, Time: time.Now().UTC()}
+				e := live.Event{Type: ne.Type, Target: *ne.Target, Data: data, CommandID: r.ID, Command: s.op.Command, App: r.App, RequestID: r.RequestID, UserID: r.Principal.UserID, AgentID: r.Principal.AgentID, OnBehalfOf: r.Principal.OnBehalfOf, Actor: r.Actor, TenantID: tenant, Time: time.Now().UTC()}
 				for _, pr := range projectors {
 					if len(pr.Types) > 0 && !slices.Contains(pr.Types, e.Target.Type) {
 						continue
@@ -258,7 +259,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 			if failed != nil {
 				break
 			}
-			plan = append(plan, planned{events: events, op: op, jobs: d.Jobs()})
+			plan = append(plan, planned{events: events, op: op, jobs: d.Jobs(), command: s.op.Command})
 			decided = append(decided, Decided{Op: s.op, Events: len(events)})
 			all = append(all, events...)
 		}
@@ -282,7 +283,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 			for j, ne := range p.events {
 				t := *ne.Target
 				data, _ := json.Marshal(ne.Data)
-				e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: fmt.Sprintf("%s.%d", r.ID, i), RequestID: r.RequestID,
+				e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: fmt.Sprintf("%s.%d", r.ID, i), Command: p.command, App: r.App, RequestID: r.RequestID,
 					UserID: r.Principal.UserID, AgentID: r.Principal.AgentID, OnBehalfOf: r.Principal.OnBehalfOf, Actor: ActorOf(r), TenantID: tenant, Time: now, Batch: &live.Batch{Index: len(msgs) + 1, Count: len(all)}}
 				if j == 0 {
 					e.Op, e.Jobs = p.op, p.jobs

@@ -409,7 +409,7 @@ func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstre
 		if err != nil {
 			return res, false, err
 		}
-		e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: r.ID, RequestID: r.RequestID, UserID: r.Principal.UserID, AgentID: r.Principal.AgentID, OnBehalfOf: r.Principal.OnBehalfOf, Actor: ActorOf(r), TenantID: tenant, Time: now}
+		e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: r.ID, Command: r.Type, App: r.App, RequestID: r.RequestID, UserID: r.Principal.UserID, AgentID: r.Principal.AgentID, OnBehalfOf: r.Principal.OnBehalfOf, Actor: ActorOf(r), TenantID: tenant, Time: now}
 		if i == 0 {
 			e.Op, e.Jobs = op, jobs
 		}

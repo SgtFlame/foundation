@@ -228,8 +228,8 @@ func (st *render) openWith(page ui.Page, params json.RawMessage) *session {
 
 type commander struct{ b *bus.Bus }
 
-func (c commander) Execute(args features.ServiceArgs, id, typ, target, request string, raw json.RawMessage) ([]live.Problem, *features.ServiceResponse) {
-	res := c.b.Execute(bus.Request{ServiceArgs: args, ID: id, Type: typ, Target: target, RequestID: request, Args: raw})
+func (c commander) Execute(args features.ServiceArgs, r ui.CommandRequest) ([]live.Problem, *features.ServiceResponse) {
+	res := c.b.Execute(bus.Request{ServiceArgs: args, ID: r.ID, Type: r.Type, Target: r.Target, RequestID: r.Request, App: r.App, Args: r.Args})
 	if res.Common.Code >= 300 {
 		return res.Problems, &res.Common
 	}

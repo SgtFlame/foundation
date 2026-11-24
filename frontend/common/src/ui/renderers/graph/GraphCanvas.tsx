@@ -108,6 +108,9 @@ function Canvas(p: RendererProps) {
 
   const [nodes, setNodes] = useState<Node<NodeData>[]>([])
   const dragging = useRef(new Set<string>())
+  // The selection last sent: React Flow reports an empty one each time the
+  // canvas mounts or shows again, which is no one's gesture (forge 15c)
+  const lastSelection = useRef('{"nodes":[],"edges":[]}')
   // The server's nodes, keeping positions being dragged and the selection
   useEffect(() => {
     setNodes((current) => {
@@ -182,8 +185,12 @@ function Canvas(p: RendererProps) {
             onNodesDelete={(deleted) => p.emit('delete', { nodes: deleted.map((n) => n.id), edges: [] })}
             onSelectionChange={({ nodes: sel, edges: selEdges }) => {
               const ids = sel.map((n) => n.id)
+              const selection = { nodes: ids, edges: selEdges.map((e) => e.id) }
+              const key = JSON.stringify(selection)
+              if (key === lastSelection.current) return
+              lastSelection.current = key
               host.setPresence({ selected: ids })
-              p.emit('select', { nodes: ids, edges: selEdges.map((e) => e.id) })
+              p.emit('select', selection)
             }}
             onNodeDoubleClick={(_, node) => p.emit('open', { id: node.id })}
             deleteKeyCode={['Backspace', 'Delete']}
