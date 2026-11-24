@@ -63,7 +63,7 @@ func (p *Projections) Close() {
 }
 
 // Stream makes sure the tenant's area stream exists. Events are kept
-// forever (01-ServerUI question 6), and a command's several events are
+// forever (001-ServerUI question 6), and a command's several events are
 // published as one atomic batch (forge 03h).
 func (p *Projections) Stream(ctx context.Context, tenant uint64, area live.Area) (jetstream.Stream, error) {
 	name := live.StreamName(tenant, area)

@@ -195,7 +195,7 @@ Forge 05c ([Apps.md › Built in slice 33](Apps.md#built-in-slice-33)): an insta
 Features may contribute built-in tenant roles (`authz.ContributedRoles`, point `authz.role`; [Connectors.md › Built in slice 49](Connectors.md#contributed-built-in-roles)): fixed permissions, usually scoped (`<scope>/<type>.<action>`, held only on that path by `Role.HoldsOn`, as app roles' are), ids reserved from 100 to 999, listed with the built-in roles and neither edited nor deleted. Forge's *Mail administrator* (id 100) is the first: `config:mail/config.write` and `connection.read|use|manage` under `connectors:mail`. Such a role is granted beside a member's role, which holds the tenant-wide checks every command passes first.
 
 ## Built in slice 51
-Forge 07j, agent principals and roles granted on a record ([forge 07j-AgentPrincipals.md](../../forge/documentation/plans/07j-AgentPrincipals.md); questions 1 and 2 answered with their proposals before building, 2026-11-20).
+Forge 07j, agent principals and roles granted on a record ([forge 007j-AgentPrincipals.md](../../forge/documentation/plans/007j-AgentPrincipals.md); questions 1 and 2 answered with their proposals before building, 2026-11-20).
 
 ### Agent principals
 - **A principal kind `agent`** (`features.PrincipalAgent`, `features.AgentPrincipal(tenant, agent, onBehalfOf)`; `Principal.AgentID`, `OnBehalfOf`, carried by `PrincipalRef` too, `String()` `agent:<id>`). It cannot sign in (`session.*` is refused) and has no password or session.

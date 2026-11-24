@@ -1,6 +1,6 @@
 # Jobs
 
-Durable background work on NATS JetStream: a **job** runs one published graph with inputs, as the principal it names, once, and is retried with backoff when it fails in a way worth retrying. An installed app's **triggers** (`app.trigger` graphs) run as jobs, on each event their event node starts on and on each tick of a schedule. Built as Forge's part 7a ([forge 07a-JobRunner.md](../../forge/documentation/plans/07a-JobRunner.md)), slice 45. It answers Cognition question 3 (background runs).
+Durable background work on NATS JetStream: a **job** runs one published graph with inputs, as the principal it names, once, and is retried with backoff when it fails in a way worth retrying. An installed app's **triggers** (`app.trigger` graphs) run as jobs, on each event their event node starts on and on each tick of a schedule. Built as Forge's part 7a ([forge 007a-JobRunner.md](../../forge/documentation/plans/007a-JobRunner.md)), slice 45. It answers Cognition question 3 (background runs).
 
 ## Built in slice 45
 

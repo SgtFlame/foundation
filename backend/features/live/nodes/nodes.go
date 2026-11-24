@@ -1,9 +1,9 @@
 // Package livenodes is the live core's Cognition node family and graph
-// kinds (forge 02-Blueprints, documentation/Blueprints.md): command graphs
+// kinds (forge 002-Blueprints, documentation/Blueprints.md): command graphs
 // decide a command's events, data.query graphs are live queries,
 // server.action graphs run server logic that changes data only by sending
 // commands, and app.trigger graphs (their kind and events only, until
-// forge 07-Email) react to events in the background. A published command
+// forge 007-Email) react to events in the background. A published command
 // or query graph is found by the bus and the subscriptions through
 // CommandFor and QueryFor, so it is a command or a query like any other.
 package livenodes

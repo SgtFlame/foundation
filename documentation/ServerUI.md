@@ -2,12 +2,12 @@
 
 Applications are rendered mostly on the server. A page is a render function. Given one viewer's **UI session** (its view state) and the data of the queries it holds, the function returns a **component tree**. The browser draws the tree with registered renderers in three families: MUI, flexlayout and React Flow. Component events go to the server's handlers, which change view state and send commands. The server answers with **patches**, and pushes patches whenever a query the page holds changes. Everything travels over the live connection ([Live.md](Live.md)). An application may also declare **editor kinds**, pages that open as their own top-level workbench tab.
 
-It was designed in [forge 01-ServerUI.md](../../forge/documentation/plans/01-ServerUI.md) and built as Forge's iteration 1. From [forge 02-Blueprints](../../forge/documentation/plans/02-Blueprints.md) on, handlers become blueprints; from [04-Prefabs](../../forge/documentation/plans/04-Prefabs.md) on, render functions become prefab templates.
+It was designed in [forge 001-ServerUI.md](../../forge/documentation/plans/001-ServerUI.md) and built as Forge's iteration 1. From [forge 002-Blueprints](../../forge/documentation/plans/002-Blueprints.md) on, handlers become blueprints; from [004-Prefabs](../../forge/documentation/plans/004-Prefabs.md) on, render functions become prefab templates.
 
 ## Built in slice 13
 
 ### Decisions
-Answered before building ([forge 01-ServerUI.md › TODO](../../forge/documentation/plans/01-ServerUI.md#todo)):
+Answered before building ([forge 001-ServerUI.md › TODO](../../forge/documentation/plans/001-ServerUI.md#todo)):
 - **Binding tracking**, not whole-subtree diffing (question 1).
   - Bound props (`state.*`, `query:<name>[.<path>]`) are resolved on the server. When one's source changes, only a `props` patch for that node is sent, with no rendering.
   - A render function reads view state and query data through `ui.Render`, which records what each `r.Region(key, fn)` read. A change renders again only the regions that read it, outermost first, and diffs each against its old subtree by key. Reads outside any region belong to the root.
@@ -115,7 +115,7 @@ For the Hello task list (forge 03i, [Records.md › Built in slice 23](Records.m
 - **The Hello app** has the task list: the page `hello/tasks`, the editor kind `app:hello:tasks` (icon `checklist`, added to the icon map) and an *Open task list* button on its main page.
 
 ## Built in slice 25
-Forge's part 4a ([forge 04-Prefabs.md](../../forge/documentation/plans/04-Prefabs.md)): what a **prefab** is, as a definition edited by several people at once. Nothing renders a prefab yet; part 4b (the template evaluator) does.
+Forge's part 4a ([forge 004-Prefabs.md](../../forge/documentation/plans/004-Prefabs.md)): what a **prefab** is, as a definition edited by several people at once. Nothing renders a prefab yet; part 4b (the template evaluator) does.
 
 ### The definition
 `ui.Prefab` (`ui/Prefab.go`) is a reusable component:
@@ -185,11 +185,11 @@ Made while building:
 - Forge's server, run fresh: `GET /api/v1/ui/prefabs` answers `{"prefabs":[]}`, `POST /ui/prefabs/get` a 404 `prefab_not_found`, and the extensions and resource types list the prefab commands, queries, projectors, tools and the `prefabs` type.
 
 ### Decisions to review after seeing it
-- Decision 7 (a breaking change that breaks no published prefab publishes without the flag); pages are checked once they exist (forge 05-Applications).
+- Decision 7 (a breaking change that breaks no published prefab publishes without the flag); pages are checked once they exist (forge 005-Applications).
 - Decision 8 (interface changes in steps), once the Prefab Editor's Interface tab (4c) shows how it feels.
 
 ## Built in slice 26
-Forge's part 4b ([forge 04-Prefabs.md](../../forge/documentation/plans/04-Prefabs.md)): prefabs render. The **template evaluator** expands a prefab instance's template, props and state into primitives on the server, inside a session's render, so the browser only ever receives primitives. Instances have their own state, raise events their user handles, and run their `prefab.logic` graphs. A page can be a prefab.
+Forge's part 4b ([forge 004-Prefabs.md](../../forge/documentation/plans/004-Prefabs.md)): prefabs render. The **template evaluator** expands a prefab instance's template, props and state into primitives on the server, inside a session's render, so the browser only ever receives primitives. Instances have their own state, raise events their user handles, and run their `prefab.logic` graphs. A page can be a prefab.
 
 ### Template constructs
 A template's nodes are primitives, `slot`, `prefab.<id>` and two constructs, which are nodes like any other (`ui/Template.go`), so `prefab.*` commands edit them by key paths:
@@ -233,7 +233,7 @@ A template's nodes are primitives, `slot`, `prefab.<id>` and two constructs, whi
 - **REST**: `POST /ui/prefabs/preview {prefab, props?, draft?}` → `{tree, problems}` (`prefabservice.Preview`, needing `prefabs.read`; `prefabimpl.WithRegistry` and `WithSubscriptions`), and `Prefabs.preview` in `Prefabs.ts`.
 
 ### Decisions
-Answered before building ([forge 04b-TemplateEvaluator.md › TODO](../../forge/documentation/plans/04b-TemplateEvaluator.md#todo)), each with its proposal: 1, `ui.PrefabPage`; 2, `prefab.<id>` follows the last published version and `prefab.<id>@<n>` pins; 3, *Raise event* (`ui.raiseEvent`); 4, queries per instance, capped at 200 per session; 5, `=` expressions; 6, `local.*` scoped per instance; 7, what a `prefab.logic` run can do.
+Answered before building ([forge 004b-TemplateEvaluator.md › TODO](../../forge/documentation/plans/004b-TemplateEvaluator.md#todo)), each with its proposal: 1, `ui.PrefabPage`; 2, `prefab.<id>` follows the last published version and `prefab.<id>@<n>` pins; 3, *Raise event* (`ui.raiseEvent`); 4, queries per instance, capped at 200 per session; 5, `=` expressions; 6, `local.*` scoped per instance; 7, what a `prefab.logic` run can do.
 
 Made while building:
 1. **`repeat` and `when` are nodes** with their settings as props and their content as a child and slots, not the plan's `{repeat, template}` and `{when, then, else}` fields, so every `prefab.*` command, key path and check works on them unchanged. An empty repeat is allowed, since no command may leave a problem and a repeat is inserted before its row's template.
@@ -260,13 +260,13 @@ Made while building:
 - Forge's server, run fresh: `POST /api/v1/ui/prefabs/preview {prefab: "nope"}` answers a `ui.error` tree with the problem at `["root"]`, and the extension points list `prefab.preview`, `ui.raiseEvent` and `ui.subscribe`.
 
 ### Decisions to review after seeing it
-In the Prefab Editor's canvas ([forge 4c](../../forge/documentation/plans/04c-PrefabEditor.md)) and with Hello's task page as *Task list* ([forge 4d](../../forge/documentation/plans/04d-TaskListPrefabs.md)):
+In the Prefab Editor's canvas ([forge 4c](../../forge/documentation/plans/004c-PrefabEditor.md)) and with Hello's task page as *Task list* ([forge 4d](../../forge/documentation/plans/004d-TaskListPrefabs.md)):
 - rows in place and slot content in a box (decision 2), and how they lay out;
 - an instance's state removed when it is no longer drawn (decision 6);
 - the strict sx token set (decision 10, forge 04 question 4).
 
 ## Built in slice 27
-Forge's part 4c ([forge 04c-PrefabEditor.md](../../forge/documentation/plans/04c-PrefabEditor.md)) builds the Prefab Editor in Forge ([forge PrefabEditor.md](../../forge/documentation/PrefabEditor.md)). What it needs from Foundation is a page that draws a prefab's draft for design, a renderer that can select instead of click, and dry runs.
+Forge's part 4c ([forge 004c-PrefabEditor.md](../../forge/documentation/plans/004c-PrefabEditor.md)) builds the Prefab Editor in Forge ([forge PrefabEditor.md](../../forge/documentation/PrefabEditor.md)). What it needs from Foundation is a page that draws a prefab's draft for design, a renderer that can select instead of click, and dry runs.
 
 ### The design page
 - **`ui.DesignPage()`** (`ui/Design.go`, page `prefabs/design`, `ui.DesignPageID`, registered by `prefabs.Contribute`, needing `prefabs.read`) draws a prefab's **draft** with params `{prefab}`: the root instance reads the draft (`__prefab:<id>~draft`), nested prefabs their published versions, and its props are the draft's **preview data** (`prefab.setPreview`, shared by everyone editing it; forge 04c question 2). Every command on the draft or its preview draws it again, as any query change does.
@@ -283,7 +283,7 @@ Forge's part 4c ([forge 04c-PrefabEditor.md](../../forge/documentation/plans/04c
 3. **A prefab whose template's root is another prefab**, made while the page was open, stayed an empty box: the outer instance's region and the inner one's share a node, and the outer one replaced the inner one's entry, losing what it read (the inner prefab's definition). `Render.Region` and `Session.update` now give the outer region what the inner one reads.
 
 ### Decisions
-Answered before building ([forge 04c-PrefabEditor.md › TODO](../../forge/documentation/plans/04c-PrefabEditor.md#todo)), each with its proposal: 1, the Canvas is a dry preview session over the draft, a click selects and *Interact* runs handlers dry; 2, preview data is shared, in the draft; 3, no undo in this part.
+Answered before building ([forge 004c-PrefabEditor.md › TODO](../../forge/documentation/plans/004c-PrefabEditor.md#todo)), each with its proposal: 1, the Canvas is a dry preview session over the draft, a click selects and *Interact* runs handlers dry; 2, preview data is shared, in the draft; 3, no undo in this part.
 
 Made while building:
 1. **A registered page, not a new frame**: the Canvas is an ordinary UI session on `prefabs/design`, so it resumes, patches and shows problems as every page does.
@@ -302,7 +302,7 @@ Made while building:
 - Logic running dry on the Canvas, and *Interact*'s dry-run log (decisions 3 and 4).
 
 ## Built in slice 28
-Forge's part 4d ([forge 04d-TaskListPrefabs.md](../../forge/documentation/plans/04d-TaskListPrefabs.md)), the iteration's demo: the Hello app's task page is the *Task list* prefab, which repeats *Task row*, and both are made only by `prefab.*` commands. Its Go render function is gone.
+Forge's part 4d ([forge 004d-TaskListPrefabs.md](../../forge/documentation/plans/004d-TaskListPrefabs.md)), the iteration's demo: the Hello app's task page is the *Task list* prefab, which repeats *Task row*, and both are made only by `prefab.*` commands. Its Go render function is gone.
 
 ### The prefabs
 - ***Task row*** (`taskRow`, owner `app:hello`): prop `task` (a record of *Task*); events `toggled {id, done}` and `renamed {id, title}`; slot `actions`. Its template is a row of a checkbox bound to `props.task.done` (`change` → `onToggle`), the title in a text field (`blur` and `submit` → `onRename`), a `when` drawing the due chip (`mui.chip`, colour `primary`, outlined) when the task has a due date, a `when` drawing the assignee's name from `_expanded.assignee`, and the `actions` slot. `onToggle` (`taskRow-onToggle`) raises `toggled` with the task's id and the opposite of its `done`; `onRename` (`taskRow-onRename`) raises `renamed` with the trimmed title when it is not empty and differs.
@@ -323,7 +323,7 @@ Forge's part 4d ([forge 04d-TaskListPrefabs.md](../../forge/documentation/plans/
 - Hello's graphs: `hello-onEditTask` (the table's cell edits) is gone; `taskRow-onToggle`, `taskRow-onRename`, `hello-onTaskToggled` and `hello-onTaskRenamed` are new; 23 in all.
 
 ### Decisions
-Answered before building ([forge 04d-TaskListPrefabs.md › TODO](../../forge/documentation/plans/04d-TaskListPrefabs.md#todo)): 1, Hello's `Setup` sends the prefabs' commands as the service principal on first open; 2, overlays stay for Go pages only; 3, *Sort by* (Due, Title, Created) and a direction toggle; 4, everything the Go page had carries over, the title edited in its row, raising `renamed`.
+Answered before building ([forge 004d-TaskListPrefabs.md › TODO](../../forge/documentation/plans/004d-TaskListPrefabs.md#todo)): 1, Hello's `Setup` sends the prefabs' commands as the service principal on first open; 2, overlays stay for Go pages only; 3, *Sort by* (Due, Title, Created) and a direction toggle; 4, everything the Go page had carries over, the title edited in its row, raising `renamed`.
 
 Made while building:
 1. **The prefabs' graphs are Hello's built-in graphs**, like all of Hello's (editable, a tenant's published version replacing them), rather than graphs Hello makes with `bp.*` commands on first open. Question 1's "`prefab.*` and `bp.*` commands" is met by the prefabs alone; the graphs are edited by `bp.*` as before.
@@ -344,7 +344,7 @@ Made while building:
 - The rows' layout (a row of a checkbox, a text field, the chip and the assignee, rather than a table with headers), and *Sort by* with a direction button in place of sortable headers.
 
 ## Built in slice 29
-Forge's part 4e, the starter library ([forge 04e-StarterLibrary.md](../../forge/documentation/plans/04e-StarterLibrary.md)): Foundation gets what the starter prefabs need, and Forge keeps and seeds the prefabs themselves ([forge StarterLibrary.md](../../forge/documentation/StarterLibrary.md)).
+Forge's part 4e, the starter library ([forge 004e-StarterLibrary.md](../../forge/documentation/plans/004e-StarterLibrary.md)): Foundation gets what the starter prefabs need, and Forge keeps and seeds the prefabs themselves ([forge StarterLibrary.md](../../forge/documentation/StarterLibrary.md)).
 
 ### Importing a prefab
 `prefab.import {prefab}` (`ui/prefabs`, event `imported`) replaces a prefab's whole draft with a definition as `prefab.describe` gives it, or makes it (its id from the definition's name when no target is sent). It is checked whole like every other command; an import identical to the draft commits nothing; the draft keeps its published versions until it is published again. Seeding a tenant with ready-made prefabs uses it.
@@ -367,7 +367,7 @@ Forge's part 4e, the starter library ([forge 04e-StarterLibrary.md](../../forge/
 - **`foundation(backend, more)`**: an app with backend routes of its own names them (Forge: `forge`), and the dev server proxies them too.
 
 ### Decisions
-Answered before building ([forge 04e › TODO](../../forge/documentation/plans/04e-StarterLibrary.md#todo)): 1, the library is seeded into tenants by Forge (`cli seed` and the Tenants editor's *Seed prefabs*), not built into Foundation; 2, the plan's primitives plus a form-merge primitive (`record.form`); 3, the name of the user whose change moved the field.
+Answered before building ([forge 04e › TODO](../../forge/documentation/plans/004e-StarterLibrary.md#todo)): 1, the library is seeded into tenants by Forge (`cli seed` and the Tenants editor's *Seed prefabs*), not built into Foundation; 2, the plan's primitives plus a form-merge primitive (`record.form`); 3, the name of the user whose change moved the field.
 
 Made while building:
 1. **Seeding is by commands, whole definitions at a time**: `prefab.import` was added rather than replaying `prefab.insertNode` and friends, so re-seeding resets a changed prefab in one event.
@@ -385,7 +385,7 @@ Made while building:
 - Rich text as plain text in the form (decision 5); a relation to `user`, and a `user` field, edited as ids.
 
 ## Built in slice 30
-Forge's part 4f, variants and the chat acceptance ([forge 04f-VariantsAndChat.md](../../forge/documentation/plans/04f-VariantsAndChat.md)), finishing iteration 4 but for the acceptance's run with a real model. The Prefab Editor's side is in [forge PrefabEditor.md](../../forge/documentation/PrefabEditor.md#variants-built-with-slice-30).
+Forge's part 4f, variants and the chat acceptance ([forge 004f-VariantsAndChat.md](../../forge/documentation/plans/004f-VariantsAndChat.md)), finishing iteration 4 but for the acceptance's run with a real model. The Prefab Editor's side is in [forge PrefabEditor.md](../../forge/documentation/PrefabEditor.md#variants-built-with-slice-30).
 
 ### Variants
 - **`ui.Prefab.Variants`** (`variants`, left out when there are none): `name → ui.VariantDecl {description?, props}`, named presets of the prefab's props, set whole by **`prefab.setVariants {variants}`** (event `variantsSet`). `ui.CheckPrefab` refuses a variant name that is not a valid name, a preset of an undeclared prop (`variants.<name>.props.<prop>`) and a value that does not fit its prop's type.
@@ -402,7 +402,7 @@ Found while running the acceptance with a real model (see *Verification*), and f
 - **`prefab.publish`'s report waits for the published projection** as well as the draft, so a `prefab.preview` sent right after renders the new version instead of "there is no published prefab".
 
 ### Decisions
-Answered before building ([forge 04f › TODO](../../forge/documentation/plans/04f-VariantsAndChat.md#todo)): 1, the acceptance runs through Gemini from the Chat, plus a Go test of the same commands; 2, an instance names its variant in a node field, not a prop.
+Answered before building ([forge 04f › TODO](../../forge/documentation/plans/004f-VariantsAndChat.md#todo)): 1, the acceptance runs through Gemini from the Chat, plus a Go test of the same commands; 2, an instance names its variant in a node field, not a prop.
 
 Made while building:
 1. **`prefab.setVariants` replaces them all**, like a section of `prefab.setInterface`; it is its own command, since variants are not part of what an instance's props are checked against.
@@ -424,7 +424,7 @@ Made while building:
 Forge's part 6d ([Apps.md](Apps.md#built-in-slice-40)): every primitive has tags (checked by `apps/tools`' `TestMetadata`). A prefab has `tags` (`ui.Prefab.Tags`), set by `prefab.create` and `prefab.setInfo`, kept on `prefab.list`'s summaries and searched by it, and added to the owner in its component's tags. Every `prefab.*` command's fields are described.
 
 ## Built in slice 53
-Forge's part 7l ([forge 07l-ContentComponents.md](../../forge/documentation/plans/07l-ContentComponents.md), [forge ContentComponents.md](../../forge/documentation/ContentComponents.md)): five primitives a mail client needs, none named for mail. Each is registered with its metadata in `ui/components` and drawn by a renderer in `frontend/common/src/ui/renderers/doc/`.
+Forge's part 7l ([forge 007l-ContentComponents.md](../../forge/documentation/plans/007l-ContentComponents.md), [forge ContentComponents.md](../../forge/documentation/ContentComponents.md)): five primitives a mail client needs, none named for mail. Each is registered with its metadata in `ui/components` and drawn by a renderer in `frontend/common/src/ui/renderers/doc/`.
 
 ### Decisions
 Asked before building (the user, 2026-11-21): the `markdown` field type and `doc.markdown` as its field editor (forge 07l questions 1 and 2, [Records.md](Records.md#changed-in-slice-53)), rows held by the server in a window about three screens tall (question 3), and two row implementations, server-rendered rows and JSON rows (question 4).

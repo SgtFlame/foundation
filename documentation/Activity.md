@@ -1,9 +1,9 @@
 # Recent activity
 
-What a person does by hand, kept briefly and readable only by them: the tabs they focus, their clicks on app pages, the record and app commands they send and their definition changes, grouped by request into **gestures** with plain-language summaries. The chat will show it and automate it ([forge 15d](../../forge/documentation/plans/15d-AutomateWhatIDid.md)). Forge's Activity tabs, an object's operation log, are a different thing ([forge Activity.md](../../forge/documentation/Activity.md)).
+What a person does by hand, kept briefly and readable only by them: the tabs they focus, their clicks on app pages, the record and app commands they send and their definition changes, grouped by request into **gestures** with plain-language summaries. The chat will show it and automate it ([forge 15d](../../forge/documentation/plans/015d-AutomateWhatIDid.md)). Forge's Activity tabs, an object's operation log, are a different thing ([forge Activity.md](../../forge/documentation/Activity.md)).
 
 ## Built in forge 15c
-Forge's part 15c ([plans/15c-ActivityHistory.md](../../forge/documentation/plans/15c-ActivityHistory.md)). The package is `features/activity`.
+Forge's part 15c ([plans/015c-ActivityHistory.md](../../forge/documentation/plans/015c-ActivityHistory.md)). The package is `features/activity`.
 
 ### Where it is kept
 - A **per-tenant JetStream stream** `ACT_<tenant>`, one subject per person, `act.<tenant>.<userId>` (`activity.Store`). The stream's own limits are the settings' maximums: a day (`MaxAge`) and 1000 entries per person (`MaxMsgsPerSubject`).
@@ -83,7 +83,7 @@ Only **people's** gestures. `activity.Person` takes users only, and events count
   - `TestRecordingOffAndTheLimits`: `keepCount` trims, recording off clears what was kept and records nothing, and entries past `keepHours` are gone from the stream (an hour shortened to a second).
   - `TestTwoRunnersWriteEachGestureOnce`: two processes over one JetStream write each click and change once.
   - `TestHandlerWords`.
-- The packages these changes touch pass: `live/...`, `ui/...`, `apps/ops`, and `apps/tools`' `TestMetadata`. The full suite had two known parallel-load flakes, recorded again in forge's `plans/99-Cleanup.md`. `frontend/common` `yarn build` passes.
+- The packages these changes touch pass: `live/...`, `ui/...`, `apps/ops`, and `apps/tools`' `TestMetadata`. The full suite had two known parallel-load flakes, recorded again in forge's `plans/099-Cleanup.md`. `frontend/common` `yarn build` passes.
 - Forge: `go test ./features/starter/mail -run TestAnasActivityInMail`, the Mail fixture. Ana opens a thread (the page marks it read), labels it Billing, starts a reply and sends it. Her history holds five gestures in plain words, with the thread's subject and the reply's subject, and no message or reply body. Bo has none.
 - In the browser (forge `documentation/walks/15c.json`, `forge serve` and Vite, made multi-user with `forge users`: maya the administrator, ana and ben):
   - Ana's history had four gestures: Hello's *Increment* and *Open task list* clicks, *Add* on the task list as one gesture with its `record.create`, and the focus on *Hello tasks*, as `forge activity --username ana` printed them.

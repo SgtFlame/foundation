@@ -16,7 +16,7 @@ const StreamCall = "ai.chat.stream"
 // ContributeLive registers the ai.chat.stream call, given the service once
 // made: "delta" events as the reply is generated, then "done" with the
 // complete response; a failure ends the call with its status. It replaces
-// POST /ai/chat/stream (01-ServerUI question 9).
+// POST /ai/chat/stream (001-ServerUI question 9).
 func ContributeLive(reg *extensions.Registry, service func() chatservice.Service) {
 	live.Calls.Register(reg, live.Call{
 		Descriptor:  extensions.Descriptor{ID: StreamCall, Source: "ai"},

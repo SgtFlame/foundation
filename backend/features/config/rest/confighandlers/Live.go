@@ -15,7 +15,7 @@ const ChangesQuery = "config.changes"
 // ContributeLive registers the config.changes query, given the service
 // once made: an empty snapshot, then an upsert keyed by section for each
 // stored change, until the subscription closes. It replaces the SSE
-// stream (01-ServerUI question 9).
+// stream (001-ServerUI question 9).
 func ContributeLive(reg *extensions.Registry, service func() configservice.Service) {
 	live.Queries.Register(reg, live.Query{
 		Descriptor:  extensions.Descriptor{ID: ChangesQuery, Source: "config"},

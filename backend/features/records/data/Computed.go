@@ -15,7 +15,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/records"
 )
 
-// Computed values are written by events (Forge 03-DataModel question 9,
+// Computed values are written by events (Forge 003-DataModel question 9,
 // Records.md › Built in slice 24): after a record command decides its
 // change, compute works out the record's computed fields as they will be
 // and puts those that differ in the record's last event. A create takes

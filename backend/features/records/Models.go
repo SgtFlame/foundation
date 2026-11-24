@@ -8,7 +8,7 @@ import (
 
 // EntityTypeVersion is one published version of an entity type, copied
 // from its published event so that definitions are exported and imported
-// with the tenant's other tables (Forge 03-DataModel question 5). Drafts
+// with the tenant's other tables (Forge 003-DataModel question 5). Drafts
 // stay in the records.entity projection.
 type EntityTypeVersion struct {
 	db.Model

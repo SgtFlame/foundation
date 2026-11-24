@@ -14,7 +14,7 @@ import (
 const SourceID = "records"
 
 // Contribute registers the records as a retrieval source (Forge
-// 03-DataModel question 10): optional, so chat searches them only when RAG
+// 003-DataModel question 10): optional, so chat searches them only when RAG
 // Search's Records switch is on. A segment is a record the principal may
 // read, its text its searchable fields'.
 func Contribute(reg *extensions.Registry, index func() *Index) {

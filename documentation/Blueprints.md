@@ -2,22 +2,22 @@
 
 An application's handlers, commands, actions and queries are **blueprints**: Cognition graphs of the kinds below, drawn rather than coded, edited by several people at once and published to take effect at once. They run on the Cognition Engine ([Cognition.md](Cognition.md)), the live core ([Live.md](Live.md)) and server-driven UI ([ServerUI.md](ServerUI.md)). Forge edits them in its Blueprint Editor (forge `documentation/BlueprintEditor.md`).
 
-It was designed in [forge 02-Blueprints.md](../../forge/documentation/plans/02-Blueprints.md) and built as Forge's iteration 2, in two slices: Cognition's editing pass (slice 14, in [Cognition.md](Cognition.md#built-in-slice-14)) and the blueprints themselves (slice 15, here).
+It was designed in [forge 002-Blueprints.md](../../forge/documentation/plans/002-Blueprints.md) and built as Forge's iteration 2, in two slices: Cognition's editing pass (slice 14, in [Cognition.md](Cognition.md#built-in-slice-14)) and the blueprints themselves (slice 15, here).
 
 ## Built in slice 15
 
 ### Decisions
-Answered before building, in [forge 02-Blueprints.md › TODO](../../forge/documentation/plans/02-Blueprints.md#todo):
+Answered before building, in [forge 002-Blueprints.md › TODO](../../forge/documentation/plans/002-Blueprints.md#todo):
 - **The expression language** (question 2): `expr-lang/expr`.
 - **Hot swapping** (question 3): a republished handler runs from each open session's next event.
 - **Tracing** (question 4): a blueprint's run is traced in full while its graph is open in an editor, and otherwise only when it fails. The other runs are counted.
-- **Commands as graphs** (question 6): every entity will get generic record commands (forge 03-DataModel). `command` graphs are for writes that need their own checks.
+- **Commands as graphs** (question 6): every entity will get generic record commands (forge 003-DataModel). `command` graphs are for writes that need their own checks.
 - **`app.trigger`** (question 8): the kind and its events; since slice 45 they run as jobs, as the app's own principal ([Jobs.md](Jobs.md#triggers)).
 
 Decided while building:
 - **A command or query graph's id follows from its spec**: `cmd-<command, - for .>` and `qry-<query, - for .>` (`Kind.IDFor`, checked by `bp.create` and `bp.setInfo`). The bus and the subscriptions find a tenant's graph by the type alone.
 - **A handler's id in a tree is a graph's id**: when a page has no Go handler of that name, the session runs the published `ui.handler` graph with that id, from its On event.
-- **Tree overlays**: a page drawn by a Go render function takes added nodes from commands, so a model can add a button before pages are prefabs (forge 04-Prefabs).
+- **Tree overlays**: a page drawn by a Go render function takes added nodes from commands, so a model can add a button before pages are prefabs (forge 004-Prefabs).
 - **Test runs are dry runs**: in `bp.test`, a handler's host and an action's sender record the commands they would send, and a command graph's host records its events. Nothing is sent or committed.
 - **A handler's failure names the node**: its message is public, `<graph> failed at <node>: <error>. Its run is in the graph's Log Viewer.`
 - **Built-in graphs can be editable defaults** (`cognition.BuiltIn.Editable`), as Hello's are. A tenant's published version replaces them in that tenant.

@@ -122,7 +122,7 @@ type Session struct {
 	o         Options
 }
 
-// HandlerRunner runs handlers that are graphs (forge 02-Blueprints): a
+// HandlerRunner runs handlers that are graphs (forge 002-Blueprints): a
 // handler id a page has no Go handler for names a published ui.handler
 // graph, run at each event in its latest version.
 type HandlerRunner interface {

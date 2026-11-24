@@ -1,5 +1,5 @@
 // Package uinodes is the server-driven UI's Cognition node family and graph
-// kinds (forge 02-Blueprints, documentation/Blueprints.md): ui.handler
+// kinds (forge 002-Blueprints, documentation/Blueprints.md): ui.handler
 // graphs are a page's handlers, run in the UI session at each event, and
 // prefab.logic graphs a prefab instance's logic, run on mount, props and
 // query changes and unmount (forge 04b). Runner runs both for sessions.

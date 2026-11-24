@@ -36,7 +36,7 @@ type ClosedFrame struct {
 
 // ContributeLive carries collaboration rooms over the live connection, each
 // on its own channel, given the service once made. It replaces the room's
-// own WebSocket (01-ServerUI question 8).
+// own WebSocket (001-ServerUI question 8).
 func ContributeLive(reg *extensions.Registry, service func() collabservice.Service) {
 	live.Extensions.Register(reg, live.Extension{
 		Descriptor: extensions.Descriptor{ID: "collab", Source: "kb"},

@@ -7,7 +7,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ui"
 )
 
-// Task row and Task list (forge 04d-TaskListPrefabs), made only by
+// Task row and Task list (forge 004d-TaskListPrefabs), made only by
 // prefab.* commands: Hello sends them as the tenant's service principal
 // the first time a tenant opens the task list (04d question 1), and the
 // Prefab Editor edits them afterwards. Their handlers are Hello's graphs.

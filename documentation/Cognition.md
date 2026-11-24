@@ -19,9 +19,9 @@ The same graphs define:
 The Cognition Engine (backend, `backend/features/cognition`) runs graphs; the Cognition Editor (frontend, React Flow; in Forge since slice 44, `forge/frontend/axiom/src/editors/cognition/`) edits them. Slice 7 built the **skeleton**: the engine with linear exec flow and pure nodes, Chronicle's steps as nodes, *Personal* as a built-in graph that chat runs, and the read-only Cognition Editor with the Log Viewer and the details panel over real traces. Slice 8 added the `Agent` node. Slice 14 built the **editing pass**: graph kinds, drafts that several people edit at once by commands, publishing, the Palette, variables, loops, `Call graph`, implicit conversions, undo and copy and paste. Slice 15 built the blueprint kinds on it ([Blueprints.md](Blueprints.md)). The rest of the design (prompt templates, the Nexus, debugging, Replay, chat modes) and what remains are in [plans/Cognition.md](plans/Cognition.md).
 
 ## Decisions
-- **Collaborative graph editing** (Cognition 2): drafts are **changed by commands** (`bp.*`) on the live core, like every structured object, and several people edit one at once through its live query. Decided before slice 7 as shared Yjs documents, and **revised before slice 14** (forge 02-Blueprints question 5, 2026-11-01), so that every graph, blueprint or chat mode, is edited one way; nothing had been built on Yjs drafts.
-- **Graph kinds** (forge 02-Blueprints question 1): a `cognition.kind` point in Cognition proper, with `mode`, `agent`, `function` and `summarizer` registered on it like the blueprint kinds, so the Explorer groups by kind for both. Decided before slice 14.
-- **Published versions** (forge 02-Blueprints question 7): **events and KV**, not the `CognitionGraph` and `CognitionGraphVersion` tables the plan drew. `bp.publish` commits a `published` event carrying the graph, and a projector keeps each graph's last published version. Decided before slice 14.
+- **Collaborative graph editing** (Cognition 2): drafts are **changed by commands** (`bp.*`) on the live core, like every structured object, and several people edit one at once through its live query. Decided before slice 7 as shared Yjs documents, and **revised before slice 14** (forge 002-Blueprints question 5, 2026-11-01), so that every graph, blueprint or chat mode, is edited one way; nothing had been built on Yjs drafts.
+- **Graph kinds** (forge 002-Blueprints question 1): a `cognition.kind` point in Cognition proper, with `mode`, `agent`, `function` and `summarizer` registered on it like the blueprint kinds, so the Explorer groups by kind for both. Decided before slice 14.
+- **Published versions** (forge 002-Blueprints question 7): **events and KV**, not the `CognitionGraph` and `CognitionGraphVersion` tables the plan drew. `bp.publish` commits a `published` event carrying the graph, and a projector keeps each graph's last published version. Decided before slice 14.
 - **Template helpers** (Cognition 4): **global**. The safe helpers (`join`, `indent`, `json`, `truncate`, `default`) form one global set, and domain helpers such as `GetFeature` wait until a graph needs one.
 - **Trace retention** (Cognition 5): **both**: a trace is kept while it is among the last N runs of its graph *or* younger than N days, both configurable in the `cognition` section.
 
@@ -112,7 +112,7 @@ The Cognition Engine (backend, `backend/features/cognition`) runs graphs; the Co
   - No built-in graph uses it yet, and it cannot be placed until editing arrives.
 
 ## Built in slice 14
-Cognition's editing pass, built for forge 02-Blueprints ([BuildHistory.md](BuildHistory.md)). Its blueprint kinds came in slice 15 ([Blueprints.md](Blueprints.md)).
+Cognition's editing pass, built for forge 002-Blueprints ([BuildHistory.md](BuildHistory.md)). Its blueprint kinds came in slice 15 ([Blueprints.md](Blueprints.md)).
 
 **The model** (`features/cognition`)
 - **Graph kinds**: the `cognition.kind` point (`cognition.Kinds`). A `Kind` has a title, a description, what it returns, the event node types that may start it, `Pure` (it refuses nodes with `Effects`), a `Spec` schema, `IDFor` (the graph id its spec requires) and `Host` (what a test run acts on). `cognitionnodes` registers `mode` (events *On user message* and *On reply*), `agent` and `function` (*On call*) and `summarizer`.

@@ -21,7 +21,7 @@ const SendCall = "conversation.send"
 // for what each round follower did. A message refused before its round is
 // stored ends the call with its status; a reply that fails afterwards is a
 // "done" round with its status. Cancelling the call stops the reply. It
-// replaces POST /conversation/send (01-ServerUI question 9).
+// replaces POST /conversation/send (001-ServerUI question 9).
 func ContributeLive(reg *extensions.Registry, service func() conversationservice.Service) {
 	live.Calls.Register(reg, live.Call{
 		Descriptor:  extensions.Descriptor{ID: SendCall, Source: "chat"},

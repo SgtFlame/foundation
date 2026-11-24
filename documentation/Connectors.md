@@ -1,6 +1,6 @@
 # Connectors
 
-Services outside the tenant (a mail server, an HTTP API, a SaaS), described by metadata and called from blueprints. A **contract** is a named, versioned API of operations and events. A **connector type** implements contracts. Every call is a NATS request/reply message on the **connector bus**, answered by a **connector adapter** that may run in the server's process or in another process on another machine. Built as Forge's part 7b ([forge 07b-ConnectorRegistry.md](../../forge/documentation/plans/07b-ConnectorRegistry.md)), slice 46. Connections (settings and secrets, sessions, event sources) come with 7c, and scripted connectors with 7d.
+Services outside the tenant (a mail server, an HTTP API, a SaaS), described by metadata and called from blueprints. A **contract** is a named, versioned API of operations and events. A **connector type** implements contracts. Every call is a NATS request/reply message on the **connector bus**, answered by a **connector adapter** that may run in the server's process or in another process on another machine. Built as Forge's part 7b ([forge 007b-ConnectorRegistry.md](../../forge/documentation/plans/007b-ConnectorRegistry.md)), slice 46. Connections (settings and secrets, sessions, event sources) come with 7c, and scripted connectors with 7d.
 
 ## Built in slice 46
 
@@ -223,7 +223,7 @@ In Forge, the Blueprint Editor was checked in headless Chromium. The setup was a
 
 ## Built in slice 47
 
-Forge's part [7c](../../forge/documentation/plans/07c-Connections.md): connections, sessions and event sources. Packages: `features/connectors/connections` (the connections themselves, Foundation's side of the bus and of event sources), additions to `features/connectors` (`State.go`: subjects, buckets, the ledger, locks, the event stream) and `connectors/adapter` (`sources.go`: leases and `Watch`), the `connection` field type in `records`, the `connection.form` primitive, and in the live core the commands' `Seal` and `NoTool` and the trigger events' `Stream` and `Accept`.
+Forge's part [7c](../../forge/documentation/plans/007c-Connections.md): connections, sessions and event sources. Packages: `features/connectors/connections` (the connections themselves, Foundation's side of the bus and of event sources), additions to `features/connectors` (`State.go`: subjects, buckets, the ledger, locks, the event stream) and `connectors/adapter` (`sources.go`: leases and `Watch`), the `connection` field type in `records`, the `connection.form` primitive, and in the live core the commands' `Seal` and `NoTool` and the trigger events' `Stream` and `Accept`.
 
 ### Connections
 
@@ -317,7 +317,7 @@ In Forge, in headless Chromium, with a scratch NATS server running the test adap
 
 ## Built in slice 48
 
-Forge's part [7d](../../forge/documentation/plans/07d-ScriptedConnectors.md): scripted connectors, connector types an app declares in its manifest and implements in blueprints. Packages: `features/connectors/scripted` (the `connector.op` kind, its nodes, *Emit connector event* and the scripted adapter), additions to `apps` (the manifest's `connectors`, their check, the version's pinned graphs), `apps/manifests` (the keyed list, publishing their graphs, lint), `apps/installs` (`app.installs` lists them), `connectors` (`EventID`, `PublishEvent`, the registry's `scripted` source) and `connectors/connections` (disabling the connections of removed types).
+Forge's part [7d](../../forge/documentation/plans/007d-ScriptedConnectors.md): scripted connectors, connector types an app declares in its manifest and implements in blueprints. Packages: `features/connectors/scripted` (the `connector.op` kind, its nodes, *Emit connector event* and the scripted adapter), additions to `apps` (the manifest's `connectors`, their check, the version's pinned graphs), `apps/manifests` (the keyed list, publishing their graphs, lint), `apps/installs` (`app.installs` lists them), `connectors` (`EventID`, `PublishEvent`, the registry's `scripted` source) and `connectors/connections` (disabling the connections of removed types).
 
 ### The manifest's `connectors`
 
@@ -349,7 +349,7 @@ An operation of its contracts with no graph is a **warning** of `forge.check` (`
 
 ### Decisions
 
-Answered before building (the user, 2026-11-11), each as proposed: question 1 (no scripted contracts here; 50-Workflows adds them) and 2 (the types travel with the manifest in an export).
+Answered before building (the user, 2026-11-11), each as proposed: question 1 (no scripted contracts here; 050-Workflows adds them) and 2 (the types travel with the manifest in an export).
 
 Decided while building:
 
@@ -490,7 +490,7 @@ Record commands do not take `heldBy` yet: setting a file someone else uploaded o
 
 ### Verification
 
-`go test ./features/connectors/... ./features/records/... ./features/apps/... ./features/jobs/...` pass, except `records/data`'s known flaky failure ([forge 99-Cleanup.md](../../forge/documentation/plans/99-Cleanup.md#foundation-recordsdata-the-package-fails-about-half-its-runs), seen again in `TestARecordFieldIsEditedInARoom`):
+`go test ./features/connectors/... ./features/records/... ./features/apps/... ./features/jobs/...` pass, except `records/data`'s known flaky failure ([forge 099-Cleanup.md](../../forge/documentation/plans/099-Cleanup.md#foundation-recordsdata-the-package-fails-about-half-its-runs), seen again in `TestARecordFieldIsEditedInARoom`):
 
 - `connections/held_test.go` `TestAppUsesTheConnectionsItsRecordsHold`: the Holder app may not use user 1's own connection until a record of its type holds it; user 2 may not set it on a record, user 1 may; then the app calls it, its trigger's `Accept` takes its events and not another's, its event source starts within seconds and its events reach the trigger; cleared, the app may use it no more and the source stops;
 - `records/data/richer_test.go` `TestFilesAreServedToReadersOnly`: `HeldFiles` vouches for a file to the record's reader, not to a user the row rule hides it from, nor one without a grant, nor through a field that holds no file; once the record is shared, to user 6 too, and never for a file the record does not hold;

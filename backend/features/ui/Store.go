@@ -19,7 +19,7 @@ const (
 )
 
 // KVSessions keeps session records in the tenant's ui_sessions_<tenant>
-// bucket (01-ServerUI question 2), so a restart or another instance
+// bucket (001-ServerUI question 2), so a restart or another instance
 // resumes a session's view state.
 type KVSessions struct {
 	js      jetstream.JetStream

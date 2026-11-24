@@ -1,6 +1,6 @@
 // Package uisettings declares the ui.layouts section: each user's own
 // arrangement of an application's docked sub-tabs, per page and layout
-// (01-ServerUI question 3).
+// (001-ServerUI question 3).
 package uisettings
 
 import (

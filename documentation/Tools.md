@@ -158,7 +158,7 @@ Forge 06i: tools are chosen in graphs. A **tool set** (`ToolSet`, `[]tools.Spec{
 ## Changed in forge 7p-4
 - **An agent run numbers its passages as a chat round does.** The Agent node's loop (`toolsnodes`, `citeInOrder`) numbers the segments every tool returns `[1]`, `[2]`, … across the run, so each passage in a call's result carries `cite`, and the model cites by number. Chat's round numbering is unchanged.
 - **A passage names its source** (`source`: `library`, `chronicle`) beside `title`, `text`, `path`, `lines` and `entryId`, in chat and agent runs alike.
-- A host keeps an agent's citations from its run's calls: Forge's Mail turns the numbers a draft cites into `{number, source, title, snippet, location}`, a chat round's citation shape ([forge MailApp.md › Built in part 7p-4](../../forge/documentation/MailApp.md#built-in-part-7p-4)). Agents searching Chronicle memory and the dials are planned in forge's [15-AgentEnhancements.md](../../forge/documentation/plans/15-AgentEnhancements.md).
+- A host keeps an agent's citations from its run's calls: Forge's Mail turns the numbers a draft cites into `{number, source, title, snippet, location}`, a chat round's citation shape ([forge MailApp.md › Built in part 7p-4](../../forge/documentation/MailApp.md#built-in-part-7p-4)). Agents searching Chronicle memory and the dials are planned in forge's [015-AgentEnhancements.md](../../forge/documentation/plans/015-AgentEnhancements.md).
 - Tests: `tools/nodes` `TestAgentCitesInOrder`; end to end, Forge's `starter/mail` `TestDraftsAndSending`.
 
 ## Changed in forge 15a

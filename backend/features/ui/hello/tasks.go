@@ -11,7 +11,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ui"
 )
 
-// The task list (forge 03i-TaskList, 04d-TaskListPrefabs): the entity type
+// The task list (forge 003i-TaskList, 004d-TaskListPrefabs): the entity type
 // Task and the prefabs Task row and Task list, which Hello seeds in each
 // tenant the first time the list opens, and the page, which is Task list.
 // The prefabs are made by prefab.* commands alone (prefabs.go); their

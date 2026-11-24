@@ -14,7 +14,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/live"
 )
 
-// Apps is the ui.app point: the installed applications. Until 05-Applications
+// Apps is the ui.app point: the installed applications. Until 005-Applications
 // they are contributed in Go, as the Hello app is.
 var Apps = extensions.NewPoint[App]("ui.app", "Applications rendered by the server inside the workbench")
 

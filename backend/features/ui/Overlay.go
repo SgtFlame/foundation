@@ -10,9 +10,9 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/live"
 )
 
-// Tree overlays (forge 02-Blueprints) let commands add nodes to a page a
+// Tree overlays (forge 002-Blueprints) let commands add nodes to a page a
 // render function draws, such as the chat adding a button to the Hello
-// app, until pages are prefabs (forge 04-Prefabs). A page's overlay is an
+// app, until pages are prefabs (forge 004-Prefabs). A page's overlay is an
 // aggregate on the def stream, its target the page id with "-" for "/";
 // every session of the page holds the ui.overlay query and draws the page
 // with its inserts.

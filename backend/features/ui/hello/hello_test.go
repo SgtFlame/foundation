@@ -262,7 +262,7 @@ func TestTwoUsersSeeEachOthersIncrements(t *testing.T) {
 	c.await(`"type":"ui.tree"`, `Hello, Ada!`)
 }
 
-// The acceptance of 02-Blueprints through commands alone, as the chat's
+// The acceptance of 002-Blueprints through commands alone, as the chat's
 // tools send them: a reset button, the command and the handler it needs,
 // published, working in an open tab without a reload.
 func TestAResetButtonMadeOfBlueprints(t *testing.T) {

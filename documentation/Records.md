@@ -2,12 +2,12 @@
 
 Applications get their own data. An **entity type** is a schema for records, such as *Task* or *Customer*: its fields, title field, indexes and row rules. Entity types are definitions on the live core ([Live.md](Live.md)). They change only by `entity.*` commands, so several people can edit one at once and each sees the others' changes as they commit, and they are read by queries that are subscriptions. **Records** of those types are aggregates on the live core too: the generic `record.*` commands change them, one projector keeps them in KV with their **index entries**, and the `records.get`, `records.list` and `records.find` queries read them, through a query planner that uses an index when one fits. `records.find` is a sorted page that stays current without running again. A query can expand relations, and `records.aggregate` keeps counts and sums current; both run again, debounced, when what they read changes. An entity type's row rules hide records from every query and check every command. Blueprints read and write records with the record nodes, and a page binds a record query to a component prop. Fields can also hold rich text, uploaded files and Volume files; computed fields (formulas, rollups, auto numbers and the record's own times and author) are written by the records' own events; and fields marked searchable are searched by keyword and meaning, by `records.search` and, when switched on, by chat's RAG Search.
 
-It was designed in [forge 03-DataModel.md](../../forge/documentation/plans/03-DataModel.md) and is built as Forge's iteration 3, in parts. Part 3a, entity types, is slice 16. Part 3b, records, is slice 17; Forge's Data Designer (part 3c, [forge DataDesigner.md](../../forge/documentation/DataDesigner.md)) was built with it. Part 3d, indexes and the query planner, is slice 18. Part 3e, live queries, is slice 19. Part 3f, expansions and aggregates, is slice 20. Part 3g, access and row rules, is slice 21. Part 3i, record nodes and the Hello task list, is slice 23 (part 3h, atomic batches, was slice 22 in [Live.md](Live.md#built-in-slice-22)). Part 3j, richer fields and search, is slice 24.
+It was designed in [forge 003-DataModel.md](../../forge/documentation/plans/003-DataModel.md) and is built as Forge's iteration 3, in parts. Part 3a, entity types, is slice 16. Part 3b, records, is slice 17; Forge's Data Designer (part 3c, [forge DataDesigner.md](../../forge/documentation/DataDesigner.md)) was built with it. Part 3d, indexes and the query planner, is slice 18. Part 3e, live queries, is slice 19. Part 3f, expansions and aggregates, is slice 20. Part 3g, access and row rules, is slice 21. Part 3i, record nodes and the Hello task list, is slice 23 (part 3h, atomic batches, was slice 22 in [Live.md](Live.md#built-in-slice-22)). Part 3j, richer fields and search, is slice 24.
 
 ## Built in slice 16
 
 ### Decisions
-Answered before building, in [forge 03-DataModel.md › Open questions](../../forge/documentation/plans/03-DataModel.md#open-questions):
+Answered before building, in [forge 003-DataModel.md › Open questions](../../forge/documentation/plans/003-DataModel.md#open-questions):
 - **Where definitions live** (question 5): drafts in KV, published versions in SQLite. An entity type's draft is the `records.entity` projection. `entity.publish` commits a version, and a follower copies each version into the tenant database (`records_entity_versions`), so definitions are exported and imported with the tenant's other tables.
 - **How the iteration is recorded** (question 8): one Foundation slice per Foundation part, from slice 16.
 
@@ -83,8 +83,8 @@ Decided while building:
 
 ### Decisions
 Answered before building:
-- **One bucket per tenant** ([forge 03-DataModel](../../forge/documentation/plans/03-DataModel.md#open-questions) question 7). The `records.record` projector folds the whole `rec` area into `PRJ_<tenant>_records_record`, keyed `<entityId>.<recordId>`, so a type's records are the keys `<entityId>.*`. It fits the live core as built: no projector per entity type.
-- **A field's type can change** ([forge 03b-Records](../../forge/documentation/plans/03b-Records.md#todo) question 1). When the change is published, the records' values are converted. A value that cannot be converted is cleared, with a problem on its record.
+- **One bucket per tenant** ([forge 003-DataModel](../../forge/documentation/plans/003-DataModel.md#open-questions) question 7). The `records.record` projector folds the whole `rec` area into `PRJ_<tenant>_records_record`, keyed `<entityId>.<recordId>`, so a type's records are the keys `<entityId>.*`. It fits the live core as built: no projector per entity type.
+- **A field's type can change** ([forge 003b-Records](../../forge/documentation/plans/003b-Records.md#todo) question 1). When the change is published, the records' values are converted. A value that cannot be converted is cleared, with a problem on its record.
 - **Deleting an entity type hides it** (03b question 2). `entity.delete` and `entity.restore` take effect at once, without publishing. The records are kept, and record commands on a deleted type are refused.
 
 Decided while building:
@@ -102,7 +102,7 @@ Decided while building:
 - **`records.list` scans** up to the `records` section's `scanLimit` (10 000), and fails with `scan_limit` beyond it until indexes come (3d). It takes `where` (field id → value, equality) and keeps a filtered list current: a record that stops matching is removed. Sorting is the client's for now.
 - **`records.import` sends one `record.create` per row**, `importConcurrency` (8) at a time. Command ids name the import and the row. A rejected row is reported with its problems (the first 20) and the rest are imported. The plan's "one command per batch" waits for a batch-creating command; atomic batches exist since slice 22 ([Live.md](Live.md#built-in-slice-22)).
 - **REST** serves only reading and import (`/records/records/get|list|import`). Records change by commands on the live connection; `recordservice.Create`, `Update` and `Delete` are for Go only.
-- **No per-entity event retention.** Events are kept forever on every stream (Live.md, 01-ServerUI question 6), so the setting the plan listed was not made.
+- **No per-entity event retention.** Events are kept forever on every stream (Live.md, 001-ServerUI question 6), so the setting the plan listed was not made.
 
 ### Backend
 - **`features/records`**:
@@ -156,12 +156,12 @@ Decided while building:
 ## Built in slice 18
 
 ### Decisions
-Answered before building, in [forge 03-DataModel.md](../../forge/documentation/plans/03-DataModel.md#open-questions) and [forge 03d-Indexes.md](../../forge/documentation/plans/03d-Indexes.md#todo):
-- **Records and their index entries change in the same fold** (03-DataModel question 2). The `records.record` projector's `Keep` (Live.md › Changed in slice 18) writes a record's index entries before the record is written and the event acknowledged. An index is never behind the records, and both are rebuilt together. The planner checks every record it reads against the query, so a query never returns a record that does not match; at worst a record is missing for the moment between its entry and its value.
+Answered before building, in [forge 003-DataModel.md](../../forge/documentation/plans/003-DataModel.md#open-questions) and [forge 003d-Indexes.md](../../forge/documentation/plans/003d-Indexes.md#todo):
+- **Records and their index entries change in the same fold** (003-DataModel question 2). The `records.record` projector's `Keep` (Live.md › Changed in slice 18) writes a record's index entries before the record is written and the event acknowledged. An index is never behind the records, and both are rebuilt together. The planner checks every record it reads against the query, so a query never returns a record that does not match; at worst a record is missing for the moment between its entry and its value.
 - **An index's order lives in memory** (03d question 1). NATS KV lists keys in write order and filters only whole tokens, so it cannot walk a range in order. The entries stay a KV projection, and each index a query uses is loaded into a B-tree (`google/btree`) on first use and kept current by watching its keys.
 
 Decided while building:
-- **One side bucket per tenant**, `PRJ_<tenant>_records_index`, beside the records' (03-DataModel question 7 left index buckets to 3d). An entry is the key `<entityId>.<indexId>.<token>….<length><recordId>`: a token per field, then the record id after its length in three digits, so ids sort as `compareRecordIds` does (a shorter TSID is an earlier one). The value is `1`. A record keeps the list of its entries in its projected value's `kept`, so a change deletes exactly the entries it no longer has.
+- **One side bucket per tenant**, `PRJ_<tenant>_records_index`, beside the records' (003-DataModel question 7 left index buckets to 3d). An entry is the key `<entityId>.<indexId>.<token>….<length><recordId>`: a token per field, then the record id after its length in three digits, so ids sort as `compareRecordIds` does (a shorter TSID is an earlier one). The value is `1`. A record keeps the list of its entries in its projected value's `kept`, so a change deletes exactly the entries it no longer has.
 - **Order-preserving tokens** (`records.SortTokens`). A value becomes bytes that compare as it does, written in base32hex, whose alphabet is in ASCII order, so one token is one key part. `.` sorts below every token character, so a shorter token sorts first.
   - No value is `0` and sorts first. Every value starts with `1`.
   - A number is its IEEE bits with the sign flipped (all bits, when negative).
@@ -241,7 +241,7 @@ Decided while building:
 ## Built in slice 19
 
 ### Decisions
-Forge's [03e-LiveQueries.md](../../forge/documentation/plans/03e-LiveQueries.md) had no open questions. Decided while building:
+Forge's [003e-LiveQueries.md](../../forge/documentation/plans/003e-LiveQueries.md) had no open questions. Decided while building:
 - **A new query, `records.find`**, is `Find` as a subscription. It takes the same parameters (`entity`, `where`, `filter`, `sort`, `limit`, `cursor`, `fields`) and gives the same `{records, next, plan}`. `records.list` stays the unsorted list keyed by record, which the Data Designer reads.
 - **Ordered lists in the live core.** `live.Delta` has `list`, `index` and `from`. On the list `records`, the ops are:
   - `insert` (the value at `index`);
@@ -311,7 +311,7 @@ Forge's [03e-LiveQueries.md](../../forge/documentation/plans/03e-LiveQueries.md)
 ## Built in slice 20
 
 ### Decisions
-Forge's [03f-ExpansionsAggregates.md](../../forge/documentation/plans/03f-ExpansionsAggregates.md) had no open questions. Two gaps found while reading it were asked before building (03f questions 1 and 2):
+Forge's [003f-ExpansionsAggregates.md](../../forge/documentation/plans/003f-ExpansionsAggregates.md) had no open questions. Two gaps found while reading it were asked before building (03f questions 1 and 2):
 - **A relation to `user` expands from identity.** Users are rows in the application database and commit no events, so an expansion reads `{_id, username, displayName}` each time the query runs, and only for members of the principal's tenant. A change to a user does not run the query again.
 - **Expansions are `expand` on a query, and aggregates are their own query.** `records.find`, `records.query` and `Find` take `expand: [fieldId]`. `records.aggregate` is a new live query, with `recordservice.Aggregate` and a tool beside it.
 
@@ -373,7 +373,7 @@ Decided while building:
 ## Built in slice 21
 
 ### Decisions
-Forge's [03g-Access.md](../../forge/documentation/plans/03g-Access.md) had no open questions. One gap was asked before building (03g question 1):
+Forge's [003g-Access.md](../../forge/documentation/plans/003g-Access.md) had no open questions. One gap was asked before building (03g question 1):
 - **Row rules are `expr-lang/expr` expressions, and they apply to every user**, administrators included. Only service principals (the converter, background work) skip them. Create checks the new record, update checks the record before and after the change, and delete checks it before. An expanded record follows its own type's read rule.
 
 Decided while building:
@@ -422,10 +422,10 @@ Decided while building:
 
 ## Built in slice 23
 
-Forge's part 3i ([forge 03i-TaskList.md](../../forge/documentation/plans/03i-TaskList.md)): the Blueprint record nodes, page queries bound to view state, and the Hello app's task list, the iteration's demo. The binding and the page are in [ServerUI.md](ServerUI.md#changed-in-slice-23) and [Blueprints.md](Blueprints.md#changed-in-slice-23).
+Forge's part 3i ([forge 003i-TaskList.md](../../forge/documentation/plans/003i-TaskList.md)): the Blueprint record nodes, page queries bound to view state, and the Hello app's task list, the iteration's demo. The binding and the page are in [ServerUI.md](ServerUI.md#changed-in-slice-23) and [Blueprints.md](Blueprints.md#changed-in-slice-23).
 
 ### Decisions
-Gaps found while reading the plan, asked before building ([forge 03i › TODO](../../forge/documentation/plans/03i-TaskList.md#todo), questions 1-4):
+Gaps found while reading the plan, asked before building ([forge 03i › TODO](../../forge/documentation/plans/003i-TaskList.md#todo), questions 1-4):
 - **Hello seeds *Task*.** The first time a tenant opens the task list, Hello defines and publishes *Task* (owner `app:hello`, fields `title`, `done`, `due`, `assignee`; indexes `by_due` and `by_done_due`) as the tenant's service principal. The Data Designer edits it like any other type afterwards.
 - **The list is its own top-level tab**, `app:hello:tasks`, opened from *Open task list* on Hello's main page. Since slice 28 its page is the *Task list* prefab rather than a Go render function with a table ([ServerUI.md › Built in slice 28](ServerUI.md#built-in-slice-28)).
 - **Rows bind `records.find` directly**, with `where` and `sort` bound to view state, so rows arrive as list changes. The "N open" count is a `data.query` graph over the *Aggregate* node.
@@ -436,7 +436,7 @@ Decided while building:
 - **Each write sees the record as committed**: two write nodes on one record in one command both decide on the state before the command, so a record created in a command cannot also be changed by it.
 - **Read nodes work in every kind**: *Get record*, *Query* (records.find's request, from the config with a `query` input over it) and *Aggregate* (records.aggregate's, with a `request` input, and `values`, the first group's values, for a plain count). Each applies the read rule as the queries do.
 - **A `data.query` graph that read records runs again when they change.** The read nodes note a key pattern (`<entity>.*`) and the entity type's published version; the graph runs again, debounced by 100 ms, when a matching record changes (an updates-only watch), and sends a `replace`. A change folded between the run's read and the watch starting is caught by the projector's folded position, taken before the read.
-- ***Subscribe to records* is not built.** The plan lists it, but a node that keeps a subscription needs `prefab.logic` runs (forge 04-Prefabs); a page binds the query instead. *On record changed* is registered as an `app.trigger` event, with no runs until forge 07-Email.
+- ***Subscribe to records* is not built.** The plan lists it, but a node that keeps a subscription needs `prefab.logic` runs (forge 004-Prefabs); a page binds the query instead. *On record changed* is registered as an `app.trigger` event, with no runs until forge 007-Email.
 - ***Current user*** (`live.currentUser`, every kind) gives the run's user id as text, as a relation to `user` holds it; a handler uses it to assign a task to whoever clicked.
 - **`live.Apply` no longer changes the data it is given.** It copied nothing before, and a UI session's rendered props share the held query's data, so a list change applied in place left the bound prop equal to itself and no patch was sent: an updated row never reached the page. It now copies the list or map it changes.
 
@@ -469,13 +469,13 @@ Decided while building:
 
 ## Built in slice 24
 
-Forge's part 3j ([forge 03j-RicherFields.md](../../forge/documentation/plans/03j-RicherFields.md)): rich text, files, computed fields and search, the last part of iteration 3. Forge's Data Designer gained their settings ([forge DataDesigner.md](../../forge/documentation/DataDesigner.md#changed-in-slice-24)).
+Forge's part 3j ([forge 003j-RicherFields.md](../../forge/documentation/plans/003j-RicherFields.md)): rich text, files, computed fields and search, the last part of iteration 3. Forge's Data Designer gained their settings ([forge DataDesigner.md](../../forge/documentation/DataDesigner.md#changed-in-slice-24)).
 
 ### Decisions
 Asked before building:
-- **Rich text is ProseMirror JSON** (forge 35-Docs question 1): a document `{type: "doc", content: [nodes]}` as TipTap and Milkdown save it. The records check its shape (every node has a type, a text node its text, `attrs` an object, `marks` a list of `{type}`, at most 64 deep), not a schema, which belongs to the editor; `records.PlainText` is its text, a line per block, for search and for a model.
-- **Computed values are written by events** (forge 03-DataModel question 9). After a record command decides its change, the decision works out the record's computed fields as they will be and puts those that differ in the record's last event (`Change.Computed`), so they can be indexed and sorted, and a projection rebuilt from the stream equals the one it replaced. The internal `record.recompute` writes them again.
-- **Records are a retrieval source, off by default** (forge 03-DataModel question 10): `records`, searched only when RAG Search's *Records* switch is on, with row rules applied.
+- **Rich text is ProseMirror JSON** (forge 035-Docs question 1): a document `{type: "doc", content: [nodes]}` as TipTap and Milkdown save it. The records check its shape (every node has a type, a text node its text, `attrs` an object, `marks` a list of `{type}`, at most 64 deep), not a schema, which belongs to the editor; `records.PlainText` is its text, a line per block, for search and for a model.
+- **Computed values are written by events** (forge 003-DataModel question 9). After a record command decides its change, the decision works out the record's computed fields as they will be and puts those that differ in the record's last event (`Change.Computed`), so they can be indexed and sorted, and a projection rebuilt from the stream equals the one it replaced. The internal `record.recompute` writes them again.
+- **Records are a retrieval source, off by default** (forge 003-DataModel question 10): `records`, searched only when RAG Search's *Records* switch is on, with row rules applied.
 
 Decided while building:
 - **Formulas** are `expr-lang/expr` over the record's fields by id (`quantity * price`), reading only the fields above them (formulas and rollups included); decimals and money with a currency are numbers in them, rich text its text. A formula is type checked as it is defined: `records.Check` compiles it against the types of the fields above it, so `title * 2` or an unknown name is refused at `entity.fields.<id>.formula`. A field whose values may be anything (json, a rollup not yet published) is allowed by name, untyped. A formula that fails at run time, or reads a field without a value, has no value.
@@ -530,7 +530,7 @@ Decided while building:
 - A formula reads only the fields above it.
 - At 0 or below on the dial, search shows only records containing the words.
 - Records made before an autoNumber field have no number; creates on several servers at once can conflict on the counter.
-- Uploads not set on any record are kept (purging waits for forge 03-DataModel question 6).
+- Uploads not set on any record are kept (purging waits for forge 003-DataModel question 6).
 - Unsafe file types download rather than show.
 
 
@@ -547,7 +547,7 @@ For forge 07j ([RBAC.md › Built in slice 51](RBAC.md#built-in-slice-51)):
 
 ## Built in slice 52
 
-Forge's part 7k ([forge 07k-RelationalProjection.md](../../forge/documentation/plans/07k-RelationalProjection.md)): an entity type can keep its records in a table of the tenant database too, which the query planner reads, so a type of tens of thousands of records (a mailbox) lists, counts and sorts within budget. Forge's Data Designer shows it as *Large table* ([forge DataDesigner.md](../../forge/documentation/DataDesigner.md#changed-in-slice-52)).
+Forge's part 7k ([forge 007k-RelationalProjection.md](../../forge/documentation/plans/007k-RelationalProjection.md)): an entity type can keep its records in a table of the tenant database too, which the query planner reads, so a type of tens of thousands of records (a mailbox) lists, counts and sorts within budget. Forge's Data Designer shows it as *Large table* ([forge DataDesigner.md](../../forge/documentation/DataDesigner.md#changed-in-slice-52)).
 
 ### Decisions
 Asked before building:

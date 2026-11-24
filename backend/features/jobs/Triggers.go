@@ -143,7 +143,7 @@ func (r *Runner) reconcile(t *tenant, in apps.Install) error {
 				}
 				d.schedule, d.zone = pattern, zone
 			case livenodes.OnWebhook:
-				continue // webhooks come with forge 50-Workflows
+				continue // webhooks come with forge 050-Workflows
 			default:
 				te, ok := triggerEvent(r.d.Engine, node.node)
 				if !ok {

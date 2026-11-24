@@ -1,5 +1,5 @@
 // Package recordsnodes is the records' Cognition node family (forge
-// 03i-TaskList, documentation/Records.md › Built in slice 23): command
+// 003i-TaskList, documentation/Records.md › Built in slice 23): command
 // graphs create, change and delete records with the write nodes, whose
 // events commit with the command's own as one atomic batch; every kind
 // reads records with Get record, Query and Aggregate, and a data.query

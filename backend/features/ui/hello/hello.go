@@ -1,5 +1,5 @@
 // Package hello is the Hello app, which proves the live core, the
-// server-driven UI (forge 01-ServerUI) and blueprints (forge 02-Blueprints):
+// server-driven UI (forge 001-ServerUI) and blueprints (forge 002-Blueprints):
 // a shared counter and a shared graph, each one aggregate with its
 // projector, and two pages, the app's own tab and an item opened as its
 // own top-level tab. Its handlers, the counter's command and its query are

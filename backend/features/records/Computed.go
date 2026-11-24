@@ -17,7 +17,7 @@ import (
 
 // Computed fields (Records.md › Built in slice 24) keep values no command
 // sets: the records' decisions write them into their events (Forge
-// 03-DataModel question 9).
+// 003-DataModel question 9).
 //   - A formula is an expr-lang expression over the record's fields by id
 //     (quantity * price). Decimals and money with a currency are numbers
 //     in it; a field without a value is nil, and a formula that fails to

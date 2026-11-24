@@ -20,7 +20,7 @@ import (
 // Indexes (Forge's part 3d) are kept in one side bucket per tenant,
 // PRJ_<tenant>_records_index, by the records.record projector itself: its
 // Keep writes a record's index entries before the record is written, so
-// an index is never behind the records (03-DataModel question 2). An entry
+// an index is never behind the records (003-DataModel question 2). An entry
 // is the key <entityId>.<indexId>.<token>….<id>, a token per field and the
 // record's id after its length in three digits (EntryID), so ids sort as
 // compareRecordIds does: a shorter TSID is an earlier one

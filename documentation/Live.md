@@ -7,7 +7,7 @@ It was designed in Forge's plans ([forge/documentation/plans/Architecture.md ›
 ## Built in slice 13
 
 ### Decisions
-Answered before building, in [forge 01-ServerUI.md](../../forge/documentation/plans/01-ServerUI.md#todo):
+Answered before building, in [forge 001-ServerUI.md](../../forge/documentation/plans/001-ServerUI.md#todo):
 - **A stream per area** (question 5). The streams are `EVT_<tenant>_def` (definitions), `EVT_<tenant>_rec` (records) and `EVT_<tenant>_app_<appId>` (an app's own aggregates). Each is made the first time its area is used.
 - **Events are kept forever**, on every stream (question 6). Retention comes once real volumes are known.
 - **Yjs rooms ride the live connection** (question 8): a room is a channel on it, and its own WebSocket route is gone.
@@ -148,7 +148,7 @@ For live record queries ([Records.md](Records.md#built-in-slice-19)):
 - In the browser, `Delta` has the same ops and fields, `applyDelta` applies list changes, and `useQuery` moves its `pos` on `reached` without changing its data.
 
 ## Built in slice 22
-Forge's part 3h ([forge 03h-Transactions.md](../../forge/documentation/plans/03h-Transactions.md)): a command's several events commit as one **atomic batch**, on its own target and on other targets it read, so a command can change several records together or not at all.
+Forge's part 3h ([forge 003h-Transactions.md](../../forge/documentation/plans/003h-Transactions.md)): a command's several events commit as one **atomic batch**, on its own target and on other targets it read, so a command can change several records together or not at all.
 
 ### Decisions
 The plan had no open questions before building (its question 4, whether a batch is enough for a ledger, waits for forge's QuickBooks iteration). Decided while building:

@@ -1,5 +1,5 @@
 // Package search is the records' full-text and vector search (Forge
-// 03-DataModel question 3, Records.md › Built in slice 24): a LanceDB
+// 003-DataModel question 3, Records.md › Built in slice 24): a LanceDB
 // table per tenant, beside the tenant's other tables, holding each
 // searchable record's text with an FTS index and, when it could be
 // embedded, its vector. The indexer follows the rec stream and keeps it;
