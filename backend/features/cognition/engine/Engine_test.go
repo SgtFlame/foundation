@@ -14,6 +14,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/cognition/nodes"
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	"github.com/samber/oops"
 	"gorm.io/gorm"
 )
 
@@ -372,4 +373,63 @@ func TestCallGraphRunsTheCalleeAndTracesOnlyFailures(t *testing.T) {
 	if gdb.First(&run, res.RunID).Error != nil || run.FailedNode != "a" {
 		t.Errorf("failed run = %+v", run)
 	}
+}
+
+// Forge 15b: Call graph's Graph override runs another graph with the same
+// signature in place of the configured one, and refuses one that lacks
+// the configured graph's inputs or outputs with graph_signature.
+func TestCallGraphOverride(t *testing.T) {
+	callee := cognition.Graph{Kind: cognition.KindFunction,
+		Nodes: []cognition.Node{
+			{ID: "on", Type: "event.call", Config: json.RawMessage(`{"outputs": [{"id": "name", "type": "string", "description": "who"}]}`)},
+			{ID: "cat", Type: "test.concat"}, {ID: "ret", Type: "flow.return", Config: returns("string")},
+		},
+		Edges: []cognition.Edge{edge("on", "then", "ret", "then"), edge("on", "name", "cat", "a"), edge("on", "name", "cat", "b"), edge("cat", "out", "ret", "out")},
+	}
+	// The same signature, another body: it gives the name once
+	twin := cognition.Graph{Kind: cognition.KindFunction,
+		Nodes: []cognition.Node{
+			{ID: "on", Type: "event.call", Config: json.RawMessage(`{"outputs": [{"id": "name", "type": "string", "description": "who"}]}`)},
+			{ID: "ret", Type: "flow.return", Config: returns("string")},
+		},
+		Edges: []cognition.Edge{edge("on", "then", "ret", "then"), edge("on", "name", "ret", "out")},
+	}
+	other := cognition.Graph{Kind: cognition.KindFunction,
+		Nodes: []cognition.Node{
+			{ID: "on", Type: "event.call", Config: json.RawMessage(`{"outputs": [{"id": "who", "type": "string", "description": "who"}]}`)},
+			{ID: "ret", Type: "flow.return", Config: returns("string")},
+		},
+		Edges: []cognition.Edge{edge("on", "then", "ret", "then"), edge("on", "who", "ret", "out")},
+	}
+	e, _, _ := newEngine(t, map[string]cognition.Graph{"callee": callee, "twin": twin, "other": other})
+	in, out := cognition.SignatureOf(callee, e.NodeTypes())
+	cfg, _ := json.Marshal(map[string]any{"graph": "callee", "inputs": in, "outputs": out})
+	caller := cognition.Graph{ID: "caller",
+		Nodes: []cognition.Node{{ID: "start", Type: "test.start"}, {ID: "call", Type: "flow.callGraph", Config: cfg}, {ID: "ret", Type: "flow.return", Config: returns("string")}},
+		Edges: []cognition.Edge{edge("start", "then", "call", "then"), edge("start", "s", "call", "name"), edge("start", "s", "call", "graphOverride"),
+			edge("call", "then", "ret", "then"), edge("call", "out", "ret", "out")},
+	}
+	// The start node's s is both the name and the override, so name the graphs by it
+	res, err := e.Run(RunArgs{ServiceArgs: args(), Graph: &caller, Event: "test.start", Inputs: cognition.Values{"s": "twin"}})
+	if err != nil || res.Outputs["out"] != "twin" {
+		t.Fatalf("override twin: %v, %v", res.Outputs, err)
+	}
+	_, err = e.Run(RunArgs{ServiceArgs: args(), Graph: &caller, Event: "test.start", Inputs: cognition.Values{"s": "other"}})
+	if err == nil || !strings.Contains(err.Error(), "lacks input name") {
+		t.Fatalf("another signature: %v", err)
+	}
+	if code := codeOf(err); code != "graph_signature" {
+		t.Fatalf("code %q, want graph_signature", code)
+	}
+	if _, err = e.Run(RunArgs{ServiceArgs: args(), Graph: &caller, Event: "test.start", Inputs: cognition.Values{"s": "missing"}}); codeOf(err) != "graph_not_found" {
+		t.Fatalf("a missing override: %v", err)
+	}
+}
+
+func codeOf(err error) string {
+	if o, ok := oops.AsOops(err); ok {
+		c, _ := o.Code().(string)
+		return c
+	}
+	return ""
 }

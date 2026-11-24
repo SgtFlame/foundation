@@ -24,6 +24,7 @@ export interface Schema {
   scopes?: Scope[]
   restart?: boolean
   ref?: string // '<sectionId>#<arrayPath>': names an item of another section's array
+  widget?: 'slider' // how a form shows it: an integer or number with min and max as a slider with marks (forge 15b)
 }
 
 export type Value = Record<string, unknown>

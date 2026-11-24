@@ -38,7 +38,7 @@ export interface UiAction {
   // dryRun: a command a dry run did not send (name its type, id its
   // target, params its args)
   // share: the Share dialog on resource (a record's path, forge 07j)
-  type: 'toast' | 'navigate' | 'openEditor' | 'focus' | 'download' | 'copy' | 'confirm' | 'rename' | 'dryRun' | 'share'
+  type: 'toast' | 'navigate' | 'openEditor' | 'openLink' | 'focus' | 'download' | 'copy' | 'confirm' | 'rename' | 'dryRun' | 'share'
   message?: string
   severity?: 'success' | 'info' | 'warning' | 'error'
   kind?: string

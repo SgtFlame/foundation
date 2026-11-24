@@ -326,17 +326,18 @@ func Contribute(reg *extensions.Registry) {
 		External:    true,
 		Model:       true,
 		Sample:      cognition.Values{"reply": "(the model's reply: not asked in a sandboxed run)", "calls": []any{}},
-		Description: "Streams the round's reply: the model at the round's level with the system prompt, the messages and the tools, calling tools until it answers (writes ask the user, client tools run in the browser). It completes the round; leaves by Then when it replied, by Failed when stopped or failed.",
+		Description: "Streams the round's reply: the model at the round's level (its own model, temperature, max output tokens and thinking budget win when set) with the system prompt, the messages and the tools, calling tools until it answers (writes ask the user, client tools run in the browser). It completes the round; leaves by Then when it replied, by Failed when stopped or failed.",
 		Example:     "Stream reply with Add context's System, Messages and the Tools selected, then Set title",
+		Config:      json.RawMessage(`{"type":"object","properties":{` + toolsnodes.ModelProps + `}}`),
 		Pins: cognition.Pins{
-			In: []cognition.Pin{
+			In: append([]cognition.Pin{
 				cognition.ExecPin(cognition.Then, ""),
 				cognition.DataPin("system", "System", "string", "The instructions, with the context"),
 				{ID: "messages", Name: "Messages", Type: TypeMessages, Optional: true, Description: "What the model is sent; the window and the message when not joined"},
 				{ID: "tools", Name: "Tools", Type: toolsnodes.TypeToolSet, Optional: true, Description: "The tools the model may call; none makes one streamed call"},
 				{ID: "maxSteps", Name: "Steps", Type: "number", Optional: true, Description: "How many times it may call tools before it must answer, in place of the Tools settings'"},
 				{ID: "level", Name: "Level", Type: "string", Optional: true, Description: "An ai.chat.levels id in place of the round's"},
-			},
+			}, toolsnodes.ModelPins()...),
 			Out: []cognition.Pin{
 				cognition.ExecPin(PinReplied, "Replied"),
 				cognition.ExecPin(PinFailed, "Failed"),
@@ -366,6 +367,13 @@ func Contribute(reg *extensions.Registry) {
 				return nil, "", err
 			}
 			args.MaxSteps = int(steps)
+			m, err := toolsnodes.ModelSettingsOf(x, in)
+			if err != nil {
+				return nil, "", err
+			}
+			var ca chatservice.CompleteArgs
+			m.Apply(&ca)
+			args.ModelRef, args.Temperature, args.MaxTokens, args.ThinkingBudget = ca.ModelRef, ca.Temperature, ca.MaxTokens, ca.ThinkingBudget
 			set, err := cognition.Get[[]tools.Spec](in, "tools")
 			if err != nil {
 				return nil, "", err

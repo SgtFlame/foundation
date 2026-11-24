@@ -209,7 +209,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Title:      "Update memory",
 		Effects:    true,
 		External:   true, Model: true, // a model call
-		Description: "The memory update: rewrites the summaries of the used entries the round adds facts to, and proposes new entries. Its prompts are Go templates over maxProposals, round, used, types and titles.",
+		Description: "The memory update (nothing under Run mode, which never changes memory): rewrites the summaries of the used entries the round adds facts to, and proposes new entries. Its prompts are Go templates over maxProposals, round, used, types and titles.",
 		Config:      json.RawMessage(promptsSchema("maxProposals, round (text, reply), used (each id, type, title, shortSummary, fullSummary), types (each id, description) and titles", `"maxProposals": {"type": "integer", "title": "Proposals", "min": 0, "max": 10, "description": "New entries proposed at most"}`)),
 		Pins: cognition.Pins{
 			In: []cognition.Pin{
@@ -228,6 +228,10 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				if err := json.Unmarshal(x.Node.Config, &config); err != nil {
 					return nil, "", log.Code("bad_node_config").Wrapf(err, "the node's config is not valid")
 				}
+			}
+			// Run mode never changes anyone's memory (forge 15b)
+			if conversation.Headless(x.Host) {
+				return cognition.Values{"changes": chroniclesteps.Changes{}}, cognition.Then, nil
 			}
 			args := chroniclesteps.UpdateIn{ServiceArgs: x.ServiceArgs, MaxProposals: 3, Prompts: config.Prompts, Env: x.Env()}
 			if config.MaxProposals != nil {

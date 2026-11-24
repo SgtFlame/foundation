@@ -73,7 +73,7 @@ func (SegmentFeedback) TableName() string { return "segment_feedback" }
 
 // Models are the retrieval feature's tables, for db.Migrate.
 func Models() []any {
-	return []any{&RoundSegment{}, &SegmentFeedback{}}
+	return []any{&RoundSegment{}, &SegmentFeedback{}, &SegmentVote{}}
 }
 
 // snippetBytes is the length of a recorded segment's snippet.
@@ -91,3 +91,16 @@ func Snippet(text string, n int) string {
 	}
 	return text[:n] + "…"
 }
+
+// SegmentVote is one vote cast with VoteOnce (forge 15b: a reviewer's
+// outcome on an agent's draft), kept so a key votes once per tenant.
+type SegmentVote struct {
+	db.Model
+	db.Tenanted
+	Key      string `gorm:"uniqueIndex:segment_votes_key"` // what makes it once, such as an agent run's id
+	Verdict  string // up or down
+	Segments string // JSON: [{sourceId, key}]
+}
+
+// TableName names the table as the plan does.
+func (SegmentVote) TableName() string { return "segment_votes" }

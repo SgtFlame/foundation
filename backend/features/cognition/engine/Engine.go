@@ -292,7 +292,7 @@ func (e *Engine) Run(args RunArgs) (Result, error) {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(args.Context(), wall)
+	ctx, cancel := context.WithTimeout(cognition.WithScope(args.Context()), wall)
 	defer cancel()
 	r.args.Ctx = ctx
 	err := r.from(event)
@@ -335,6 +335,24 @@ func (e *Engine) call(parent *run, graphID string, inputs cognition.Values, as *
 	if as != nil {
 		args.Principal = *as
 	}
+	res, err := e.Run(args)
+	return res.Outputs, err
+}
+
+// start runs another graph from an event with its own host, for Run mode
+// (forge 15b): on the node's context and principal, counted in the depth.
+func (e *Engine) start(parent *run, s cognition.Start) (cognition.Values, error) {
+	if parent.args.depth+1 >= parent.settings.MaxCallDepth {
+		return nil, log.Code("call_depth").Errorf("graphs called graphs more than %d deep", parent.settings.MaxCallDepth)
+	}
+	trigger := s.Trigger
+	if trigger == "" {
+		trigger = "graph:" + strconv.FormatUint(parent.record.ID, 10)
+	}
+	sa := s.ServiceArgs
+	sa.Meta.RunID, sa.Meta.NodeID = 0, ""
+	args := RunArgs{ServiceArgs: sa, GraphID: s.GraphID, Event: s.Event, Inputs: s.Inputs, Trigger: trigger, Host: s.Host,
+		Trace: parent.args.Trace, Stub: parent.args.Stub, Real: parent.args.Real, Wall: parent.args.Wall, depth: parent.args.depth + 1}
 	res, err := e.Run(args)
 	return res.Outputs, err
 }

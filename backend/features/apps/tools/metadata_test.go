@@ -12,6 +12,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	kblive "github.com/SgtFlame/foundation/backend/features/kb/live"
+	"gorm.io/gorm"
 	"slices"
 	"strings"
 	"testing"
@@ -32,6 +33,7 @@ import (
 	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
 	"github.com/SgtFlame/foundation/backend/features/records/entities"
 	recordsnodes "github.com/SgtFlame/foundation/backend/features/records/nodes"
+	retrievaltools "github.com/SgtFlame/foundation/backend/features/retrieval/tools"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 	toolsnodes "github.com/SgtFlame/foundation/backend/features/tools/nodes"
 	"github.com/SgtFlame/foundation/backend/features/ui"
@@ -51,6 +53,8 @@ func everything(t *testing.T) *extensions.Registry {
 	conversationnodes.Contribute(reg)
 	chroniclenodes.Contribute(reg, func() chroniclenodes.Deps { return chroniclenodes.Deps{} })
 	toolsnodes.Contribute(reg, func() toolsnodes.Deps { return toolsnodes.Deps{} })
+	conversationnodes.ContributeRunMode(reg, func() toolsnodes.Deps { return toolsnodes.Deps{} })
+	retrievaltools.Contribute(reg, func() *gorm.DB { return nil })
 	if err := uicomponents.Contribute(reg); err != nil {
 		t.Fatal(err)
 	}

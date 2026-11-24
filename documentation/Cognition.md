@@ -210,3 +210,10 @@ For Forge's *Call connector* ([Connectors.md › Built in slice 46](Connectors.m
 - **`NodeType.SampleFor(config)`** gives a stubbed External node's sample from its config, in place of `Sample`: *Call connector*'s outputs follow from the operation it names, so a sandboxed run (`forge.test`, `bp.test`) gives that operation's result example.
 - **`bp.import` normalizes the nodes it can**: each node whose type has `Normalize` gets its completed config (a connector call's pins from its contract, a *Call graph*'s signature). A config that cannot be completed, such as a *Call graph* whose callee is imported later, is kept as exported.
 - The `app.trigger` kind allows the `connector.on` event node.
+
+## Changed in forge 15b
+- **A run's scope** (`cognition.Scope`, `WithScope`, `ScopeOf`): values shared by a run and every graph it calls or starts. The engine puts one on a top-level run's context; called graphs inherit it. `tools.Passages` lives there, so an agent's run numbers its passages once across all its model calls.
+- **`Exec.Start`** (`ExecHooks.Start`, `cognition.Start{ServiceArgs, GraphID, Event, Inputs, Host, Trigger}`): runs another graph from any event with a host of its own, on the node's context and principal, counted in the call depth. *Run mode* uses it to run a chat mode's graph.
+- **`Exec.Signature(graphID)`**: a graph's inputs and outputs as the tenant runs it.
+- ***Call graph*'s `graphOverride`** (an optional pin): a graph id to run in place of the configured one. It must take at least the configured graph's inputs and give at least its outputs (matched by id with assignable types), else the call fails with `graph_signature` (`graph_not_found` when it does not exist, or is only a draft); *Catch failures* catches both. Forge runs an agent's own blueprint this way.
+- **Tests**: `engine` `TestCallGraphOverride`; `drafts` `TestAnEditableBuiltInBecomesTheTenantsDraft` sees the new pin.

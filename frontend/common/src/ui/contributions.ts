@@ -8,10 +8,11 @@ import { starterRenderers } from './renderers/record/index.tsx'
 import { HtmlView } from './renderers/doc/HtmlView.tsx'
 import { ChipsInput } from './renderers/doc/ChipsInput.tsx'
 import { MuiVirtualGrid, MuiVirtualList } from './renderers/doc/Windowed.tsx'
+import { ChatSources } from './renderers/doc/ChatSources.tsx'
 
 // The renderers of the primitives, by the server's component ids
 // The content components (forge 07l)
-const contentRenderers = { 'mui.htmlView': HtmlView, 'mui.chipsInput': ChipsInput, 'mui.virtualList': MuiVirtualList, 'mui.virtualGrid': MuiVirtualGrid }
+const contentRenderers = { 'mui.htmlView': HtmlView, 'mui.chipsInput': ChipsInput, 'mui.virtualList': MuiVirtualList, 'mui.virtualGrid': MuiVirtualGrid, 'chat.sources': ChatSources }
 for (const [id, component] of Object.entries({ ...muiRenderers, ...starterRenderers, ...contentRenderers })) {
   extensions.contribute(renderers, { id, source: 'ui', component })
 }

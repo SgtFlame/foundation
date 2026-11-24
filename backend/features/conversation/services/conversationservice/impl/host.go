@@ -71,7 +71,8 @@ func (h *host) AddContext(system string, items []conversation.ContextItem, heade
 	h.mu.Lock()
 	start := len(h.r.segments)
 	h.mu.Unlock()
-	out, cited := prompt(system, items, header, cite, start)
+	n := start
+	out, cited := conversation.Prompt(system, items, header, cite, func(retrieval.Scored) int { n++; return n })
 	segments := h.s.storeSegments(h.args, h.r, cited)
 	if len(segments) > 0 {
 		h.mu.Lock()
@@ -139,6 +140,14 @@ func (h *host) Reply(a conversation.ReplyArgs) (conversation.ReplyOutcome, error
 		level, model = l, m
 		r.round.Level, r.round.ModelName = l.ID, m.Model
 	}
+	if a.ModelRef != "" {
+		m, ok := r.models.ByID(a.ModelRef)
+		if !ok {
+			return conversation.ReplyOutcome{}, log.Code("unknown_model").With("model", a.ModelRef).Errorf("%q is not in the model catalog", a.ModelRef)
+		}
+		model = m
+		r.round.ModelName = m.Model
+	}
 	messages := a.Messages
 	if len(messages) == 0 {
 		for _, w := range r.history {
@@ -160,12 +169,13 @@ func (h *host) Reply(a conversation.ReplyArgs) (conversation.ReplyOutcome, error
 	start := time.Now()
 	c := &citer{s: h.s, args: args, r: r, emit: h.emit}
 	out := tools.Loop{DB: h.s.db, Chat: h.s.chat}.Run(tools.RunArgs{
-		CompleteArgs: chatservice.CompleteArgs{ServiceArgs: call, Level: level.ID, System: a.System, Messages: messages},
-		Tools:        a.Tools,
-		Settings:     settings,
-		Allowed:      allowed(r),
-		Gate:         gate{s: h.s, args: args, r: r},
-		Stream:       true,
+		CompleteArgs: chatservice.CompleteArgs{ServiceArgs: call, Level: level.ID, System: a.System, Messages: messages,
+			ModelRef: a.ModelRef, Temperature: a.Temperature, MaxTokens: a.MaxTokens, ThinkingBudget: a.ThinkingBudget},
+		Tools:    a.Tools,
+		Settings: settings,
+		Allowed:  allowed(r),
+		Gate:     gate{s: h.s, args: args, r: r},
+		Stream:   true,
 		OnDelta: func(text string) {
 			h.emit(conversationservice.SendEvent{Kind: conversationservice.EventDelta, Text: text})
 		},

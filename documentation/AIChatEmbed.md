@@ -180,3 +180,7 @@ For Forge's golden tests (part 6h, [forge GoldenTests.md](../../forge/documentat
 4. Edit one section of a note in the Markdown Editor. About 5 seconds after the save, only that section's chunks change hash in the sidecar.
 5. `POST /api/v1/index/find` with weights 1, 0.5 and 0 returns documents whose chunk markers point at the matching text.
 6. Touch a `.go` file while `serve.sh` runs: it rebuilds, swaps the binary and restarts. With a syntax error, the old server keeps serving.
+
+## Changed in forge 15b
+- **`CompleteArgs.ModelRef`** names an `ai.models` id (a chat model) in place of the level's model; `Model` (the provider's id) still wins over it, and an unknown or embedding model fails with 400 `unknown_model`.
+- **`CompleteArgs.ThinkingBudget`** wins over the level's; the level fills it only when nil. Temperature and max tokens already worked this way.

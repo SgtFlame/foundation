@@ -115,6 +115,11 @@ type ReplyArgs struct {
 	Tools    []tools.Tool          // empty makes one streamed call
 	MaxSteps int                   // 0 keeps the tools section's
 	Level    string                // empty keeps the round's
+	// The model settings of Stream reply (forge 15b), over the level's
+	ModelRef       string // an ai.models id; empty keeps the level's model
+	Temperature    *float32
+	MaxTokens      *int
+	ThinkingBudget *int
 }
 
 // ReplyOutcome is how a reply ended.

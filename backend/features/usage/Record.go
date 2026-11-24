@@ -16,11 +16,14 @@ import (
 type Record struct {
 	db.Model
 	db.Tenanted
-	UserID         uint64 `gorm:"index"` // 0 for background work
-	Feature        string `gorm:"index"` // chat, embed, embed-index, embed-query, ...
-	Provider       string
-	ModelName      string `gorm:"column:model"` // the provider's model ID
-	Level          string // the chat level; empty outside the chat levels
+	UserID    uint64 `gorm:"index"` // 0 for background work
+	Feature   string `gorm:"index"` // chat, embed, embed-index, embed-query, ...
+	Provider  string
+	ModelName string `gorm:"column:model"` // the provider's model ID
+	Level     string // the chat level; empty outside the chat levels
+	// Temperature is the chat call's, as sent (forge 15b: a model node may
+	// set it); nil when the provider's default was used
+	Temperature    *float32
 	ConversationID uint64 `gorm:"index"`
 	RoundID        uint64
 	FileID         uint64

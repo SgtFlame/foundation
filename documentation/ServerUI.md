@@ -460,3 +460,9 @@ Forge 7p-5 ([forge MailApp.md](../../forge/documentation/MailApp.md#built-in-par
 
 ## Changed in forge 7p-6
 **`layout.flex` waits per tab**: each tab's content renders inside its own `Suspense` (no fallback). A lazily loaded renderer in a tab (a `doc.markdown` editor's chunk, the first time) suspended to `AppHost`'s boundary, which hid the whole layout; flexlayout then never drew its tabs again, and the page stayed blank with no error (Forge's Mail thread tab and inbox reading pane holding a draft's composer, found in forge 7p-6's walk). `ui.Subject` gains `Details` ([Apps.md › Changed in forge 7p-6](Apps.md#changed-in-forge-7p-6)), and the browser's `UiSubject` `details`.
+
+## Changed in forge 15b
+- **`chat.sources`** (`ui/renderers/doc/ChatSources.tsx`): a segment list drawn as a chat round's Sources row: `[n]`, title, lines and snippet; `collapsible` shows it as a *Sources (n)* button. A click opens the passage at its lines or the Chronicle entry, through the shared `components/chat/openSegment.ts` (which chat's `ChatEditor` now uses too), and raises `open`. A memory entry with a `location.owner` other than the viewer shows its title only, without link or text.
+- **`ui.openLink`** (*Open link*, an effect node in handlers and prefab logic) sends the `openLink` action with a `workbench:<type>/<id>?<where>` link; `AppHost` opens it through the subject openers (`openWorkbenchLink`) and toasts when nothing opens it.
+- **`UiHost.registry`**: the tab's editor registry, for a renderer that opens an editor.
+- **`SchemaField`'s slider** (`Schema.widget: "slider"`, also on the server's `config.Schema`): an integer or number with `min` and `max` shows as a slider with marks, *Inherited* while unset, and *Clear*. Forge's node settings form uses it for the retrieval dials.

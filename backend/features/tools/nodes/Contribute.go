@@ -14,6 +14,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
@@ -64,6 +65,8 @@ type AgentConfig struct {
 	// MaxSteps is its steps in place of the tools section's (forge 06g:
 	// the Builder agent builds a whole app); 0 keeps the section's
 	MaxSteps int `json:"maxSteps"`
+	// Rag is the Retrieval group (forge 15b): how kb.search searches in this call
+	Rag DialsConfig `json:"rag"`
 }
 
 // Contribute registers the nodes and the ToolSet type.
@@ -74,7 +77,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Descriptor:  extensions.Descriptor{ID: AgentID, Order: 300, Source: "tools"},
 		Title:       "Agent",
 		Category:    "LLM",
-		Description: "Asks the model, letting it call tools until it answers: its Tools set when joined, else its config's. Tools that change data and ask first are denied (a run cannot ask for approval), unless the run is an agent's: then its own roles decide, and a call it lacks the rights for fails with forbidden.",
+		Description: "Asks the model, letting it call tools until it answers: its Tools set when joined, else its config's. Its model, temperature, max output tokens and thinking budget win over the level's. Its Retrieval group (a preset or the dials) says how kb.search searches in this call; the Retrieval input narrows it to the run's Volumes. Passages are numbered once per run, as chat numbers a round's: one found twice keeps its number. Tools that change data and ask first are denied (a run cannot ask for approval), unless the run is an agent's: then its own roles decide, and a call it lacks the rights for fails with forbidden.",
 		Example:     "Agent with the prompt \"Summarize the open tasks\" and the kb.search tool",
 		Effects:     true,
 		External:    true,
@@ -82,20 +85,20 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Sample:      cognition.Values{"reply": "(the model's reply: not asked in a sandboxed run)", "calls": []any{}, "usage": map[string]any{}},
 		Config:      json.RawMessage(agentSchema),
 		Pins: cognition.Pins{
-			In: []cognition.Pin{
+			In: append([]cognition.Pin{
 				cognition.ExecPin(cognition.Then, ""),
 				cognition.DataPin("prompt", "Prompt", "string", "What to ask"),
 				{ID: "system", Name: "System", Type: "string", Optional: true, Description: "The instructions"},
 				{ID: "maxSteps", Name: "Steps", Type: "number", Optional: true, Description: "How many times it may call tools before it must answer, in place of its config's"},
 				{ID: "tools", Name: "Tools", Type: TypeToolSet, Optional: true, Description: "The tools it may call, in place of its config's"},
 				{ID: "level", Name: "Level", Type: "string", Optional: true, Description: "An ai.chat.levels id, in place of its config's (forge 7m: an agent record's level)"},
-				{ID: "retrieval", Name: "Retrieval", Type: "json", Optional: true, Description: "How kb.search searches during the run (forge 15a): {sources, lexicalSemantic, chronicleLibrary, topK, volumeIds}, from an agent's record, never from the model; empty searches the Volumes alone as before. Whose memory the chronicle source reads is the run's principal's (Call graph's Memory of)"},
-			},
+				{ID: "retrieval", Name: "Retrieval", Type: "json", Optional: true, Description: "Narrows how kb.search searches during the run (forge 15a, 15b): {sources, volumeIds} from an agent's record, never from the model. Its Volumes are searched, and its sources are intersected with the Retrieval group's: it never widens them. Whose memory the chronicle source reads is the run's principal's (Call graph's Memory of)"},
+			}, ModelPins()...),
 			Out: []cognition.Pin{
 				cognition.ExecPin(cognition.Then, ""),
 				cognition.DataPin("reply", "Reply", "string", "The model's answer"),
 				cognition.DataPin("calls", "Calls", "json", "The tool calls it made: name, status, summary, error, args and the result the model saw (cut like the tools section's maxResultKB)"),
-				cognition.DataPin("usage", "Usage", "json", "What the run cost: {steps, inputTokens, cachedTokens, outputTokens, thinkingTokens, costMicros, currency, level, model}, priced from ai.models as usage records are"),
+				cognition.DataPin("usage", "Usage", "json", "What the run cost: {steps, inputTokens, cachedTokens, outputTokens, thinkingTokens, costMicros, currency, level, model, temperature}, priced from ai.models as usage records are"),
 			},
 		},
 		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
@@ -106,54 +109,36 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Descriptor:  extensions.Descriptor{ID: CompleteID, Order: 305, Source: "tools"},
 		Title:       "Ask model",
 		Category:    "LLM",
-		Description: "One model call without tools: the system instructions and the prompt in, the answer out, at a level; leaves by Failed with the error when the model fails",
+		Description: "One model call without tools: the system instructions and the prompt in, the answer out, at a level, with its own model, temperature, max output tokens and thinking budget when set (the level fills the rest). With a JSON schema the reply is asked for as JSON matching it and given parsed on Value. Leaves by Failed with the error when the model fails or its JSON cannot be read",
 		Example:     "Ask model at the chat section's title level to name the conversation from a Template of the exchange",
 		Effects:     true,
 		External:    true,
 		Model:       true,
-		Sample:      cognition.Values{"text": "(the model's answer: not asked in a sandboxed run)"},
+		Sample:      cognition.Values{"text": "(the model's answer: not asked in a sandboxed run)", "value": nil, "usage": map[string]any{}},
 		Config: json.RawMessage(`{"type":"object","properties":{
 			"level":{"type":"string","title":"Level","ref":"ai.chat.levels#levels","description":"The level asked; the Level pin wins, else the default level"},
-			"feature":{"type":"string","title":"Feature","description":"What usage records it under, e.g. chat-title"}}}`),
+			"feature":{"type":"string","title":"Feature","description":"What usage records it under, e.g. chat-title"},
+			` + ModelProps + `,
+			"jsonSchema":{"type":"string","title":"JSON schema","format":"multiline","description":"A JSON Schema the reply must match; the reply is then given parsed on Value"}}}`),
 		Pins: cognition.Pins{
-			In: []cognition.Pin{
+			In: append([]cognition.Pin{
 				cognition.ExecPin(cognition.Then, ""),
 				cognition.DataPin("prompt", "Prompt", "string", "What to ask"),
 				{ID: "system", Name: "System", Type: "string", Optional: true, Description: "The instructions"},
 				{ID: "level", Name: "Level", Type: "string", Optional: true, Description: "An ai.chat.levels id, in place of its config's"},
-			},
+				{ID: "jsonSchema", Name: "JSON schema", Type: "json", Optional: true, Description: "A JSON Schema the reply must match, in place of its config's"},
+			}, ModelPins()...),
 			Out: []cognition.Pin{
 				cognition.ExecPin(cognition.Then, ""),
 				cognition.ExecPin("failed", "Failed"),
 				cognition.DataPin("text", "Text", "string", "The model's answer"),
+				cognition.DataPin("value", "Value", cognition.Any, "With a JSON schema: the answer parsed; else nothing"),
+				cognition.DataPin("usage", "Usage", "json", "What the call cost: {inputTokens, cachedTokens, outputTokens, thinkingTokens, costMicros, currency, level, model, temperature}"),
 				cognition.DataPin("error", "Error", "string", "Why the model failed, when it did"),
 			},
 		},
 		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
-			var c struct{ Level, Feature string }
-			if err := x.Config(&c); err != nil {
-				return nil, "", err
-			}
-			prompt, err := cognition.Get[string](in, "prompt")
-			if err != nil {
-				return nil, "", err
-			}
-			system, _ := cognition.Get[string](in, "system")
-			if l, _ := cognition.Get[string](in, "level"); l != "" {
-				c.Level = l
-			}
-			d := deps()
-			if d.Chat == nil {
-				return nil, "", tools.Log.Code("model_not_configured").New("Ask model has no chat service")
-			}
-			sa := x.ServiceArgs
-			sa.Meta.Feature, sa.Meta.Level = cmpOr(c.Feature, cmpOr(sa.Meta.Feature, "graph")), c.Level
-			resp := d.Chat.Complete(chatservice.CompleteArgs{ServiceArgs: sa, Level: c.Level, System: system,
-				Messages: []chatservice.Message{{Role: chatservice.RoleUser, Content: prompt}}})
-			if resp.Common.Code >= 300 {
-				return cognition.Values{"error": resp.Common.Message}, "failed", nil
-			}
-			return cognition.Values{"text": resp.Message.Content}, cognition.Then, nil
+			return runComplete(x, in, deps())
 		},
 	})
 	contributeToolSets(reg, deps)
@@ -161,15 +146,29 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Descriptor:  extensions.Descriptor{ID: RunPassagesID, Order: 345, Source: "tools"},
 		Title:       "Run passages",
 		Category:    "Tools",
-		Description: "The passages the agent run this graph is part of has numbered so far (forge 15a), as its tools found them: [{number, sourceId, key, title, entryId, volumeId, path, startLine, endLine}], numbers as the run's replies cite them. A tool an agent calls reads them to see what a text it is given cites, such as a draft citing a person's private memory (sourceId chronicle). Empty outside an agent's run.",
+		Description: "The passages the agent run this graph is part of has numbered so far, across all its model calls (forge 15a, 15b), as its tools found them: [{number, sourceId, key, title, entryId, volumeId, path, startLine, endLine}], numbers as the run's replies cite them. A tool an agent calls reads them to see what a text it is given cites, such as a draft citing a person's private memory (sourceId chronicle). Empty outside an agent's run.",
 		Example:     "Run passages, then refuse to send a draft whose cited numbers name a chronicle passage",
 		Tags:        []string{"tools", "citations", "agents", "retrieval"},
 		Pins: cognition.Pins{Out: []cognition.Pin{
 			cognition.DataPin("passages", "Passages", "json", "The run's numbered passages, in order; empty outside an agent's run"),
+			cognition.DataPin("segments", "Segments", "json", "The same as a chat round's segments (forge 15b), for an agent run's record: [{number, sourceId, key, title, snippet, location: {volumeId, path, startLine, endLine, entryId}}], the snippet cut to 400 bytes and left out for Chronicle memory"),
 		}},
 		Run: func(x *cognition.Exec, _ cognition.Values) (cognition.Values, string, error) {
 			out := []any{}
+			segments := []any{}
 			for _, s := range tools.PassagesFrom(x.Context()).All() {
+				loc := map[string]any{"volumeId": "", "path": s.Location.Path, "startLine": s.Location.StartLine, "endLine": s.Location.EndLine, "entryId": ""}
+				snippet := retrieval.Snippet(s.Text, 400)
+				if s.Location.VolumeID != 0 {
+					loc["volumeId"] = strconv.FormatUint(s.Location.VolumeID, 10)
+				}
+				if s.Location.EntryID != 0 {
+					loc["entryId"] = strconv.FormatUint(s.Location.EntryID, 10)
+				}
+				if s.SourceID == "chronicle" {
+					snippet = "" // a person's memory: its title only
+				}
+				segments = append(segments, map[string]any{"number": s.Number, "sourceId": s.SourceID, "key": s.Key, "title": s.Title, "snippet": snippet, "location": loc})
 				p := map[string]any{"number": s.Number, "sourceId": s.SourceID, "key": s.Key, "title": s.Title, "path": s.Location.Path,
 					"startLine": s.Location.StartLine, "endLine": s.Location.EndLine, "entryId": "", "volumeId": ""}
 				if s.Location.EntryID != 0 {
@@ -180,7 +179,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				}
 				out = append(out, p)
 			}
-			return cognition.Values{"passages": out}, "", nil
+			return cognition.Values{"passages": out, "segments": segments}, "", nil
 		},
 	})
 	cognition.Nodes.Register(reg, cognition.NodeType{
@@ -255,6 +254,82 @@ func cmpOr(a, b string) string {
 	return b
 }
 
+// runComplete runs Ask model: one call, its settings over the level's.
+func runComplete(x *cognition.Exec, in cognition.Values, d Deps) (cognition.Values, string, error) {
+	var c struct {
+		Level, Feature string
+		JSONSchema     string `json:"jsonSchema"`
+	}
+	if err := x.Config(&c); err != nil {
+		return nil, "", err
+	}
+	prompt, err := cognition.Get[string](in, "prompt")
+	if err != nil {
+		return nil, "", err
+	}
+	system, _ := cognition.Get[string](in, "system")
+	if l, _ := cognition.Get[string](in, "level"); l != "" {
+		c.Level = l
+	}
+	m, err := ModelSettingsOf(x, in)
+	if err != nil {
+		return nil, "", err
+	}
+	var schema json.RawMessage
+	if strings.TrimSpace(c.JSONSchema) != "" {
+		schema = json.RawMessage(c.JSONSchema)
+	}
+	if v, ok := in["jsonSchema"]; ok && v != nil {
+		switch t := v.(type) {
+		case string:
+			if strings.TrimSpace(t) != "" {
+				schema = json.RawMessage(t)
+			}
+		default:
+			if schema, err = json.Marshal(t); err != nil {
+				return nil, "", err
+			}
+		}
+	}
+	if len(schema) > 0 && !json.Valid(schema) {
+		return cognition.Values{"error": "the JSON schema is not valid JSON", "text": "", "value": nil, "usage": map[string]any{}}, "failed", nil
+	}
+	if d.Chat == nil {
+		return nil, "", tools.Log.Code("model_not_configured").New("Ask model has no chat service")
+	}
+	sa := x.ServiceArgs
+	sa.Meta.Feature, sa.Meta.Level = cmpOr(c.Feature, cmpOr(sa.Meta.Feature, "graph")), c.Level
+	args := chatservice.CompleteArgs{ServiceArgs: sa, Level: c.Level, System: system, JSONSchema: schema,
+		Messages: []chatservice.Message{{Role: chatservice.RoleUser, Content: prompt}}}
+	m.Apply(&args)
+	resp := d.Chat.Complete(args)
+	usage := UsageOf(x, d, resp.Level, m, resp.Model, 0, []chatservice.Usage{resp.Usage})
+	if resp.Common.Code >= 300 {
+		return cognition.Values{"error": resp.Common.Message, "text": "", "value": nil, "usage": usage}, "failed", nil
+	}
+	out := cognition.Values{"text": resp.Message.Content, "value": nil, "usage": usage}
+	if len(schema) > 0 {
+		var v any
+		if err := json.Unmarshal([]byte(stripFence(resp.Message.Content)), &v); err != nil {
+			out["error"] = "the model's answer is not JSON: " + err.Error()
+			return out, "failed", nil
+		}
+		out["value"] = v
+	}
+	return out, cognition.Then, nil
+}
+
+// stripFence is a reply without the ```json fence some models add.
+func stripFence(s string) string {
+	t := strings.TrimSpace(s)
+	if strings.HasPrefix(t, "```") {
+		t = strings.TrimPrefix(t, "```json")
+		t = strings.TrimPrefix(t, "```")
+		t = strings.TrimSuffix(strings.TrimSpace(t), "```")
+	}
+	return strings.TrimSpace(t)
+}
+
 // runAgent runs the Agent node: the tool loop without a gate.
 func runAgent(x *cognition.Exec, in cognition.Values, d Deps) (cognition.Values, string, error) {
 	prompt, err := cognition.Get[string](in, "prompt")
@@ -280,6 +355,10 @@ func runAgent(x *cognition.Exec, in cognition.Values, d Deps) (cognition.Values,
 	}
 	if l, _ := cognition.Get[string](in, "level"); l != "" {
 		cfg.Level = l
+	}
+	m, err := ModelSettingsOf(x, in)
+	if err != nil {
+		return nil, "", err
 	}
 	if d.Chat == nil {
 		return nil, "", tools.Log.Code("agent_not_configured").New("the Agent node has no chat service")
@@ -316,46 +395,30 @@ func runAgent(x *cognition.Exec, in cognition.Values, d Deps) (cognition.Values,
 	}
 	sa := x.ServiceArgs
 	sa.Meta = sa.Meta.WithFeature("agent")
-	if o, set, err := retrieval.ParseOptions(in["retrieval"]); err != nil {
+	// kb.search searches as the node's Retrieval group says, narrowed by the run's (forge 15b)
+	if o, set, err := RetrievalOf(x, d.Config, cfg.Rag, in["retrieval"]); err != nil {
 		return nil, "", tools.Log.Code("bad_retrieval").Wrap(err)
 	} else if set {
 		sa.Ctx = retrieval.WithOptions(sa.Context(), o)
 	}
-	// The tools it calls see what the run has numbered (forge 15a)
-	var kept *tools.Passages
-	sa.Ctx, kept = tools.WithPassages(sa.Context())
-	cite := citeInOrder()
+	// One numbering for the whole run, which the tools it calls see (forge 15a, 15b)
+	kept := tools.PassagesFrom(sa.Context())
+	if kept == nil {
+		sa.Ctx, kept = tools.WithPassages(sa.Context())
+	}
+	args := chatservice.CompleteArgs{ServiceArgs: sa, Level: cfg.Level, System: system,
+		Messages: []chatservice.Message{{Role: chatservice.RoleUser, Content: prompt}}}
+	m.Apply(&args)
 	out := tools.Loop{DB: d.DB, Chat: d.Chat}.Run(tools.RunArgs{
-		CompleteArgs: chatservice.CompleteArgs{ServiceArgs: sa, Level: cfg.Level, System: system,
-			Messages: []chatservice.Message{{Role: chatservice.RoleUser, Content: prompt}}},
-		Tools:    offered,
-		Settings: settings,
-		Cite: func(segments []retrieval.Scored) []retrieval.Scored {
-			numbered := cite(segments)
-			kept.Add(numbered)
-			return numbered
-		},
+		CompleteArgs: args,
+		Tools:        offered,
+		Settings:     settings,
+		Cite:         kept.Cite,
 	})
 	if c := out.Response.Common; c.Code >= 300 {
 		return nil, "", tools.Log.Code("agent_failed").With("status", c.Code).Errorf("the model failed: %s", c.Message)
 	}
-	return cognition.Values{"reply": out.Reply, "calls": Calls(out.Calls), "usage": usageOf(x, d, cfg.Level, out)}, cognition.Then, nil
-}
-
-// citeInOrder numbers the run's passages [1], [2], … in the order its tools
-// found them, as a chat round numbers its citations (forge 7p-4), so the
-// model cites them by number and a host reads them back from the calls.
-func citeInOrder() func([]retrieval.Scored) []retrieval.Scored {
-	n := 0
-	return func(segments []retrieval.Scored) []retrieval.Scored {
-		out := make([]retrieval.Scored, len(segments))
-		for i, s := range segments {
-			n++
-			s.Number = n
-			out[i] = s
-		}
-		return out
-	}
+	return cognition.Values{"reply": out.Reply, "calls": Calls(out.Calls), "usage": UsageOf(x, d, cfg.Level, m, out.Response.Model, out.Steps, out.Usage)}, cognition.Then, nil
 }
 
 // Calls are a loop's calls as a node gives them: name, status, summary,
@@ -383,36 +446,46 @@ func parsed(raw string) any {
 	return v
 }
 
-// usageOf sums a loop's model calls and prices them from the level's model
-// in ai.models, as conversation rounds and usage records are priced.
-func usageOf(x *cognition.Exec, d Deps, level string, out tools.Outcome) map[string]any {
+// UsageOf sums a node's model calls and prices them from the model in
+// ai.models (the node's own, else the level's), as conversation rounds and
+// usage records are priced.
+func UsageOf(x *cognition.Exec, d Deps, level string, m ModelSettings, model string, steps int, calls []chatservice.Usage) map[string]any {
 	var t aisettings.Tokens
-	for _, u := range out.Usage {
+	for _, u := range calls {
 		t.Input, t.Cached, t.Output, t.Thinking = t.Input+u.InputTokens, t.Cached+u.CachedTokens, t.Output+u.OutputTokens, t.Thinking+u.ThinkingTokens
 	}
-	res := map[string]any{"steps": out.Steps, "inputTokens": t.Input, "cachedTokens": t.Cached, "outputTokens": t.Output,
-		"thinkingTokens": t.Thinking, "costMicros": int64(0), "currency": "", "level": level, "model": out.Response.Model}
+	var temperature any
+	if m.Temperature != nil {
+		temperature = *m.Temperature
+	}
+	res := map[string]any{"steps": steps, "inputTokens": t.Input, "cachedTokens": t.Cached, "outputTokens": t.Output,
+		"thinkingTokens": t.Thinking, "costMicros": int64(0), "currency": "", "level": level, "model": model, "temperature": temperature}
 	if d.Config == nil {
 		return res
 	}
+	ref := m.Model
 	levels, err := config.Read[aisettings.Levels](d.Config, x.ServiceArgs, aisettings.LevelsID)
 	if err != nil {
 		return res
 	}
-	l, ok := levels.Find(level)
-	if !ok {
-		return res
+	if l, ok := levels.Find(level); ok {
+		if ref == "" {
+			ref = l.ModelRef
+		}
+		if temperature == nil && l.Temperature != nil {
+			res["temperature"] = *l.Temperature
+		}
 	}
 	models, err := config.Read[aisettings.Models](d.Config, x.ServiceArgs, aisettings.ModelsID)
 	if err != nil {
 		return res
 	}
-	if m, ok := models.ByID(l.ModelRef); ok {
+	if mm, ok := models.ByID(ref); ok {
 		var cost int64
-		for _, u := range out.Usage {
-			cost += m.Pricing.CostMicros(aisettings.Tokens{Input: u.InputTokens, Cached: u.CachedTokens, Output: u.OutputTokens, Thinking: u.ThinkingTokens})
+		for _, u := range calls {
+			cost += mm.Pricing.CostMicros(aisettings.Tokens{Input: u.InputTokens, Cached: u.CachedTokens, Output: u.OutputTokens, Thinking: u.ThinkingTokens})
 		}
-		res["costMicros"], res["currency"] = cost, cmpOr(m.Pricing.Currency, "USD")
+		res["costMicros"], res["currency"] = cost, cmpOr(mm.Pricing.Currency, "USD")
 	}
 	return res
 }
@@ -518,6 +591,8 @@ func graphTool(x *cognition.Exec, s tools.Spec) tools.Tool {
 const agentSchema = `{
   "type": "object",
   "properties": {
+    ` + ModelProps + `,
+    ` + RetrievalProps + `,
     "level": {"type": "string", "title": "Level", "ref": "ai.chat.levels#levels"},
     "tools": {"type": "array", "title": "Tools", "description": "The tools it may call, e.g. kb.search; empty allows every tool that does not ask. A joined Tools set wins.", "items": {"type": "string"}},
     "maxSteps": {"type": "integer", "title": "Steps", "min": 1, "max": 200, "description": "How many times it may call tools before it must answer; empty keeps the Tools settings'"}

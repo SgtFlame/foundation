@@ -13,8 +13,7 @@ import { log } from '../../logging/index.ts'
 import { useSetting } from '../../settings/configStore.ts'
 import { clearChatFocus, setChatFocus } from '../../chronicle/chatFocus.ts'
 import { refreshChronicles } from '../../chronicle/chronicleStore.ts'
-import { ChronicleObject } from '../chronicle/ChronicleObject.ts'
-import { openMarkdownAt } from '../markdown/openMarkdown.ts'
+import { openSegment } from '../../components/chat/openSegment.ts'
 import { useWorkbenchContext } from '../../workbench/context/WorkbenchContext.ts'
 import { openWorkbenchLink, parseWorkbenchLink } from '../../workbench/links.ts'
 import { useContributions } from '../../workbench/extensions/index.ts'
@@ -144,17 +143,7 @@ function ChatEditor({ tabId, registry }: EditorProps<ChatObject>) {
           openWorkbenchLink(registry, href).catch((err: unknown) => log.In('chat').fromError(err).With('href', href).warn('cannot open the link'))
           return true
         }}
-        onOpenSegment={(segment) => {
-          const { entryId, path, startLine, endLine } = segment.location
-          if (entryId) {
-            registry.edit(new ChronicleObject({ id: entryId, title: segment.title }))
-            return
-          }
-          if (!path) return
-          openMarkdownAt(registry, path, startLine ? [startLine, endLine ?? startLine] : undefined).catch((err: unknown) =>
-            log.In('chat').fromError(err).With('path', path).warn('cannot open the cited file'),
-          )
-        }}
+        onOpenSegment={(segment) => void openSegment(registry, segment)}
         empty={
           <Stack sx={{ height: '100%', boxSizing: 'border-box', alignItems: 'center', justifyContent: 'center', p: 4, textAlign: 'center' }} spacing={1}>
             <Typography variant="h6">Ask anything</Typography>

@@ -1,8 +1,10 @@
 package retrieval
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -68,6 +70,45 @@ func Vote(tx *gorm.DB, tenant uint64, segments []RoundSegment, from, to Feedback
 		}
 	}
 	return nil
+}
+
+// SegmentRef names a segment by its source and feedback key.
+type SegmentRef struct {
+	SourceID string `json:"sourceId"`
+	Key      string `json:"key"`
+}
+
+// VoteOnce casts verdict (up or down) on segments once for key in the
+// tenant (forge 15b), as a 👍 or 👎 on a round would: a key that has voted
+// already changes nothing, so a second outcome write does not count twice.
+// It says whether the vote was cast. Run it in a transaction.
+func VoteOnce(tx *gorm.DB, tenant uint64, key string, segments []SegmentRef, verdict Feedback) (bool, error) {
+	if verdict != FeedbackCorrect && verdict != FeedbackIncorrect {
+		return false, errors.New("a vote is up or down")
+	}
+	if strings.TrimSpace(key) == "" {
+		return false, errors.New("a vote needs a key")
+	}
+	var n int64
+	if err := tx.Model(&SegmentVote{}).Where("tenant_id = ? AND key = ?", tenant, key).Count(&n).Error; err != nil {
+		return false, err
+	}
+	if n > 0 {
+		return false, nil
+	}
+	encoded, _ := json.Marshal(segments)
+	v := SegmentVote{Key: key, Verdict: string(verdict), Segments: string(encoded)}
+	v.TenantID = tenant
+	if err := tx.Create(&v).Error; err != nil {
+		return false, err
+	}
+	rs := make([]RoundSegment, 0, len(segments))
+	for _, s := range segments {
+		if s.SourceID != "" && s.Key != "" {
+			rs = append(rs, RoundSegment{SourceID: s.SourceID, SegmentKey: s.Key})
+		}
+	}
+	return true, Vote(tx, tenant, rs, FeedbackNone, verdict)
 }
 
 // GroundingSettings shape the grounding multiplier (the retrieval.feedback

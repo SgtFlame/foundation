@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gorm.io/gorm"
 	"net/http"
 	"net/url"
 	"os"
@@ -87,6 +88,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/index/store/lancestore"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
+	kblive "github.com/SgtFlame/foundation/backend/features/kb/live"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/collabhandlers"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/kbhandlers"
 	"github.com/SgtFlame/foundation/backend/features/kb/rest/volumehandlers"
@@ -96,7 +98,6 @@ import (
 	kbimpl "github.com/SgtFlame/foundation/backend/features/kb/services/kbservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 	volumeimpl "github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice/impl"
-	kblive "github.com/SgtFlame/foundation/backend/features/kb/live"
 	kbtools "github.com/SgtFlame/foundation/backend/features/kb/tools"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
@@ -134,6 +135,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/retrieval/services/retrievalservice"
 	retrievalimpl "github.com/SgtFlame/foundation/backend/features/retrieval/services/retrievalservice/impl"
 	retrievalsettings "github.com/SgtFlame/foundation/backend/features/retrieval/settings"
+	retrievaltools "github.com/SgtFlame/foundation/backend/features/retrieval/tools"
 	"github.com/SgtFlame/foundation/backend/features/secrets"
 	"github.com/SgtFlame/foundation/backend/features/secrets/rest/bootstraphandlers"
 	"github.com/SgtFlame/foundation/backend/features/secrets/rest/secretshandlers"
@@ -467,6 +469,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		chronicletools.Contribute(registry, func() chronicletools.Deps { return chronicleToolDeps })
 		toolscontext.Contribute(registry)
 		toolsnodes.Contribute(registry, func() toolsnodes.Deps { return agentDeps })
+		// Run mode and votes on segments (forge 15b)
+		conversationnodes.ContributeRunMode(registry, func() toolsnodes.Deps { return agentDeps })
+		retrievaltools.Contribute(registry, func() *gorm.DB { return agentDeps.DB })
 		// The live core, server-driven UI and the Hello app; a command is
 		// also a tool, so livetools runs after every feature's commands
 		livesettings.Contribute(registry)

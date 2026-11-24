@@ -184,12 +184,22 @@ func TestCallTool(t *testing.T) {
 	}
 }
 
-// An agent run numbers its passages across calls, as a chat round does.
-func TestAgentCitesInOrder(t *testing.T) {
-	cite := citeInOrder()
-	first := cite([]retrieval.Scored{{Segment: retrieval.Segment{SourceID: "library", Title: "a"}}, {Segment: retrieval.Segment{Title: "b"}}})
-	second := cite([]retrieval.Scored{{Segment: retrieval.Segment{Title: "c"}}})
-	if first[0].Number != 1 || first[1].Number != 2 || second[0].Number != 3 {
-		t.Fatalf("numbers: %d %d %d", first[0].Number, first[1].Number, second[0].Number)
+// An agent run numbers its passages across calls as a chat round does
+// (forge 15b): a passage found again keeps its first number.
+func TestTheSharedCiterKeepsFirstNumbers(t *testing.T) {
+	p := &tools.Passages{}
+	seg := func(source, key string) retrieval.Scored {
+		return retrieval.Scored{Segment: retrieval.Segment{SourceID: source, Key: key, Title: key}}
+	}
+	first := p.Cite([]retrieval.Scored{seg("library", "a"), seg("library", "b"), seg("library", "a")})
+	second := p.Cite([]retrieval.Scored{seg("chronicle", "a"), seg("library", "b"), seg("library", "c")})
+	if first[0].Number != 1 || first[1].Number != 2 || first[2].Number != 1 {
+		t.Fatalf("first call: %d %d %d", first[0].Number, first[1].Number, first[2].Number)
+	}
+	if second[0].Number != 3 || second[1].Number != 2 || second[2].Number != 4 {
+		t.Fatalf("second call: %d %d %d", second[0].Number, second[1].Number, second[2].Number)
+	}
+	if all := p.All(); len(all) != 4 {
+		t.Fatalf("kept %d passages, want 4", len(all))
 	}
 }

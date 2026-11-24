@@ -194,6 +194,17 @@ func (r *run) exec(id string, node cognition.Node) *cognition.Exec {
 		Setting: func(section, path string) (any, error) {
 			return r.engine.setting(r.args.ServiceArgs, section, path)
 		},
+		Start: func(s cognition.Start) (cognition.Values, error) {
+			return r.engine.start(r, s)
+		},
+		Signature: func(graphID string) (in, out []cognition.Pin, ok bool) {
+			g, found := r.engine.Graph(r.args.ServiceArgs, graphID)
+			if !found {
+				return nil, nil, false
+			}
+			in, out = cognition.SignatureOf(g, r.engine.NodeTypes())
+			return in, out, true
+		},
 	}
 	return x
 }

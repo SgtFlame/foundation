@@ -16,6 +16,7 @@ import {
   IconButton,
   InputAdornment,
   MenuItem,
+  Slider,
   Stack,
   Switch,
   TextField,
@@ -181,6 +182,8 @@ function LeafInput({ schema, path, value, ctx }: FieldProps) {
       )
     case 'number':
     case 'integer':
+      if (schema.widget === 'slider' && schema.min !== undefined && schema.max !== undefined)
+        return <SliderInput schema={schema} label={label} value={value} set={set} disabled={disabled} helperText={helperText} error={!!error} />
       return (
         <TextField
           size="small"
@@ -212,6 +215,68 @@ function LeafInput({ schema, path, value, ctx }: FieldProps) {
         />
       )
   }
+}
+
+// A dial (forge 15b: the retrieval dials of a model call): a slider with a
+// mark per step, or at both ends when there are many. Unset, it shows
+// where it would start greyed and says it is inherited; Clear unsets it.
+function SliderInput({ schema, label, value, set, disabled, helperText, error }: {
+  schema: Schema
+  label?: string
+  value: unknown
+  set: (v: unknown) => void
+  disabled: boolean
+  helperText?: string
+  error: boolean
+}) {
+  const min = schema.min ?? 0
+  const max = schema.max ?? 10
+  const step = schema.step ?? (schema.type === 'integer' ? 1 : (max - min) / 20)
+  const isSet = typeof value === 'number'
+  const steps = Math.round((max - min) / step)
+  const marks =
+    steps <= 20
+      ? Array.from({ length: steps + 1 }, (_, i) => {
+          const v = min + i * step
+          return { value: v, label: i === 0 || i === steps || (min < 0 && v === 0) ? String(v) : undefined }
+        })
+      : [
+          { value: min, label: String(min) },
+          { value: max, label: String(max) },
+        ]
+  return (
+    <Box>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <Typography variant="body2" sx={{ flex: 1 }}>
+          {label}
+        </Typography>
+        <Typography variant="caption" color={isSet ? 'text.primary' : 'text.secondary'}>
+          {isSet ? String(value) : 'Inherited'}
+        </Typography>
+        {isSet && !disabled && (
+          <Button size="small" onClick={() => set(undefined)}>
+            Clear
+          </Button>
+        )}
+      </Stack>
+      <Box sx={{ px: 1 }}>
+        <Slider
+          size="small"
+          aria-label={label}
+          min={min}
+          max={max}
+          step={step}
+          marks={marks}
+          value={isSet ? (value as number) : min < 0 ? 0 : min}
+          onChange={(_, v) => set(Array.isArray(v) ? v[0] : v)}
+          disabled={disabled}
+          valueLabelDisplay="auto"
+          sx={isSet ? undefined : { opacity: 0.5 }}
+        />
+      </Box>
+      {helperText && <FormHelperText error={error}>{helperText}</FormHelperText>}
+    </Box>
+  )
 }
 
 // A secret is never shown: the field says whether one is set and takes a

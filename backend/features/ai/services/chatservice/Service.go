@@ -67,13 +67,19 @@ type CompleteArgs struct {
 	// Level is an ai.chat.levels ID; its model and generation settings are
 	// the defaults for the fields below. Without a level, the provider's
 	// default model is used.
-	Level       string
-	Model       string // optional; the level's model, else the provider's default
+	Level string
+	Model string // optional; the level's model, else the provider's default
+	// ModelRef is an ai.models ID (forge 15b: a model node's model), used in
+	// place of the level's model; Model wins over it
+	ModelRef    string
 	System      string // system instructions, kept apart from Messages
 	Messages    []Message
 	Temperature *float32
 	MaxTokens   *int
-	JSONSchema  json.RawMessage // optional; asks for a JSON reply matching this schema
+	// ThinkingBudget caps thinking tokens (forge 15b): -1 lets the model
+	// decide, 0 turns thinking off where the model allows; nil keeps the level's
+	ThinkingBudget *int
+	JSONSchema     json.RawMessage // optional; asks for a JSON reply matching this schema
 	// Tools the model may call (documentation/Tools.md); its calls come
 	// back in the response's Message.ToolCalls, and tools.Loop runs them.
 	Tools      []ToolSpec

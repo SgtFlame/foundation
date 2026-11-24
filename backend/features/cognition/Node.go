@@ -258,6 +258,23 @@ type ExecHooks struct {
 	// principal sees it ("builder", "maxSteps"); an empty path is the
 	// whole section (forge 06i).
 	Setting func(section, path string) (any, error)
+	// Start runs another graph from an event with a host of its own (forge
+	// 15b: Run mode runs a chat mode's graph), on the context and as the
+	// principal its ServiceArgs carry, counted in the call depth.
+	Start func(s Start) (Values, error)
+	// Signature is a graph's inputs and outputs as the run's tenant runs
+	// it (forge 15b: Call graph's override); false when there is none.
+	Signature func(graphID string) (in, out []Pin, ok bool)
+}
+
+// Start is a run Exec.Start begins.
+type Start struct {
+	features.ServiceArgs
+	GraphID string
+	Event   string // the event node type it starts from
+	Inputs  Values // the event's outputs
+	Host    any    // what its nodes act on
+	Trigger string // what started it, for its trace; the parent run when empty
 }
 
 // NewExec is the Exec of a node in run runID; the engine makes them.
@@ -303,6 +320,22 @@ func (x *Exec) CallAs(graphID string, inputs Values, as features.Principal) (Val
 		return nil, fmt.Errorf("%s needs the engine to call graph %s", x.Node.ID, graphID)
 	}
 	return x.Hooks.CallAs(graphID, inputs, as)
+}
+
+// Start runs a graph from an event with its own host (see ExecHooks.Start).
+func (x *Exec) Start(s Start) (Values, error) {
+	if x.Hooks.Start == nil {
+		return nil, fmt.Errorf("%s needs the engine to run graph %s", x.Node.ID, s.GraphID)
+	}
+	return x.Hooks.Start(s)
+}
+
+// Signature is a graph's inputs and outputs (see ExecHooks.Signature).
+func (x *Exec) Signature(graphID string) (in, out []Pin, ok bool) {
+	if x.Hooks.Signature == nil {
+		return nil, nil, false
+	}
+	return x.Hooks.Signature(graphID)
 }
 
 // Setting reads a configuration setting (see ExecHooks.Setting).

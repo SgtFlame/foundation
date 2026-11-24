@@ -261,3 +261,7 @@ Agents search Volumes and memory ([ContextRetrieval.md › Changed in forge 15a]
 - **`features.Principal.MemoryOf`**: the person whose Chronicle memory an agent's run may search. It grants nothing else. `PrincipalRef` carries it as `memoryOf`, so work an agent enqueues keeps it. **Set only by *Call graph*'s `memoryOf`** input with `As agent`, checked by **`authz.MayRemember(caller, user)`**: a person may name only themselves, an agent's run only its own (never widened), and an app or the service any person (a host naming its subject's owner). `authz.AsAgent` copies an agent caller's `MemoryOf` with its reach.
 - ***Current user*** also gives **`memoryOf`** (an agent run's, as text; empty otherwise) and **`owner`** (whether the user is the tenant's Owner, as row rules' `principal.owner`), so a command graph can keep a setting to Owners (Forge's Mail: a shared account's primary owner).
 - Tests: `authz` `TestAgentRetrievalAccess`, `TestMemoryOfNeverWidens`; `cognition/drafts` (Call graph's pins).
+
+## Changed in forge 15b
+- ***May*** (`authz.can`, `authznodes`): whether the run's principal holds an action on a resource (the tenant by default), as `authz.Check` decides. For a page to show a control only to those who may use it (Forge's agent editor's *Customize*, which needs `cognition.write` and `cognition.publish`); every command is still checked.
+- **`retrieval.vote`** (class write, `Apps`): voting on segments, which a host app's trigger does for a reviewer's outcome ([Tools.md › Changed in forge 15b](Tools.md#changed-in-forge-15b)).

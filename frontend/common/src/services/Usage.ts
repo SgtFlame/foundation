@@ -15,6 +15,7 @@ export interface UsageRecord {
   provider: string
   model: string
   level?: string
+  temperature?: number
   conversationId?: string
   roundId?: string
   fileId?: string

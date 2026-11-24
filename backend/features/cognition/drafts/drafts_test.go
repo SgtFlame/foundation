@@ -182,7 +182,7 @@ func TestAnEditableBuiltInBecomesTheTenantsDraft(t *testing.T) {
 	f.ok("bp.addNode", "caller", map[string]any{"type": "flow.callGraph", "id": "call", "config": map[string]any{"graph": "echo"}})
 	v = f.view("caller")
 	pins := v.Pins["call"]
-	if len(pins.In) != 5 || pins.In[1].ID != "text" || pins.In[2].ID != "asAgent" || pins.In[3].ID != "reach" || pins.In[4].ID != "memoryOf" || len(pins.Out) != 2 || pins.Out[1].ID != "out" {
+	if len(pins.In) != 6 || pins.In[1].ID != "text" || pins.In[2].ID != "graphOverride" || pins.In[3].ID != "asAgent" || pins.In[4].ID != "reach" || pins.In[5].ID != "memoryOf" || len(pins.Out) != 2 || pins.Out[1].ID != "out" {
 		t.Errorf("Call graph's pins = %+v", pins)
 	}
 

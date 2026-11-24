@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/SgtFlame/foundation/backend/features/records"
 	"slices"
+	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
@@ -263,6 +264,7 @@ func node(reg *extensions.Registry, order int, t cognition.NodeType) {
 // configExamples are the configs of the examples of the effect nodes
 // whose configs need values (cognition.NodeType.Examples).
 var configExamples = map[string]string{
+	"ui.openLink":   `{"link":"workbench:graph/agents-agent"}`,
 	"ui.openEditor": `{"kind":"task"}`,
 	"ui.confirm":    `{"message":"Reset the counter?","handler":"hello-onResetConfirmed"}`,
 	"ui.share":      `{"entity":"account"}`,
@@ -575,6 +577,21 @@ func Contribute(reg *extensions.Registry) {
 				params = map[string]string{"id": id}
 			}
 			h.OpenEditor(c.Kind, id, str(in, "name", id), c.HelpText, params)
+			return nil
+		})
+	effect(312, "ui.openLink", "Open link", "Opens a workbench: link in the browser through its subject openers (forge 15b), as a click on one in a chat reply does: workbench:graph/<id> opens a graph in the Blueprint Editor, workbench:file/<volumeId>/<path>?lines=3-9 a Volume file at its lines, workbench:chronicle/<id> a Chronicle entry. A link the browser cannot open shows why", "Open link workbench:graph/agent-42 after customizing an agent's blueprint",
+		`{"type":"object","properties":{"link":{"type":"string","title":"Link","description":"A workbench: link; used when the input is unconnected"}}}`,
+		[]cognition.Pin{{ID: "link", Name: "Link", Type: "string", Optional: true, Description: "The link, workbench:<type>/<id>?<where>; the config's when unconnected"}},
+		func(h Host, x *cognition.Exec, in cognition.Values) error {
+			var c struct{ Link string }
+			if err := x.Config(&c); err != nil {
+				return err
+			}
+			link := str(in, "link", c.Link)
+			if !strings.HasPrefix(link, "workbench:") {
+				return fmt.Errorf("%q is not a workbench: link", link)
+			}
+			h.Do(ui.Action{Type: "openLink", URL: link})
 			return nil
 		})
 	effect(315, "ui.navigate", "Navigate", "Goes to a route of the app: in its own tab, the page at that route replaces the current one, and Back returns to it; elsewhere the app's tab opens there", "Navigate to /task/ with the row's id appended",

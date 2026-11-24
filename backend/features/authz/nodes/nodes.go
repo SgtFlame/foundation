@@ -2,7 +2,7 @@
 // Grant role and Revoke role give an agent (or, forge 07o, a user) a role
 // on a resource (often one record), as the run's principal, who needs the
 // right to grant it; Has role tells whether the run's principal holds an
-// app role on a record.
+// app role on a record; May tells whether it holds an action (forge 15b).
 package authznodes
 
 import (
@@ -26,6 +26,8 @@ const (
 	GrantID   = "authz.grantRole"
 	RevokeID  = "authz.revokeRole"
 	HasRoleID = "authz.hasRole"
+	// CanID tells whether the run's principal holds an action (forge 15b)
+	CanID = "authz.can"
 )
 
 var kinds = []string{livenodes.KindAction, livenodes.KindTrigger, uinodes.KindHandler, cognition.KindFunction, cognition.KindAgent}
@@ -42,6 +44,30 @@ var inPins = []cognition.Pin{
 
 // Contribute registers the nodes.
 func Contribute(reg *extensions.Registry) {
+	cognition.Nodes.Register(reg, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: CanID, Source: source, Order: 975}, Title: "May", Category: "Access",
+		Description: "Whether the run's principal holds an action on a resource (the tenant when none is given), as authz.Check decides it (forge 15b): for a page to show a control only to those who may use it, such as the agent editor's Customize, which needs cognition.write and cognition.publish. The server still checks every command; this only decides what to show.",
+		Example:     "May cognition.publish, into Set state mayCustomize on mount",
+		Tags:        []string{"rbac", "permission", "access", "can"},
+		Pins: cognition.Pins{
+			In: []cognition.Pin{
+				cognition.DataPin("action", "Action", "string", "The action, <type>.<action>, e.g. cognition.publish"),
+				{ID: "resource", Name: "Resource", Type: "string", Optional: true, Description: "A resource path, e.g. tenant:1/app:mail; the tenant when empty"},
+			},
+			Out: []cognition.Pin{cognition.DataPin("allowed", "Allowed", "bool", "Whether the principal holds it")},
+		},
+		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
+			action, _ := cognition.Get[string](in, "action")
+			resource, _ := cognition.Get[string](in, "resource")
+			if strings.TrimSpace(resource) == "" {
+				resource = authz.Tenant(x.Principal)
+			}
+			if strings.TrimSpace(action) == "" {
+				return cognition.Values{"allowed": false}, "", nil
+			}
+			return cognition.Values{"allowed": authz.Check(x.Context(), x.Principal, action, resource).Err(action, resource) == nil}, "", nil
+		},
+	})
 	cognition.Nodes.Register(reg, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: GrantID, Source: source, Order: 960}, Title: "Grant role", Category: "Access",
 		Description: "Gives an agent, or a user, a role on one record (or another resource), as the run's principal, who needs grant.write there and every permission of the role: no one holds more than their granter could give. An app's own principal (its triggers and jobs) may grant the app's own roles on the app's own records. Granting it again changes nothing. Leaves by Failed with the reason when refused.",

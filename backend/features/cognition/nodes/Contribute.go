@@ -16,7 +16,10 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	"github.com/SgtFlame/foundation/backend/features/logging"
 )
+
+var log = logging.In("cognition")
 
 const source = "cognition"
 
@@ -27,15 +30,19 @@ const (
 	AsAgentPin = "asAgent"
 	// ReachPin is Call graph's input confining an agent's run to subjects
 	// (forge 7p-3), used only with As agent.
-	ReachPin    = "reach"
+	ReachPin = "reach"
 	// MemoryOfPin is Call graph's input naming the person whose Chronicle
 	// memory an agent's run may search (forge 15a), used only with As agent.
 	MemoryOfPin = "memoryOf"
-	GetVariable = "data.getVariable"
-	SetVariable = "data.setVariable"
-	Reroute     = "flow.reroute"
-	Comment     = "note.comment"
-	Wait        = "flow.wait"
+	// GraphOverridePin is Call graph's input naming a graph to run in place
+	// of its config's, with the same signature (forge 15b: an agent's own
+	// blueprint).
+	GraphOverridePin = "graphOverride"
+	GetVariable      = "data.getVariable"
+	SetVariable      = "data.setVariable"
+	Reroute          = "flow.reroute"
+	Comment          = "note.comment"
+	Wait             = "flow.wait"
 )
 
 // MaxWait is the longest a Wait node pauses (forge 07i).
@@ -312,7 +319,7 @@ func contributeFlow(reg *extensions.Registry) {
 		Descriptor:  extensions.Descriptor{ID: CallGraph},
 		Title:       "Call graph",
 		Category:    "Flow",
-		Description: "Runs another graph from its On call event with these inputs, and gives its outputs. Its pins follow the called graph's signature as it was when the node was set. As agent runs it as an agent, held to the agent's own roles. With Catch failures, a failed call leaves by Failed with the error instead of failing the run.",
+		Description: "Runs another graph from its On call event with these inputs, and gives its outputs. Its pins follow the called graph's signature as it was when the node was set. Graph override runs another graph in its place, which must take at least those inputs and give at least those outputs (else it fails with graph_signature). As agent runs it as an agent, held to the agent's own roles. With Catch failures, a failed call leaves by Failed with the error instead of failing the run.",
 		Example:     "Call graph Format greeting with Name, then Set state greeting to its Text",
 		Config: json.RawMessage(`{"type":"object","properties":{"graph":{"type":"string","title":"Graph","description":"The id of the graph to call"},
 			"catch":{"type":"boolean","title":"Catch failures","description":"Leave by Failed, with the error, when the called graph fails (forge 7m), instead of failing this run"},
@@ -329,8 +336,10 @@ func contributeFlow(reg *extensions.Registry) {
 			for i := 1; i < len(in); i++ {
 				in[i].Exec = false
 			}
-			in = append(in, cognition.Pin{ID: AsAgentPin, Name: "As agent", Type: "string", Optional: true,
-				Description: "An agent's id to run the graph as (forge 07j); the run's principal must have made the agent or hold agent.use on it"},
+			in = append(in, cognition.Pin{ID: GraphOverridePin, Name: "Graph override", Type: "string", Optional: true,
+				Description: "A graph id to run in place of the configured graph (forge 15b: an agent's own blueprint); it must take at least the configured graph's inputs and give at least its outputs, else the call fails with graph_signature. Empty runs the configured graph"},
+				cognition.Pin{ID: AsAgentPin, Name: "As agent", Type: "string", Optional: true,
+					Description: "An agent's id to run the graph as (forge 07j); the run's principal must have made the agent or hold agent.use on it"},
 				cognition.Pin{ID: ReachPin, Name: "Reach", Type: "json", Optional: true,
 					Description: "With As agent: what the agent's run is about, the subjects {entity, id} (one, or a list) its host's tools confine its writes to (forge 7p-3); Current user gives it as reach. An agent's own reach is kept, never widened"},
 				cognition.Pin{ID: MemoryOfPin, Name: "Memory of", Type: "string", Optional: true,
@@ -369,6 +378,13 @@ func contributeFlow(reg *extensions.Registry) {
 			if c.Graph == "" {
 				return nil, "", fmt.Errorf("Call graph names no graph")
 			}
+			if o, _ := in[GraphOverridePin].(string); strings.TrimSpace(o) != "" && strings.TrimSpace(o) != c.Graph {
+				if err := fits(x, c, strings.TrimSpace(o)); err != nil {
+					return caught(c, nil, err)
+				}
+				c.Graph = strings.TrimSpace(o)
+			}
+			delete(in, GraphOverridePin)
 			if s, _ := in[AsAgentPin].(string); s != "" {
 				id, ok := authz.ParseAgent(s)
 				if !ok {
@@ -437,6 +453,43 @@ func contributeFlow(reg *extensions.Registry) {
 			return nil, "", nil
 		},
 	})
+}
+
+// fits checks that graph id takes at least the inputs c's graph takes and
+// gives at least its outputs, with assignable types.
+func fits(x *cognition.Exec, c callConfig, id string) error {
+	in, out, ok := x.Signature(id)
+	if !ok {
+		return log.Code("graph_not_found").With("graphId", id).Errorf("there is no graph %q to run in place of %s", id, c.Graph)
+	}
+	want := c.Inputs
+	wantOut := c.Outputs
+	if wi, wo, ok := x.Signature(c.Graph); ok {
+		want, wantOut = wi, wo
+	}
+	has := func(list []cognition.Pin, p cognition.Pin) bool {
+		for _, q := range list {
+			if q.ID == p.ID && (cognition.Assignable(p.Type, q.Type) || cognition.Assignable(q.Type, p.Type)) {
+				return true
+			}
+		}
+		return false
+	}
+	var missing []string
+	for _, p := range want {
+		if !has(in, p) {
+			missing = append(missing, "input "+p.ID)
+		}
+	}
+	for _, p := range wantOut {
+		if !has(out, p) {
+			missing = append(missing, "output "+p.ID)
+		}
+	}
+	if len(missing) > 0 {
+		return log.Code("graph_signature").With("graphId", id, "configured", c.Graph).Errorf("graph %s cannot run in place of %s: it lacks %s", id, c.Graph, strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 type callConfig struct {

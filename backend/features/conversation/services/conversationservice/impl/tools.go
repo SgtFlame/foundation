@@ -161,15 +161,17 @@ type citer struct {
 func (c *citer) cite(segments []retrieval.Scored) []retrieval.Scored {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	var added []retrieval.RoundSegment
-	for i, seg := range segments {
-		at := slices.IndexFunc(c.r.segments, func(rs retrieval.RoundSegment) bool { return rs.SourceID == seg.SourceID && rs.SegmentKey == seg.Key })
-		if at >= 0 {
-			segments[i].Number = c.r.segments[at].Number
-			continue
+	numbered, cited := tools.Cite(func(source, key string) (int, bool) {
+		at := slices.IndexFunc(c.r.segments, func(rs retrieval.RoundSegment) bool { return rs.SourceID == source && rs.SegmentKey == key })
+		if at < 0 {
+			return 0, false
 		}
-		segments[i].Number = len(c.r.segments) + len(added) + 1
-		added = append(added, retrieval.RoundSegmentFrom(c.r.round.ID, c.r.round.Tenanted, segments[i]))
+		return c.r.segments[at].Number, true
+	}, len(c.r.segments), segments)
+	segments = numbered
+	added := make([]retrieval.RoundSegment, len(cited))
+	for i, seg := range cited {
+		added[i] = retrieval.RoundSegmentFrom(c.r.round.ID, c.r.round.Tenanted, seg)
 	}
 	if len(added) == 0 {
 		return segments

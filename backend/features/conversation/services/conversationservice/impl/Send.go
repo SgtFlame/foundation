@@ -40,7 +40,7 @@ type round struct {
 	levels       aisettings.Levels
 	level        aisettings.Level
 	model        aisettings.Model
-	models       aisettings.Models // the catalog, for a reply at another level
+	models       aisettings.Models          // the catalog, for a reply at another level
 	history      []conversation.Round       // the window: the rounds sent as history, oldest first
 	settings     map[string]json.RawMessage // the context settings, by provider ID
 	segments     []retrieval.RoundSegment   // what the round injected, once stored

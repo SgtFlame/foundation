@@ -15,6 +15,7 @@ import { useQuery } from '../live/useQuery.ts'
 import { log } from '../logging/index.ts'
 import type { EditorProps } from '../workbench/points.ts'
 import { useWorkbenchSubject } from '../workbench/context/WorkbenchContext.ts'
+import { openWorkbenchLink } from '../workbench/links.ts'
 import { AppEditorObject, parseKind } from './AppEditorObject.ts'
 import { onNavigateRequest, openAppAt } from './editorKinds.ts'
 import type { UiAction, UiNode } from './types.ts'
@@ -96,6 +97,13 @@ function AppHost({ object, registry, tabId, page }: AppHostProps) {
           case 'openEditor':
             if (a.kind && a.id) registry.edit(new AppEditorObject({ kind: a.kind, id: a.id, name: a.name, helpText: a.helpText, params: a.params }))
             break
+          case 'openLink':
+            // A workbench: link, through the subject openers (forge 15b)
+            if (a.url)
+              void openWorkbenchLink(registry, a.url).then((opened) => {
+                if (!opened) setToast({ message: `Nothing here opens ${a.url}`, severity: 'warning', key: Date.now() })
+              })
+            break
           case 'rename':
             if (a.name) registry.rename(tabId, a.name)
             break
@@ -171,8 +179,8 @@ function AppHost({ object, registry, tabId, page }: AppHostProps) {
   const { data: present } = useQuery<PresentUser[]>(joined ? 'live.presence' : undefined, { object: subjectObject })
   const others = useMemo(() => (joined ? (present ?? []).filter((u) => u.connection !== presence.me) : presence.others), [joined, present, presence.me, presence.others])
   const host: UiHost = useMemo(
-    () => ({ others, setPresence: (s) => setPresenceState((old) => (JSON.stringify({ ...old, ...s }) === JSON.stringify(old) ? old : { ...old, ...s })) }),
-    [others],
+    () => ({ others, registry, setPresence: (s) => setPresenceState((old) => (JSON.stringify({ ...old, ...s }) === JSON.stringify(old) ? old : { ...old, ...s })) }),
+    [others, registry],
   )
   useWorkbenchSubject(tabId, state.subject)
 

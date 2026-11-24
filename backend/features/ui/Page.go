@@ -197,7 +197,9 @@ type Commander interface {
 
 // Action is a client action: an effect only the browser can perform.
 type Action struct {
-	Type     string `json:"type"` // toast, navigate, openEditor, focus, download, copy, confirm, rename, dryRun, share
+	Type string `json:"type"` // toast, navigate, openEditor, openLink, focus, download, copy, confirm, rename, dryRun, share
+	// openLink: a workbench:<type>/<id>?<where> link in URL, opened by the
+	// browser's subject openers (forge 15b)
 	Message  string `json:"message,omitempty"`
 	Severity string `json:"severity,omitempty"` // toast: success, info, warning, error
 	// openEditor

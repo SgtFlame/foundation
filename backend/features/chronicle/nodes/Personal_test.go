@@ -278,3 +278,89 @@ func TestPersonalWithMemoryOff(t *testing.T) {
 		t.Errorf("reply args %+v", h.replied)
 	}
 }
+
+// Forge 15b: Run mode runs Personal inside a function graph on a headless
+// host: it gives the reply and the passages it numbered, stores no round
+// and changes no memory entry.
+func TestRunModeRunsPersonalHeadless(t *testing.T) {
+	f := newFixture(t)
+	gdb := f.steps.DB
+	if err := db.Migrate(gdb, tools.Models()...); err != nil {
+		t.Fatal(err)
+	}
+	f.chat.replies["run-mode"] = "Ada and Byron built the Engine [1]."
+	cfg := sections{
+		"chat":              `{"systemPrompt": "Be kind.", "titleLevel": "fast"}`,
+		"chat.modes":        `{"modes": [{"id": "personal", "label": "Personal", "graphRef": "personal", "default": true}]}`,
+		aisettings.LevelsID: `{"levels": [{"id": "fast"}, {"id": "standard", "default": true}]}`,
+		aisettings.ModelsID: `{"models": []}`,
+	}
+	reg := extensions.NewRegistry()
+	cognitionnodes.Contribute(reg)
+	conversationnodes.Contribute(reg)
+	deps := func() toolsnodes.Deps { return toolsnodes.Deps{Chat: f.chat, Registry: reg, Config: cfg, DB: gdb} }
+	toolsnodes.Contribute(reg, deps)
+	conversationnodes.ContributeRunMode(reg, deps)
+	Contribute(reg, func() Deps { return Deps{Steps: f.steps} })
+	e := engine.New(gdb, reg, cfg)
+
+	g := cognition.Graph{ID: "ask", Kind: cognition.KindFunction,
+		Nodes: []cognition.Node{
+			{ID: "on", Type: cognition.EventCall, Config: json.RawMessage(`{"outputs": [{"id": "message", "type": "string", "description": "what to ask"}]}`)},
+			{ID: "mode", Type: conversationnodes.RunModeID, Config: json.RawMessage(`{"mode": "personal", "temperature": 0.2}`)},
+			{ID: "ret", Type: "flow.return", Config: json.RawMessage(`{"outputs": [{"id": "reply", "type": "string", "description": "r"}, {"id": "segments", "type": "RoundSegment[]", "description": "s"}]}`)},
+		},
+		Edges: []cognition.Edge{
+			{From: cognition.PinRef{Node: "on", Pin: "then"}, To: cognition.PinRef{Node: "mode", Pin: "then"}},
+			{From: cognition.PinRef{Node: "on", Pin: "message"}, To: cognition.PinRef{Node: "mode", Pin: "message"}},
+			{From: cognition.PinRef{Node: "mode", Pin: "then"}, To: cognition.PinRef{Node: "ret", Pin: "then"}},
+			{From: cognition.PinRef{Node: "mode", Pin: "reply"}, To: cognition.PinRef{Node: "ret", Pin: "reply"}},
+			{From: cognition.PinRef{Node: "mode", Pin: "segments"}, To: cognition.PinRef{Node: "ret", Pin: "segments"}},
+		},
+	}
+	if res := e.Resolve(g); res.Errors() {
+		t.Fatalf("the graph has problems: %+v", res.Problems)
+	}
+	before := map[uint64]string{}
+	for _, entry := range f.entries {
+		before[entry.ID] = entry.FullSummary
+	}
+	res, err := e.Run(engine.RunArgs{ServiceArgs: f.args(), Graph: &g, Event: cognition.EventCall, Inputs: cognition.Values{"message": "Who built the Engine?"}})
+	if err != nil {
+		t.Fatalf("the run failed on %s: %v", res.FailedNode, err)
+	}
+	if res.Outputs["reply"] != "Ada and Byron built the Engine [1]." {
+		t.Fatalf("reply = %v", res.Outputs["reply"])
+	}
+	segments, _ := res.Outputs["segments"].([]retrieval.RoundSegment)
+	if len(segments) == 0 || segments[0].Number != 1 || segments[0].SourceID != chroniclesteps.SourceID {
+		t.Fatalf("segments = %+v", res.Outputs["segments"])
+	}
+	var reply *chatservice.CompleteArgs
+	for i, c := range f.chat.got {
+		if c.Meta.Feature == "chronicle-memory" {
+			t.Errorf("the memory update asked the model: %+v", c.Meta)
+		}
+		if c.Meta.Feature == "run-mode" {
+			reply = &f.chat.got[i]
+		}
+	}
+	if reply == nil || reply.Temperature == nil || *reply.Temperature != float32(0.2) {
+		t.Fatalf("the reply did not take Run mode's temperature: %+v", reply)
+	}
+	var rounds int64
+	gdb.Model(&conversation.Round{}).Count(&rounds)
+	if rounds != 0 {
+		t.Errorf("%d rounds were stored", rounds)
+	}
+	var after []chronicle.Entry
+	gdb.Find(&after)
+	for _, entry := range after {
+		if before[entry.ID] != entry.FullSummary || entry.Status != chronicle.StatusActive {
+			t.Errorf("entry %s changed: %+v", entry.Title, entry)
+		}
+	}
+	if len(after) != len(before) {
+		t.Errorf("%d entries, want %d: Run mode proposed some", len(after), len(before))
+	}
+}
