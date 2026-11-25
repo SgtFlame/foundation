@@ -720,6 +720,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			conversationimpl.WithDB(gdb), conversationimpl.WithChat(chatService), conversationimpl.WithConfig(configService), conversationimpl.WithRegistry(registry),
 			conversationimpl.WithEngine(cognitionEngine),
 			conversationimpl.WithActivity(activitycontext.Reader(func() activity.Deps { return activityDeps })),
+			conversationimpl.WithWorkspaces(workspace.KnowledgeReader(func() workspace.Deps { return workspaceDeps })), // the round's workspace (forge 16c)
 		)
 
 		retrievalService = retrievalimpl.CreateService(

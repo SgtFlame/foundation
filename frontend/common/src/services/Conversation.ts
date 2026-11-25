@@ -206,6 +206,7 @@ export interface SendRequest {
   offered?: string[] // the chat.modes ids offered here, which the pre-mode chooses among (forge 15f)
   modeChosen?: boolean // the person chose mode for this message: no pre-mode
   undoes?: string // a round this message runs again, which leaves the history (Undo of a switch)
+  workspace?: string // the tab's workspace (forge 16c): its active Volumes and entries; the caller's Default when omitted
 }
 
 // Answers a waiting tool call: approval for an awaiting one, result or

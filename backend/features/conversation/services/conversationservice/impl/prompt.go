@@ -51,13 +51,37 @@ func (s *service) gather(args conversationservice.SendArgs, r *round, named []st
 // settingsOf is a provider's settings for the conversation, else its
 // defaults section, else the defaults it declared.
 func (s *service) settingsOf(args conversationservice.SendArgs, r *round, id string, defaults json.RawMessage) json.RawMessage {
-	if v, ok := r.settings[id]; ok {
-		return v
+	v, ok := r.settings[id]
+	if !ok {
+		if d, err := s.config.Resolved(args.ServiceArgs, conversation.DefaultsSection(id)); err == nil {
+			v = d
+		} else {
+			v = defaults
+		}
 	}
-	if v, err := s.config.Resolved(args.ServiceArgs, conversation.DefaultsSection(id)); err == nil {
-		return v
+	if id == conversation.ChronicleID && r.workspace != nil {
+		v = withChecked(v, r.workspace.CheckedEntries)
 	}
-	return defaults
+	return v
+}
+
+// withChecked is Chronicle settings whose checked entries are the
+// workspace's (forge 16c): a conversation's own checks are ignored.
+func withChecked(settings json.RawMessage, checked []string) json.RawMessage {
+	m := map[string]json.RawMessage{}
+	if len(settings) > 0 {
+		_ = json.Unmarshal(settings, &m)
+	}
+	if m == nil {
+		m = map[string]json.RawMessage{}
+	}
+	delete(m, "checked")
+	if len(checked) > 0 {
+		raw, _ := json.Marshal(checked)
+		m["checked"] = raw
+	}
+	out, _ := json.Marshal(m)
+	return out
 }
 
 // enabled is a provider's "enabled" setting; it is on unless set to false.

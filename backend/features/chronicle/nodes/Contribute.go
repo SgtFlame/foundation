@@ -77,7 +77,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Pins: cognition.Pins{
 			In: []cognition.Pin{cognition.DataPin("settings", "Settings", "json", "The chronicle context settings")},
 			Out: []cognition.Pin{
-				cognition.DataPin("checked", "Checked", TypeEntryRefs, "The entries checked in the Chronicles view"),
+				cognition.DataPin("checked", "Checked", TypeEntryRefs, "The entries checked in the workspace (the Context view)"),
 				cognition.DataPin("topK", "Entries", "number", "How many entries stage 1 may choose, besides the checked ones"),
 				cognition.DataPin("retrieve", "Retrieve", "number", "How many entries retrieval adds to the candidates"),
 				cognition.DataPin("match", "Match", "bool", "Whether stage 1 runs"),
@@ -112,7 +112,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				cognition.ExecPin(cognition.Then, ""),
 				cognition.DataPin("text", "Text", "string", "The user's message"),
 				cognition.DataPin("window", "Window", conversationnodes.TypeRounds, "The rounds sent as history"),
-				cognition.DataPin("checked", "Checked", TypeEntryRefs, "The entries checked in the Chronicles view, always kept"),
+				cognition.DataPin("checked", "Checked", TypeEntryRefs, "The entries checked in the workspace (the Context view), always kept"),
 				cognition.DataPin("retrieve", "Retrieve", "number", "How many entries retrieval adds at most; 0 adds none"),
 			},
 			Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("candidates", "Candidates", TypeCandidates, "The checked entries and the others stage 1 may choose from")},
@@ -358,9 +358,9 @@ type Settings struct {
 	TopK    int   `json:"topK"`   // entries chosen at most, besides the checked ones
 	Match   *bool `json:"match"`  // stage 1; off keeps retrieval's order
 	Update  *bool `json:"update"` // the memory update after each reply
-	// Checked are the entries the user checked for the conversation in the
-	// Chronicles view, as IDs. Not in the schema: it is the conversation's
-	// alone, never a default.
+	// Checked are the entries checked in the workspace the round was sent
+	// from (forge 16c: Send puts them here, in place of any the
+	// conversation once kept), as IDs. Not in the schema, never a default.
 	Checked []string `json:"checked,omitempty"`
 }
 

@@ -42,6 +42,7 @@ export interface SendOptions {
   offered?: string[]
   modeChosen?: boolean
   undoes?: string
+  workspace?: string // the tab's workspace (forge 16c)
   onMode?: (mode: string) => void
 }
 
@@ -157,7 +158,7 @@ export function useChatStream() {
         await Conversations.send(
           {
             conversationId: current.conversation?.id, text, level: options.level, mode: options.mode, workbench: options.workbench, contextSettings: options.contextSettings,
-            clientTools: options.clientTools?.map(declare), offered: options.offered, modeChosen: options.modeChosen || undefined, undoes: options.undoes,
+            clientTools: options.clientTools?.map(declare), offered: options.offered, modeChosen: options.modeChosen || undefined, undoes: options.undoes, workspace: options.workspace,
           },
           {
             signal: controller.signal,

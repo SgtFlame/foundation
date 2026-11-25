@@ -1,15 +1,18 @@
 import { FormControlLabel, Slider, Stack, Switch, Typography } from '@mui/material'
 import type { ContextControlProps } from '../editors/chat/points.ts'
+import { kindChronicle } from '../workspace/context.ts'
+import { useActiveKnowledge } from '../workspace/contextStore.ts'
 
 // Chronicle memory for the conversation: whether it is used, how many
 // entries context matching may choose, whether a model call (stage 1)
-// chooses them, and whether replies update memory. The entries checked in
-// the Chronicles view are part of the same settings (checked). The server's
-// "chronicle" context provider and round follower read them.
+// chooses them, and whether replies update memory. The entries always used
+// are checked in the workspace's Context view (forge 16c), not here. The
+// server's "chronicle" context provider and round follower read them.
 function ChronicleControl({ value, onChange }: ContextControlProps) {
   const enabled = value.enabled !== false
   const topK = Number(value.topK ?? 5)
-  const checked = Array.isArray(value.checked) ? value.checked.length : 0
+  const { context } = useActiveKnowledge()
+  const checked = Object.values(context[kindChronicle] ?? {}).filter(Boolean).length
   return (
     <Stack spacing={1}>
       <FormControlLabel
@@ -31,7 +34,7 @@ function ChronicleControl({ value, onChange }: ContextControlProps) {
         label="Update memory after each reply"
       />
       <Typography variant="caption" color="text.secondary">
-        {checked > 0 ? `${checked} checked in the Chronicles view, always used. ` : 'Check entries in the Chronicles view to always use them. '}
+        {checked > 0 ? `${checked} checked in this workspace, always used. ` : 'Check entries in the Context view to always use them in this workspace. '}
         Context matching picks the others each message needs, with a fast model call; off, retrieval's ranking decides.
       </Typography>
     </Stack>

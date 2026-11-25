@@ -40,12 +40,13 @@ type round struct {
 	levels       aisettings.Levels
 	level        aisettings.Level
 	model        aisettings.Model
-	models       aisettings.Models          // the catalog, for a reply at another level
-	history      []conversation.Round       // the window: the rounds sent as history, oldest first
-	settings     map[string]json.RawMessage // the context settings, by provider ID
-	segments     []retrieval.RoundSegment   // what the round injected, once stored
-	activity     []conversation.Gesture     // the person's gestures sent with the message (forge 15d)
-	debug        bool                       // the conversation's Debug setting: log its AI calls in detail
+	models       aisettings.Models                // the catalog, for a reply at another level
+	history      []conversation.Round             // the window: the rounds sent as history, oldest first
+	settings     map[string]json.RawMessage       // the context settings, by provider ID
+	segments     []retrieval.RoundSegment         // what the round injected, once stored
+	activity     []conversation.Gesture           // the person's gestures sent with the message (forge 15d)
+	debug        bool                             // the conversation's Debug setting: log its AI calls in detail
+	workspace    *conversation.WorkspaceKnowledge // the workspace it was sent from (forge 16c); nil without one
 }
 
 // Send stores the message as a new round and runs the round's mode graph
@@ -90,6 +91,10 @@ func (s *service) start(args conversationservice.SendArgs) (*round, *features.Se
 	}
 
 	r := &round{}
+	var failedWs *features.ServiceResponse
+	if r.workspace, failedWs = s.workspaceOf(args); failedWs != nil {
+		return nil, failedWs
+	}
 	var err error
 	if r.chat, err = config.Read[conversationsettings.Chat](s.config, args.ServiceArgs, conversationsettings.ID); err != nil {
 		return nil, args.Fail(http.StatusInternalServerError, log.Wrap(err))
@@ -201,6 +206,11 @@ func (s *service) modeOf(args conversationservice.SendArgs, c conversation.Conve
 // round if the graph did not: with what it said, else its failure.
 func (s *service) run(args conversationservice.SendArgs, r *round, events chan<- conversationservice.SendEvent) {
 	defer close(events)
+	// Every retrieval the round makes, inline graphs and tools included,
+	// leaves out the Volumes its workspace unchecked (forge 16c)
+	if r.workspace != nil {
+		args.Ctx = retrieval.WithScope(args.Context(), retrieval.Scope{ExceptVolumeIDs: r.workspace.ExceptVolumeIDs})
+	}
 	r.debug = debugging(s.settingsOf(args, r, conversation.DebugID, nil))
 	h := newHost(s, args, r, events)
 	conv, started := r.conversation, r.round
@@ -333,4 +343,26 @@ func clip(s string, n int) string {
 		n--
 	}
 	return s[:n]
+}
+
+// workspaceOf reads the workspace the message was sent from (forge 16c):
+// the one named, which must be the caller's own, else their Default; a
+// Default not made yet has the defaults (every Volume, no entry checked).
+func (s *service) workspaceOf(args conversationservice.SendArgs) (*conversation.WorkspaceKnowledge, *features.ServiceResponse) {
+	if s.workspaces == nil {
+		return nil, nil
+	}
+	id := strings.TrimSpace(args.Workspace)
+	named := id != ""
+	if !named {
+		id = conversation.DefaultWorkspace
+	}
+	w, ok := s.workspaces(args.ServiceArgs, id)
+	switch {
+	case ok:
+		return &w, nil
+	case named && id != conversation.DefaultWorkspace:
+		return nil, args.Fail(http.StatusNotFound, log.Code("workspace_not_found").With("workspace", id).New("you have no such workspace"))
+	}
+	return &conversation.WorkspaceKnowledge{ID: conversation.DefaultWorkspace}, nil
 }

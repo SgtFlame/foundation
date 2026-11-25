@@ -2,6 +2,8 @@ import { useState } from 'react'
 import {
   Alert,
   Box,
+  Checkbox,
+  FormControlLabel,
   List,
   ListItemButton,
   ListItemIcon,
@@ -30,11 +32,15 @@ import type { EditorProps } from '../../workbench/points.ts'
 import { Volume } from '../../services/Volume.ts'
 import { openVolume } from '../volume/openVolume.ts'
 import type { VolumesObject } from './VolumesObject.ts'
+import { useVolumes } from '../../workspace/volumes.ts'
+import { kindVolume } from '../../workspace/context.ts'
+import { useActiveKnowledge } from '../../workspace/contextStore.ts'
 
 // Navigates the knowledge base root: open folders, make and remove folders,
 // convert a folder into a volume, and share a volume (the Share dialog, for
 // whoever may grant there). Double-clicking a volume opens it in a
-// VolumeEditor.
+// VolumeEditor. Each Volume has *Active in this workspace*, the Context
+// view's checkbox for it (forge 16c).
 function VolumesEditor({ registry, tabId }: EditorProps<VolumesObject>) {
   const [folders, setFolders] = useState<string[]>([])
   const [selected, setSelected] = useState<string>()
@@ -48,6 +54,9 @@ function VolumesEditor({ registry, tabId }: EditorProps<VolumesObject>) {
   const listing = useFolderListing(folders)
   const session = useSession()
   const can = useCan()
+  const active = useActiveKnowledge()
+  const { volumes } = useVolumes()
+  const volumeAt = (name: string) => volumes.find((v) => v.path === [...folders, name].join('/'))
 
   const navigate = (next: string[]) => {
     setFolders(next)
@@ -157,6 +166,22 @@ function VolumesEditor({ registry, tabId }: EditorProps<VolumesObject>) {
                   primary={entry.name}
                   secondary={entry.isVolume ? 'Volume' : undefined}
                 />
+                {entry.isVolume && volumeAt(entry.name) && (
+                  <FormControlLabel
+                    onClick={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={active.checked(kindVolume, volumeAt(entry.name)!.id)}
+                        disabled={!active.workspace}
+                        onChange={(_, on) => active.setChecked(kindVolume, volumeAt(entry.name)!.id, on)}
+                      />
+                    }
+                    label={<Typography variant="caption">Active in this workspace</Typography>}
+                    slotProps={{ typography: { sx: { whiteSpace: 'nowrap' } } }}
+                  />
+                )}
               </ListItemButton>
             ))}
           </List>

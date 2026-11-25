@@ -59,6 +59,14 @@ func WithActivity(read conversation.ActivityReader) Option {
 	}
 }
 
+// WithWorkspaces sets how a round reads the workspace it was sent from
+// (forge 16c); without it rounds have no workspace and search as before.
+func WithWorkspaces(read conversation.WorkspaceReader) Option {
+	return func(s *service) {
+		s.workspaces = read
+	}
+}
+
 var (
 	instance *service
 	once     sync.Once

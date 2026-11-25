@@ -41,7 +41,8 @@ type Source struct {
 
 // Filter narrows a search; the zero Filter searches everything.
 type Filter struct {
-	VolumeIDs []uint64
+	VolumeIDs       []uint64
+	ExceptVolumeIDs []uint64 // never these Volumes (forge 16c: a workspace's unchecked ones)
 }
 
 // Segment is one piece of content a source found.

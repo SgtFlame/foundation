@@ -80,7 +80,7 @@ func (s *service) Retrieve(args retrievalservice.RetrieveArgs) retrievalservice.
 	}
 
 	k := max(conf.CandidateFactor*topK, conf.MinCandidates, topK)
-	filter := retrieval.Filter{VolumeIDs: args.VolumeIDs}
+	filter := retrieval.Filter{VolumeIDs: args.VolumeIDs, ExceptVolumeIDs: args.ExceptVolumeIDs}
 	ctx := args.CallContext()
 	ranked := make([][]fuse.Ranked[retrieval.Segment], len(sources))
 	var wg sync.WaitGroup

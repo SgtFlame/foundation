@@ -74,6 +74,7 @@ func gather(args conversation.GatherArgs, service retrievalservice.Service) ([]c
 		ServiceArgs: args.ServiceArgs, Query: args.Text,
 		LexicalSemantic: clamp(s.LexicalSemantic, -5, 5), ChronicleLibrary: clamp(s.ChronicleLibrary, -5, 5), TopK: clamp(s.TopK, 0, 50),
 		ContextWindow: args.ContextWindow, Sources: sources, VolumeIDs: volumes,
+		ExceptVolumeIDs: retrieval.ScopeFrom(args.Context()).ExceptVolumeIDs, // the workspace's unchecked Volumes (forge 16c)
 	})
 	if resp.Common.Code != http.StatusOK {
 		return nil, log.Code(resp.Common.ErrorCode).Errorf("retrieval failed with %d: %s", resp.Common.Code, resp.Common.Message)

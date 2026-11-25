@@ -215,6 +215,8 @@ func searchArgs(call tools.Call, query string, count int) retrievalservice.Retri
 			out.TopK = o.TopK
 		}
 	}
+	// A workspace's unchecked Volumes are never searched (forge 16c)
+	out.ExceptVolumeIDs = retrieval.ScopeFrom(call.Context()).ExceptVolumeIDs
 	if out.TopK == 0 {
 		out.TopK = 6
 	}

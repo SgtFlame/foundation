@@ -1,6 +1,6 @@
 # Workspaces
 
-A **workspace** is a context a person switches to: the editors they have open and how they are laid out, the Volumes and Chronicle entries that are active, and the chats that belong to it. It is planned in forge's [016-Workspaces.md](../../forge/documentation/plans/016-Workspaces.md) and built in parts. Part 16a (the records and the menu) and part 16b (the editors and layout) are built. The active knowledge (16c) and the chats (16d) will store their state in these records too.
+A **workspace** is a context a person switches to: the editors they have open and how they are laid out, the Volumes and Chronicle entries that are active, and the chats that belong to it. It is planned in forge's [016-Workspaces.md](../../forge/documentation/plans/016-Workspaces.md) and built in parts. Parts 16a (the records and the menu), 16b (the editors and layout) and 16c (the active Volumes and Chronicle entries) are built. The chats (16d) will store their state in these records too.
 
 ## Built in forge 16a
 
@@ -123,3 +123,71 @@ Decided while building:
 ![Default: Data Designer and Hello side by side](../../forge/documentation/images/workspace-layout-default.png)
 ![A second window opening Support, which the first window shows](../../forge/documentation/images/workspace-windows-ask.png)
 ![A Markdown file with unsaved changes asks before a switch](../../forge/documentation/images/workspace-switch-unsaved.png)
+
+## Built in forge 16c
+
+A workspace now holds its **active knowledge**: which Volumes chat searches there and which Chronicle entries it always uses. Planned in forge's [016c-ActiveKnowledge.md](../../forge/documentation/plans/016c-ActiveKnowledge.md).
+
+### Decisions (2026-11-25, all four on their proposals)
+- **Agents are unchanged** (question 1). A run has no workspace, so an agent searches its own Volumes, or every Volume its maker may read.
+- **Chat's RAG Search follows the workspace** (question 3). Its Volume source and `kb.search` search only the checked Volumes, within the person's grants, and the checked entries replace the per-conversation checks. The dials and Top-K stay per conversation.
+- **What a workspace lists** (question 10). Every Volume and entry the person can read is listed in every workspace. Volumes are checked unless unchecked there; entries are unchecked unless checked there. So *Default* and a new workspace search what chat searched before, and a new Volume is searched everywhere. *Duplicate* copies the checks.
+- **Where they are edited** (question 11). The Chronicles side view became **Context**, with a *Volumes* group above the entries. The Volumes editor shows *Active in this workspace* on each Volume.
+
+Decided while building:
+- **Only differences from the defaults are stored.** `context` is `{"<kind>": {"<id>": checked}}`, such as `{"volume": {"42": false}, "chronicle": {"7": true}}` (`workspace.Context`, `ParseContext`, `Checked`, `Differing`). A workspace back at its defaults stores `{}`. Kinds are open: a later source adds its own (`CheckedByDefault` says unknown kinds start unchecked). `workspace.update` refuses a context of another shape (`bad_context`).
+- **The workspace's Volumes narrow by exclusion.** A round leaves out the unchecked Volumes (`ExceptVolumeIDs`), so it never needs the list of Volumes. A Volume the person can no longer read stays listed, greyed, and the library source's own `volume.read` check still drops it. A workspace can only narrow what the person may read, never widen it.
+- **The narrowing rides on the call as a `retrieval.Scope`**, separate from `retrieval.Options` ([ContextRetrieval.md › Changed in forge 16c](ContextRetrieval.md#changed-in-forge-16c)). A model node in the round's graph sets its own options (an Agent node's Retrieval group, *Run mode*), but never removes the scope, so nothing a round runs inline searches a Volume its workspace left out.
+- **A checked entry is pinned with the reason `checked`.** An unchecked entry can still be found by retrieval and chosen by stage 1, as before 16c, with the reason `retrieved` (the walk checks both).
+- **No workspace named means the person's Default**, so API callers and old browsers get it. A Default not yet made has the defaults. An id the caller does not own, someone else's included, is refused with `404 workspace_not_found` before a round is stored.
+
+### On the server
+- **`conversation.send` takes `workspace`** (`SendArgs.Workspace`, the tab's id). `Send` reads it before storing the round through `conversationimpl.WithWorkspaces(read)`. The reader is `workspace.KnowledgeReader(deps)`, which reads the caller's own record (`workspace.Get`, user principals only), wired in both `serve.go`s.
+- Its `conversation.WorkspaceKnowledge {ID, Name, ExceptVolumeIDs, CheckedEntries}` is applied in two places:
+  - `run` puts `retrieval.Scope{ExceptVolumeIDs}` on the round's context, so RAG Search's gather and every `kb.search` the round runs leave those Volumes out;
+  - `settingsOf` puts `CheckedEntries` in the `chronicle` settings' `checked`, in place of any the conversation kept. Chronicle's *Chronicle settings* node reads them as before.
+- Without `WithWorkspaces` (tests, Foundation's own stacks before wiring), rounds have no workspace and search as before.
+
+### In the browser
+- **`workspace/context.ts`** (unit-tested): `parseContext`, `isChecked`, `withCheck` (keeps only differences), and **`ContextWriter`**:
+  - each toggle shows at once and is sent through `workspace.update {version, context}` on the newest version this browser saw;
+  - on `stale_workspace` it waits for the newer version and re-applies its own toggles there, so another window's checks are kept;
+  - a toggle stays shown until the list brings the version that holds it, and a failed write shows the saved checks again.
+- **`workspace/contextStore.ts`**: `useActiveKnowledge()` gives `{workspace, context, checked(kind, id), setChecked(kind, id, on), error}` for the tab's workspace, one writer per workspace. Every window follows the live `workspace.list`.
+- **`workspace/volumes.ts`**: `useVolumes()` follows `kb.volumes`.
+- **The Context view** (`chronicle/ContextView.tsx`, side view id `context`; a browser that remembered `chronicles` opens it):
+  - a caption names the workspace;
+  - the *Volumes* group has a checkbox each (*Search <name>*), and clicking a name opens the Volume;
+  - the entry tree's checkboxes (*Always use <title>*) are the workspace's, so the view works with no chat open;
+  - items the workspace names that the person can no longer read are greyed;
+  - the dot and ✎ for the focused chat's last reply stay (`chatFocus` no longer carries checks).
+- **RAG Search** (`RagControl`) says *Volumes and memory: from the workspace "<name>"*, with a link that opens the Context view (`workbench/sideView.ts`, `openSideView(id)`, which the side bar follows). **Chronicles' ⚙** counts the entries checked in the workspace.
+- **The Volumes editor** shows *Active in this workspace* on each Volume, matched to `kb.volumes` by path.
+- **The chat sends `workspace`** with each message (`useChatStream`, `Conversation.send`).
+
+### Tests
+- `go test ./features/conversation/services/conversationservice/impl -run 'Workspace|Scope'` runs over the real library and chronicle sources, the real `rag` provider and the real `kb.search` (`retrievaltest`):
+  - a round in Support finds only Support's passage, and so does its `kb.search`;
+  - HR the other way round;
+  - no workspace named reads Default and searches both;
+  - an unknown id and another person's id are refused before any search;
+  - the workspace's checked entries replace the conversation's;
+  - a scope outlasts options set after it.
+- `go test ./features/workspace`, `TestContextForRounds`:
+  - a new workspace has the defaults, and a context of the wrong shape is refused;
+  - Duplicate copies the checks;
+  - Bo and an agent read nothing of Ana's;
+  - the defaults per kind.
+- `lancestore` `TestStore` (through `build.sh`) checks `volume_id NOT IN`, alone and with a list.
+- `yarn test` in `frontend/common` runs `src/workspace/context.test.ts`:
+  - the defaults, and only differences stored;
+  - one write per toggle;
+  - toggles queued behind a write;
+  - a stale write re-applied over another window's toggle;
+  - a toggle undone while being written;
+  - a failed write.
+- Agents' existing retrieval tests (Forge `starter/agents`, `starter/mail`) pass unchanged.
+- Forge's walk `documentation/walks/16c.json` (53 steps) and `forge workspaces --context` cover the rest ([forge plans/016c-ActiveKnowledge.md › Test](../../forge/documentation/plans/016c-ActiveKnowledge.md#test)).
+
+![Support: HR unchecked, Refund tone checked, and the replies in Default and Support](../../forge/documentation/images/workspace-context.png)
+![RAG Search: Volumes and memory from the workspace](../../forge/documentation/images/workspace-context-rag.png)

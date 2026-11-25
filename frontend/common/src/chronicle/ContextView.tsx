@@ -27,6 +27,10 @@ import type { WorkbenchContext } from '../workbench/points.ts'
 import { userIdOf } from '../session/permissions.ts'
 import { useSession } from '../session/session.ts'
 import { ChronicleObject } from '../editors/chronicle/ChronicleObject.ts'
+import { VolumeObject } from '../editors/volume/VolumeObject.ts'
+import { useVolumes, type VolumeItem } from '../workspace/volumes.ts'
+import { kindChronicle, kindVolume } from '../workspace/context.ts'
+import { useActiveKnowledge, type ActiveKnowledge } from '../workspace/contextStore.ts'
 import { useChatFocus, type ChatFocus } from './chatFocus.ts'
 import { ancestorsOf, inputOf, refreshChronicles, typeOf, useChronicles } from './chronicleStore.ts'
 
@@ -38,16 +42,16 @@ interface TreeProps {
   childrenOf: Map<string, Entry[]>
   shown: Set<string> // what the filter keeps
   focus?: ChatFocus
+  active: ActiveKnowledge
   implied: Set<string> // parents of checked entries: checked through them
   onOpen: (entry: Entry) => void
-  onToggle: (entry: Entry, checked: boolean) => void
 }
 
 // One entry and, when expanded, its children
-function EntryNode({ entry, depth, childrenOf, shown, focus, implied, onOpen, onToggle }: TreeProps) {
+function EntryNode({ entry, depth, childrenOf, shown, focus, active, implied, onOpen }: TreeProps) {
   const [open, setOpen] = useState(true)
   const kids = (childrenOf.get(entry.id) ?? []).filter((e) => shown.has(e.id))
-  const checked = focus?.checked.includes(entry.id) ?? false
+  const checked = active.checked(kindChronicle, entry.id)
   const viaChild = !checked && implied.has(entry.id)
   const chosen = focus?.chosen.includes(entry.id)
   const changed = focus?.changed.includes(entry.id)
@@ -57,18 +61,15 @@ function EntryNode({ entry, depth, childrenOf, shown, focus, implied, onOpen, on
         <IconButton size="small" sx={{ visibility: kids.length ? 'visible' : 'hidden', p: 0.25 }} onClick={() => setOpen((o) => !o)} aria-label={open ? 'Collapse' : 'Expand'}>
           {open ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
         </IconButton>
-        <Tooltip
-          title={!focus ? 'Open Chat to use entries in a conversation' : viaChild ? 'Included because a child is checked' : 'Use in the conversation'}
-          placement="right"
-        >
+        <Tooltip title={viaChild ? 'Included because a child is checked' : 'Always use in this workspace'} placement="right">
           <span>
             <Checkbox
               size="small"
               sx={{ p: 0.25 }}
               checked={checked || viaChild}
-              disabled={!focus || viaChild}
-              onChange={(_, on) => onToggle(entry, on)}
-              slotProps={{ input: { 'aria-label': `Use ${entry.title} in the conversation` } }}
+              disabled={!active.workspace || viaChild}
+              onChange={(_, on) => active.setChecked(kindChronicle, entry.id, on)}
+              slotProps={{ input: { 'aria-label': `Always use ${entry.title}` } }}
             />
           </span>
         </Tooltip>
@@ -103,10 +104,22 @@ function EntryNode({ entry, depth, childrenOf, shown, focus, implied, onOpen, on
       </Stack>
       <Collapse in={open} unmountOnExit>
         {kids.map((k) => (
-          <EntryNode key={k.id} entry={k} depth={depth + 1} childrenOf={childrenOf} shown={shown} focus={focus} implied={implied} onOpen={onOpen} onToggle={onToggle} />
+          <EntryNode key={k.id} entry={k} depth={depth + 1} childrenOf={childrenOf} shown={shown} focus={focus} active={active} implied={implied} onOpen={onOpen} />
         ))}
       </Collapse>
     </>
+  )
+}
+
+// A row for an item the person can no longer read: listed, greyed, never searched
+function GoneRow({ label }: { label: string }) {
+  return (
+    <Stack direction="row" sx={{ alignItems: 'center', pl: 3.5, pr: 0.5, color: 'text.disabled' }}>
+      <Checkbox size="small" sx={{ p: 0.25 }} disabled checked={false} slotProps={{ input: { 'aria-label': label } }} />
+      <Typography variant="body2" sx={{ fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {label}
+      </Typography>
+    </Stack>
   )
 }
 
@@ -129,13 +142,18 @@ function Group({ title, count, children }: { title: string; count: number; child
 
 const noChildren = new Map<string, Entry[]>()
 
-// The Chronicles side view: the principal's memory entries as a tree per
-// type, with a checkbox per entry for the focused chat's conversation
-// (checking an entry includes its parents), the entries the memory update
-// proposed, to accept or dismiss, and a filter
-function ChroniclesView({ registry }: WorkbenchContext) {
+// The Context side view (forge 16c, once the Chronicles view): the
+// workspace's active knowledge. A Volumes group with a checkbox per Volume
+// (checked: chat searches it here), then the memory entries as a tree per
+// type with a checkbox per entry (checked: always used here; checking an
+// entry includes its parents). The checks are the workspace's, so the view
+// works with no chat open and every window follows them. The dot and ✎
+// still show what the focused chat's last reply used and changed.
+function ContextView({ registry }: WorkbenchContext) {
   const { loaded, entries, types, error } = useChronicles()
   const focus = useChatFocus()
+  const active = useActiveKnowledge()
+  const { volumes } = useVolumes()
   const [filter, setFilter] = useState('')
   const [onlyActive, setOnlyActive] = useState(false)
   const [failure, setFailure] = useState<string>()
@@ -145,37 +163,41 @@ function ChroniclesView({ registry }: WorkbenchContext) {
   const tenant = session.account?.tenantId ?? '1'
   // Your entries make the tree; those others shared with you are listed apart
   const isMine = useCallback((e: Entry) => e.ownerId === me && e.tenantId === tenant, [me, tenant])
-  const active = useMemo(() => entries.filter((e) => e.status === 'active' && isMine(e)), [entries, isMine])
+  const activeEntries = useMemo(() => entries.filter((e) => e.status === 'active' && isMine(e)), [entries, isMine])
   const sharedWithMe = useMemo(() => entries.filter((e) => e.status === 'active' && !isMine(e)), [entries, isMine])
   const proposed = useMemo(() => entries.filter((e) => e.status === 'proposed'), [entries])
-  const implied = useMemo(() => new Set((focus?.checked ?? []).flatMap((id) => ancestorsOf(active, id))), [focus?.checked, active])
+  const checkedIds = useMemo(() => Object.entries(active.context[kindChronicle] ?? {}).filter(([, on]) => on).map(([id]) => id), [active.context])
+  const implied = useMemo(() => new Set(checkedIds.flatMap((id) => ancestorsOf(activeEntries, id))), [checkedIds, activeEntries])
+  const q = filter.trim().toLowerCase()
 
-  // What the filter and the dormant toggle keep, with the parents of what they keep
+  // What the filter and the in-use toggle keep, with the parents of what they keep
   const shown = useMemo(() => {
-    const q = filter.trim().toLowerCase()
-    const inUse = new Set([...(focus?.checked ?? []), ...(focus?.chosen ?? []), ...implied])
-    const keep = active.filter(
+    const inUse = new Set([...checkedIds, ...(focus?.chosen ?? []), ...implied])
+    const keep = activeEntries.filter(
       (e) => (!q || e.title.toLowerCase().includes(q) || e.shortSummary.toLowerCase().includes(q)) && (!onlyActive || inUse.has(e.id)),
     )
-    return new Set(keep.flatMap((e) => [e.id, ...ancestorsOf(active, e.id)]))
-  }, [active, filter, onlyActive, focus, implied])
+    return new Set(keep.flatMap((e) => [e.id, ...ancestorsOf(activeEntries, e.id)]))
+  }, [activeEntries, q, onlyActive, focus, implied, checkedIds])
 
   const { roots, children } = useMemo(() => {
-    const ids = new Set(active.map((e) => e.id))
+    const ids = new Set(activeEntries.map((e) => e.id))
     const children = new Map<string, Entry[]>()
     const roots: Entry[] = []
-    for (const e of active) {
+    for (const e of activeEntries) {
       if (e.parentId && ids.has(e.parentId)) children.set(e.parentId, [...(children.get(e.parentId) ?? []), e])
       else roots.push(e)
     }
     return { roots, children }
-  }, [active])
+  }, [activeEntries])
+
+  // Volumes: the readable ones, then those the workspace names that the
+  // person can no longer read, greyed
+  const shownVolumes = volumes.filter((v) => (!q || v.name.toLowerCase().includes(q)) && (!onlyActive || active.checked(kindVolume, v.id)))
+  const goneVolumes = Object.keys(active.context[kindVolume] ?? {}).filter((id) => !volumes.some((v) => v.id === id))
+  const goneEntries = loaded ? checkedIds.filter((id) => !entries.some((e) => e.id === id)) : []
 
   const open = (entry: Entry) => registry.edit(new ChronicleObject(entry))
-  const toggle = (entry: Entry, on: boolean) => {
-    if (!focus) return
-    focus.setChecked(on ? [...focus.checked, entry.id] : focus.checked.filter((id) => id !== entry.id))
-  }
+  const openVolume = (v: VolumeItem) => registry.edit(new VolumeObject(v.id, v.path.split('/').filter(Boolean)))
   const run = async (what: string, action: () => Promise<unknown>) => {
     setFailure(undefined)
     try {
@@ -193,6 +215,7 @@ function ChroniclesView({ registry }: WorkbenchContext) {
       if (entry) await Chronicle.update({ ...inputOf(entry), id: entry.id, accept: true })
     })
   const dismiss = (e: Entry) => run('dismiss a proposed entry', () => Chronicle.delete(e.id))
+  const problem = failure ?? active.error ?? error
 
   return (
     <Stack spacing={0.5} sx={{ pb: 1 }}>
@@ -202,7 +225,7 @@ function ChroniclesView({ registry }: WorkbenchContext) {
           placeholder="Filter"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }, htmlInput: { 'aria-label': 'Filter Chronicles' } }}
+          slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }, htmlInput: { 'aria-label': 'Filter the context' } }}
           sx={{ flex: 1 }}
         />
         <Tooltip title="New entry">
@@ -217,19 +240,44 @@ function ChroniclesView({ registry }: WorkbenchContext) {
         </Tooltip>
       </Stack>
       <Typography variant="caption" color="text.secondary" sx={{ px: 1.5 }}>
-        {focus
-          ? `Checks apply to ${focus.title ? `“${focus.title}”` : 'the current conversation'}.`
-          : 'Open Chat to choose entries for a conversation.'}
+        {active.workspace
+          ? `Active in “${active.workspace.name}”: chat searches the checked Volumes and always uses the checked entries.`
+          : 'Loading your workspace…'}
       </Typography>
       <FormControlLabel
         sx={{ px: 1.5 }}
         control={<Switch size="small" checked={onlyActive} onChange={(_, on) => setOnlyActive(on)} />}
-        label={<Typography variant="caption">Only entries in use</Typography>}
+        label={<Typography variant="caption">Only what is in use</Typography>}
       />
-      {(error || failure) && (
+      {problem && (
         <Alert severity="warning" sx={{ mx: 1 }}>
-          {failure ?? error}
+          {problem}
         </Alert>
+      )}
+      {(volumes.length > 0 || goneVolumes.length > 0) && (
+        <Group title="📚 Volumes" count={volumes.length}>
+          {shownVolumes.map((v) => (
+            <Stack key={v.id} direction="row" sx={{ alignItems: 'center', pl: 2, pr: 0.5, '&:hover': { bgcolor: 'action.hover' } }}>
+              <Tooltip title="Search in this workspace" placement="right">
+                <Checkbox
+                  size="small"
+                  sx={{ p: 0.25 }}
+                  checked={active.checked(kindVolume, v.id)}
+                  disabled={!active.workspace}
+                  onChange={(_, on) => active.setChecked(kindVolume, v.id, on)}
+                  slotProps={{ input: { 'aria-label': `Search ${v.name}` } }}
+                />
+              </Tooltip>
+              <Box component="button" onClick={() => openVolume(v)} title={`/${v.path}`}
+                sx={{ flex: 1, minWidth: 0, textAlign: 'left', border: 0, bgcolor: 'transparent', color: 'text.primary', cursor: 'pointer', p: 0.25,
+                  font: 'inherit', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              >
+                {v.name}
+              </Box>
+            </Stack>
+          ))}
+          {!onlyActive && goneVolumes.map((id) => <GoneRow key={id} label="A Volume you can no longer read" />)}
+        </Group>
       )}
       {proposed.length > 0 && (
         <Group title="Proposed" count={proposed.length}>
@@ -262,7 +310,7 @@ function ChroniclesView({ registry }: WorkbenchContext) {
         return (
           <Group key={t.id} title={`${t.icon} ${t.title}`} count={own.length}>
             {own.map((e) => (
-              <EntryNode key={e.id} entry={e} depth={0} childrenOf={children} shown={shown} focus={focus} implied={implied} onOpen={open} onToggle={toggle} />
+              <EntryNode key={e.id} entry={e} depth={0} childrenOf={children} shown={shown} focus={focus} active={active} implied={implied} onOpen={open} />
             ))}
           </Group>
         )
@@ -270,13 +318,18 @@ function ChroniclesView({ registry }: WorkbenchContext) {
       {sharedWithMe.length > 0 && (
         <Group title="🤝 Shared with you" count={sharedWithMe.length}>
           {sharedWithMe
-            .filter((e) => !filter.trim() || e.title.toLowerCase().includes(filter.trim().toLowerCase()))
+            .filter((e) => !q || e.title.toLowerCase().includes(q))
             .map((e) => (
-              <EntryNode key={e.id} entry={e} depth={0} childrenOf={noChildren} shown={new Set([e.id])} focus={focus} implied={implied} onOpen={open} onToggle={toggle} />
+              <EntryNode key={e.id} entry={e} depth={0} childrenOf={noChildren} shown={new Set([e.id])} focus={focus} active={active} implied={implied} onOpen={open} />
             ))}
         </Group>
       )}
-      {loaded && active.length === 0 && proposed.length === 0 && !error && (
+      {!onlyActive && goneEntries.length > 0 && (
+        <Group title="No longer readable" count={goneEntries.length}>
+          {goneEntries.map((id) => <GoneRow key={id} label="An entry you can no longer read" />)}
+        </Group>
+      )}
+      {loaded && activeEntries.length === 0 && proposed.length === 0 && !error && (
         <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 1 }}>
           No Chronicles yet. Add one with +, or chat: after each reply, the memory update proposes entries worth remembering.
         </Typography>
@@ -285,4 +338,4 @@ function ChroniclesView({ registry }: WorkbenchContext) {
   )
 }
 
-export default ChroniclesView
+export default ContextView

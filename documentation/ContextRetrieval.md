@@ -225,3 +225,10 @@ Agents search as chat does ([forge AgentsApp.md › Built in part 15a](../../for
 - **The `rag` provider's gather narrows to the run's Volumes** (`retrieval.OptionsFrom` on its context), which only *Run mode*'s headless host sets; a chat round's gather is unchanged.
 - **`retrieval.VoteOnce(tx, tenant, key, segments, verdict)`** and the `SegmentVote` table (`segment_votes`): a vote not tied to a round, cast once per key ([Tools.md › Changed in forge 15b](Tools.md#changed-in-forge-15b)). The `retrieval` resource type gains `vote`.
 - **Tests**: `toolsnodes` `TestResolve` and `TestAgentRetrievalGroup` (the preset, then the dials, then the tenant default; the pin narrows and never widens), `retrievaltools` `TestVoteOncePerKey`.
+
+## Changed in forge 16c
+Chat's retrieval follows the tab's workspace ([Workspaces.md › Built in forge 16c](Workspaces.md#built-in-forge-16c)).
+- **`retrieval.Scope{ExceptVolumeIDs}`** (`retrieval/Scope.go`, `WithScope`, `ScopeFrom`) narrows every retrieval a call makes, whatever options it runs with. A chat round sets it from its workspace. It is kept apart from `Options` so that an Agent node's Retrieval group or *Run mode* replacing the options never widens a round. Agent runs on triggers and jobs carry none.
+- **`ExceptVolumeIDs`** joins `retrieval.Filter`, `RetrieveArgs`, `indexservice.Filter`, the `library` source and `retrievaltest`'s library. `lancestore` adds `volume_id NOT IN (…)`, alongside `IN` when both are given.
+- **`kb.search` and the `rag` provider's gather** read the scope from their call's context.
+- Tests: `conversationservice/impl` `TestRoundsFollowTheirWorkspace`, `TestScopeOutlastsOptions`; `lancestore` `TestStore`.

@@ -1,4 +1,7 @@
-import { Chip, FormControlLabel, Slider, Stack, Switch, Typography } from '@mui/material'
+import { Chip, FormControlLabel, Link, Slider, Stack, Switch, Typography } from '@mui/material'
+import { contextViewId } from '../chronicle/chatFocus.ts'
+import { openSideView } from '../workbench/sideView.ts'
+import { useWorkspace } from '../workspace/workspaceStore.ts'
 import type { ContextControlProps } from '../editors/chat/points.ts'
 import { useSetting } from '../settings/configStore.ts'
 
@@ -64,6 +67,7 @@ function Dial({
 // most segments injected. The server's "rag" context provider reads them.
 function RagControl({ value, onChange }: ContextControlProps) {
   const presets = useSetting<Preset[]>('chat.context.presets', 'presets', 'user') ?? []
+  const workspace = useWorkspace().current
   const enabled = value.enabled !== false
   const lexical = Number(value.lexicalSemantic ?? 0)
   const balance = Number(value.chronicleLibrary ?? 0)
@@ -131,6 +135,12 @@ function RagControl({ value, onChange }: ContextControlProps) {
           />
         ))}
       </Stack>
+      <Typography variant="caption" color="text.secondary">
+        Volumes and memory: from the workspace{workspace ? ` “${workspace.name}”` : ''}.{' '}
+        <Link component="button" variant="caption" onClick={() => openSideView(contextViewId)} sx={{ verticalAlign: 'baseline' }}>
+          Choose them in the Context view
+        </Link>
+      </Typography>
       <Typography variant="caption" color="text.secondary">
         The best-matching passages and memory entries go with each message, numbered, so the reply can cite them.
       </Typography>

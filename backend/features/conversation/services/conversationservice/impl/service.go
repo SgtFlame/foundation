@@ -24,6 +24,8 @@ type service struct {
 	registry *extensions.Registry
 	engine   *engine.Engine              // runs the rounds' mode graphs
 	activity conversation.ActivityReader // the person's recent gestures (forge 15d); nil sends none
+	// workspaces reads the workspace a round is sent from (forge 16c); nil gives rounds none
+	workspaces conversation.WorkspaceReader
 
 	mu      sync.Mutex
 	waiting map[string]*waiting // tool calls rounds are paused on, by waitKey

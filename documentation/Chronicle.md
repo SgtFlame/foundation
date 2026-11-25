@@ -135,3 +135,7 @@ Forge 06i ([Cognition.md › Built in slice 44](Cognition.md#built-in-slice-44))
 
 ## Changed in forge 15a
 **An agent's run searches one person's memory**: the `chronicle` retrieval source answers an agent principal whose `Principal.MemoryOf` is set ([RBAC.md › Changed in forge 15a](RBAC.md#changed-in-forge-15a)) with that person's own entries and those shared with the tenant, **never the global tenant's**: an agent replying to a stranger should not quote platform-wide notes either. Any other agent, an app and the service get none; a person still searches their own, the tenant's shared and the global ones. The agent's prompt marks these passages as the person's private notes, to use and not quote, and Forge's Mail never lets an agent send a draft citing one. Test: `chronicle/source` `TestAgentMemory`.
+
+## Changed in forge 16c
+- **The entries always used are the workspace's**, not the conversation's ([Workspaces.md › Built in forge 16c](Workspaces.md#built-in-forge-16c)). `Send` puts the checked entries of the round's workspace in the `chronicle` settings' `checked`, in place of any the conversation kept. The *Chronicle settings* node reads them as before, and such entries are pinned with the reason `checked`.
+- **The Chronicles side view is now the Context view** (`chronicle/ContextView.tsx`, id `context`), with a Volumes group above the entries. `chatFocus` carries only what the last reply chose and changed.

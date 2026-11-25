@@ -166,7 +166,7 @@ func (l *Library) KeywordSearch(_ context.Context, query string, k int, f indexs
 	}
 	var hits []hit
 	for _, c := range l.chunks {
-		if len(f.VolumeIDs) > 0 && !contains(f.VolumeIDs, c.VolumeID) {
+		if (len(f.VolumeIDs) > 0 && !contains(f.VolumeIDs, c.VolumeID)) || contains(f.ExceptVolumeIDs, c.VolumeID) {
 			continue
 		}
 		if n := score(query, c.Text); n > 0 {

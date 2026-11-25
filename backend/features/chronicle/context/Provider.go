@@ -64,7 +64,7 @@ const schema = `{
   "type": "object",
   "properties": {
     "enabled": {"type": "boolean", "title": "Use Chronicle memory", "description": "Chooses the Chronicle entries each message needs and adds them, numbered, before any Volume passages."},
-    "topK": {"type": "integer", "title": "Entries", "min": 1, "max": 20, "description": "How many entries context matching may choose, besides the ones checked in the Chronicles view"},
+    "topK": {"type": "integer", "title": "Entries", "min": 1, "max": 20, "description": "How many entries context matching may choose, besides the ones checked in the workspace"},
     "match": {"type": "boolean", "title": "Context matching", "description": "A fast model call (stage 1) chooses among the candidate entries; off keeps retrieval's ranking"},
     "update": {"type": "boolean", "title": "Update memory", "description": "After each reply, update the entries it used and propose new ones to accept"}
   }

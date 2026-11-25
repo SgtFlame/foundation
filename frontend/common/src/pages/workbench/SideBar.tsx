@@ -1,9 +1,10 @@
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Box, CircularProgress, IconButton, Stack, Tooltip, Typography } from '@mui/material'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import { useContributions } from '../../workbench/extensions/index.ts'
 import { sideViews } from '../../workbench/points.ts'
+import { onOpenSideView } from '../../workbench/sideView.ts'
 import type { EditorRegistry } from './EditorRegistry.ts'
 import AccountMenu from '../../session/AccountMenu.tsx'
 import WorkspaceMenu from '../../workspace/WorkspaceMenu.tsx'
@@ -14,6 +15,7 @@ const collapsedKey = 'workbench.sideView.collapsed'
 function remembered(): string | null | undefined {
   try {
     const v = localStorage.getItem(storageKey)
+    if (v === 'chronicles') return 'context' // the Chronicles view became Context (forge 16c)
     return v === '' ? null : (v ?? undefined)
   } catch {
     return undefined
@@ -58,6 +60,15 @@ function SideBar({ registry }: { registry: EditorRegistry }) {
     setChosen(next)
     remember(next)
   }
+  // Another part asks for a view (openSideView): it is shown, never hidden
+  useEffect(
+    () =>
+      onOpenSideView((id) => {
+        setChosen(id)
+        remember(id)
+      }),
+    [],
+  )
   const [collapsedIds, setCollapsedIds] = useState(rememberedCollapsed)
   const collapsed = !!open?.collapsible && collapsedIds.includes(open.id)
   const toggleCollapsed = (id: string) => {

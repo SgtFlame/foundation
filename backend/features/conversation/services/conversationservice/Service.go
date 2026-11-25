@@ -85,6 +85,11 @@ type SendArgs struct {
 	// 15f: Undo of a pre-mode switch, with Mode the mode it left): that
 	// round leaves the history, and the pre-mode does not run.
 	Undoes uint64
+	// Workspace is the id of the workspace the browser tab shows (forge
+	// 16c): the round searches its checked Volumes and always uses its
+	// checked Chronicle entries. It must be the caller's own, else the
+	// message is refused (workspace_not_found); empty is their Default.
+	Workspace string
 }
 
 // SendEventKind says what a SendEvent carries.

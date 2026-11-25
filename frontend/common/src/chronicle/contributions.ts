@@ -5,15 +5,18 @@ import { extensions } from '../workbench/extensions/index.ts'
 import { commands, sideViews } from '../workbench/points.ts'
 import { ChronicleObject } from '../editors/chronicle/ChronicleObject.ts'
 import ChronicleControl from './ChronicleControl.tsx'
+import { contextViewId } from './chatFocus.ts'
 
+// The workspace's active Volumes and Chronicle entries (forge 16c: once the
+// Chronicles view)
 extensions.contribute(sideViews, {
-  id: 'chronicles',
+  id: contextViewId,
   source: 'chronicle',
   order: 200,
-  title: 'Chronicles',
+  title: 'Context',
   icon: AutoStoriesIcon,
   width: 300,
-  component: lazy(() => import('./ChroniclesView.tsx')),
+  component: lazy(() => import('./ContextView.tsx')),
 })
 
 extensions.contribute(commands, {

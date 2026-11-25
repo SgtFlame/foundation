@@ -174,14 +174,14 @@ func TestDuplicateUpdateAndDelete(t *testing.T) {
 	ok(t, cmd(pr, ana, "workspace.create", "w1", map[string]any{"name": "Support"}))
 	settle(t, pr)
 	w1 := list(t, pr, ana)[1]
-	ok(t, cmd(pr, ana, "workspace.update", "w1", map[string]any{"version": w1.Version, "layout": map[string]any{"tabs": []string{"chat:main"}}, "context": map[string]any{"volumes": []string{"v1"}}}))
+	ok(t, cmd(pr, ana, "workspace.update", "w1", map[string]any{"version": w1.Version, "layout": map[string]any{"tabs": []string{"chat:main"}}, "context": map[string]any{"volume": map[string]bool{"41": false}}}))
 	refused(t, cmd(pr, ana, "workspace.update", "w1", map[string]any{"version": w1.Version, "layout": map[string]any{}}), "stale_workspace")
 	refused(t, cmd(pr, ana, "workspace.update", "w1", map[string]any{"version": w1.Version + 1, "layout": map[string]any{"big": strings.Repeat("x", workspace.MaxPart)}}), "workspace_too_large")
 	ok(t, cmd(pr, ana, "workspace.create", "w2", map[string]any{"name": "Support copy", "from": "w1"}))
 	refused(t, cmd(pr, ana, "workspace.create", "w3", map[string]any{"name": "Other", "from": "nope"}), "workspace_not_found")
 	settle(t, pr)
 	ws := list(t, pr, ana)
-	if len(ws) != 3 || string(ws[2].Layout) != `{"tabs":["chat:main"]}` || string(ws[2].Context) != `{"volumes":["v1"]}` {
+	if len(ws) != 3 || string(ws[2].Layout) != `{"tabs":["chat:main"]}` || string(ws[2].Context) != `{"volume":{"41":false}}` {
 		t.Fatalf("copy %+v", ws)
 	}
 	refused(t, cmd(pr, ana, "workspace.delete", workspace.DefaultID, map[string]any{}), "default_workspace")
@@ -327,5 +327,49 @@ func TestWindowsPresenceIsPrivate(t *testing.T) {
 	}
 	if !presence.Allowed(bo.Principal, "app.hello") || !presence.Allowed(bo.Principal, "rec_1.x") {
 		t.Fatal("ordinary objects are refused")
+	}
+}
+
+// forge 16c: a workspace's context, read for a chat round from the
+// caller's own workspaces only, with Volumes checked and entries unchecked
+// unless it says otherwise; a duplicate copies the checks.
+func TestContextForRounds(t *testing.T) {
+	pr := setup(t, 1)[0]
+	read := workspace.KnowledgeReader(func() workspace.Deps { return workspace.Deps{Store: pr.p, Bus: pr.bus} })
+	if _, found := read(ana, workspace.DefaultID); found {
+		t.Fatal("a Default no one read yet was found")
+	}
+	list(t, pr, ana)
+	ok(t, cmd(pr, ana, "workspace.create", "w1", map[string]any{"name": "Support"}))
+	settle(t, pr)
+	if k, found := read(ana, "w1"); !found || k.Name != "Support" || len(k.ExceptVolumeIDs) != 0 || len(k.CheckedEntries) != 0 {
+		t.Fatalf("a new workspace's defaults: %+v %v", k, found)
+	}
+	w1 := list(t, pr, ana)[1]
+	refused(t, cmd(pr, ana, "workspace.update", "w1", map[string]any{"version": w1.Version, "context": map[string]any{"volume": []string{"41"}}}), "bad_context")
+	ok(t, cmd(pr, ana, "workspace.update", "w1", map[string]any{"version": w1.Version, "context": map[string]any{
+		"volume":    map[string]bool{"41": false, "42": true, "x": false},
+		"chronicle": map[string]bool{"7": true, "8": false},
+		"channel":   map[string]bool{"c1": true}, // kinds are open
+	}}))
+	ok(t, cmd(pr, ana, "workspace.create", "w2", map[string]any{"name": "Support copy", "from": "w1"}))
+	settle(t, pr)
+	for _, id := range []string{"w1", "w2"} {
+		k, found := read(ana, id)
+		if !found || len(k.ExceptVolumeIDs) != 1 || k.ExceptVolumeIDs[0] != 41 || len(k.CheckedEntries) != 1 || k.CheckedEntries[0] != "7" {
+			t.Errorf("%s: %+v %v", id, k, found)
+		}
+	}
+	// Bo naming Ana's workspace reads nothing; so does an agent
+	if _, found := read(bo, "w1"); found {
+		t.Error("Bo read Ana's workspace")
+	}
+	agent := features.ServiceArgs{Ctx: context.Background(), Principal: features.AgentPrincipal(1, 7, 7)}
+	if _, found := read(agent, "w1"); found {
+		t.Error("an agent read a workspace")
+	}
+	c := workspace.ParseContext(json.RawMessage(`{"volume": {"41": false}, "chronicle": {"7": true}}`))
+	if c.Checked("volume", "41") || !c.Checked("volume", "99") || !c.Checked("chronicle", "7") || c.Checked("chronicle", "8") || c.Checked("channel", "c1") {
+		t.Errorf("checks %+v", c)
 	}
 }

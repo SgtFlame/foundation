@@ -24,7 +24,8 @@ type Match struct {
 
 // Filter narrows a search; the zero Filter searches everything.
 type Filter struct {
-	VolumeIDs []uint64
+	VolumeIDs       []uint64
+	ExceptVolumeIDs []uint64 // never these volumes
 }
 
 // Store keeps the chunks, their embeddings for semantic search and their

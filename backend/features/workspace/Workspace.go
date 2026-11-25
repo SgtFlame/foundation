@@ -475,6 +475,12 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		if len(a.Layout) > MaxPart || len(a.Context) > MaxPart {
 			return nil, problem("workspace_too_large", "args", fmt.Sprintf("a workspace's layout and context may hold at most %d KB each", MaxPart>>10), "close some editors")
 		}
+		if a.Context != nil {
+			var c Context
+			if err := json.Unmarshal(a.Context, &c); err != nil {
+				return nil, problem("bad_context", "args.context", "a workspace's context is {kind: {id: checked}}, such as {\"volume\": {\"42\": false}}", "send each kind's items as an object of true or false")
+			}
+		}
 		return []live.NewEvent{{Type: EventUpdated, Data: change{Layout: a.Layout, Context: a.Context}}}, nil
 	})
 
@@ -560,16 +566,8 @@ func run(f live.Feed, deps func() Deps) error {
 // Name is the name of args' principal's workspace id, read from their own
 // workspaces only; false when they have none by that id.
 func Name(args features.ServiceArgs, store live.Store, id string) (string, bool) {
-	p := args.Principal
-	if store == nil || p.UserID == 0 || !live.ValidToken(id) {
-		return "", false
-	}
-	v, ok, err := store.Get(args.Context(), p.TenantID, Projector, TypeOf(p.UserID)+"."+id)
-	if err != nil || !ok {
-		return "", false
-	}
-	var w Workspace
-	if json.Unmarshal(v.Value, &w) != nil || w.Name == "" {
+	w, ok := Get(args, store, id)
+	if !ok || w.Name == "" {
 		return "", false
 	}
 	return w.Name, true

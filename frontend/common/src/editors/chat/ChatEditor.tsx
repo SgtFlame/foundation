@@ -13,6 +13,7 @@ import { useContextSettings } from '../../components/chat/useContextSettings.ts'
 import { log } from '../../logging/index.ts'
 import { useSetting } from '../../settings/configStore.ts'
 import { clearChatFocus, setChatFocus } from '../../chronicle/chatFocus.ts'
+import { useWorkspace } from '../../workspace/workspaceStore.ts'
 import { refreshChronicles } from '../../chronicle/chronicleStore.ts'
 import { openSegment } from '../../components/chat/openSegment.ts'
 import { useWorkbenchContext } from '../../workbench/context/WorkbenchContext.ts'
@@ -90,27 +91,20 @@ function ChatEditor({ tabId, registry }: EditorProps<ChatObject>) {
     return new Date(Math.floor((Date.now() - lookBack * minute) / minute) * minute).toISOString()
   }, [lastSent, lookBack, current.key]) // oxlint-disable-line react-hooks/exhaustive-deps
 
-  // The Chronicles view's checkboxes act on the current conversation: it
-  // sees what is checked, what the last round used and what its memory
-  // update changed
-  const { setContextSetting } = chat
-  const chronicle = settings.chronicle
+  // The Context view marks what the last round used and what its memory
+  // update changed (the checks are the workspace's, forge 16c)
   const lastRound = current.rounds.findLast((r) => !r.note)
   const followed = lastRound?.followed?.filter((f) => f.follower === 'chronicle') ?? []
   const focusKey = JSON.stringify([
     current.key,
     current.conversation?.title,
-    chronicle?.checked,
     lastRound?.segments?.filter((s) => s.sourceId === 'chronicle' && s.pinned).map((s) => s.key),
     followed.flatMap((f) => [...((f.data as ChronicleChanges)?.updated ?? []), ...((f.data as ChronicleChanges)?.proposed ?? [])].map((e) => e.id)),
   ])
   useEffect(() => {
-    const [key, title, checked, chosen, changed] = JSON.parse(focusKey) as [string, string | undefined, string[] | undefined, string[] | undefined, string[]]
-    setChatFocus({
-      owner: tabId, key, title, checked: checked ?? [], chosen: chosen ?? [], changed,
-      setChecked: (ids) => setContextSetting('chronicle', { ...chronicle, checked: ids }),
-    })
-  }, [focusKey, tabId, chronicle, setContextSetting])
+    const [key, title, chosen, changed] = JSON.parse(focusKey) as [string, string | undefined, string[] | undefined, string[]]
+    setChatFocus({ owner: tabId, key, title, chosen: chosen ?? [], changed })
+  }, [focusKey, tabId])
   useEffect(() => () => clearChatFocus(tabId), [tabId])
   // A memory update changed entries: the Chronicles view shows them
   useEffect(() => {
@@ -126,6 +120,7 @@ function ChatEditor({ tabId, registry }: EditorProps<ChatObject>) {
   // The person chose the mode since the last message (the menu or /mode),
   // so the pre-mode leaves the next one alone (forge 15f)
   const modeChosen = useRef(false)
+  const workspaceId = useWorkspace().current?.id
   const sendWith = (text: string, mode: string | undefined, extra: { modeChosen?: boolean; undoes?: string } = {}) => {
     const key = current.key
     const chosen = extra.modeChosen ?? modeChosen.current
@@ -141,6 +136,7 @@ function ChatEditor({ tabId, registry }: EditorProps<ChatObject>) {
       offered: offered.map((m) => m.id),
       modeChosen: chosen,
       undoes: extra.undoes,
+      workspace: workspaceId, // the server reads its active Volumes and entries (forge 16c)
       onMode: (id) => setChosenModes((m) => ({ ...m, [key]: id })),
     })
   }

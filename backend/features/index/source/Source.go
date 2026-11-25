@@ -32,14 +32,14 @@ func Contribute(reg *extensions.Registry, store indexservice.Store, root string)
 			if !hasVolumes(ctx) {
 				return nil, nil
 			}
-			matches, err := store.VectorSearch(ctx, vector, k, indexservice.Filter{VolumeIDs: f.VolumeIDs})
+			matches, err := store.VectorSearch(ctx, vector, k, indexservice.Filter{VolumeIDs: f.VolumeIDs, ExceptVolumeIDs: f.ExceptVolumeIDs})
 			return src.segments(readable(ctx, matches)), err
 		},
 		KeywordSearch: func(ctx context.Context, query string, k int, f retrieval.Filter) ([]retrieval.Segment, error) {
 			if !hasVolumes(ctx) {
 				return nil, nil
 			}
-			matches, err := store.KeywordSearch(ctx, query, k, indexservice.Filter{VolumeIDs: f.VolumeIDs})
+			matches, err := store.KeywordSearch(ctx, query, k, indexservice.Filter{VolumeIDs: f.VolumeIDs, ExceptVolumeIDs: f.ExceptVolumeIDs})
 			return src.segments(readable(ctx, matches)), err
 		},
 	})
