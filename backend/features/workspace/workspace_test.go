@@ -13,6 +13,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	"github.com/SgtFlame/foundation/backend/features/live/natsd"
+	"github.com/SgtFlame/foundation/backend/features/live/presence"
 	"github.com/SgtFlame/foundation/backend/features/live/project"
 	"github.com/SgtFlame/foundation/backend/features/live/subscribe"
 	livetools "github.com/SgtFlame/foundation/backend/features/live/tools"
@@ -175,6 +176,7 @@ func TestDuplicateUpdateAndDelete(t *testing.T) {
 	w1 := list(t, pr, ana)[1]
 	ok(t, cmd(pr, ana, "workspace.update", "w1", map[string]any{"version": w1.Version, "layout": map[string]any{"tabs": []string{"chat:main"}}, "context": map[string]any{"volumes": []string{"v1"}}}))
 	refused(t, cmd(pr, ana, "workspace.update", "w1", map[string]any{"version": w1.Version, "layout": map[string]any{}}), "stale_workspace")
+	refused(t, cmd(pr, ana, "workspace.update", "w1", map[string]any{"version": w1.Version + 1, "layout": map[string]any{"big": strings.Repeat("x", workspace.MaxPart)}}), "workspace_too_large")
 	ok(t, cmd(pr, ana, "workspace.create", "w2", map[string]any{"name": "Support copy", "from": "w1"}))
 	refused(t, cmd(pr, ana, "workspace.create", "w3", map[string]any{"name": "Other", "from": "nope"}), "workspace_not_found")
 	settle(t, pr)
@@ -306,4 +308,24 @@ func (c *changes) Failed(features.ServiceResponse)      {}
 func (c *changes) send(v any) {
 	raw, _ := json.Marshal(v)
 	c.got <- string(raw)
+}
+
+// Who has a workspace open is presence only its person may see or join
+// (forge 16b).
+func TestWindowsPresenceIsPrivate(t *testing.T) {
+	setup(t, 1)
+	object := workspace.TypeOf(ana.Principal.UserID) + ".default"
+	if !presence.Allowed(ana.Principal, object) {
+		t.Fatal("ana is refused their own workspace")
+	}
+	if presence.Allowed(bo.Principal, object) {
+		t.Fatal("bo may follow ana's workspace")
+	}
+	agent := features.Principal{Kind: features.PrincipalAgent, TenantID: 1, AgentID: 9, OnBehalfOf: ana.Principal.UserID}
+	if presence.Allowed(agent, object) {
+		t.Fatal("an agent may follow ana's workspace")
+	}
+	if !presence.Allowed(bo.Principal, "app.hello") || !presence.Allowed(bo.Principal, "rec_1.x") {
+		t.Fatal("ordinary objects are refused")
+	}
 }

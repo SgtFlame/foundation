@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/SgtFlame/foundation/backend/features/authz"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -85,6 +86,41 @@ func (p *Presence) bucket(ctx context.Context, tenant uint64) (jetstream.KeyValu
 	return kv, nil
 }
 
+// owned holds the object type prefixes whose objects belong to one person:
+// an object of type "<prefix>_<userId>" (a person's workspace, forge 16b:
+// ws_<userId>.<workspaceId>) is seen and joined by that user alone.
+var (
+	ownedMu sync.RWMutex
+	owned   = map[string]bool{}
+)
+
+// Owned makes the objects of type "<prefix>_<userId>" private to that user:
+// only they may be present there or follow who is (forge 16b's windows on
+// one workspace). It is called once, when a feature contributes.
+func Owned(prefix string) {
+	ownedMu.Lock()
+	defer ownedMu.Unlock()
+	owned[prefix] = true
+}
+
+// Allowed reports whether a principal may be present in object and follow
+// who is there: anyone may, but for an object one person owns (Owned),
+// where only that person, as themselves, may.
+func Allowed(principal features.Principal, object string) bool {
+	typ, _, _ := strings.Cut(object, ".")
+	prefix, user, ok := strings.Cut(typ, "_")
+	if !ok {
+		return true
+	}
+	ownedMu.RLock()
+	private := owned[prefix]
+	ownedMu.RUnlock()
+	if !private {
+		return true
+	}
+	return principal.Kind == features.PrincipalUser && strconv.FormatUint(principal.UserID, 10) == user
+}
+
 // ValidObject reports whether object is "<type>.<id>".
 func ValidObject(object string) bool {
 	typ, id, ok := strings.Cut(object, ".")
@@ -102,6 +138,9 @@ func (p *Presence) Set(ctx context.Context, principal features.Principal, object
 func (p *Presence) SetAs(ctx context.Context, principal features.Principal, object, conn, actor string, state json.RawMessage) error {
 	if !ValidObject(object) || !live.ValidToken(conn) {
 		return log.Code("invalid_object").Errorf("%q is not an object (<type>.<id>)", object)
+	}
+	if !Allowed(principal, object) {
+		return log.Code("forbidden").Errorf("%s is another person's", object)
 	}
 	kv, err := p.bucket(ctx, principal.TenantID)
 	if err != nil {
@@ -173,6 +212,9 @@ func (p *Presence) run(f live.Feed) error {
 	_ = json.Unmarshal(f.Params(), &params)
 	if !ValidObject(params.Object) {
 		return log.Code("invalid_object").Errorf("%q is not an object (<type>.<id>)", params.Object)
+	}
+	if !Allowed(f.Args().Principal, params.Object) {
+		return log.Code("forbidden").Errorf("%s is another person's", params.Object)
 	}
 	ctx := f.Context()
 	kv, err := p.bucket(ctx, f.Args().Principal.TenantID)

@@ -46,8 +46,8 @@ extensions.contribute(chatCommands, {
       case 'found':
         if (match.workspace.id === current?.id) ctx.say(`This tab already shows ${match.workspace.name}.`)
         else {
-          workspaces.switchTo(match.workspace.id)
-          ctx.say(`Switched to the workspace ${match.workspace.name}.`)
+          if (workspaces.switchTo(match.workspace.id)) ctx.say(`Switched to the workspace ${match.workspace.name}.`)
+          else ctx.say(`An editor has unsaved changes: choose *Switch anyway* or *Stay*.`)
         }
         return
       case 'ambiguous':
@@ -90,7 +90,9 @@ extensions.contribute(chatClientTools, {
       if (match.kind === 'found') target = match.workspace
     }
     if (!target) throw new Error(`there is no such workspace; the user's are ${list.map((w) => `${w.name} (${w.id})`).join(', ')}`)
-    workspaces.switchTo(target.id)
+    if (!workspaces.switchTo(target.id)) {
+      return { switched: false, id: target.id, name: target.name, why: 'an editor has unsaved changes; the user is asked to switch anyway or stay' }
+    }
     return { switched: true, id: target.id, name: target.name }
   },
 })

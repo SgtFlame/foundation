@@ -223,3 +223,6 @@ Every committed event carries **`command`**, the command type that committed it 
 ## Changed in forge 16a
 - **`live.Command.TypeFor(principal)`** makes a command's target type from the principal, for state kept per person. Workspaces use `ws_<userId>` ([Workspaces.md](Workspaces.md#built-in-forge-16a)), so one person's keys are a pattern of their own and no id reaches another's. `Command.TargetFor` now takes the principal: `TargetFor(p, id, args)`.
 - **Streams and buckets made at the same moment**: `project.Projections.Stream` and `Bucket` try again (up to five times) when `CreateOrUpdate` fails with *stream name already in use*, which happens when another process or goroutine made the stream in between. The first concurrent read of a fresh projection used to fail with a 500.
+
+## Changed in forge 16b
+- **Presence a person owns**: `presence.Owned(prefix)` makes objects of type `<prefix>_<userId>` private to that user. `Set` (the `presence` frame) and the `live.presence` query refuse anyone else with `forbidden`, an agent too. `presence.Allowed(principal, object)` is the check. Workspaces register `ws`, so which windows show a workspace (`ws_<userId>.<id>`) is that person's alone ([Workspaces.md › Built in forge 16b](Workspaces.md#built-in-forge-16b)).

@@ -37,6 +37,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
+	"github.com/SgtFlame/foundation/backend/features/live/presence"
 )
 
 const (
@@ -50,6 +51,9 @@ const (
 	DefaultName = "Default"
 	// MaxName is the longest name a workspace may have, in characters.
 	MaxName = 60
+	// MaxPart is the most bytes a workspace's layout or context may hold
+	// (forge 16b): a layout of a few dozen tabs is a few kilobytes.
+	MaxPart = 256 << 10
 	source  = "workspace"
 )
 
@@ -235,6 +239,9 @@ const describeFields = `{id, name, isDefault, position, layout, context, version
 // dependencies once made. It runs before livetools.Contribute, which gives
 // each command that is not internal its tool.
 func Contribute(reg *extensions.Registry, deps func() Deps) {
+	// Who has a workspace open (forge 16b: the windows on one workspace) is
+	// presence in ws_<userId>.<id>, which only that person may see
+	presence.Owned("ws")
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: Projector, Source: source}, Title: "Workspaces",
 		Description: "Each person's workspaces (forge 16a), keyed ws_<userId>.<id>: " + describeFields,
@@ -464,6 +471,9 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		}
 		if a.Layout == nil && a.Context == nil {
 			return nil, nil
+		}
+		if len(a.Layout) > MaxPart || len(a.Context) > MaxPart {
+			return nil, problem("workspace_too_large", "args", fmt.Sprintf("a workspace's layout and context may hold at most %d KB each", MaxPart>>10), "close some editors")
 		}
 		return []live.NewEvent{{Type: EventUpdated, Data: change{Layout: a.Layout, Context: a.Context}}}, nil
 	})

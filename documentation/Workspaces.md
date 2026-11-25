@@ -1,6 +1,6 @@
 # Workspaces
 
-A **workspace** is a context a person switches to: the editors they have open and how they are laid out, the Volumes and Chronicle entries that are active, and the chats that belong to it. It is planned in forge's [016-Workspaces.md](../../forge/documentation/plans/016-Workspaces.md) and built in parts. Part 16a, the records and the menu, is built. The layout (16b), the active knowledge (16c) and the chats (16d) store their state in these records.
+A **workspace** is a context a person switches to: the editors they have open and how they are laid out, the Volumes and Chronicle entries that are active, and the chats that belong to it. It is planned in forge's [016-Workspaces.md](../../forge/documentation/plans/016-Workspaces.md) and built in parts. Part 16a (the records and the menu) and part 16b (the editors and layout) are built. The active knowledge (16c) and the chats (16d) will store their state in these records too.
 
 ## Built in forge 16a
 
@@ -66,3 +66,60 @@ A **workspace** is a context a person switches to: the editors they have open an
 - Forge's walk `documentation/walks/16a.json` and its `forge workspaces` tool cover the rest ([forge plans/016a-WorkspaceRecords.md › Test](../../forge/documentation/plans/016a-WorkspaceRecords.md#test)).
 
 ![The Workspaces menu](../../forge/documentation/images/workspaces-menu.png)
+
+## Built in forge 16b
+
+A workspace now holds its **open editors and their layout**: switching shows the other workspace's editors and splits, and a reload or another browser shows what was saved. Planned in forge's [016b-WorkspaceLayout.md](../../forge/documentation/plans/016b-WorkspaceLayout.md).
+
+### Decisions
+- **Editors that cannot be restored** (question 8, 2026-11-25): a switch closes them, as a reload does. A tab with unsaved changes asks first, *Switch anyway* or *Stay*.
+- **Two windows on one workspace** (question 9, 2026-11-25, the user's answer): the person chooses, per window, between ***Live follow*** and ***Don't save this window***. So the browser tracks which windows show each workspace.
+
+Decided while building:
+- **Which windows show a workspace is presence.** Each window is present in `ws_<userId>.<workspaceId>` (`live.presence`). Only that person may join or follow such an object: `presence.Owned("ws")`, registered by `workspace.Contribute` ([Live.md › Changed in forge 16b](Live.md#changed-in-forge-16b)). It needs no new state and works across processes, since presence is a KV bucket.
+- **A window alone on its workspace saves and follows.** The question is asked only of a window that opens a workspace (on load or by a switch) while another window already shows it. The first window is never asked.
+- **The choice lasts for the tab**, per workspace (`sessionStorage`). It applies again after a reload only while another window is still there; a window found alone saves and forgets the choice.
+- **Live follow takes the other window's saved layout as it arrives**, replacing the model with `Model.fromJson(json, previous)`. Tabs both layouts hold keep their view state and stay mounted, and so do the border tabs, so the chat is untouched. The following window keeps its own unsaveable tabs.
+- **Last writer wins** between following windows. A window with a change pending or in flight ignores incoming layouts; its own save, refused as stale, is sent again on the newer version.
+- **Don't save this window** neither saves nor follows. The Workspaces button shows a dot (amber once the workspace has changed elsewhere), the menu says *Not saved in this window*, and *Live follow* there takes the saved layout and joins. A saving window beside others has *Don't save this window* in its menu.
+- **A deleted workspace's window falls back to Default without asking.** The deletion was confirmed already, and Default's layout is shown.
+- **The size of a layout or context** is at most 256 KB (`workspace.MaxPart`, `workspace_too_large`).
+- **Markdown counts edits its autosave has not sent yet as unsaved** (`CollabState.pending`, reported as `dirty`). Before this, `dirty` covered only a save in flight.
+
+### What is saved
+- `layout` is `{format: 1, layout: <flexlayout row>}`: the main area's rows, tabsets, weights, the active tabset and each tabset's selected tab (`workspace/layout.ts`, `layoutToSave`).
+- Only **restorable** tabs are kept: app editor kinds, and editors with `restorable: true`. A tabset left empty, and a row left empty, are removed. A tabset's selected tab stays selected when kept; otherwise the tab now in its place is selected.
+- Border tabs and their open state are not part of a workspace. They are contributions, the same in every workspace.
+- The side bar's open and collapsed views stay per browser.
+
+### In the browser
+- **`Workbench.tsx`** holds the model in state. `EditorRegistry.setModel` swaps it under the same registry, so editors keep the registry they were given.
+  - The model starts empty. Deep links (`?logs=`, `?app=`) open into it, and the workspace's layout is shown when `useWorkspace()` brings it, keeping those tabs. If they change the layout, it is saved.
+  - On a switch the old workspace's layout is saved at once as it was (`LayoutSaver.retire`). Then the other's is shown, closing every tab it lacks.
+- **`LayoutSaver`** (`workspace/layoutSaver.ts`) sends `workspace.update {version, layout}` half a second after the last layout change (a drag sends one).
+  - It skips a layout the workspace already holds.
+  - It uses the version its own last save made when the list has not brought it yet.
+  - On `stale_workspace` it waits for a newer version and sends again (the window's layout wins).
+  - It sends nothing while the window does not save.
+- **`workspaceWindows`** (`workspace/windows.ts`) joins the workspace's presence on every switch and decides the window's mode from the first list of who is there: `checking`, `asking`, `saving` or `unsaved`. `WorkspaceWindowsDialog` asks; the menu shows the mode.
+- **The switch guard** (`workspaces.setSwitchGuard`): before a switch, the workbench lists the tabs the target lacks whose subject reports `dirty`. If any, it shows *Switch to <name>?*, and `switchTo` returns false.
+  - *Stay* keeps the workspace; *Switch anyway* calls `switchTo(id, true, true)`.
+  - `/workspace` and the `workspace.switch` tool say when the person was asked (`switched: false`).
+- **The move-in**: the first time a browser opens *Default* while it has no layout, the tabs this browser kept before workspaces (`workbench.tabs.<tenant>.<user>` in `localStorage`) become its layout, and the key is removed. A browser that finds a layout there takes it and removes its own key.
+
+### Tests
+- `go test ./features/workspace`: a layout over `MaxPart` is refused; `TestWindowsPresenceIsPrivate` (a person's own workspace object, not another's, not an agent's; ordinary objects unchanged).
+- `yarn test` in `frontend/common` runs `src/workspace/layout.test.ts`:
+  - the saved layout has no unsaveable or border tabs and no empty tabsets, and keeps the selected tab;
+  - a split layout restores as it was;
+  - kept tabs join the active tabset;
+  - the move-in makes one tabset;
+  - a drag sends one update, and the same layout again sends none;
+  - a stale save is sent again on the newer version;
+  - a retired saver sends the layout it had, not the next workspace's;
+  - a window that does not save sends nothing.
+- Forge's walk `documentation/walks/16b.json` and its `forge workspaces` tool (now printing each layout's editors) cover the rest ([forge plans/016b-WorkspaceLayout.md › Test](../../forge/documentation/plans/016b-WorkspaceLayout.md#test)).
+
+![Default: Data Designer and Hello side by side](../../forge/documentation/images/workspace-layout-default.png)
+![A second window opening Support, which the first window shows](../../forge/documentation/images/workspace-windows-ask.png)
+![A Markdown file with unsaved changes asks before a switch](../../forge/documentation/images/workspace-switch-unsaved.png)

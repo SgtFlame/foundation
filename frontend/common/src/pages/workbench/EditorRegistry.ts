@@ -10,9 +10,15 @@ export function tabIdOf(object: EditableObject): string {
 }
 
 export class EditorRegistry {
-  private readonly model: Model
+  private model: Model
 
   constructor(model: Model) {
+    this.model = model
+  }
+
+  // The model now shown: a workspace switch or another window's layout
+  // replaces it (forge 16b); the registry handed to editors stays the same
+  setModel(model: Model) {
     this.model = model
   }
 

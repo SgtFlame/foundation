@@ -52,6 +52,10 @@ let subscribedAs = ''
 // A workspace this tab switches to once the list holds it: one just made,
 // whose create was acknowledged before the list's change arrived
 let pending: { id: string; until: number } | undefined
+// Asked before this tab switches (forge 16b): false keeps the current
+// workspace, e.g. while the workbench asks about an editor with unsaved
+// changes, and switches later with force
+let switchGuard: ((to: string) => boolean) | undefined
 
 function set(workspaces: Workspace[]) {
   if (pending && !workspaces.some((w) => w.id === pending!.id) && Date.now() < pending.until) {
@@ -99,10 +103,22 @@ export const workspaces = {
   subscribe,
   start,
 
+  // Asks guard before every switch but a forced one; returns the remover
+  setSwitchGuard(guard: (to: string) => boolean) {
+    switchGuard = guard
+    return () => {
+      if (switchGuard === guard) switchGuard = undefined
+    }
+  },
+
   // Shows another workspace in this tab, and remembers it as this
   // browser's last one. A workspace not in the list yet (one just made)
-  // is shown when it arrives, if within ten seconds.
-  switchTo(id: string, justMade = false) {
+  // is shown when it arrives, if within ten seconds. False when it is not
+  // shown: unknown, or held back by the switch guard (which then asks the
+  // person and switches with force).
+  switchTo(id: string, justMade = false, force = false) {
+    if (id === state.current?.id) return true
+    if (!force && switchGuard && !switchGuard(id)) return false
     if (!state.workspaces.some((w) => w.id === id)) {
       if (!justMade) return false
       pending = { id, until: Date.now() + 10_000 }
@@ -146,7 +162,7 @@ export const workspaces = {
 
   // Deletes a workspace; the one in use switches to Default first
   async remove(id: string) {
-    if (state.current?.id === id) workspaces.switchTo(defaultWorkspaceId)
+    if (state.current?.id === id) workspaces.switchTo(defaultWorkspaceId, false, true) // the delete was confirmed
     await live.command('workspace.delete', id, {})
   },
 }

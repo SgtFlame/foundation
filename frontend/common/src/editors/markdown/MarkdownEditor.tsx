@@ -95,7 +95,7 @@ function useMarkdownSubject(tabId: string, object: MarkdownObject, session: Coll
   useWorkbenchSubject(
     tabId,
     { type: 'markdown', id: object.fileId, label: object.name, summary: object.helpText },
-    { selection: state.selection ? { lines: state.selection } : undefined, dirty: state.saving },
+    { selection: state.selection ? { lines: state.selection } : undefined, dirty: state.saving || !!state.pending },
   )
   useEffect(() => {
     let last = 0

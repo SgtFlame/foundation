@@ -10,9 +10,12 @@ import CheckIcon from '@mui/icons-material/Check'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
+import SyncIcon from '@mui/icons-material/Sync'
+import SyncDisabledIcon from '@mui/icons-material/SyncDisabled'
 import { log } from '../logging/Logger.ts'
 import { nameProblem, type Workspace } from './current.ts'
 import { useWorkspace, workspaces } from './workspaceStore.ts'
+import { useWorkspaceWindows, workspaceWindows } from './windows.ts'
 
 const menuLog = log.In('workspace').Tags('menu')
 
@@ -80,6 +83,8 @@ type Asking = { kind: 'new' } | { kind: 'rename'; workspace: Workspace } | { kin
 // switches, makes, renames, duplicates, moves and deletes workspaces.
 function WorkspaceMenu() {
   const { workspaces: list, current } = useWorkspace()
+  const windows = useWorkspaceWindows()
+  const unsaved = windows.mode === 'unsaved' && windows.workspace === current?.id
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const [asking, setAsking] = useState<Asking>()
   const [error, setError] = useState<string>()
@@ -93,7 +98,7 @@ function WorkspaceMenu() {
     })
   }
 
-  const title = current ? `Workspace: ${current.name}` : 'Workspaces'
+  const title = current ? `Workspace: ${current.name}${unsaved ? ' (not saved in this window)' : ''}` : 'Workspaces'
   return (
     <>
       <Tooltip title={title} placement="right">
@@ -106,6 +111,9 @@ function WorkspaceMenu() {
           >
             {current ? workspaceInitials(current.name) : '…'}
           </Box>
+          {unsaved && (
+            <Box sx={{ position: 'absolute', right: 6, top: 6, width: 8, height: 8, borderRadius: '50%', bgcolor: windows.changedElsewhere ? 'warning.main' : 'text.secondary' }} />
+          )}
         </IconButton>
       </Tooltip>
       <Menu
@@ -117,9 +125,25 @@ function WorkspaceMenu() {
         {list.map((w) => (
           <MenuItem key={w.id} selected={w.id === current?.id} onClick={() => { close(); workspaces.switchTo(w.id) }}>
             <ListItemIcon>{w.id === current?.id && <CheckIcon fontSize="small" />}</ListItemIcon>
-            <ListItemText>{w.name}</ListItemText>
+            <ListItemText
+              secondary={w.id === current?.id && unsaved ? (windows.changedElsewhere ? 'Not saved here · changed in another window' : 'Not saved in this window') : undefined}
+            >
+              {w.name}
+            </ListItemText>
           </MenuItem>
         ))}
+        {unsaved && (
+          <MenuItem onClick={() => { close(); workspaceWindows.choose('follow') }}>
+            <ListItemIcon><SyncIcon fontSize="small" /></ListItemIcon>
+            <ListItemText secondary="Take the saved layout and keep it in step">Live follow</ListItemText>
+          </MenuItem>
+        )}
+        {!unsaved && windows.workspace === current?.id && windows.others > 0 && (
+          <MenuItem onClick={() => { close(); workspaceWindows.choose('unsaved') }}>
+            <ListItemIcon><SyncDisabledIcon fontSize="small" /></ListItemIcon>
+            <ListItemText secondary={`Open in ${windows.others === 1 ? 'another window' : `${windows.others} other windows`}`}>Don't save this window</ListItemText>
+          </MenuItem>
+        )}
         <Divider />
         <MenuItem onClick={() => { close(); setAsking({ kind: 'new' }) }}>
           <ListItemIcon><AddIcon fontSize="small" /></ListItemIcon>

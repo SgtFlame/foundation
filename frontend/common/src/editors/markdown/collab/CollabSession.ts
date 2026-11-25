@@ -22,6 +22,9 @@ export interface CollabState {
   loaded: boolean // the document has been ready at least once, so views can show it
   writer: boolean
   saving: boolean
+  // the writer has edits its autosave has not sent yet (forge 16b: a
+  // workspace switch asks before closing such a tab)
+  pending?: boolean
   lastSavedAt?: number
   saveError?: string
   closedReason?: string
@@ -89,7 +92,7 @@ export class CollabSession {
     this.doc.off('update', this.onDocUpdate)
     this.provider?.destroy()
     this.provider = undefined
-    this.update({ status: 'connecting', writer: false, saving: false, peers: [] })
+    this.update({ status: 'connecting', writer: false, saving: false, pending: false, peers: [] })
   }
 
   snapshot = (): CollabState => this.state
@@ -161,6 +164,7 @@ export class CollabSession {
     if (!this.state.writer || !this.ready) return
     clearTimeout(this.saveTimer)
     this.saveTimer = setTimeout(() => this.save(), saveDelayMs)
+    if (!this.state.pending) this.update({ pending: true })
   }
 
   // Saves now if a save is pending, e.g. when the page is closing
@@ -173,10 +177,13 @@ export class CollabSession {
     clearTimeout(this.saveTimer)
     this.saveTimer = undefined
     const markdown = this.ytext.toString()
-    if (!this.state.writer || this.state.readOnly || markdown === this.lastSavedText) return // the room ignores a read-only save
+    if (!this.state.writer || this.state.readOnly || markdown === this.lastSavedText) {
+      if (this.state.pending) this.update({ pending: false })
+      return // the room ignores a read-only save
+    }
     logger.With('fileId', this.fileId).debug('saving %d characters', markdown.length)
     this.provider?.sendControl({ op: 'save', markdown })
-    this.update({ saving: true })
+    this.update({ saving: true, pending: false })
   }
 
   private readonly onAwarenessChange = () => {
