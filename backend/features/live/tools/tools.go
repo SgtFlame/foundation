@@ -131,7 +131,7 @@ func commandTool(c live.Command, deps func() Deps) tools.Tool {
 			}
 			content := map[string]any{"stream": res.Stream, "seq": res.Seq, "target": res.Target}
 			if c.Report != nil {
-				tg, _ := c.TargetFor(res.Target, args.Args)
+				tg, _ := c.TargetFor(call.Principal, res.Target, args.Args)
 				content["report"] = c.Report(call.ServiceArgs, tg, res.Seq)
 			}
 			return tools.Result{Content: content, Summary: c.Title}, nil

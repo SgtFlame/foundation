@@ -55,6 +55,7 @@ export interface WorkbenchSnapshot {
   previous?: string // the editor focused before the chat surface: usually what "this" means
   editors: EditorEntry[]
   recent: RecentEntry[]
+  workspace?: string // the id of the workspace this tab shows (forge 16a); the server reads its name
 }
 
 const maxRecent = 20
@@ -69,6 +70,12 @@ export interface SubjectReport {
 
 export class WorkbenchContextStore {
   private state: WorkbenchState = { editors: [], focusOrder: [], recent: [] }
+  private workspace?: string
+
+  // The workspace this tab shows, sent with each snapshot (forge 16a)
+  setWorkspace(id: string | undefined) {
+    this.workspace = id
+  }
   private readonly listeners = new Set<Listener>()
   // What editors reported, kept apart from the layout's tabs so either can come first
   private readonly reports = new Map<string, { subject?: SubjectRef } & SubjectReport>()
@@ -142,7 +149,7 @@ export class WorkbenchContextStore {
   snapshot(surface: string, surfaceTab: string): WorkbenchSnapshot {
     const { editors, focusOrder, recent } = this.state
     const previous = focusOrder.find((t) => t !== surfaceTab)
-    const snap: WorkbenchSnapshot = { surface, focused: surfaceTab, previous, editors: [...editors], recent: [...recent] }
+    const snap: WorkbenchSnapshot = { surface, focused: surfaceTab, previous, editors: [...editors], recent: [...recent], workspace: this.workspace }
     const size = () => new TextEncoder().encode(JSON.stringify(snap)).length
     while (size() > maxSnapshotBytes && snap.recent.length > 0) snap.recent.pop()
     while (size() > maxSnapshotBytes) {

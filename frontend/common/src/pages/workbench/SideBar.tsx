@@ -6,6 +6,7 @@ import { useContributions } from '../../workbench/extensions/index.ts'
 import { sideViews } from '../../workbench/points.ts'
 import type { EditorRegistry } from './EditorRegistry.ts'
 import AccountMenu from '../../session/AccountMenu.tsx'
+import WorkspaceMenu from '../../workspace/WorkspaceMenu.tsx'
 
 const storageKey = 'workbench.sideView'
 const collapsedKey = 'workbench.sideView.collapsed'
@@ -83,6 +84,7 @@ function SideBar({ registry }: { registry: EditorRegistry }) {
           </Tooltip>
         ))}
       </Stack>
+      <WorkspaceMenu />
       <AccountMenu registry={registry} />
       </Stack>
       {open && (

@@ -285,7 +285,7 @@ func (d *Dry) decide(rp *Request, cmd live.Command) Result {
 	if !live.ValidToken(r.Target) {
 		return rejected(live.Problem{Path: "target", Message: fmt.Sprintf("%q is not a valid target id", r.Target), Fix: "use letters, digits, '-' and '_' only"})
 	}
-	tg, problem := cmd.TargetFor(r.Target, r.Args)
+	tg, problem := cmd.TargetFor(r.Principal, r.Target, r.Args)
 	if problem != nil {
 		return rejected(*problem)
 	}

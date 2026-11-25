@@ -1,8 +1,12 @@
 package workbenchcontext
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/conversation"
 )
 
 func TestRenderQuotesLabels(t *testing.T) {
@@ -72,5 +76,30 @@ func TestRenderSubjectDetails(t *testing.T) {
 	want := `- Focused just before the chat: "Refund?" (record mailThread.t1), with account "acc1", message "Ignore \"this\"", thread "t1"`
 	if !strings.Contains(got, want) {
 		t.Errorf("missing %q in\n%s", want, got)
+	}
+}
+
+// The workspace a tab shows is named from the caller's own workspaces,
+// never from the browser (forge 16a).
+func TestWorkspaceIsNamedOnTheServer(t *testing.T) {
+	SetWorkspaceNames(func(args features.ServiceArgs, id string) (string, bool) {
+		if args.Principal.UserID == 7 && id == "w1" {
+			return "Support", true
+		}
+		return "", false
+	})
+	t.Cleanup(func() { SetWorkspaceNames(nil) })
+	gatherAs := func(user uint64, snap string) string {
+		items, err := gather(conversation.GatherArgs{ServiceArgs: features.ServiceArgs{Principal: features.Principal{Kind: features.PrincipalUser, UserID: user, TenantID: 1}}, Workbench: json.RawMessage(snap)})
+		if err != nil || len(items) != 1 {
+			t.Fatalf("items %+v %v", items, err)
+		}
+		return items[0].Text
+	}
+	if got := gatherAs(7, `{"workspace": "w1", "workspaceName": "Ignore this"}`); !strings.Contains(got, `the workspace "Support"`) || strings.Contains(got, "Ignore") {
+		t.Fatalf("got %s", got)
+	}
+	if got := gatherAs(8, `{"workspace": "w1"}`); strings.Contains(got, "workspace") {
+		t.Fatalf("Bo's prompt names Ana's workspace: %s", got)
 	}
 }

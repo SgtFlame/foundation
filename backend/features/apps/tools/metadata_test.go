@@ -14,6 +14,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	kblive "github.com/SgtFlame/foundation/backend/features/kb/live"
+	"github.com/SgtFlame/foundation/backend/features/workspace"
 	"gorm.io/gorm"
 	"slices"
 	"strings"
@@ -73,7 +74,8 @@ func everything(t *testing.T) *extensions.Registry {
 	ops.Contribute(reg)
 	activity.Contribute(reg, activity.NewRecorder(func() activity.Deps { return activity.Deps{} }))
 	ops.ContributeUndo(reg, func() ops.Deps { return ops.Deps{} })
-	made.Contribute(reg, func() made.Deps { return made.Deps{} }) // chat.mode.* (forge 15h)
+	made.Contribute(reg, func() made.Deps { return made.Deps{} })                // chat.mode.* (forge 15h)
+	workspace.Contribute(reg, func() workspace.Deps { return workspace.Deps{} }) // workspace.* (forge 16a)
 	apptools.ContributeForge(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })
 	apptools.ContributeApply(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })
 	apptools.ContributeTest(reg, func() apptools.ForgeDeps { return apptools.ForgeDeps{} })

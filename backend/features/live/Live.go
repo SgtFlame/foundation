@@ -303,6 +303,11 @@ type Command struct {
 	// TypeOf, when set, reads the target's type from the arguments, for a
 	// command that serves many types: record.* take it from their entity.
 	TypeOf func(args json.RawMessage) (string, *Problem)
+	// TypeFor, when set, makes the target's type from the principal, for
+	// state kept per person: a workspace's type is ws_<userId>, so one
+	// person's keys are a pattern of their own and no one names another's
+	// (forge 16a).
+	TypeFor func(p features.Principal) string
 	// NewTarget, when set, makes the target's id for a command sent
 	// without one (a record made from Go or a tool). A browser that may
 	// resend the command makes the id itself, so a resend is a duplicate.
@@ -344,9 +349,12 @@ type Command struct {
 	Report func(args features.ServiceArgs, target Target, seq uint64) any
 }
 
-// TargetFor is the target of the command sent to id with args.
-func (c Command) TargetFor(id string, args json.RawMessage) (Target, *Problem) {
+// TargetFor is the target of the command p sent to id with args.
+func (c Command) TargetFor(p features.Principal, id string, args json.RawMessage) (Target, *Problem) {
 	t := Target{Area: c.Area, Type: c.TargetType, ID: id}
+	if c.TypeFor != nil {
+		t.Type = c.TypeFor(p)
+	}
 	if c.TypeOf != nil {
 		typ, p := c.TypeOf(args)
 		if p != nil {

@@ -219,3 +219,7 @@ For Forge's Builder in presence ([Apps.md › Changed in slice 43](Apps.md#chang
 
 ## Changed in forge 15c
 Every committed event carries **`command`**, the command type that committed it as the bus knew it (an installed app's `<appId>.<name>`), and **`app`**, the app the request was made for (`live.Event.Command`, `App`), from `bus.Execute`, `bus.Transact` and dry runs. A person's recent activity names them ([Activity.md](Activity.md#built-in-forge-15c)).
+
+## Changed in forge 16a
+- **`live.Command.TypeFor(principal)`** makes a command's target type from the principal, for state kept per person. Workspaces use `ws_<userId>` ([Workspaces.md](Workspaces.md#built-in-forge-16a)), so one person's keys are a pattern of their own and no id reaches another's. `Command.TargetFor` now takes the principal: `TargetFor(p, id, args)`.
+- **Streams and buckets made at the same moment**: `project.Projections.Stream` and `Bucket` try again (up to five times) when `CreateOrUpdate` fails with *stream name already in use*, which happens when another process or goroutine made the stream in between. The first concurrent read of a fresh projection used to fail with a 500.

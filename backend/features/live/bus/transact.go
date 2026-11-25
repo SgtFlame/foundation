@@ -98,7 +98,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 		if !live.ValidToken(op.Target) {
 			return at(live.Problem{Path: "target", Message: fmt.Sprintf("%q is not a valid target id", op.Target), Fix: "use letters, digits, '-' and '_' only"})
 		}
-		tg, problem := cmd.TargetFor(op.Target, args)
+		tg, problem := cmd.TargetFor(r.Principal, op.Target, args)
 		if problem != nil {
 			return at(*problem)
 		}

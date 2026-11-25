@@ -76,9 +76,11 @@ func (p *Projections) Stream(ctx context.Context, tenant uint64, area live.Area)
 	if !live.ValidToken(string(area)) {
 		return nil, log.Errorf("%q is not a valid area", area)
 	}
-	s, err := p.js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
-		Name: name, Subjects: []string{live.StreamSubjects(tenant, area)}, Storage: jetstream.FileStorage,
-		Retention: jetstream.LimitsPolicy, Duplicates: Duplicates, AllowDirect: true, AllowAtomicPublish: true,
+	s, err := made(func() (jetstream.Stream, error) {
+		return p.js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+			Name: name, Subjects: []string{live.StreamSubjects(tenant, area)}, Storage: jetstream.FileStorage,
+			Retention: jetstream.LimitsPolicy, Duplicates: Duplicates, AllowDirect: true, AllowAtomicPublish: true,
+		})
 	})
 	if err != nil {
 		return nil, log.Wrapf(err, "cannot make the event stream %s", name)
@@ -87,6 +89,22 @@ func (p *Projections) Stream(ctx context.Context, tenant uint64, area live.Area)
 	p.streams[name] = s
 	p.mu.Unlock()
 	return s, nil
+}
+
+// made makes a stream or bucket, trying again when another process (or
+// goroutine) made it at the same moment: CreateOrUpdate then fails with
+// "stream name already in use", and the next try updates the one it made
+// (forge 16a, two processes reading a person's workspaces at once).
+func made[T any](make func() (T, error)) (T, error) {
+	var v T
+	var err error
+	for range 5 {
+		if v, err = make(); err == nil || !errors.Is(err, jetstream.ErrStreamNameAlreadyInUse) {
+			return v, err
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return v, err
 }
 
 // Projector finds a projector by id.
@@ -116,7 +134,9 @@ func (p *Projections) Bucket(ctx context.Context, tenant uint64, projector strin
 	if err != nil {
 		return nil, err
 	}
-	kv, err = p.js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{Bucket: name, Description: pr.Title, History: 1, Storage: jetstream.FileStorage})
+	kv, err = made(func() (jetstream.KeyValue, error) {
+		return p.js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{Bucket: name, Description: pr.Title, History: 1, Storage: jetstream.FileStorage})
+	})
 	if err != nil {
 		return nil, log.Wrapf(err, "cannot make the projection %s", name)
 	}
