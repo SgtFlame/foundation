@@ -159,10 +159,16 @@ func Group(entries []Entry, set Settings, now time.Time, q Params) Activity {
 	oldest := now.Add(-set.Keep())
 	dismissed := map[string]bool{}
 	var kept []Entry
+	var marks []Mark
 	for _, e := range entries {
 		switch e.Kind {
 		case KindClear:
-			kept, dismissed = nil, map[string]bool{}
+			kept, dismissed, marks = nil, map[string]bool{}, nil
+			continue
+		case KindAsk:
+			if e.Ask != nil {
+				marks = append(marks, *e.Ask)
+			}
 			continue
 		case KindDismiss:
 			for _, id := range e.IDs {
@@ -196,6 +202,7 @@ func Group(entries []Entry, set Settings, now time.Time, q Params) Activity {
 	}
 	for i := range gs {
 		finish(&gs[i], dismissed[gs[i].ID])
+		gs[i].Asks = asksOf(gs[i], marks)
 	}
 	slices.SortStableFunc(gs, func(a, b Gesture) int { return a.Start.Compare(b.Start) })
 	gs = merge(gs)
@@ -250,6 +257,41 @@ func finish(g *Gesture, dismissed bool) {
 	default:
 		g.Summary = strings.Join(rest, "; ")
 	}
+}
+
+// asksOf applies the marks on a gesture's values, in the order made: the
+// last mark of a field wins, and a removing one clears it. Only a command
+// entry's fields can be marked.
+func asksOf(g Gesture, marks []Mark) []Ask {
+	var out []Ask
+	for _, m := range marks {
+		if m.Gesture != g.ID {
+			continue
+		}
+		out = slices.DeleteFunc(out, func(a Ask) bool { return a.Entry == m.Entry && a.Field == m.Field })
+		if m.Remove {
+			continue
+		}
+		for _, e := range g.Entries {
+			if e.ID != m.Entry || e.Kind != KindCommand {
+				continue
+			}
+			for _, f := range e.Fields {
+				if f.ID != m.Field {
+					continue
+				}
+				a := Ask{Entry: e.ID, Field: f.ID, Name: f.Name, Question: m.Question, Default: m.Default, Omitted: f.Omitted}
+				if a.Question == "" {
+					a.Question = "Which " + strings.ToLower(f.Name) + "?"
+				}
+				if a.Default == nil && !f.Omitted {
+					a.Default = f.Value
+				}
+				out = append(out, a)
+			}
+		}
+	}
+	return out
 }
 
 // compact keeps a summary repeated by several events once, with a count.

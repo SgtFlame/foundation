@@ -112,3 +112,43 @@ extensions.contribute(chatClientTools, {
   effect: 'ui',
   Card: lazy(() => import('./AskChoiceCard.tsx')),
 })
+
+// Several questions asked together, once, in a dialog (forge 15g): the
+// Agent Builder's, with the values a person marked to ask each run
+extensions.contribute(chatClientTools, {
+  id: 'chat.askForm',
+  source: 'tools',
+  order: 125,
+  title: 'Ask you a few questions',
+  description:
+    'Asks the user several questions at once, in one dialog, instead of one at a time: each a choice among options (they may type something else) or a text answer, with a default filled in. Use it when you need more than one answer before you can go on. Returns {answers: {<question id>: answer}} or {cancelled: true}.',
+  input: {
+    type: 'object',
+    properties: {
+      title: { type: 'string', description: 'What the questions are for, as the dialog title' },
+      questions: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 12,
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'The key of its answer' },
+            question: { type: 'string', minLength: 1 },
+            kind: { type: 'string', enum: ['text', 'choice'] },
+            choices: {
+              type: 'array',
+              items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'string' } }, required: ['label'] },
+            },
+            default: { type: 'string', description: 'The answer filled in' },
+            help: { type: 'string', description: 'A line under the question' },
+          },
+          required: ['id', 'question'],
+        },
+      },
+    },
+    required: ['questions'],
+  },
+  effect: 'ui',
+  Card: lazy(() => import('./AskFormCard.tsx')),
+})

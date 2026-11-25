@@ -41,7 +41,14 @@ type Round struct {
 	Error          string // the failure's message, safe to show
 	Workbench      string // the workbench snapshot sent with the message, JSON
 	Mode           string // the chat.modes id it ran in (e.g. personal, builder)
-	InputTokens    int    // includes CachedTokens
+	// Activity is the person's gestures sent with the message, JSON
+	// []Gesture with their summaries, so a reload shows them after the
+	// activity stream has dropped them (forge 15d)
+	Activity string
+	// PreMode is what the pre-mode decided before the round ran (forge
+	// 15f), JSON PreModeDecision; empty when it did not run
+	PreMode        string
+	InputTokens    int // includes CachedTokens
 	CachedTokens   int
 	OutputTokens   int
 	ThinkingTokens int
@@ -49,6 +56,19 @@ type Round struct {
 	Currency       string // empty when the model is not in the catalog
 	LatencyMs      int64
 	Feedback       string // a retrieval.Feedback: "", up, down or ignore
+}
+
+// PreModeDecision is what the pre-mode decided for a round (forge 15f),
+// kept on Round.PreMode for its debug view and Undo.
+type PreModeDecision struct {
+	Decision   string  `json:"decision"` // what the graph said: stay, switch or ask
+	Mode       string  `json:"mode"`     // the mode it named
+	Confidence float64 `json:"confidence"`
+	Reason     string  `json:"reason"`
+	Ms         int64   `json:"ms"`              // how long it took
+	From       string  `json:"from"`            // the mode the round was in before
+	Outcome    string  `json:"outcome"`         // stayed, switched, asked-switched, asked-stayed, or timeout / failed
+	Error      string  `json:"error,omitempty"` // why it stayed when it failed
 }
 
 // StatusStopped is a round the user stopped, keeping the reply so far

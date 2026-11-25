@@ -99,14 +99,14 @@ const (
 	// surface.<surface>.<instance>, refreshed by each adapter instance.
 	AdaptersBucket = "cx_adapters"
 	// HooksBucket maps a callback's hook id to its tenant, connection and
-	// type (20b): <hookId> → Hook.
+	// type (26b): <hookId> → Hook.
 	HooksBucket = "cx_hooks"
 )
 
 // DiscoveredBucket holds a tenant's discovered contracts, by connection.
 func DiscoveredBucket(tenant uint64) string { return fmt.Sprintf("cx_discovered_%d", tenant) }
 
-// Hook is a cx_hooks value (20b).
+// Hook is a cx_hooks value (26b).
 type Hook struct {
 	Tenant     uint64 `json:"tenant,string"`
 	Connection string `json:"connection"`

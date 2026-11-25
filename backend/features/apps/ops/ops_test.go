@@ -37,6 +37,7 @@ import (
 	recordsnodes "github.com/SgtFlame/foundation/backend/features/records/nodes"
 	"github.com/SgtFlame/foundation/backend/features/ui"
 	uicomponents "github.com/SgtFlame/foundation/backend/features/ui/components"
+	"github.com/SgtFlame/foundation/backend/features/conversation/made"
 	uinodes "github.com/SgtFlame/foundation/backend/features/ui/nodes"
 	"github.com/SgtFlame/foundation/backend/features/ui/prefabs"
 )
@@ -66,6 +67,7 @@ func setup(t *testing.T) *fixture {
 		prefabDeps prefabs.Deps
 		appDeps    manifests.Deps
 		installDep installs.Deps
+		madeDeps   made.Deps
 	)
 	livenodes.Contribute(reg, func() livenodes.Deps { return nodeDeps })
 	drafts.Contribute(reg, func() drafts.Deps { return draftDeps })
@@ -76,6 +78,7 @@ func setup(t *testing.T) *fixture {
 	manifests.Contribute(reg, func() manifests.Deps { return appDeps })
 	installs.Contribute(reg, func() installs.Deps { return installDep })
 	ui.ContributeOverlays(reg)
+	made.Contribute(reg, func() made.Deps { return madeDeps }) // chat.mode.* (forge 15h)
 	ui.Pages.Register(reg, ui.Page{Descriptor: extensions.Descriptor{ID: "demo/main", Source: "test"}, App: "demo", Title: "Demo"})
 	ops.Contribute(reg)
 	var undoDeps ops.Deps
@@ -101,6 +104,7 @@ func setup(t *testing.T) *fixture {
 	prefabDeps = prefabs.Deps{Projections: p, DB: gdb}
 	appDeps = manifests.Deps{Projections: p, DB: gdb}
 	installDep = installs.Deps{Projections: p, DB: gdb, Nodes: nodeDeps}
+	madeDeps = made.Deps{Store: p, Bus: f.bus, Engine: eng}
 	f.bus.Resolve = installs.CommandFor(func() installs.Deps { return installDep }, livenodes.CommandFor(func() livenodes.Deps { return nodeDeps }))
 	f.subs.Resolve = installs.QueryFor(func() installs.Deps { return installDep }, livenodes.QueryFor(func() livenodes.Deps { return nodeDeps }))
 	return f
@@ -191,6 +195,8 @@ func (f *fixture) state(command, target string, seq uint64) string {
 		projector, key = entities.DraftProjector, entities.TargetType+"."+target
 	case "ui":
 		projector, key = "ui.overlay", ui.OverlayType+"."+target
+	case "chat":
+		projector, key = made.Projector, made.TargetType+"."+target
 	default:
 		projector, key = manifests.DraftProjector, manifests.TargetType+"."+target
 	}
@@ -240,6 +246,10 @@ func (f *fixture) state(command, target string, seq uint64) string {
 			return "null"
 		}
 		out = []any{d.Manifest, d.Seed, d.Published}
+	case made.Projector:
+		var x made.Mode
+		_ = json.Unmarshal(v.Value, &x)
+		out = x
 	default:
 		var o ui.Overlay
 		_ = json.Unmarshal(v.Value, &o)
@@ -412,6 +422,12 @@ func steps() []step {
 		// Page overlays
 		s("ui.insertNode", "demo-main", m{"parent": "root", "node": m{"type": "mui.text", "key": "hi", "props": m{"text": "Hi"}}}),
 		s("ui.removeNode", "demo-main", m{"key": "hi"}),
+		// Made chat modes (forge 15h)
+		s("chat.mode.add", "mode-1", m{"label": "Support answers", "icon": "🎧", "purpose": "Answers support questions briefly.", "graphRef": made.TemplateID}),
+		s("chat.mode.update", "mode-1", m{"label": "Support replies", "focus": m{"kinds": []string{"app:*"}}}),
+		s("chat.mode.update", "mode-1", m{"everywhere": true}),
+		s("chat.mode.share", "mode-1", m{"shared": true}),
+		s("chat.mode.delete", "mode-1", m{}),
 	}
 }
 

@@ -292,7 +292,8 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	}
 	cognition.Graphs.Register(reg, cognition.BuiltIn{Descriptor: extensions.Descriptor{ID: PersonalID, Order: 100, Source: source}, Graph: g, Editable: true})
 	conversation.Modes.Register(reg, conversation.ModeEntry{Descriptor: extensions.Descriptor{ID: PersonalID, Order: 100, Source: source},
-		Label: "Personal", Icon: "🧠", GraphRef: PersonalID, Default: true})
+		Label: "Personal", Icon: "🧠", GraphRef: PersonalID, Default: true,
+		Purpose: "Everyday questions and help: answers from what the person remembers (their Chronicles), their documents and the editors they have open, and summarizes, explains or drafts text."})
 }
 
 // promptsSchema is the config schema of a node whose model call has

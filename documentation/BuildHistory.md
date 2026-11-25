@@ -757,7 +757,7 @@ Each slice ends with something to look at, and the ★ marks where a decision is
 46. **The connector registry and bus** (Forge iteration 7, part 7b, [forge 007b-ConnectorRegistry.md](../../forge/documentation/plans/007b-ConnectorRegistry.md)). *Built* ([Connectors.md](Connectors.md#built-in-slice-46), [Cognition.md](Cognition.md#changed-in-slice-46), [Apps.md](Apps.md#changed-in-slice-46), [Live.md](Live.md#changed-in-slice-46); Forge's palette in [forge BlueprintEditor.md](../../forge/documentation/BlueprintEditor.md)).
     - **Built**:
       - `features/connectors`: versioned contracts, connector types, typed errors, the metadata check with the tool shape, `ToolSpec`/`MCPTool`/`FunctionSpec`/`OpenAPI` with golden tests, the registry over the builtin points and `cx_adapters` announcements, discovered contracts in `cx_discovered_<tenant>`, the dispatcher, the `connectors.*` queries;
-      - `connectors/adapter`: the adapter runtime, in-process or external, with the interfaces declared for 7c, 75c and 20b and surfaces announced;
+      - `connectors/adapter`: the adapter runtime, in-process or external, with the interfaces declared for 7c, 75c and 26b and surfaces announced;
       - `connectors/nodes`: *Call connector* and *On connector event*, pins normalized from the contract; `NodeType.SampleFor`; `bp.import` normalizing what it can;
       - `forge.catalog`'s `connectors` area; `natsd.Server.Connect`, `ClientURL` and `StartTestListening`;
       - Forge's *Connectors* palette and connector details.
@@ -772,7 +772,7 @@ Each slice ends with something to look at, and the ★ marks where a decision is
       - `jobs`/`live/nodes`: `TriggerEvent.Stream` and `Accept`; `records`: the `connection` field type (exports leave its values out); `ui`: the `connection.form` primitive, the Jobs view's *Event sources*, a secret-safe command option in the browser; Forge's *Connection form* prefab.
     - **Blockers**: none. Forge 07c questions 1 to 3 answered with their proposals before building (2026-11-11).
     - **Decisions to review after seeing it**: in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-1).
-    - **Pending, carried forward**: the *Connection* picker in *Call connector*'s panel; pushed events and registration (20b); scripted connectors (7d); the mail contracts and types (7e to 7h).
+    - **Pending, carried forward**: the *Connection* picker in *Call connector*'s panel; pushed events and registration (26b); scripted connectors (7d); the mail contracts and types (7e to 7h).
 
 49. **Connector groups, contributed roles, connection validators and ref settings** (with Forge iteration 7, part 7f, [forge 007f-SMTP.md](../../forge/documentation/plans/007f-SMTP.md)). *Built* ([Connectors.md](Connectors.md#built-in-slice-49)).
     - **Built**:

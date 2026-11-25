@@ -18,6 +18,7 @@ func (ch *ConversationHandler) Register(router gin.IRouter, service conversation
 	group.POST("/rounds", ch.Rounds)
 	group.POST("/feedback", ch.Feedback)
 	group.POST("/answer", ch.Answer) // a waiting tool call's approval or client result
+	group.POST("/mode", ch.Mode)     // switches a conversation's mode (forge 15e)
 	group.GET("/context-providers", ch.ContextProviders)
 	group.GET("/modes", ch.Modes)
 }

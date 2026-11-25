@@ -22,7 +22,8 @@ type service struct {
 	chat     chatservice.Service
 	config   config.Reader
 	registry *extensions.Registry
-	engine   *engine.Engine // runs the rounds' mode graphs
+	engine   *engine.Engine              // runs the rounds' mode graphs
+	activity conversation.ActivityReader // the person's recent gestures (forge 15d); nil sends none
 
 	mu      sync.Mutex
 	waiting map[string]*waiting // tool calls rounds are paused on, by waitKey

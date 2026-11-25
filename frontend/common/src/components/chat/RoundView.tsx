@@ -1,14 +1,16 @@
-import { Alert, Box, Chip, CircularProgress, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material'
+import { Alert, Box, Button, Chip, CircularProgress, Divider, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
-import { roundStopped, type RoundFeedback, type RoundSegment } from '../../services/Conversation.ts'
+import { roundStopped, type ChatMode, type RoundFeedback, type RoundSegment } from '../../services/Conversation.ts'
 import MarkdownText from '../markdown/MarkdownText.tsx'
 import FeedbackButtons from './FeedbackButtons.tsx'
 import { formatCost, formatTokens, type ChatLevel } from './levels.ts'
+import { modeTitle } from './modeMatch.ts'
 import RoundSources from './RoundSources.tsx'
 import RoundUndo, { changedSomething } from './RoundUndo.tsx'
 import ToolCallCard, { type ToolAnswer } from './ToolCallCard.tsx'
 import type { ChatRound } from './useChatStream.ts'
 import type { ChatClientToolContribution } from '../../editors/chat/points.ts'
+import { ActivityLines } from '../../activity/ActivityLines.tsx'
 
 // The footer shown on hover: level, model, tokens, cost and latency
 function footer(round: ChatRound, levels: readonly ChatLevel[]): string {
@@ -23,6 +25,9 @@ function footer(round: ChatRound, levels: readonly ChatLevel[]): string {
     if (round.currency) parts.push(formatCost(round.costMicros, round.currency))
   }
   if (round.latencyMs) parts.push(`${(round.latencyMs / 1000).toFixed(1)} s`)
+  // What the pre-mode decided (forge 15f), for whoever wonders why a round ran where it did
+  const pre = round.preMode
+  if (pre) parts.push(`mode check: ${pre.outcome}${pre.decision ? ` (${pre.decision} ${pre.mode} ${pre.confidence.toFixed(2)})` : ''}, ${pre.ms} ms`)
   return parts.filter(Boolean).join(' · ')
 }
 
@@ -32,14 +37,26 @@ export interface RoundActions {
   onAnswerTool?: (round: ChatRound, callId: string, answer: ToolAnswer) => Promise<void>
   clientTools?: readonly ChatClientToolContribution[] // for their titles and cards
   onOpenLink?: (href: string) => boolean // a click on a reply's link; true when followed (workbench: links)
+  onUndoSwitch?: (round: ChatRound) => void // runs a round the pre-mode switched again in the mode it left (forge 15f)
 }
 
-// The modes a context provider may put a round in (forge 06g)
-const modeTitles: Record<string, string> = { builder: 'Builder' }
 
 // One round: the user's message, the reply as it streams with its
 // citations, its sources and Context inspector, feedback, and its footer
-function RoundView({ round, levels, onOpenSegment, onFeedback, onAnswerTool, clientTools, onOpenLink }: { round: ChatRound; levels: readonly ChatLevel[] } & RoundActions) {
+// modes name its mode badge; switched shows "Switched to …" above it, its
+// mode differing from the round before (forge 15e)
+function RoundView({
+  round,
+  levels,
+  modes,
+  switched,
+  onOpenSegment,
+  onFeedback,
+  onAnswerTool,
+  onUndoSwitch,
+  clientTools,
+  onOpenLink,
+}: { round: ChatRound; levels: readonly ChatLevel[]; modes?: readonly ChatMode[]; switched?: boolean } & RoundActions) {
   if (round.note) {
     return (
       <Box sx={{ px: 2, py: 1, color: 'text.secondary', borderLeft: 3, borderColor: 'divider', mx: 2, my: 1 }}>
@@ -53,6 +70,10 @@ function RoundView({ round, levels, onOpenSegment, onFeedback, onAnswerTool, cli
   const segments = round.segments ?? []
   const citations = segments.length > 0 ? { titles: segments.map((s) => s.title), onCite: (n: number) => onOpenSegment?.(segments[n - 1]) } : undefined
   const ignored = round.feedback === 'ignore'
+  const roundMode = modes?.find((m) => m.id === round.mode)
+  const modeName = roundMode ? modeTitle(roundMode) : round.mode
+  // The pre-mode switched this round (forge 15f): Undo runs it again where it was
+  const preSwitched = round.preMode?.outcome === 'switched' || round.preMode?.outcome === 'asked-switched'
   const judgeable = !streaming && !failed && !!round.reply && !round.id.startsWith('local-')
   return (
     <Stack
@@ -60,6 +81,19 @@ function RoundView({ round, levels, onOpenSegment, onFeedback, onAnswerTool, cli
       spacing={1}
       title={ignored ? 'Ignored: this exchange is left out of the rest of the conversation' : undefined}
     >
+      {switched && modeName && (
+        <Divider aria-label="Mode switch" sx={{ typography: 'caption', color: 'text.secondary' }}>
+          <Tooltip title={preSwitched && round.preMode?.reason ? round.preMode.reason : ''}>
+            <span>Switched to {modeName}</span>
+          </Tooltip>
+          {preSwitched && onUndoSwitch && !streaming && !ignored && (
+            <Button size="small" onClick={() => onUndoSwitch(round)} sx={{ ml: 1, py: 0, minWidth: 0, typography: 'caption' }} aria-label={`Undo the switch to ${modeName}`}>
+              Undo
+            </Button>
+          )}
+        </Divider>
+      )}
+      {round.activity && round.activity.length > 0 && <ActivityLines gestures={round.activity} label="What you did, sent with this message" />}
       <Paper
         elevation={0}
         sx={{ alignSelf: 'flex-end', maxWidth: '80%', px: 1.5, py: 1, bgcolor: 'action.selected', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
@@ -67,7 +101,7 @@ function RoundView({ round, levels, onOpenSegment, onFeedback, onAnswerTool, cli
         <Typography variant="body2">{round.text}</Typography>
       </Paper>
       {round.mode && (
-        <Chip size="small" variant="outlined" color="primary" label={modeTitles[round.mode] ?? round.mode} sx={{ alignSelf: 'flex-start' }} aria-label="Mode" />
+        <Chip size="small" variant="outlined" color="primary" label={modeName} sx={{ alignSelf: 'flex-start' }} aria-label="Mode" />
       )}
       {round.toolCalls && round.toolCalls.length > 0 && (
         <Stack spacing={0.5} aria-label="Tool calls">

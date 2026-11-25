@@ -9,7 +9,8 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "lint": "oxlint"
+    "lint": "oxlint",
+    "test": "node --test 'src/**/*.test.ts'"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",

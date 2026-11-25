@@ -21,6 +21,7 @@ type Service interface {
 	ContextProviders(args ContextProvidersArgs) ContextProvidersResponse
 	Modes(args ModesArgs) ModesResponse
 	Answer(args AnswerArgs) AnswerResponse
+	SetMode(args SetModeArgs) SetModeResponse
 }
 
 // ListArgs pages through the principal's conversations, newest first.
@@ -72,6 +73,18 @@ type SendArgs struct {
 	// with the server's tools while the conversation's tools setting is on.
 	// Their effect must be read or ui; the browser runs them.
 	ClientTools []tools.Tool
+	// Offered are the chat.modes ids the browser offers where the message
+	// was sent (forge 15f), since offering follows the editor in focus.
+	// The pre-mode chooses only among those that exist; with fewer than
+	// two it does not run.
+	Offered []string
+	// ModeChosen says the person chose Mode for this message (the menu or
+	// /mode since the last round), so the pre-mode does not run.
+	ModeChosen bool
+	// Undoes is a round of the conversation this message runs again (forge
+	// 15f: Undo of a pre-mode switch, with Mode the mode it left): that
+	// round leaves the history, and the pre-mode does not run.
+	Undoes uint64
 }
 
 // SendEventKind says what a SendEvent carries.
@@ -87,6 +100,7 @@ const (
 	EventFollowed SendEventKind = "followed" // Follower and Followed: what a chat.roundFollower did after the reply
 	EventFailed   SendEventKind = "failed"   // Common: the message was refused before a round was stored
 	EventRetry    SendEventKind = "retry"    // Retry: the provider was busy, and the step is tried again after a wait
+	EventMode     SendEventKind = "mode"     // Switch and Round: the pre-mode switched the round's and the conversation's mode (forge 15f)
 )
 
 type SendEvent struct {
@@ -99,7 +113,14 @@ type SendEvent struct {
 	Followed     *conversation.Followed
 	ToolCall     *tools.ToolCall
 	Retry        *Retry
+	Switch       *Switch
 	Common       features.ServiceResponse
+}
+
+// Switch is a mode switch the pre-mode made (forge 15f).
+type Switch struct {
+	From, To string // chat.modes ids
+	Reason   string
 }
 
 // Retry is a model call tried again because the provider was busy.
@@ -166,6 +187,24 @@ type ModeInfo struct {
 	Description               string   // the graph's
 	Settings                  []string // the context settings it uses; empty uses them all
 	Missing                   bool     // its graph does not exist
+	// Forge 15h: the mode that makes modes, and a mode a person made (Made),
+	// the principal's own (Mine, so the menu offers to edit its graph) or
+	// shared with the tenant
+	MakesModes, Made, Mine, Shared bool
+}
+
+// SetModeArgs switches one of the principal's conversations to a chat.modes
+// mode (forge 15e), so its next rounds run in it without the send naming
+// it, on any tab or device.
+type SetModeArgs struct {
+	features.ServiceArgs
+	ConversationID uint64
+	Mode           string
+}
+
+type SetModeResponse struct {
+	Common       features.ServiceResponse
+	Conversation conversation.Conversation
 }
 
 // AnswerArgs answers a tool call its round is waiting on: the user's

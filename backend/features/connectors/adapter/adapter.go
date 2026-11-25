@@ -96,9 +96,9 @@ type Impl struct {
 	// connection changes or the adapter stops.
 	Open func(ctx Context, conn Connection) (Session, error)
 	// Receive, for a type with Receives, verifies a callback and turns it
-	// into events (20b; declared, not called in 07b).
+	// into events (26b; declared, not called in 07b).
 	Receive Receiver
-	// Register registers the hook URL with the service (20b; not called).
+	// Register registers the hook URL with the service (26b; not called).
 	Register Registrar
 }
 
@@ -136,13 +136,13 @@ type Describer interface {
 }
 
 // Receiver verifies a callback with the connection's secret and turns it
-// into events (20b). An error refuses it (4xx); the runtime publishes the
+// into events (26b). An error refuses it (4xx); the runtime publishes the
 // events, then replies 2xx.
 type Receiver interface {
 	Receive(ctx Context, conn Connection, cb Callback) ([]Event, error)
 }
 
-// Registrar registers the hook URL with the service itself (20b).
+// Registrar registers the hook URL with the service itself (26b).
 type Registrar interface {
 	Register(ctx Context, conn Connection, url string, events []string) (Registration, error)
 	Unregister(ctx Context, conn Connection, reg Registration) error

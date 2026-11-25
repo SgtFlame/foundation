@@ -82,7 +82,7 @@ const (
 // Delivery is how an event arrives.
 const (
 	DeliveryWatch    = "watch"    // an adapter's Watch produces it
-	DeliveryCallback = "callback" // the service pushes it to Axiom's hook URL (20b)
+	DeliveryCallback = "callback" // the service pushes it to Axiom's hook URL (26b)
 )
 
 // Directions of types and surfaces.

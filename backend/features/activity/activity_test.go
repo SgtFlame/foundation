@@ -456,3 +456,42 @@ func TestHandlerWords(t *testing.T) {
 		}
 	}
 }
+
+// Forge 15g: a person marks values of a gesture to ask for each run. The
+// last mark of a field wins, a removing mark clears it, only a command's
+// fields can be marked, an omitted value has no default, and a clear
+// drops the marks with the gestures.
+func TestAsksMarkValuesOfAGesture(t *testing.T) {
+	now := time.Now().UTC()
+	label := Entry{ID: "e1", Kind: KindCommand, Request: "g1", Time: now, Command: "mail.thread.label", Summary: `Label a thread "Invoice" (Labels: Billing)`,
+		Fields: []Field{{ID: "labels", Name: "Labels", Value: []any{"Billing"}}, {ID: "body", Name: "Body", Omitted: true}}}
+	click := Entry{ID: "u1", Kind: KindUI, Request: "g1", Time: now, Label: "Labels", Summary: `changed "Labels"`}
+	mark := func(m Mark) Entry { return Entry{ID: "a-" + m.Field + m.Question, Kind: KindAsk, Time: now, Ask: &m} }
+	group := func(es ...Entry) Gesture {
+		t.Helper()
+		a := Group(es, Defaults, now.Add(time.Second), Params{})
+		if len(a.Gestures) != 1 {
+			t.Fatalf("%d gestures", len(a.Gestures))
+		}
+		return a.Gestures[0]
+	}
+
+	g := group(click, label, mark(Mark{Gesture: "g1", Entry: "e1", Field: "labels"}))
+	if len(g.Asks) != 1 || g.Asks[0].Name != "Labels" || g.Asks[0].Question != "Which labels?" || fmt.Sprint(g.Asks[0].Default) != "[Billing]" {
+		t.Fatalf("a mark with no question: %+v", g.Asks)
+	}
+	g = group(click, label, mark(Mark{Gesture: "g1", Entry: "e1", Field: "labels", Question: "Which label?"}), mark(Mark{Gesture: "g1", Entry: "e1", Field: "labels", Question: "Which label, then?", Default: "Invoices"}),
+		mark(Mark{Gesture: "g1", Entry: "e1", Field: "body", Question: "What reply?"}))
+	if len(g.Asks) != 2 || g.Asks[0].Question != "Which label, then?" || g.Asks[0].Default != "Invoices" || !g.Asks[1].Omitted || g.Asks[1].Default != nil {
+		t.Fatalf("the last mark wins, an omitted value has no default: %+v", g.Asks)
+	}
+	g = group(click, label, mark(Mark{Gesture: "g1", Entry: "e1", Field: "labels"}), mark(Mark{Gesture: "g1", Entry: "e1", Field: "labels", Remove: true}),
+		mark(Mark{Gesture: "g1", Entry: "u1", Field: "labels"}), mark(Mark{Gesture: "g2", Entry: "e1", Field: "labels"}), mark(Mark{Gesture: "g1", Entry: "e1", Field: "nope"}))
+	if len(g.Asks) != 0 {
+		t.Fatalf("removed, a click's, another gesture's and an unknown field's marks: %+v", g.Asks)
+	}
+	a := Group([]Entry{label, mark(Mark{Gesture: "g1", Entry: "e1", Field: "labels"}), {ID: "c", Kind: KindClear, Time: now}, label}, Defaults, now.Add(time.Second), Params{})
+	if len(a.Gestures) != 1 || len(a.Gestures[0].Asks) != 0 {
+		t.Fatalf("a clear drops the marks: %+v", a.Gestures)
+	}
+}

@@ -51,3 +51,13 @@ type SendRetry struct {
 	WaitMs int64 `json:"waitMs"`
 	Status int   `json:"status"`
 }
+
+// SendMode is the data of a "mode" event (forge 15f): the pre-mode
+// switched the round and its conversation from one chat.modes mode to
+// another, for reason.
+type SendMode struct {
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Reason string `json:"reason,omitempty"`
+	Round  Round  `json:"round"`
+}

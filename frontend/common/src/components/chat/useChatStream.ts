@@ -36,6 +36,13 @@ export interface SendOptions {
   // The chat.clientTool contributions the model may call, and what they run with
   clientTools?: readonly ChatClientToolContribution[]
   toolContext?: ClientToolContext
+  // The pre-mode (forge 15f): the modes offered here, whether the person
+  // chose this message's mode, the round an Undo runs again, and what to
+  // do when the server switches the mode
+  offered?: string[]
+  modeChosen?: boolean
+  undoes?: string
+  onMode?: (mode: string) => void
 }
 
 // A client tool as declared to the server: one with a card waits for the user
@@ -136,7 +143,11 @@ export function useChatStream() {
       let roundId = placeholder.id
       const patchRound = (fn: (r: ChatRound) => ChatRound) =>
         update(key, (t) => ({ ...t, rounds: t.rounds.map((r) => (r.id === roundId ? fn(r) : r)) }))
-      update(key, (t) => ({ ...t, rounds: [...t.rounds, placeholder] }))
+      // An Undo's round leaves the history, as the server marks it
+      update(key, (t) => ({
+        ...t,
+        rounds: [...t.rounds.map((r) => (options.undoes && r.id === options.undoes ? { ...r, feedback: 'ignore' as const } : r)), placeholder],
+      }))
       setPending(true)
       setError(undefined)
       const controller = new AbortController()
@@ -146,7 +157,7 @@ export function useChatStream() {
         await Conversations.send(
           {
             conversationId: current.conversation?.id, text, level: options.level, mode: options.mode, workbench: options.workbench, contextSettings: options.contextSettings,
-            clientTools: options.clientTools?.map(declare),
+            clientTools: options.clientTools?.map(declare), offered: options.offered, modeChosen: options.modeChosen || undefined, undoes: options.undoes,
           },
           {
             signal: controller.signal,
@@ -184,6 +195,11 @@ export function useChatStream() {
             onTitle: (conversation) => update(key, (t) => ({ ...t, conversation: { ...t.conversation, ...conversation } })),
             onFollowed: (followed) => patchRound((r) => ({ ...r, followed: [...(r.followed ?? []), followed] })),
             onRetry: (retry) => patchRound((r) => ({ ...r, retry })),
+            onMode: (change) => {
+              patchRound((r) => ({ ...r, mode: change.to }))
+              update(key, (t) => ({ ...t, conversation: t.conversation ? { ...t.conversation, mode: change.to } : t.conversation }))
+              options.onMode?.(change.to)
+            },
           },
         )
       } catch (err) {
@@ -258,5 +274,26 @@ export function useChatStream() {
     [current.key, update],
   )
 
-  return { threads, current, more, loading, pending, error, send, stop, newConversation, say, loadEarlier, setContextSetting, setFeedback, answerTool }
+  // Switches the current conversation's mode (forge 15e): at once here,
+  // and stored on the server once the conversation exists, so a reload or
+  // another device opens it in that mode. A new conversation takes it with
+  // its first message.
+  const setMode = useCallback(
+    async (mode: string) => {
+      const key = current.key
+      const id = current.conversation?.id
+      update(key, (t) => ({ ...t, conversation: t.conversation ? { ...t.conversation, mode } : t.conversation }))
+      if (!id) return
+      try {
+        const res = await Conversations.setMode({ conversationId: id, mode })
+        if (res.conversation) update(key, (t) => ({ ...t, conversation: { ...t.conversation, ...res.conversation! } }))
+      } catch (err) {
+        chatLog.fromError(err).With('mode', mode).warn('cannot switch the mode')
+        setError(err instanceof Error ? err.message : String(err))
+      }
+    },
+    [current, update],
+  )
+
+  return { threads, current, more, loading, pending, error, send, stop, newConversation, say, loadEarlier, setContextSetting, setFeedback, answerTool, setMode }
 }

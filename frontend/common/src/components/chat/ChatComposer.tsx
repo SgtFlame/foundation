@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState, type ReactNode, type Ref } from 'react'
 import { IconButton, List, ListItemButton, ListItemText, Paper, Stack, TextField, Tooltip } from '@mui/material'
 import SendIcon from '@mui/icons-material/Send'
 import StopIcon from '@mui/icons-material/Stop'
@@ -14,6 +14,7 @@ function ChatComposer({
   pending,
   commands,
   tools,
+  inputRef,
 }: {
   onSend: (text: string) => void
   onCommand: (command: ChatCommandContribution, arg: string) => void
@@ -21,6 +22,7 @@ function ChatComposer({
   pending: boolean
   commands: readonly ChatCommandContribution[]
   tools?: ReactNode
+  inputRef?: Ref<HTMLTextAreaElement> // the message box, to give it focus back (after the /mode list)
 }) {
   const [text, setText] = useState('')
   const command = /^\/(\S*)(?:\s+([\s\S]*))?$/.exec(text)
@@ -75,6 +77,7 @@ function ChatComposer({
               submit()
             }
           }}
+          inputRef={inputRef}
           slotProps={{ htmlInput: { 'aria-label': 'Message' } }}
         />
         {pending ? (

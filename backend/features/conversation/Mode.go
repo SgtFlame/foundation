@@ -28,6 +28,13 @@ type ModeEntry struct {
 	Icon     string
 	GraphRef string // the mode graph's id
 	Default  bool   // the mode of a new conversation where no Focus matches
+	// Purpose is what the mode is for, in a sentence or two of plain
+	// words: the pre-mode chooses between modes by it (forge 15f), so keep
+	// it short and distinct from the other modes'.
+	Purpose string
+	// MakesModes marks the mode that makes new modes (forge 15h: the Mode
+	// Builder): the menu's New mode… and /mode new switch to it.
+	MakesModes bool
 	// Focus, when set, offers the mode only while the editor the user was
 	// in matches it, and picks it for a new conversation started there.
 	Focus *Focus
@@ -104,8 +111,9 @@ type Turn struct {
 	Round         Round
 	Window        []Round // the rounds sent as history, oldest first
 	Workbench     json.RawMessage
-	Level         string // the round's ai.chat.levels id
-	ContextWindow int    // the level's model's window, in tokens
+	Activity      []Gesture // the person's gestures sent with the message (forge 15d)
+	Level         string    // the round's ai.chat.levels id
+	ContextWindow int       // the level's model's window, in tokens
 }
 
 // ReplyArgs are a streamed reply's.

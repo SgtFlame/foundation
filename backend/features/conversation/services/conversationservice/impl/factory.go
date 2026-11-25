@@ -6,6 +6,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
 	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
 	"github.com/SgtFlame/foundation/backend/features/config"
+	"github.com/SgtFlame/foundation/backend/features/conversation"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"gorm.io/gorm"
@@ -47,6 +48,14 @@ func WithEngine(e *engine.Engine) Option {
 func WithRegistry(reg *extensions.Registry) Option {
 	return func(s *service) {
 		s.registry = reg
+	}
+}
+
+// WithActivity sets where a round reads the person's recent gestures
+// (forge 15d); without it no activity is sent.
+func WithActivity(read conversation.ActivityReader) Option {
+	return func(s *service) {
+		s.activity = read
 	}
 }
 

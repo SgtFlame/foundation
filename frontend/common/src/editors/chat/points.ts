@@ -2,7 +2,7 @@
 
 import type { ComponentType } from 'react'
 import type { EditorRegistry } from '../../pages/workbench/EditorRegistry.ts'
-import type { ToolCall } from '../../services/Conversation.ts'
+import type { ChatMode, ToolCall } from '../../services/Conversation.ts'
 import type { WorkbenchContextStore } from '../../workbench/context/WorkbenchContextStore.ts'
 import { defineExtensionPoint, type Contribution } from '../../workbench/extensions/index.ts'
 
@@ -36,6 +36,23 @@ export interface ChatCommandContext {
   levels: readonly { id: string; label: string }[]
   say: (markdown: string) => void // a note in the transcript, not sent to the model
   commands: readonly ChatCommandContribution[]
+  // The current conversation's context settings over their defaults, by
+  // chat.contextSettings id, and a change to one of them, sent with the
+  // next message as the ⚙ does (forge 15d)
+  contextSettings: Record<string, Record<string, unknown>>
+  setContextSetting: (id: string, value: Record<string, unknown>) => void
+  // The chat modes (forge 15e): those offered on this tab (the mode menu's
+  // list), every configured one, the conversation's, a switch to an offered
+  // one (stored once the conversation exists), the mode list opened above
+  // the composer (false when there is no choice to make), and an editor
+  // kind's name, to say where a mode not offered here is
+  modes: readonly ChatMode[]
+  allModes: readonly ChatMode[]
+  mode?: ChatMode
+  setMode: (id: string) => void
+  newMode: () => boolean // switch to the mode that makes modes (forge 15h: /mode new); false when there is none
+  pickMode: () => boolean
+  kindName: (kind: string) => string | undefined
 }
 
 // A /command typed in the composer; the id is the command's name

@@ -1,9 +1,11 @@
 // The chat modes (forge 06i): the chat.modes settings with what each
 // mode's graph says of itself, from GET /conversation/modes, fetched again
-// when the settings change; and the mode a new conversation starts in,
-// from the editor the user was in.
+// when the settings change or a mode someone made changes (the live
+// chat.modes.made query, forge 15h); and the mode a new conversation
+// starts in, from the editor the user was in.
 
 import { useEffect, useState } from 'react'
+import { useQuery } from '../../live/useQuery.ts'
 import { log } from '../../logging/index.ts'
 import { Conversations, type ChatMode } from '../../services/Conversation.ts'
 import { useSetting } from '../../settings/configStore.ts'
@@ -11,7 +13,8 @@ import type { WorkbenchState } from '../../workbench/context/WorkbenchContextSto
 
 export function useModes(): readonly ChatMode[] {
   const configured = useSetting<unknown>('chat.modes', 'modes', 'user')
-  const key = JSON.stringify(configured ?? null)
+  const made = useQuery<unknown>('chat.modes.made')
+  const key = JSON.stringify([configured ?? null, made.data ?? null])
   const [modes, setModes] = useState<readonly ChatMode[]>([])
   useEffect(() => {
     let live = true

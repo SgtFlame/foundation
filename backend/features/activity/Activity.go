@@ -34,6 +34,7 @@ const (
 	KindOp      = "op"      // a definition change, an op of the operation log
 	KindDismiss = "dismiss" // gestures the person dismissed (activity.dismiss)
 	KindClear   = "clear"   // everything before it was cleared (activity.clear)
+	KindAsk     = "ask"     // a value of a gesture to ask for each run when automating it (activity.ask, forge 15g)
 )
 
 // StreamName is a tenant's activity stream.
@@ -95,9 +96,34 @@ type Entry struct {
 	Fields       []Field `json:"fields,omitempty"`
 	// dismiss: the gestures dismissed
 	IDs []string `json:"ids,omitempty"`
+	// ask: the value marked, or unmarked
+	Ask *Mark `json:"ask,omitempty"`
 	// Summary is the entry in plain words: opened "Refund for the second
 	// charge?", clicked "Billing", Label thread "Refund…" (Labels: Billing)
 	Summary string `json:"summary,omitempty"`
+}
+
+// Mark is a person's mark on one value of a gesture: when what they did
+// is automated, ask for it each run (forge 15g). Remove clears it.
+type Mark struct {
+	Gesture  string `json:"gesture"`
+	Entry    string `json:"entry"` // the command entry
+	Field    string `json:"field"` // its field's id
+	Question string `json:"question,omitempty"`
+	Default  any    `json:"default,omitempty"` // this time's value when left out
+	Remove   bool   `json:"remove,omitempty"`
+}
+
+// Ask is a value of a gesture to ask for each run: the field's name, the
+// question and the default answer (this time's value unless the mark gave
+// another; none for an omitted value, such as a reply's body).
+type Ask struct {
+	Entry    string `json:"entry"`
+	Field    string `json:"field"`
+	Name     string `json:"name"`
+	Question string `json:"question"`
+	Default  any    `json:"default,omitempty"`
+	Omitted  bool   `json:"omitted,omitempty"`
 }
 
 // Gesture is one request's entries: a click and the commands it caused, a
@@ -111,9 +137,11 @@ type Gesture struct {
 	Summary string    `json:"summary"`
 	// Repeats is how many more times the same event on the same node came
 	// right after, merged into this one (typing in a search field)
-	Repeats   int     `json:"repeats,omitempty"`
-	Dismissed bool    `json:"dismissed,omitempty"`
-	Entries   []Entry `json:"entries"`
+	Repeats   int  `json:"repeats,omitempty"`
+	Dismissed bool `json:"dismissed,omitempty"`
+	// Asks are the values marked to ask for each run (forge 15g)
+	Asks    []Ask   `json:"asks,omitempty"`
+	Entries []Entry `json:"entries"`
 }
 
 // Activity is activity.mine's result: the caller's gestures, newest last,

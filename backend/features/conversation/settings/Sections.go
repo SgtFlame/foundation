@@ -5,6 +5,7 @@ package conversationsettings
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
@@ -16,9 +17,45 @@ const ID = "chat"
 
 // Chat is the chat section.
 type Chat struct {
-	SystemPrompt  string `json:"systemPrompt"`
-	HistoryRounds int    `json:"historyRounds"` // the window: earlier rounds sent with a message; 0 sends them all
-	TitleLevel    string `json:"titleLevel"`    // the level that names conversations; the default level when unknown
+	SystemPrompt  string  `json:"systemPrompt"`
+	HistoryRounds int     `json:"historyRounds"` // the window: earlier rounds sent with a message; 0 sends them all
+	TitleLevel    string  `json:"titleLevel"`    // the level that names conversations; the default level when unknown
+	PreMode       PreMode `json:"preMode"`       // the pre-mode run before each round (forge 15f)
+}
+
+// PreMode is the chat section's preMode (forge 15f): the graph run before
+// each round that keeps the conversation's mode, switches it, or asks.
+// Unset fields take the defaults.
+type PreMode struct {
+	Enabled   *bool   `json:"enabled,omitempty"`
+	Graph     string  `json:"graph,omitempty"`     // a chat.premode graph; chatPreMode when empty
+	Threshold float64 `json:"threshold,omitempty"` // the confidence a switch needs; 0.8 when 0
+	AskFirst  *bool   `json:"askFirst,omitempty"`  // the conversation's first switch always asks
+	BudgetMs  int     `json:"budgetMs,omitempty"`  // how long the round waits for it; 3000 when 0 (question 16)
+}
+
+// PreModeGraph is the built-in pre-mode graph's id.
+const PreModeGraph = "chatPreMode"
+
+func (p PreMode) On() bool      { return p.Enabled == nil || *p.Enabled }
+func (p PreMode) Asks1st() bool { return p.AskFirst == nil || *p.AskFirst }
+func (p PreMode) GraphID() string {
+	if p.Graph == "" {
+		return PreModeGraph
+	}
+	return p.Graph
+}
+func (p PreMode) Bar() float64 {
+	if p.Threshold <= 0 {
+		return 0.8
+	}
+	return p.Threshold
+}
+func (p PreMode) Budget() time.Duration {
+	if p.BudgetMs <= 0 {
+		return 3 * time.Second
+	}
+	return time.Duration(p.BudgetMs) * time.Millisecond
 }
 
 // ModesID is the chat.modes section's ID (forge 06i).
@@ -37,6 +74,15 @@ type Mode struct {
 	GraphRef string              `json:"graphRef"` // the mode graph's id
 	Default  bool                `json:"default,omitempty"`
 	Focus    *conversation.Focus `json:"focus,omitempty"`
+	Purpose  string              `json:"purpose,omitempty"` // what it is for, which the pre-mode chooses by (forge 15f)
+	// MakesModes marks the mode that makes new modes: the menu's New mode…
+	// and /mode new switch to it (forge 15h)
+	MakesModes bool `json:"makesModes,omitempty"`
+	// Made modes (forge 15h) are read, never stored in the settings: whose
+	// it is and whether it is shared with the tenant
+	Made   bool `json:"made,omitempty"`
+	Mine   bool `json:"mine,omitempty"`
+	Shared bool `json:"shared,omitempty"`
 }
 
 // Find is the mode with the given ID; ok is false when there is none.
@@ -91,7 +137,7 @@ func Contribute(reg *extensions.Registry) {
 	})
 	var modes Modes
 	for _, m := range conversation.Modes.All(reg) {
-		modes.Modes = append(modes.Modes, Mode{ID: m.ID, Label: m.Label, Icon: m.Icon, GraphRef: m.GraphRef, Default: m.Default, Focus: m.Focus})
+		modes.Modes = append(modes.Modes, Mode{ID: m.ID, Label: m.Label, Icon: m.Icon, GraphRef: m.GraphRef, Default: m.Default, Focus: m.Focus, Purpose: m.Purpose, MakesModes: m.MakesModes})
 	}
 	if modes.Modes == nil {
 		modes.Modes = []Mode{}
@@ -126,7 +172,14 @@ const chatSchema = `{
   "properties": {
     "systemPrompt": {"type": "string", "title": "System prompt", "format": "multiline", "description": "The instructions every chat round starts with. Context, such as the workspace, is added after them."},
     "historyRounds": {"type": "integer", "title": "Window", "unit": "rounds", "min": 0, "max": 1000, "description": "How many earlier rounds of the conversation are sent with each message, and seen by Chronicle's context matching; 0 sends them all. Older rounds are remembered through Chronicle entries."},
-    "titleLevel": {"type": "string", "title": "Title level", "ref": "ai.chat.levels#levels", "description": "The level that writes each conversation's title after its first round"}
+    "titleLevel": {"type": "string", "title": "Title level", "ref": "ai.chat.levels#levels", "description": "The level that writes each conversation's title after its first round"},
+    "preMode": {"type": "object", "title": "Choosing the mode", "description": "Before each round, a quick check whether the message needs another of the modes offered: it keeps the mode, switches (which you can undo), or asks you", "properties": {
+      "enabled": {"type": "boolean", "title": "Suggest the mode", "description": "Check each message for the mode it needs. It is skipped when you chose the mode for the message yourself, or only one mode is offered"},
+      "graph": {"type": "string", "title": "Graph", "description": "The pre-mode graph (kind chat.premode) that decides; edit chatPreMode in the Cognition editor"},
+      "threshold": {"type": "number", "title": "Confidence to switch", "min": 0, "max": 1, "description": "How sure it must be to switch without asking; below this it asks"},
+      "askFirst": {"type": "boolean", "title": "Ask before the first switch", "description": "The first switch in a conversation always asks"},
+      "budgetMs": {"type": "integer", "title": "Time allowed", "unit": "ms", "min": 200, "max": 30000, "description": "How long a round waits for the check before it goes on in the current mode"}
+    }}
   }
 }`
 
@@ -139,6 +192,8 @@ const modesSchema = `{
       "icon": {"type": "string", "title": "Icon", "description": "An emoji shown before the label"},
       "graphRef": {"type": "string", "title": "Graph", "description": "The mode graph each round runs"},
       "default": {"type": "boolean", "title": "Default", "description": "The mode of a new conversation away from every focus"},
+      "makesModes": {"type": "boolean", "title": "Makes modes", "description": "The mode that makes new modes: New mode… in the mode menu and /mode new switch to it"},
+      "purpose": {"type": "string", "title": "Purpose", "format": "multiline", "description": "What the mode is for, in a sentence or two: the chat suggests switching to it by this, so keep it short and distinct from the other modes'"},
       "focus": {"type": "object", "title": "Focus", "description": "Offered only while the editor you were in is of one of these kinds or subject types, and chosen for a new conversation started there", "properties": {
         "kinds": {"type": "array", "title": "Editor kinds", "items": {"type": "string"}, "description": "A kind ending in * matches every kind it begins: app:* is any installed app's tab"},
         "subjects": {"type": "array", "title": "Subject types", "items": {"type": "string"}},
@@ -151,5 +206,6 @@ const modesSchema = `{
 const chatDefaults = `{
   "systemPrompt": "You are the assistant in Foundation, a workbench for knowledge work. Answer clearly and concisely, in Markdown. When the user's workspace is described below, use it to work out what \"this\", \"it\" or a name refers to; when more than one thing could be meant, ask which. When you do not know, say so.",
   "historyRounds": 15,
-  "titleLevel": "fast"
+  "titleLevel": "fast",
+  "preMode": {"enabled": true, "graph": "chatPreMode", "threshold": 0.8, "askFirst": true, "budgetMs": 3000}
 }`

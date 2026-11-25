@@ -50,7 +50,7 @@ func (h *host) emit(e conversationservice.SendEvent) {
 
 func (h *host) Turn() conversation.Turn {
 	return conversation.Turn{Conversation: h.r.conversation, Round: h.r.round, Window: h.r.history, Workbench: h.args.Workbench,
-		Level: h.r.level.ID, ContextWindow: h.r.model.ContextWindow}
+		Activity: h.r.activity, Level: h.r.level.ID, ContextWindow: h.r.model.ContextWindow}
 }
 
 func (h *host) Settings(provider string) json.RawMessage {

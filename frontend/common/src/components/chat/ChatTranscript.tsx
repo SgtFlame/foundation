@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { Box, Chip, CircularProgress, Divider, IconButton, Stack, Tooltip, Typography } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import type { ChatMode } from '../../services/Conversation.ts'
 import type { ChatLevel } from './levels.ts'
 import RoundView, { type RoundActions } from './RoundView.tsx'
 import type { ChatRound, ChatThread } from './useChatStream.ts'
@@ -9,15 +10,24 @@ import type { ChatRound, ChatThread } from './useChatStream.ts'
 type Row =
   | { kind: 'more'; key: string }
   | { kind: 'divider'; key: string; thread: ChatThread; current: boolean }
-  | { kind: 'round'; key: string; round: ChatRound }
+  | { kind: 'round'; key: string; round: ChatRound; switched: boolean } // switched: its mode differs from the round before (forge 15e), or the pre-mode switched it (15f)
+  | { kind: 'tail'; key: string }
 
-function rowsOf(threads: readonly ChatThread[], more: boolean): Row[] {
+function rowsOf(threads: readonly ChatThread[], more: boolean, tail: boolean): Row[] {
   const rows: Row[] = more ? [{ kind: 'more', key: 'more' }] : []
   threads.forEach((thread, i) => {
     const current = i === threads.length - 1
     if (thread.rounds.length > 0 || i > 0) rows.push({ kind: 'divider', key: `divider-${thread.key}`, thread, current })
-    for (const round of thread.rounds) rows.push({ kind: 'round', key: round.id, round })
+    let mode: string | undefined
+    for (const round of thread.rounds) {
+      // A round the pre-mode switched is marked even as a conversation's first (forge 15f)
+      const preSwitched = round.preMode?.outcome === 'switched' || round.preMode?.outcome === 'asked-switched'
+      const switched = !round.note && !!round.mode && ((!!mode && round.mode !== mode) || (preSwitched && round.preMode?.from !== round.mode))
+      if (!round.note && round.mode) mode = round.mode
+      rows.push({ kind: 'round', key: round.id, round, switched })
+    }
   })
+  if (tail) rows.push({ kind: 'tail', key: 'tail' })
   return rows
 }
 
@@ -49,27 +59,34 @@ function ChatTranscript({
   more,
   loading,
   levels,
+  modes,
   onLoadEarlier,
   onNewConversation,
   empty,
   onOpenSegment,
   onFeedback,
   onAnswerTool,
+  onUndoSwitch,
   clientTools,
   onOpenLink,
+  tail,
 }: RoundActions & {
   threads: readonly ChatThread[]
   more: boolean
   loading: boolean
   levels: readonly ChatLevel[]
+  modes?: readonly ChatMode[] // for the rounds' mode badges and switch notices
   onLoadEarlier: () => void
   onNewConversation: () => void
   empty?: ReactNode
+  // What follows the last round, before the next message: the person's
+  // gestures since then (forge 15d)
+  tail?: ReactNode
 }) {
   const scroller = useRef<HTMLDivElement>(null)
   const atBottom = useRef(true)
   const fromBottom = useRef<number | undefined>(undefined) // set while earlier conversations load
-  const rows = rowsOf(threads, more)
+  const rows = rowsOf(threads, more, !!tail)
   // The project does not use the React Compiler, which is what this warns about
   // oxlint-disable-next-line react/incompatible-library
   const virtualizer = useVirtualizer({
@@ -81,10 +98,10 @@ function ChatTranscript({
   })
 
   const firstKey = rows[0]?.key
-  const lastReply = rows.length > 0 ? rows[rows.length - 1] : undefined
-  const last = lastReply?.kind === 'round' ? lastReply.round : undefined
+  const lastRound = rows.findLast((r) => r.kind === 'round')
+  const last = lastRound?.kind === 'round' ? lastRound.round : undefined
   // The reply's length and its tool calls' statuses: either grows the last round
-  const tail = last ? `${last.reply.length}:${last.toolCalls?.map((c) => c.status).join(',') ?? ''}` : ''
+  const growth = last ? `${last.reply.length}:${last.toolCalls?.map((c) => c.status).join(',') ?? ''}` : ''
 
   // Keeps the view in place when earlier conversations are prepended
   useLayoutEffect(() => {
@@ -97,7 +114,7 @@ function ChatTranscript({
   // Follows new rounds, the streaming reply and its tool calls while at the bottom
   useEffect(() => {
     if (atBottom.current && rows.length > 0) virtualizer.scrollToIndex(rows.length - 1, { align: 'end' })
-  }, [rows.length, tail, virtualizer])
+  }, [rows.length, growth, virtualizer])
 
   const onScroll = () => {
     const el = scroller.current
@@ -109,7 +126,7 @@ function ChatTranscript({
     }
   }
 
-  const onlyEmpty = threads.length === 1 && threads[0].rounds.length === 0
+  const onlyEmpty = threads.length === 1 && threads[0].rounds.length === 0 && !tail
   return (
     <Box ref={scroller} onScroll={onScroll} sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
       {onlyEmpty && !loading ? (
@@ -137,7 +154,8 @@ function ChatTranscript({
                   </Stack>
                 )}
                 {row.kind === 'divider' && <ConversationDivider thread={row.thread} current={row.current} onEnd={onNewConversation} />}
-                {row.kind === 'round' && <RoundView round={row.round} levels={levels} onOpenSegment={onOpenSegment} onFeedback={onFeedback} onAnswerTool={onAnswerTool} clientTools={clientTools} onOpenLink={onOpenLink} />}
+                {row.kind === 'tail' && tail}
+                {row.kind === 'round' && <RoundView round={row.round} levels={levels} modes={modes} switched={row.switched} onOpenSegment={onOpenSegment} onFeedback={onFeedback} onAnswerTool={onAnswerTool} onUndoSwitch={onUndoSwitch} clientTools={clientTools} onOpenLink={onOpenLink} />}
               </Box>
             )
           })}

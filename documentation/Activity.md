@@ -1,6 +1,6 @@
 # Recent activity
 
-What a person does by hand, kept briefly and readable only by them: the tabs they focus, their clicks on app pages, the record and app commands they send and their definition changes, grouped by request into **gestures** with plain-language summaries. The chat will show it and automate it ([forge 15d](../../forge/documentation/plans/015d-AutomateWhatIDid.md)). Forge's Activity tabs, an object's operation log, are a different thing ([forge Activity.md](../../forge/documentation/Activity.md)).
+What a person does by hand, kept briefly and readable only by them: the tabs they focus, their clicks on app pages, the record and app commands they send and their definition changes, grouped by request into **gestures** with plain-language summaries. The chat shows it and makes agents from it ([Built in forge 15d](#built-in-forge-15d)). Forge's Activity tabs, an object's operation log, are a different thing ([forge Activity.md](../../forge/documentation/Activity.md)).
 
 ## Built in forge 15c
 Forge's part 15c ([plans/015c-ActivityHistory.md](../../forge/documentation/plans/015c-ActivityHistory.md)). The package is `features/activity`.
@@ -99,3 +99,83 @@ Only **people's** gestures. `activity.Person` takes users only, and events count
 - The summaries' wording (`clicked "Add" in Tasks → created Task "…" (Done: no, Title: …)`), in the chat once 15d shows it.
 - A page's own commands (marking a thread read on opening) as a gesture of their own, before the focus that the browser reports 1.5 s later.
 - Field values copied by type (decision 7).
+
+## Built in forge 15d
+Forge's part 15d ([plans/015d-AutomateWhatIDid.md](../../forge/documentation/plans/015d-AutomateWhatIDid.md)): the history in the chat. What the modes do with it (the Agent Builder's *Automate what I just did*) is in [forge ChatModes.md › Automate what I just did](../../forge/documentation/ChatModes.md#automate-what-i-just-did).
+
+### Read once per round
+- **`conversationimpl.WithActivity(read)`** gives Send a `conversation.ActivityReader` (`Activity.go`). `serve.go` passes `activitycontext.Reader(deps)`, which reads `activity.Read` as the sender alone, with `sendable` and no limit beyond the settings' keep (question 13: no cap on how many).
+- Send reads it **once**, in `start`, before the round is stored:
+  - since the conversation's `LastRoundAt` (the previous round's start);
+  - or, for a first message, since the `activity` provider's `lookBackMinutes` (30 by default, `conversation.DefaultLookBack`).
+  - Nothing is read while the conversation's `activity` setting is off, and a failed read sends nothing (logged).
+- The same list then goes everywhere:
+  - **`Round.Activity`**: the gestures as JSON (`[]conversation.Gesture`: id, start, time, app, summary, repeats). A reload shows them after the stream has dropped them (`Round.Gestures()`; DTO `activity` on every round, the started and done events too).
+  - **`GatherArgs.Activity`** and **`Turn.Activity`**.
+  - **On user message's `activity` pin** (`conversationnodes.PinActivity`, type `json`; empty in *Run mode*).
+
+### The `activity` context provider
+`features/activity/context` (`activitycontext.Contribute`, order 210, beside `workbench`) renders the round's gestures as *"What the person did since their last message, by hand, oldest first (times in UTC)…"*, one line each: `- 13:42:05 opened "Refund for the second charge?"`, with `(and n more times)` for repeats. The summaries already quote every label, and the header says quoted names are data. Its settings are `enabled` (*Send what I did*, on) and `lookBackMinutes` (30). It gives nothing when there are no gestures, so a mode reads the pin to tell "nothing done" from "not gathered".
+
+### In the browser
+- `src/activity/`:
+  - `contributions.ts` adds the `activity` `chat.contextSettings` control (`ActivityControl`: *Send what I did*, saying so when recording is off).
+  - **`/activity`** (`command.ts`, a `chat.command`) gives finer control from the chat than the ⚙ switch, keeping two things apart:
+    - **This conversation's sending.** `on`/`off` and `since <minutes>m` (the first message's look-back) change its `activity` context setting, sent with the next message as the ⚙ does.
+    - **Recording at all.** `record on`/`off` (off deletes what is kept), `keep <hours>h` and `keep <count>` write the person's own `activity` section (user scope, `Config.set`), and `clear` calls `activity.clear`.
+    - Bare, it says which are on. An unknown argument lists them. `parseActivityCommand` is pure, and checks the settings' limits.
+    - For it, `ChatCommandContext` gained `contextSettings` and `setContextSetting`.
+  - `ActivityIndicator.tsx` is the composer's *Recent activity is shared* chip (15c question 11), shown while the activity is recorded and sent. Its tooltip names the setting, since nothing opens Settings at a section yet.
+  - `ActivityLines.tsx` has `ActivityLines` (quiet, timestamped lines, the newest five shown under *and n more*, a dismiss ✕ each, dismissed ones struck through) and `PendingActivity`, which follows `activity.mine {after}`, dismissing with `activity.dismiss`.
+- `ChatTranscript` takes a `tail` row after the last round. `ChatEditor` fills it with `PendingActivity`:
+  - after the last round's time, or the look-back for a new conversation;
+  - only while the mode's graph gathers `activity` (its `spec.settings`) and the switch is on.
+- `RoundView` shows a round's `activity` above its message.
+
+### Decided while building
+1. **Read once in Send, not in the provider.** The prompt, the pin and the stored round must agree, and the provider runs only when a graph gathers it. The reader is a hook on the conversation service, so `conversation` does not depend on `activity`.
+2. **Since the previous round's start**, from `Conversation.LastRoundAt`: gestures made while a reply streamed go with the next message.
+3. **The look-back is a setting** of the provider (`lookBackMinutes`), the 30 minutes of question 13 its default.
+4. **No line when nothing was done.** The provider gives nothing, and the Agent Builder's template tells "no history" from the pin.
+5. **Times in UTC** in the prompt (the server does not know the person's zone); the browser shows local times.
+6. **A comment folds a long parenthesis to `(…)`** (`shortSummary`): a record's every field, such as a draft's author id or a Message-ID, made the transcript unreadable. The tooltip and the prompt keep the whole summary.
+7. **`mui.chipsInput` no longer sends an empty `text` on mount** (`ChipsInput.tsx`), only a changed one. Each composer's To, Cc and Bcc fields had made a *used "To"* gesture nobody made, as the graph renderer's `select` did before 15c (decision 8).
+
+### Verification
+- `go test ./features/conversation/... ./features/activity/... ./features/chronicle/nodes ./features/workbench/...` (Foundation):
+  - `TestSendSendsWhatThePersonDid`: a first message looks back 30 minutes; the prompt, `GatherArgs.Activity`, the `activity` pin (a test mode's template) and `Round.Activity` agree, also after a reload; the next message looks back to the previous round; with the switch off nothing is read.
+  - `TestReaderGivesTheSendableGesturesSince`: 60 gestures (past `activity.mine`'s default 50), none older than the look-back, none dismissed, none of Bo's, nothing for an agent.
+  - `TestRenderQuotesAndTimesEachGesture`.
+  - Personal's test with its new gather.
+- `apps/tools`, `cognition/...` and `tools/...` pass. `frontend/common` `yarn build` and `frontend/example` `yarn lint` pass.
+- Forge: the Mail fixture's `TestAutomateWhatAnaDid` and the 15d browser walk ([forge ChatModes.md › Verification of part 15d](../../forge/documentation/ChatModes.md#verification-of-part-15d)).
+
+## Built in forge 15g
+Forge's part 15g ([plans/015g-RunInputs.md](../../forge/documentation/plans/015g-RunInputs.md)): a value the person entered can be **asked for each run** when what they did is automated. How the Agent Builder and Forge's agent hosts use it is in [forge ChatModes.md › Automate what I just did](../../forge/documentation/ChatModes.md#automate-what-i-just-did) and [AgentsApp.md › Built in part 15g](../../forge/documentation/AgentsApp.md#built-in-part-15g).
+
+### Marks
+- **`activity.ask {gesture, entry, field, question?, default?, remove?}`** is a call like `activity.dismiss`. It writes an `ask` entry (`Entry.Ask`, an `activity.Mark`) to the person's subject.
+- `activity.Group` applies the marks to their gesture as **`asks`** (`[]activity.Ask`: entry, field, name, question, default, omitted):
+  - only a `command` entry's changed fields can be marked;
+  - the last mark of a field wins, and `remove` clears it;
+  - a question left empty becomes *Which <field name>?*;
+  - the default is this time's value unless the mark gives another, and an *omitted* value (a reply's body) has none;
+  - a `clear` drops the marks with the gestures.
+- `conversation.Gesture.Asks` (`GestureAsk`: name, question, default) carries them to the prompt, the `activity` pin and `Round.Activity`. The provider writes each after its action: `[ask each run: "Which label?", for "Labels", this time "Billing"]`, every part quoted. Its header says such a value was particular to this time.
+
+### In the browser
+- **The pencil** (`ActivityLines.tsx`) sits beside the ✕ of each pending action that changed values. Its popover (*Ask for this each run*) lists the action's values, with radios, *The question* and *Default answer*, then *Ask each run* or *Don't ask*. A marked value shows as a chip under the action (*asks: Which label? (Billing)*, its ✕ removing the mark). Sent rounds show the marks without the pencil.
+- **`chat.askForm`** (`tools/AskFormCard.tsx`) is a client tool that waits for the user: `{title, questions: [{id, question, kind: text|choice, choices?, default?, help?}]}`, up to 12.
+  - Its card opens a dialog at once, with every question: choices as radios plus *Something else…*, and text as fields filled with their defaults. *Answer* opens it again.
+  - *Send answers* gives `{answers: {<id>: value}}`, and *Skip* gives `{cancelled: true}`.
+  - `chat.askChoice` stays for a single question.
+
+### Decided while building
+1. **Marks are entries in the person's stream**, like dismissals, so they follow the person across tabs and devices. They are never a tool.
+2. **The default is kept only when it differs** from this time's value. Otherwise the mark leaves it out, and this time's value is used.
+3. **The form opens itself** when its card appears, since the round waits on it. Closing the dialog keeps the card waiting; only *Skip* answers it empty.
+
+### Verification
+- `go test ./features/activity/...` (`TestAsksMarkValuesOfAGesture`: a mark with no question, the last mark winning, a default other than this time's, an omitted value, a removed mark, a click's and another gesture's marks ignored, a clear) and `./features/activity/context` (the provider writes the marks quoted).
+- `frontend/common` `yarn build` and `frontend/example` `yarn lint`.
+- Forge: the Mail fixture's `TestAValueAskedEachRun` and the 15g browser walk.

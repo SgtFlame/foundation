@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
+	activitycontext "github.com/SgtFlame/foundation/backend/features/activity/context"
 	"github.com/SgtFlame/foundation/backend/features/ai/providers/gemini"
 	"github.com/SgtFlame/foundation/backend/features/ai/rest/chathandlers"
 	"github.com/SgtFlame/foundation/backend/features/ai/rest/embedhandlers"
@@ -67,6 +68,7 @@ import (
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
+	"github.com/SgtFlame/foundation/backend/features/conversation/made"
 	conversationnodes "github.com/SgtFlame/foundation/backend/features/conversation/nodes"
 	"github.com/SgtFlame/foundation/backend/features/conversation/rest/conversationhandlers"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
@@ -424,6 +426,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var connectionDeps connections.Deps
 		var scriptedDeps scripted.Deps
 		var uiService uiservice.Service
+		var madeDeps made.Deps
 		var configLive configservice.Service
 		var chatLive chatservice.Service
 		var conversationLive conversationservice.Service
@@ -462,6 +465,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		chroniclecontext.Contribute(registry, func() chroniclecontext.Deps { return chronicleDeps })
 		retrievalcontext.Contribute(registry, func() retrievalservice.Service { return retrievalService })
 		workbenchcontext.Contribute(registry)
+		activitycontext.Contribute(registry) // the person's recent activity in the chat (forge 15d)
 		cognitionsettings.Contribute(registry)
 		cognitionnodes.Contribute(registry)
 		conversationnodes.Contribute(registry)
@@ -536,6 +540,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		apptools.ContributeSandbox(registry, func() apptools.ForgeDeps { return forgeToolDeps }) // sandbox.run (forge 07j)
 		presence.Contribute(registry, func() *presence.Presence { return livePresence })
 		uitools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
+		made.Contribute(registry, func() made.Deps { return madeDeps }) // chat.mode.*, chat.modes.made, chat.mode.create|options (forge 15h)
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
 		uihandlers.ContributeLive(registry, func() uiservice.Service { return uiService })
 		confighandlers.ContributeLive(registry, func() configservice.Service { return configLive })
@@ -710,6 +715,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		conversationService := conversationimpl.CreateService(
 			conversationimpl.WithDB(gdb), conversationimpl.WithChat(chatService), conversationimpl.WithConfig(configService), conversationimpl.WithRegistry(registry),
 			conversationimpl.WithEngine(cognitionEngine),
+			conversationimpl.WithActivity(activitycontext.Reader(func() activity.Deps { return activityDeps })),
 		)
 
 		retrievalService = retrievalimpl.CreateService(
@@ -831,6 +837,13 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// An installed app's own entity types are under its path (forge 05c)
 		records.SetPlacement(installs.Placement(func() installs.Deps { return installDeps }))
 		authz.SetAgents(recordsdata.Agents{Deps: func() recordsdata.Deps { return recordDeps }}) // agents are records (forge 07j)
+		// Modes people made are listed after the chat.modes settings (forge 15h)
+		madeDeps = made.Deps{Store: projections, Bus: liveBus, Engine: cognitionEngine, Config: configService,
+			Apps: func(args features.ServiceArgs) []made.App {
+				resp := uiService.EditorKinds(uiservice.EditorKindsArgs{ServiceArgs: args})
+				return made.AppsOf(resp.Apps, resp.Kinds)
+			}}
+		conversationsettings.SetMadeModes(made.Source{Deps: func() made.Deps { return madeDeps }})
 		// This process runs its share of every tenant's jobs; other
 		// processes on the same JetStream share the queues (forge 07a)
 		jobDeps = jobs.Deps{Projections: projections, Bus: liveBus, Engine: cognitionEngine, Config: configService}

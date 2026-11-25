@@ -23,6 +23,7 @@ type testMode struct {
 	include  []string // the tools selected; empty takes every tool
 	maxSteps string   // an expression for Stream reply's steps; empty keeps the section's
 	followed string   // a summary Emit followed memory reports after the title; empty reports none
+	activity bool     // the template reads On user message's activity pin (forge 15d)
 }
 
 // graph is the mode as a graph: every provider's context after the
@@ -57,6 +58,9 @@ func (m testMode) graph() cognition.Graph {
 	edge("system", "value", "instructions", "system")
 	if strings.Contains(m.template, ".tools") {
 		edge("tools", "tools", "instructions", "tools")
+	}
+	if m.activity {
+		edge("on", "activity", "instructions", "activity")
 	}
 	edge("gather", "then", "context", "then")
 	edge("instructions", "text", "context", "system")
@@ -94,12 +98,14 @@ var testModes = []testMode{
 	{id: "chat", template: "{{.system}}{{if .tools}}\n\n# Tools{{end}}"},
 	{id: "builder", template: "{{.system}}\n\n# Mode: Builder\nFollow the procedure.", include: []string{"test."}, maxSteps: "2"},
 	{id: "memo", template: "{{.system}}", followed: "Memory: updated *e1*"},
+	{id: "acts", template: "{{.system}}{{range .activity}}\n* pin: {{.summary}}{{end}}", activity: true},
 }
 
 const testModesSection = `{"modes": [
 	{"id": "chat", "label": "Chat", "graphRef": "chat", "default": true},
 	{"id": "builder", "label": "Builder", "icon": "🛠", "graphRef": "builder", "focus": {"kinds": ["prefab"]}},
 	{"id": "memo", "label": "Memo", "graphRef": "memo"},
+	{"id": "acts", "label": "Acts", "graphRef": "acts"},
 	{"id": "gone", "label": "Gone", "graphRef": "nowhere"}]}`
 
 func contributeModes(t *testing.T, reg *extensions.Registry) {
@@ -186,10 +192,10 @@ func TestAFailingModeFailsItsRound(t *testing.T) {
 func TestModesListsTheModesGraphs(t *testing.T) {
 	s, _ := newTestService(t, &fakeChat{})
 	resp := s.Modes(conversationservice.ModesArgs{ServiceArgs: features.ServiceArgs{Principal: features.LocalPrincipal()}})
-	if resp.Common.Code != http.StatusOK || len(resp.Modes) != 4 {
+	if resp.Common.Code != http.StatusOK || len(resp.Modes) != 5 {
 		t.Fatalf("modes %+v", resp)
 	}
-	chat, builder, gone := resp.Modes[0], resp.Modes[1], resp.Modes[3]
+	chat, builder, gone := resp.Modes[0], resp.Modes[1], resp.Modes[4]
 	if !chat.Default || strings.Join(chat.Settings, ",") != "test,tools" || chat.Missing {
 		t.Errorf("chat %+v", chat)
 	}
@@ -198,5 +204,45 @@ func TestModesListsTheModesGraphs(t *testing.T) {
 	}
 	if !gone.Missing {
 		t.Errorf("gone %+v", gone)
+	}
+}
+
+// forge 15e: a switch is stored on the conversation, so the next round runs
+// in it without the send naming a mode; an unknown mode and another user's
+// conversation are refused.
+func TestSetModeStoresTheConversationsMode(t *testing.T) {
+	s, _ := newTestService(t, &fakeChat{})
+	args := features.ServiceArgs{Principal: features.LocalPrincipal()}
+	first := collect(s.Send(conversationservice.SendArgs{ServiceArgs: args, Text: "hi"}))[conversationservice.EventDone][0].Round
+	if first.Mode != "chat" {
+		t.Fatalf("first round %+v", first)
+	}
+
+	resp := s.SetMode(conversationservice.SetModeArgs{ServiceArgs: args, ConversationID: first.ConversationID, Mode: "memo"})
+	if resp.Common.Code != http.StatusOK || resp.Conversation.Mode != "memo" {
+		t.Fatalf("set mode %+v", resp)
+	}
+	if again := s.SetMode(conversationservice.SetModeArgs{ServiceArgs: args, ConversationID: first.ConversationID, Mode: "memo"}); again.Common.Code != http.StatusOK {
+		t.Errorf("setting the same mode again: %+v", again.Common)
+	}
+	if list := s.List(conversationservice.ListArgs{ServiceArgs: args}); list.Conversations[0].Mode != "memo" {
+		t.Errorf("stored mode %q", list.Conversations[0].Mode)
+	}
+	next := collect(s.Send(conversationservice.SendArgs{ServiceArgs: args, ConversationID: first.ConversationID, Text: "more"}))[conversationservice.EventDone][0].Round
+	if next.Mode != "memo" {
+		t.Errorf("the next round ran in %q", next.Mode)
+	}
+
+	unknown := s.SetMode(conversationservice.SetModeArgs{ServiceArgs: args, ConversationID: first.ConversationID, Mode: "nope"})
+	if unknown.Common.Code != http.StatusBadRequest || unknown.Common.ErrorCode != "unknown_mode" {
+		t.Errorf("unknown mode: %+v", unknown.Common)
+	}
+	other := args
+	other.Principal.UserID = 99
+	if code := s.SetMode(conversationservice.SetModeArgs{ServiceArgs: other, ConversationID: first.ConversationID, Mode: "chat"}).Common.Code; code != http.StatusNotFound {
+		t.Errorf("another user's conversation: code %d", code)
+	}
+	if list := s.List(conversationservice.ListArgs{ServiceArgs: args}); list.Conversations[0].Mode != "memo" {
+		t.Errorf("another user changed the mode to %q", list.Conversations[0].Mode)
 	}
 }

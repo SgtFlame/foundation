@@ -52,6 +52,28 @@ export interface ActivityEntry {
   summary?: string
 }
 
+// A value of a gesture the person marked to ask for each run when what
+// they did is automated (forge 15g): the field's name, the question and
+// the default answer (none for an omitted value)
+export interface ActivityAsk {
+  entry: string
+  field: string
+  name: string
+  question: string
+  default?: unknown
+  omitted?: boolean
+}
+
+// What activity.ask marks, or clears with remove
+export interface ActivityMark {
+  gesture: string
+  entry: string
+  field: string
+  question?: string
+  default?: unknown
+  remove?: boolean
+}
+
 // One request's entries: a click and the commands it caused
 export interface ActivityGesture {
   id: string
@@ -62,6 +84,7 @@ export interface ActivityGesture {
   summary: string
   repeats?: number
   dismissed?: boolean
+  asks?: ActivityAsk[] // forge 15g
   entries: ActivityEntry[]
 }
 
@@ -85,6 +108,8 @@ export const ActivityCalls = {
   focus: (subject: ActivityThing) => run('activity.focus', { id: newId('focus'), subject }),
   // Marks gestures so they are never sent to a model
   dismiss: (ids: string[]) => run('activity.dismiss', { ids }),
+  // Marks one value of a gesture to ask for each run, or clears the mark
+  ask: (mark: ActivityMark) => run('activity.ask', mark),
   // Deletes everything kept
   clear: () => run('activity.clear', {}),
 }

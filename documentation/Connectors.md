@@ -82,7 +82,7 @@ The request body is the operation's args, a JSON object.
 
 **Discovered contracts.** KV `cx_discovered_<tenant>` maps `<connection>` to `{contract, problems, at}`. The adapter writes it through `Context.PutDiscovered`, which leaves out the operations and events failing the check (listing them as `problems`) and publishes `cx.discovered.<tenant>.<connection>`. The contract's id is `conn.<connection>`.
 
-**Callbacks.** KV `cx_hooks` (20b) maps `<hookId>` to `connectors.Hook{tenant, connection, type}`; only its shape is fixed here.
+**Callbacks.** KV `cx_hooks` (26b) maps `<hookId>` to `connectors.Hook{tenant, connection, type}`; only its shape is fixed here.
 
 Slice 47 adds `cx.resolve`, `cx.status`, the ledger, locks, event sources and `CX_<tenant>` to the protocol: see [Built in slice 47 › Protocol additions](#protocol-additions).
 
@@ -136,7 +136,7 @@ A call no adapter serves gets NATS's *no responders* at once and returns retryab
 - **Calls.** `Session.Call(ctx, op, args)` runs one. A `*connectors.Error` is replied as it is; any other error, or a panic, is `unavailable`.
 - **`adapter.Context`** carries the caller's `ServiceArgs` (principal in the subject's tenant, Meta), the call id, contract, operation and key, and a logger carrying the trace. The tenant's file store and the ledger writer join it with 7c.
 - **Announcements** are written at once and every `AnnounceEvery`. A stop unsubscribes, waits for running calls, deletes its announcements and closes its sessions.
-- **Surfaces.** `Surfaces` are announced, and each `Listen` runs with a `Gateway` that refuses every request (`notSupported`) until 75a. `Watcher` is run by 7c, `Describer` by 75c, and `Receiver`/`Registrar` by 20b; they are declared only.
+- **Surfaces.** `Surfaces` are announced, and each `Listen` runs with a `Gateway` that refuses every request (`notSupported`) until 75a. `Watcher` is run by 7c, `Describer` by 75c, and `Receiver`/`Registrar` by 26b; they are declared only.
 
 `serve.go` (Foundation's and Forge's) makes the registry and dispatcher. It starts an in-process adapter from `connectorImpls()` when that lists implementations: none in Foundation's; Forge's lists `mail.mime` (7e).
 
@@ -155,7 +155,7 @@ A call no adapter serves gets NATS's *no responders* at once and returns retryab
 
 ### Decisions
 
-Answered before building (2026-11-11), each with its proposal: questions 1 (nested objects as one pin), 2 (versions side by side), 4 (`cx.resolve` in 7c), 5 (the protocol written here, the Go runtime only), 6 (the bidirectional shapes here, the gateway and adapters in 55), 7 (claiming declared contracts in 75c), 8 (`destructive`), 9 (no durable wait for a callback) and 10 (callback metadata and interfaces here, the endpoint in 20b). Question 3 (always through NATS) was the user's direction.
+Answered before building (2026-11-11), each with its proposal: questions 1 (nested objects as one pin), 2 (versions side by side), 4 (`cx.resolve` in 7c), 5 (the protocol written here, the Go runtime only), 6 (the bidirectional shapes here, the gateway and adapters in 55), 7 (claiming declared contracts in 75c), 8 (`destructive`), 9 (no durable wait for a callback) and 10 (callback metadata and interfaces here, the endpoint in 26b). Question 3 (always through NATS) was the user's direction.
 
 Decided while building:
 
@@ -311,7 +311,7 @@ In Forge, in headless Chromium, with a scratch NATS server running the test adap
 ### Not built
 
 - The *Connection* picker in *Call connector*'s details panel, and a *Connections* administration view (apps embed the form).
-- Pushed events at a hook URL, registration with the service and backfill after a gap (20b).
+- Pushed events at a hook URL, registration with the service and backfill after a gap (26b).
 - Several sessions per connection in one instance (one session serves concurrent calls).
 - Authorization between processes, which `cx.resolve` waits for.
 

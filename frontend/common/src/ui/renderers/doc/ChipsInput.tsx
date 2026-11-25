@@ -76,9 +76,16 @@ export function ChipsInput(p: RendererProps) {
   const emit = useRef(p.emit)
   emit.current = p.emit
 
-  // text, debounced, for the suggestions query
+  // text, debounced, for the suggestions query; only when it changed from
+  // what was last sent, so mounting sends nothing (an empty text on mount
+  // was a gesture nobody made in the person's recent activity, forge 15d)
+  const sent = useRef('')
   useEffect(() => {
-    const t = setTimeout(() => emit.current('text', { text }), 200)
+    if (text === sent.current) return
+    const t = setTimeout(() => {
+      sent.current = text
+      emit.current('text', { text })
+    }, 200)
     return () => clearTimeout(t)
   }, [text])
 

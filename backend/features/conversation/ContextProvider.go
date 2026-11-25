@@ -42,6 +42,7 @@ type GatherArgs struct {
 	Text           string          // the user's message
 	Window         []Round         // the rounds sent as history with the message, oldest first
 	Workbench      json.RawMessage // the browser's workbench snapshot; untrusted, may be empty
+	Activity       []Gesture       // the person's gestures since the previous round, sent with this one (forge 15d)
 	Settings       json.RawMessage // this provider's settings for the conversation
 	ContextWindow  int             // the round's model's context window, in tokens; 0 when unknown
 }

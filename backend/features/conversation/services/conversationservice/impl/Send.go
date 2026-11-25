@@ -44,6 +44,7 @@ type round struct {
 	history      []conversation.Round       // the window: the rounds sent as history, oldest first
 	settings     map[string]json.RawMessage // the context settings, by provider ID
 	segments     []retrieval.RoundSegment   // what the round injected, once stored
+	activity     []conversation.Gesture     // the person's gestures sent with the message (forge 15d)
 	debug        bool                       // the conversation's Debug setting: log its AI calls in detail
 }
 
@@ -113,6 +114,13 @@ func (s *service) start(args conversationservice.SendArgs) (*round, *features.Se
 		if r.conversation, failed = s.find(args.ServiceArgs, args.ConversationID); failed != nil {
 			return nil, failed
 		}
+		// Undo of a pre-mode switch runs the message again (forge 15f): the
+		// round it replaces leaves the history, as a 🚫 one does
+		if args.Undoes != 0 {
+			if fb := s.Feedback(conversationservice.FeedbackArgs{ServiceArgs: args.ServiceArgs, RoundID: args.Undoes, Feedback: retrieval.FeedbackIgnore}); fb.Common.Code >= 300 {
+				return nil, &fb.Common
+			}
+		}
 		q := s.owned(args.ServiceArgs).Where("conversation_id = ? AND status IN ? AND reply <> '' AND feedback <> ?", args.ConversationID, []int{http.StatusOK, conversation.StatusStopped}, retrieval.FeedbackIgnore).Order("id DESC")
 		if r.chat.HistoryRounds > 0 {
 			q = q.Limit(r.chat.HistoryRounds)
@@ -140,11 +148,17 @@ func (s *service) start(args conversationservice.SendArgs) (*round, *features.Se
 	stored, _ := json.Marshal(r.settings)
 	r.conversation.ContextSettings = string(stored)
 	r.conversation.Mode = r.mode.ID
+	previous := r.conversation.LastRoundAt
 	r.conversation.LastRoundAt = time.Now()
 
+	r.activity = s.activityOf(args, r, previous)
 	r.round = conversation.Round{
 		Tenanted: db.TenantOf(args.Principal), Owned: db.OwnedBy(args.Principal),
 		Text: text, Level: r.level.ID, ModelName: r.model.Model, Workbench: string(args.Workbench), Mode: r.mode.ID,
+	}
+	if len(r.activity) > 0 {
+		raw, _ := json.Marshal(r.activity)
+		r.round.Activity = string(raw)
 	}
 	err = s.db.WithContext(args.Context()).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(&r.conversation).Error; err != nil {
@@ -162,7 +176,7 @@ func (s *service) start(args conversationservice.SendArgs) (*round, *features.Se
 // modeOf is the mode a round runs in: the one sent, else the
 // conversation's, else the default of the chat.modes settings.
 func (s *service) modeOf(args conversationservice.SendArgs, c conversation.Conversation) (conversationsettings.Mode, *features.ServiceResponse) {
-	modes, err := config.Read[conversationsettings.Modes](s.config, args.ServiceArgs, conversationsettings.ModesID)
+	modes, err := conversationsettings.ReadModes(s.config, args.ServiceArgs)
 	if err != nil {
 		return conversationsettings.Mode{}, args.Fail(http.StatusInternalServerError, log.Wrap(err))
 	}
@@ -191,6 +205,12 @@ func (s *service) run(args conversationservice.SendArgs, r *round, events chan<-
 	h := newHost(s, args, r, events)
 	conv, started := r.conversation, r.round
 	h.emit(conversationservice.SendEvent{Kind: conversationservice.EventStarted, Conversation: &conv, Round: &started})
+	// The pre-mode may switch the round's mode, or ask, before it runs
+	s.preMode(args, r, h)
+	if args.Context().Err() != nil {
+		h.finish(nil) // stopped while it asked
+		return
+	}
 
 	// The run outlives the browser: what follows the reply is done even
 	// when nobody is left to tell. The reply itself stops with the browser.
@@ -207,12 +227,52 @@ func (s *service) run(args conversationservice.SendArgs, r *round, events chan<-
 			conversationnodes.PinText: r.round.Text, conversationnodes.PinWindow: r.history, conversationnodes.PinSettings: all,
 			conversationnodes.PinWorkbench: json.RawMessage(orEmpty(args.Workbench)), conversationnodes.PinConversation: r.conversation,
 			conversationnodes.PinTitle: r.conversation.Title, conversationnodes.PinLevel: r.level.ID, conversationnodes.PinRound: r.round,
+			conversationnodes.PinActivity: orNone(r.activity),
 		},
 	})
 	if err != nil {
 		log.With("roundId", r.round.ID, "mode", r.mode.ID, "runId", res.RunID).Warn(call.Context(), "the mode graph %s failed: %v", r.mode.GraphRef, err)
 	}
 	h.finish(err)
+}
+
+// activityOf is the person's gestures to send with the message, read
+// once (forge 15d): those since the conversation's previous round, or
+// since the look-back of the activity settings for a first message,
+// without the dismissed ones. Nothing is read while the conversation's
+// activity is off; a failed read sends none.
+func (s *service) activityOf(args conversationservice.SendArgs, r *round, previous time.Time) []conversation.Gesture {
+	if s.activity == nil {
+		return nil
+	}
+	var defaults json.RawMessage
+	for _, p := range conversation.ContextProviders.All(s.registry) {
+		if p.ID == conversation.ActivityID {
+			defaults = p.Defaults
+		}
+	}
+	set := conversation.ActivitySettingsOf(s.settingsOf(args, r, conversation.ActivityID, defaults))
+	if !set.On() {
+		return nil
+	}
+	after := time.Now().Add(-set.LookBack())
+	if !previous.IsZero() {
+		after = previous
+	}
+	gs, _, err := s.activity(args.ServiceArgs, after)
+	if err != nil {
+		log.Warn(args.Context(), "cannot read the recent activity, so the round goes without it: %v", err)
+		return nil
+	}
+	return gs
+}
+
+// orNone is a list of gestures, never nil, for the activity pin.
+func orNone(gs []conversation.Gesture) []conversation.Gesture {
+	if gs == nil {
+		return []conversation.Gesture{}
+	}
+	return gs
 }
 
 func orEmpty(raw json.RawMessage) json.RawMessage {

@@ -1,6 +1,6 @@
 {
   "name": "Personal",
-  "description": "The default chat mode: chooses the Chronicle entries each message needs, adds them with the workbench and Volume passages to the chat's system prompt, streams the reply with the tools the conversation allows, names the conversation after its first round, and keeps memory up to date after each reply. Every prompt is a template you can change here.",
+  "description": "The default chat mode: chooses the Chronicle entries each message needs, adds them with the workbench, what the person just did (forge 15d) and Volume passages to the chat's system prompt, streams the reply with the tools the conversation allows, names the conversation after its first round, and keeps memory up to date after each reply. Every prompt is a template you can change here.",
   "kind": "mode",
   "version": 1,
   "spec": {
@@ -8,6 +8,7 @@
       "chronicle",
       "rag",
       "workbench",
+      "activity",
       "tools",
       "debug"
     ]
@@ -162,6 +163,7 @@
       "config": {
         "providers": [
           "workbench",
+          "activity",
           "rag"
         ]
       }
@@ -211,7 +213,7 @@
       },
       "title": "Instructions",
       "config": {
-        "template": "{{.system}}{{if .tools}}\n\n# Tools\nYou can call tools to search and read the user's Volumes and Chronicles, to ask them to choose, to open things in their workbench, and to change their files and Chronicles. Every change is shown to the user to approve first, so propose it with the tool rather than asking in words. When a tool's result has passages with a cite such as [5], cite them like the context's passages. Never say something was changed unless a tool's result says so.{{end}}"
+        "template": "{{.system}}\n\nWhen the context lists what the person did since their last message, \"this\", \"what I just did\" and \"like before\" can mean those actions. When they ask to automate what they did (\"automate what I just did\", \"do this every time\", \"make this automatic\", \"turn that into an agent\"), you cannot make agents in this mode: tell them to pick 🤖 Agent Builder in the mode menu by the message box, which is offered while an app's tab (such as Mail) is open, and to ask again there.{{if .tools}}\n\n# Tools\nYou can call tools to search and read the user's Volumes and Chronicles, to ask them to choose, to open things in their workbench, and to change their files and Chronicles. Every change is shown to the user to approve first, so propose it with the tool rather than asking in words. When a tool's result has passages with a cite such as [5], cite them like the context's passages. Never say something was changed unless a tool's result says so.{{end}}"
       }
     },
     {

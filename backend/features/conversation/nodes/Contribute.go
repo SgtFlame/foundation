@@ -38,6 +38,7 @@ const (
 	PinTitle        = "title"        // string: the conversation's title, empty until it is named
 	PinLevel        = "level"        // string: the round's level
 	PinRound        = "round"        // conversation.Round: the round, as stored when the message was sent
+	PinActivity     = "activity"     // []conversation.Gesture: the person's gestures since the previous round (forge 15d)
 )
 
 // The data types Chat contributes.
@@ -90,6 +91,7 @@ func host(x *cognition.Exec) (conversation.Host, error) {
 
 // Contribute registers the event, the nodes and the data types.
 func Contribute(reg *extensions.Registry) {
+	contributePreMode(reg)
 	for i, t := range []cognition.DataType{
 		{Descriptor: extensions.Descriptor{ID: TypeRound}, Color: "#00acc1", Description: "A chat round: the message, the reply and their usage"},
 		{Descriptor: extensions.Descriptor{ID: TypeRounds}, Color: "#00838f", Description: "Chat rounds, oldest first"},
@@ -118,6 +120,7 @@ func Contribute(reg *extensions.Registry) {
 			cognition.DataPin(PinTitle, "Title", "string", "The conversation's title; empty until it is named"),
 			cognition.DataPin(PinLevel, "Level", "string", "The round's level, an ai.chat.levels id"),
 			cognition.DataPin(PinRound, "Round", TypeRound, "The round, as stored when the message was sent"),
+			cognition.DataPin(PinActivity, "Activity", "json", "What the person did by hand since their previous message (the last 30 minutes for a first one), oldest first: [{id, start, time, app, summary, repeats}], without the gestures they dismissed; empty while the conversation's activity is off or not recorded"),
 		}},
 	})
 	node := func(order int, t cognition.NodeType) {

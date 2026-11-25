@@ -101,7 +101,7 @@ func runMode(x *cognition.Exec, in cognition.Values, d toolsnodes.Deps) (cogniti
 	if d.Config == nil {
 		return fail("Run mode cannot read the chat modes")
 	}
-	modes, err := config.Read[conversationsettings.Modes](d.Config, x.ServiceArgs, conversationsettings.ModesID)
+	modes, err := conversationsettings.ReadModes(d.Config, x.ServiceArgs)
 	if err != nil {
 		return nil, "", err
 	}
@@ -171,6 +171,7 @@ func runMode(x *cognition.Exec, in cognition.Values, d toolsnodes.Deps) (cogniti
 	inputs := cognition.Values{
 		PinText: message, PinWindow: host.Window, PinSettings: host.ProviderSettings, PinWorkbench: json.RawMessage(`{}`),
 		PinConversation: host.Turn().Conversation, PinTitle: mode.Label, PinLevel: level.ID, PinRound: host.Turn().Round,
+		PinActivity: []conversation.Gesture{},
 	}
 	_, runErr := x.Start(cognition.Start{ServiceArgs: sa, GraphID: mode.GraphRef, Event: EventUserMessage, Inputs: inputs, Host: host,
 		Trigger: "runMode:" + x.Node.ID})

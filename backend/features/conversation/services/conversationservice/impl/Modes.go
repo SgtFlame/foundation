@@ -5,7 +5,6 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
-	"github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	"github.com/SgtFlame/foundation/backend/features/conversation/settings"
 )
@@ -18,14 +17,15 @@ func (s *service) Modes(args conversationservice.ModesArgs) conversationservice.
 	if s.config == nil {
 		return conversationservice.ModesResponse{Common: *args.Fail(http.StatusServiceUnavailable, log.Code("chat_not_configured").New("chat is not configured"))}
 	}
-	modes, err := config.Read[conversationsettings.Modes](s.config, args.ServiceArgs, conversationsettings.ModesID)
+	modes, err := conversationsettings.ReadModes(s.config, args.ServiceArgs)
 	if err != nil {
 		return conversationservice.ModesResponse{Common: *args.Fail(http.StatusInternalServerError, log.Wrap(err))}
 	}
 	resp := conversationservice.ModesResponse{Common: features.OK(), Modes: []conversationservice.ModeInfo{}}
 	def, _ := modes.Default()
 	for _, m := range modes.Modes {
-		info := conversationservice.ModeInfo{ID: m.ID, Label: m.Label, Icon: m.Icon, GraphRef: m.GraphRef, Default: m.ID == def.ID, Focus: m.Focus, Missing: true}
+		info := conversationservice.ModeInfo{ID: m.ID, Label: m.Label, Icon: m.Icon, GraphRef: m.GraphRef, Default: m.ID == def.ID, Focus: m.Focus, Missing: true,
+			MakesModes: m.MakesModes, Made: m.Made, Mine: m.Mine, Shared: m.Shared}
 		if s.engine != nil {
 			if g, ok := s.engine.Graph(args.ServiceArgs, m.GraphRef); ok {
 				info.Missing, info.Description, info.Settings = false, g.Description, cognition.ModeSpecOf(g).Settings

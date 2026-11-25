@@ -75,7 +75,9 @@ export interface Round {
   finishReason?: string
   error?: string // the failure's message
   workbench?: unknown // the workbench snapshot sent with the message
-  mode?: string // the mode a context provider put it in, e.g. builder (forge 06g)
+  mode?: string // the chat.modes id it ran in (forge 06i)
+  activity?: RoundGesture[] // the person's gestures sent with the message, oldest first (forge 15d)
+  preMode?: PreModeDecision // what the pre-mode decided before the round ran (forge 15f)
   inputTokens: number // includes cachedTokens
   cachedTokens: number
   outputTokens: number // excludes thinkingTokens
@@ -88,6 +90,38 @@ export interface Round {
   toolCalls?: ToolCall[] // in the order the model made them
   followed?: Followed[] // what the round followers did, as the reply streamed (not stored)
   retry?: Retry // the last busy provider's retry, as the reply streamed (not stored)
+}
+
+// What the pre-mode decided for a round (forge 15f)
+export interface PreModeDecision {
+  decision: string // what its graph said: stay, switch or ask
+  mode: string // the mode it named
+  confidence: number
+  reason: string
+  ms: number
+  from: string // the mode the round was in before
+  outcome: 'stayed' | 'switched' | 'asked-switched' | 'asked-stayed' | 'timeout' | 'failed'
+  error?: string
+}
+
+// The data of a send's mode event: the pre-mode switched the round (forge 15f)
+export interface ModeSwitch {
+  from: string
+  to: string
+  reason?: string
+  round: Round
+}
+
+// One of the person's gestures a round was sent with (forge 15d): what
+// activity.mine gave, kept with the round after the stream drops it
+export interface RoundGesture {
+  id: string
+  start: string
+  time: string
+  app?: string
+  summary: string
+  repeats?: number
+  asks?: { name: string; question: string; default?: unknown }[] // values to ask for each run (forge 15g)
 }
 
 // A model call tried again because the provider was busy (429 or 503)
@@ -169,6 +203,9 @@ export interface SendRequest {
   workbench?: unknown // the workbench snapshot
   contextSettings?: Record<string, unknown>
   clientTools?: ClientToolDeclaration[] // the tools the model may call in this browser
+  offered?: string[] // the chat.modes ids offered here, which the pre-mode chooses among (forge 15f)
+  modeChosen?: boolean // the person chose mode for this message: no pre-mode
+  undoes?: string // a round this message runs again, which leaves the history (Undo of a switch)
 }
 
 // Answers a waiting tool call: approval for an awaiting one, result or
@@ -188,6 +225,16 @@ export interface FeedbackRequest {
 
 export interface FeedbackResponse extends ResponseStatus {
   round?: Round
+}
+
+// Switches a conversation's mode (forge 15e)
+export interface ModeRequest {
+  conversationId: string
+  mode: string // a chat.modes id
+}
+
+export interface ModeResponse extends ResponseStatus {
+  conversation?: Conversation
 }
 
 export interface ProviderInfo {
@@ -217,6 +264,10 @@ export interface ChatMode {
   description?: string
   settings?: string[] // the context settings its graph uses; empty uses them all
   missing?: boolean // its graph does not exist
+  makesModes?: boolean // the mode New mode… and /mode new switch to (forge 15h)
+  made?: boolean // a person made it (forge 15h)
+  mine?: boolean // you made it: the menu offers to edit its graph
+  shared?: boolean // shared with everyone in the tenant
 }
 
 export interface ModesResponse extends ResponseStatus {
@@ -232,6 +283,7 @@ export interface SendOptions {
   onTitle?: (conversation: Conversation) => void
   onFollowed?: (followed: Followed) => void // after done and any title
   onRetry?: (retry: Retry) => void // the provider was busy: the step is tried again after a wait
+  onMode?: (change: ModeSwitch) => void // the pre-mode switched the round's mode, before it runs (forge 15f)
   signal?: AbortSignal
 }
 
@@ -260,6 +312,13 @@ export const Conversations = {
     return response.data
   },
 
+  // Stores the mode a conversation's next rounds run in, on every tab and
+  // device; 400 unknown_mode, 404 for another's conversation (forge 15e)
+  async setMode(request: ModeRequest): Promise<ModeResponse> {
+    const response = await http.post<ModeResponse>('/conversation/mode', request)
+    return response.data
+  },
+
   async modes(): Promise<ModesResponse> {
     const response = await http.get<ModesResponse>('/conversation/modes')
     return response.data
@@ -275,7 +334,7 @@ export const Conversations = {
   // call ends (after the title, when one is generated). A failed reply
   // resolves too, with its status and error; only a refused message throws.
   // Aborting the signal stops the reply.
-  async send(request: SendRequest, { onStarted, onSources, onDelta, onTool, onDone, onTitle, onFollowed, onRetry, signal }: SendOptions = {}): Promise<Round> {
+  async send(request: SendRequest, { onStarted, onSources, onDelta, onTool, onDone, onTitle, onFollowed, onRetry, onMode, signal }: SendOptions = {}): Promise<Round> {
     let done: Round | undefined
     await live.call(
       'conversation.send',
@@ -308,6 +367,9 @@ export const Conversations = {
             break
           case 'retry':
             onRetry?.(data as Retry)
+            break
+          case 'mode':
+            onMode?.(data as ModeSwitch)
             break
         }
       },

@@ -231,7 +231,7 @@ func TestPersonalRunsARound(t *testing.T) {
 			t.Errorf("the prompt lacks %s", item.Title)
 		}
 	}
-	if len(h.gathered) != 1 || strings.Join(h.gathered[0], ",") != "workbench,rag" {
+	if len(h.gathered) != 1 || strings.Join(h.gathered[0], ",") != "workbench,activity,rag" {
 		t.Errorf("gathered %v", h.gathered)
 	}
 	if len(h.replied.Tools) != 1 || h.replied.Tools[0].ID != "kb.search" || len(h.replied.Messages) != 3 || h.replied.Messages[2].Content != "the engine?" {

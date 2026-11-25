@@ -33,7 +33,7 @@ func (s *service) gather(args conversationservice.SendArgs, r *round, named []st
 		}
 		ga := conversation.GatherArgs{
 			ServiceArgs: call, ConversationID: r.conversation.ID, Text: r.round.Text, Window: r.history,
-			Workbench: args.Workbench, Settings: settings, ContextWindow: r.model.ContextWindow,
+			Workbench: args.Workbench, Activity: r.activity, Settings: settings, ContextWindow: r.model.ContextWindow,
 		}
 		wg.Go(func() {
 			items, err := p.Gather(ga)

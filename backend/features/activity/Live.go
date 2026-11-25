@@ -33,7 +33,7 @@ func Resource(p features.Principal) string {
 func Contribute(reg *extensions.Registry, r *Recorder) {
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "activity.mine", Source: "activity"}, Title: "My recent activity",
-		Description: "The caller's own recent gestures, newest last: {recording, gestures: [{id, start, time, app, subject {type, id, label, details}, summary, repeats, dismissed, entries: [{id, kind (focus|ui|command|op), request, time, app, subject, page, title, handler, event, path, node, label, command, commandTitle, entity, entityName, target, recordTitle, change, fields: [{id, name, value, omitted}], summary}]}]}. after keeps the gestures that ended after a time, limit the newest (50), sendable leaves out the dismissed. Only a person's own history: it takes no one else's.",
+		Description: "The caller's own recent gestures, newest last: {recording, gestures: [{id, start, time, app, subject {type, id, label, details}, summary, repeats, dismissed, asks: [{entry, field, name, question, default, omitted}], entries: [{id, kind (focus|ui|command|op), request, time, app, subject, page, title, handler, event, path, node, label, command, commandTitle, entity, entityName, target, recordTitle, change, fields: [{id, name, value, omitted}], summary}]}]}. after keeps the gestures that ended after a time, limit the newest (50), sendable leaves out the dismissed. Only a person's own history: it takes no one else's.",
 		Params:      json.RawMessage(`{"type":"object","additionalProperties":false,"properties":{"after":{"type":"string","description":"An RFC 3339 time"},"limit":{"type":"integer","minimum":1,"maximum":1000},"sendable":{"type":"boolean","description":"Leave out the gestures the caller dismissed"}}}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"sendable":true}`)},
 		Action:      "activity.read",
@@ -88,6 +88,19 @@ func Contribute(reg *extensions.Registry, r *Recorder) {
 			}
 			slices.Sort(a.IDs)
 			e := Entry{ID: "dismiss-" + strconv.FormatUint(features.NewTSID(), 36), Kind: KindDismiss, IDs: slices.Compact(a.IDs)}
+			if err := r.write(c.Context(), c.Principal.TenantID, user, e); err != nil {
+				return nil, c.Fail(http.StatusInternalServerError, err)
+			}
+			return map[string]bool{"ok": true}, nil
+		})
+	call("activity.ask", "Ask for a value each run", "Marks one value of the caller's gesture {gesture, entry, field} (a command entry's changed field) to be asked for each run when what they did is automated, with question and default (this time's value when left out); remove clears the mark (forge 15g).",
+		func(c live.CallRun, user uint64) (any, *features.ServiceResponse) {
+			var m Mark
+			if err := strict(c.Args, &m); err != nil || m.Gesture == "" || m.Entry == "" || m.Field == "" || len(m.Question) > 300 {
+				return nil, c.Fail(http.StatusBadRequest, log.Code("invalid_args").New("activity.ask takes {gesture, entry, field, question?, default?, remove?}; the question is at most 300 characters"))
+			}
+			m.Question = cut(m.Question, 300)
+			e := Entry{ID: "ask-" + strconv.FormatUint(features.NewTSID(), 36), Kind: KindAsk, Time: time.Now().UTC(), Ask: &m}
 			if err := r.write(c.Context(), c.Principal.TenantID, user, e); err != nil {
 				return nil, c.Fail(http.StatusInternalServerError, err)
 			}
