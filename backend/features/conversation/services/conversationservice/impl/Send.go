@@ -135,7 +135,13 @@ func (s *service) start(args conversationservice.SendArgs) (*round, *features.Se
 		}
 		slices.Reverse(r.history)
 	} else {
-		r.conversation = conversation.Conversation{Tenanted: db.TenantOf(args.Principal), Owned: db.OwnedBy(args.Principal)}
+		// A new conversation belongs to the workspace it is started in (forge 16d)
+		r.conversation = conversation.Conversation{Tenanted: db.TenantOf(args.Principal), Owned: db.OwnedBy(args.Principal), WorkspaceID: conversation.DefaultWorkspace}
+		if r.workspace != nil {
+			r.conversation.WorkspaceID = r.workspace.ID
+		} else if id := strings.TrimSpace(args.Workspace); id != "" {
+			r.conversation.WorkspaceID = id
+		}
 	}
 	var failed *features.ServiceResponse
 	if r.mode, failed = s.modeOf(args, r.conversation); failed != nil {
@@ -166,7 +172,13 @@ func (s *service) start(args conversationservice.SendArgs) (*round, *features.Se
 		r.round.Activity = string(raw)
 	}
 	err = s.db.WithContext(args.Context()).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Save(&r.conversation).Error; err != nil {
+		// An existing conversation keeps the columns this round does not
+		// set, so a Move to… or a title written meanwhile stays (forge 16d)
+		if r.conversation.ID == 0 {
+			if err := tx.Create(&r.conversation).Error; err != nil {
+				return err
+			}
+		} else if err := tx.Model(&r.conversation).Select("ContextSettings", "Mode", "LastRoundAt", "UpdatedAt").Updates(&r.conversation).Error; err != nil {
 			return err
 		}
 		r.round.ConversationID = r.conversation.ID

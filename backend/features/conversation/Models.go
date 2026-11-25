@@ -22,6 +22,20 @@ type Conversation struct {
 	AllowedTools    string    // JSON array: the write tools the user chose "Always allow" for here
 	Mode            string    // the chat.modes id its rounds run in, as last sent (forge 06i)
 	LastRoundAt     time.Time `gorm:"index"`
+	// WorkspaceID is the owner's workspace it belongs to (forge 16d): the
+	// one its first message was sent from, or the one it was moved to. An
+	// empty or no longer existing id is their Default's (OwnWorkspace).
+	WorkspaceID string `gorm:"index;not null;default:''"`
+}
+
+// ConversationWorkspace shows a conversation in another of its owner's
+// workspaces besides its own (forge 16d: Show in…).
+type ConversationWorkspace struct {
+	db.Model
+	db.Tenanted
+	db.Owned
+	ConversationID uint64 `gorm:"uniqueIndex:conversation_workspace"`
+	WorkspaceID    string `gorm:"uniqueIndex:conversation_workspace;index"`
 }
 
 // Round is one message and its reply. It is stored when the message is
@@ -82,5 +96,5 @@ func (r Round) InHistory() bool {
 
 // Models are the conversation feature's tables, for db.Migrate.
 func Models() []any {
-	return []any{&Conversation{}, &Round{}}
+	return []any{&Conversation{}, &Round{}, &ConversationWorkspace{}}
 }

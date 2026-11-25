@@ -17,6 +17,9 @@ export interface Conversation {
   mode?: string // the chat.modes id its rounds run in (forge 06i)
   lastRoundAt: string
   contextSettings?: Record<string, unknown> // by chat.contextSettings id
+  // Forge 16d: the workspace it belongs to, and the others it is shown in
+  workspace?: string
+  shownIn?: string[]
 }
 
 // Where a cited segment opens: a Chronicle entry, a Volume file's lines,
@@ -180,6 +183,7 @@ export interface ListRequest {
   before?: string // only conversations older than this one
   limit?: number // 5 by default, at most 50
   ids?: string[] // only these conversations
+  workspace?: string // one of the caller's workspaces (forge 16d); empty is Default unless ids are given
 }
 
 export interface ListResponse extends ResponseStatus {
@@ -235,6 +239,17 @@ export interface ModeRequest {
 }
 
 export interface ModeResponse extends ResponseStatus {
+  conversation?: Conversation
+}
+
+// Move to… and Show in… (forge 16d)
+export interface WorkspacesRequest {
+  conversationId: string
+  move?: string // the workspace it now belongs to
+  shownIn?: string[] // every workspace it is shown in besides its own; left out keeps them
+}
+
+export interface WorkspacesResponse extends ResponseStatus {
   conversation?: Conversation
 }
 
@@ -317,6 +332,11 @@ export const Conversations = {
   // device; 400 unknown_mode, 404 for another's conversation (forge 15e)
   async setMode(request: ModeRequest): Promise<ModeResponse> {
     const response = await http.post<ModeResponse>('/conversation/mode', request)
+    return response.data
+  },
+
+  async setWorkspaces(request: WorkspacesRequest): Promise<WorkspacesResponse> {
+    const response = await http.post<WorkspacesResponse>('/conversation/workspaces', request)
     return response.data
   },
 

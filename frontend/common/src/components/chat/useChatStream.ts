@@ -80,8 +80,8 @@ function localRound(conversationId: string, text: string, reply: string, extra: 
   }
 }
 
-async function load(before?: string, limit = 1): Promise<{ threads: ChatThread[]; more: boolean }> {
-  const list = await Conversations.list({ before, limit })
+async function load(workspace: string | undefined, before?: string, limit = 1): Promise<{ threads: ChatThread[]; more: boolean }> {
+  const list = await Conversations.list({ before, limit, workspace })
   const conversations = [...(list.conversations ?? [])].reverse() // oldest first
   const threads = await Promise.all(
     conversations.map(async (c) => threadOf(c, (await Conversations.rounds({ conversationId: c.id })).rounds ?? [])),
@@ -89,50 +89,77 @@ async function load(before?: string, limit = 1): Promise<{ threads: ChatThread[]
   return { threads, more: !!list.more }
 }
 
-export function useChatStream() {
+// Where a conversation is listed (forge 16d): Move to… and Show in…
+export interface WorkspacesChange {
+  move?: string
+  shownIn?: string[]
+}
+
+// workspace is the tab's workspace (forge 16d): only its conversations are
+// listed, and a switch loads the other's. Nothing loads until ready (the
+// workspaces are known), so the first list is the right one.
+export function useChatStream(workspace?: string, ready = true) {
   const [threads, setThreads] = useState<ChatThread[]>(() => [newThread()])
   const [more, setMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
   const abort = useRef<AbortController | undefined>(undefined)
-  const started = useRef(false)
+  const loaded = useRef<string | undefined>(undefined) // the workspace the scroll shows, '' for none
+  const generation = useRef(0) // a load for a workspace since left is dropped
 
   const update = useCallback((key: string, fn: (t: ChatThread) => ChatThread) => {
     setThreads((all) => all.map((t) => (t.key === key ? fn(t) : t)))
   }, [])
 
-  // Opens on the latest conversation, so it can be continued
+  // Opens on the workspace's latest conversation, so it can be continued;
+  // a switch starts the scroll again on the other's (forge 16d)
   useEffect(() => {
-    if (started.current) return
-    started.current = true
-    load()
+    if (!ready) return
+    const key = workspace ?? ''
+    if (loaded.current === key) return
+    const switched = loaded.current !== undefined
+    loaded.current = key
+    const gen = ++generation.current
+    if (switched) {
+      setThreads([newThread()])
+      setMore(false)
+      setError(undefined)
+    }
+    setLoading(true)
+    load(workspace)
       .then(({ threads: latest, more }) => {
+        if (gen !== generation.current) return
         setMore(more)
         setThreads((all) => (all.length === 1 && all[0].rounds.length === 0 && latest.length > 0 ? latest : all))
       })
       .catch((err: unknown) => {
+        if (gen !== generation.current) return
         chatLog.fromError(err).warn('cannot load the latest conversation')
         setError(err instanceof Error ? err.message : String(err))
       })
-      .finally(() => setLoading(false))
-  }, [])
+      .finally(() => {
+        if (gen === generation.current) setLoading(false)
+      })
+  }, [workspace, ready])
 
   const loadEarlier = useCallback(async () => {
     const oldest = threads.find((t) => t.conversation)?.conversation?.id
     if (!more || loading || !oldest) return
+    const gen = generation.current
     setLoading(true)
     try {
-      const earlier = await load(oldest, 3)
+      const earlier = await load(workspace, oldest, 3)
+      if (gen !== generation.current) return
       setMore(earlier.more)
       setThreads((all) => [...earlier.threads, ...all])
     } catch (err) {
       chatLog.fromError(err).warn('cannot load earlier conversations')
       setError(err instanceof Error ? err.message : String(err))
     } finally {
-      setLoading(false)
+      if (gen === generation.current) setLoading(false)
     }
-  }, [threads, more, loading])
+  }, [threads, more, loading, workspace])
 
   const current = threads[threads.length - 1]
 
@@ -296,5 +323,25 @@ export function useChatStream() {
     [current, update],
   )
 
-  return { threads, current, more, loading, pending, error, send, stop, newConversation, say, loadEarlier, setContextSetting, setFeedback, answerTool, setMode }
+  // Moves a conversation to another workspace or sets those it is shown
+  // in (forge 16d); it stays in this scroll until the next load
+  const setWorkspaces = useCallback(
+    async (thread: ChatThread, change: WorkspacesChange) => {
+      const id = thread.conversation?.id
+      if (!id) return
+      try {
+        const res = await Conversations.setWorkspaces({ conversationId: id, ...change })
+        if (res.conversation) {
+          const c = res.conversation
+          update(thread.key, (t) => ({ ...t, conversation: { ...t.conversation, ...c, shownIn: c.shownIn ?? [] } }))
+        }
+      } catch (err) {
+        chatLog.fromError(err).With('conversationId', id).warn('cannot change where the conversation is listed')
+        setError(err instanceof Error ? err.message : String(err))
+      }
+    },
+    [update],
+  )
+
+  return { threads, current, more, loading, pending, error, send, stop, newConversation, say, loadEarlier, setContextSetting, setFeedback, answerTool, setMode, setWorkspaces }
 }

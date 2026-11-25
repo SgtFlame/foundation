@@ -67,6 +67,14 @@ func WithWorkspaces(read conversation.WorkspaceReader) Option {
 	}
 }
 
+// WithWorkspaceList sets how the caller's workspaces are listed (forge
+// 16d); without it conversations are listed in none and cannot be moved.
+func WithWorkspaceList(list conversation.WorkspaceList) Option {
+	return func(s *service) {
+		s.workspaceList = list
+	}
+}
+
 var (
 	instance *service
 	once     sync.Once

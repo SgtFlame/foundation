@@ -195,7 +195,7 @@ function WorkspaceMenu() {
         <Dialog open onClose={() => setAsking(undefined)} maxWidth="xs">
           <DialogTitle>Delete {asking.workspace.name}?</DialogTitle>
           <DialogContent>
-            <DialogContentText>Its chats stay in your other workspaces.</DialogContentText>
+            <DialogContentText>Its chats move to {list.find((w) => w.isDefault)?.name ?? 'Default'}; nothing is lost.</DialogContentText>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setAsking(undefined)}>Cancel</Button>

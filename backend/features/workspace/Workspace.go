@@ -432,7 +432,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 
 	register(live.Command{
 		Descriptor: extensions.Descriptor{ID: "workspace.delete"}, Title: "Delete a workspace",
-		Description: "Deletes a workspace of yours. Its chats stay in your other workspaces. Default cannot be deleted.",
+		Description: "Deletes a workspace of yours. Its chats move to Default (forge 16d), and those only shown there stay where they belong. Default cannot be deleted.",
 		Args:        json.RawMessage(`{"type":"object","properties":{}}`), Examples: []json.RawMessage{json.RawMessage(`{}`)},
 		Events: []string{EventDeleted},
 	}, func(d live.Decision, w Workspace, exists bool) ([]live.NewEvent, []live.Problem) {

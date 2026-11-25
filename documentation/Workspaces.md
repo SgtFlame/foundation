@@ -1,6 +1,6 @@
 # Workspaces
 
-A **workspace** is a context a person switches to: the editors they have open and how they are laid out, the Volumes and Chronicle entries that are active, and the chats that belong to it. It is planned in forge's [016-Workspaces.md](../../forge/documentation/plans/016-Workspaces.md) and built in parts. Parts 16a (the records and the menu), 16b (the editors and layout) and 16c (the active Volumes and Chronicle entries) are built. The chats (16d) will store their state in these records too.
+A **workspace** is a context a person switches to: the editors they have open and how they are laid out, the Volumes and Chronicle entries that are active, and the chats that belong to it. It is planned in forge's [016-Workspaces.md](../../forge/documentation/plans/016-Workspaces.md) and built in parts. Parts 16a (the records and the menu), 16b (the editors and layout), 16c (the active Volumes and Chronicle entries) and 16d (the chats) are built.
 
 ## Built in forge 16a
 
@@ -191,3 +191,49 @@ Decided while building:
 
 ![Support: HR unchecked, Refund tone checked, and the replies in Default and Support](../../forge/documentation/images/workspace-context.png)
 ![RAG Search: Volumes and memory from the workspace](../../forge/documentation/images/workspace-context-rag.png)
+
+## Built in forge 16d
+
+A workspace now has its **chats**: the Chat tab lists only the conversations of the tab's workspace, a conversation can be shown in other workspaces or moved to one, and deleting a workspace keeps its chats in *Default*. Planned in forge's [016d-WorkspaceChats.md](../../forge/documentation/plans/016d-WorkspaceChats.md).
+
+### Decisions (2026-11-25, both on their proposals)
+- **A chat in several workspaces** (question 4). A conversation belongs to the workspace its first message was sent from. *Show in…* lists it in others too, *Move to…* changes where it belongs, and deleting a workspace moves its chats to *Default*.
+- **App surfaces** (question 12). Every chat surface follows the tab's workspace. Today the Chat editor is the only one (`ChatSurface` `document` has no editor yet), so this is the Chat tab wherever it is docked.
+
+Decided while building:
+- **Chats are not part of the workspace record.** Conversations are rows in the tenant database, so where one is listed is too: `Conversation.WorkspaceID`, and a `ConversationWorkspace` row (conversation, workspace, owner) per workspace it is shown in. The workspace's `layout` and `context` are untouched, and showing a chat never races a layout save.
+- **Whether a workspace exists is read, never stored.** `conversation.OwnWorkspace(c, ids)` is the conversation's workspace while the owner still has it, else their *Default*. So a deleted workspace's chats are *Default*'s at once, in every process, with no event to follow and nothing to lose if a process stops. A conversation from before workspaces (an empty id) is *Default*'s the same way: that is the migration.
+- **Default's list writes this down.** Listing *Default* (its first page) sets `workspace_id = 'default'` on the person's conversations whose workspace is gone and deletes rows naming a workspace that is gone. It is idempotent, and it skips anything made in the last minute (`settleAfter`): a workspace just made in another process may not be in this process's view yet, and its chats are listed in *Default* meanwhile but not moved.
+- **Continuing a chat from another workspace's tab** (a chat shown there) keeps it where it belongs. `Send` now updates only the columns a round sets on an existing conversation, so a *Move to…* made during a round is kept.
+- **The Dashboard's top conversations** (`list` with `ids`) ignore workspaces unless one is named.
+- **Other windows see a change on their next load** (a switch, a reload or reopening the Chat tab). Conversations have no live query yet, so the plan's "through the conversation stream" was not built (forge plan › TODO).
+- **Links that open a conversation** do not exist yet (no `workbench:` subject for one), so the plan's *From your Support workspace … Show here* for a linked chat waits for them. A chat shown from another workspace carries that note on its divider.
+
+### On the server
+- `conversation.Conversation.WorkspaceID` (`not null default ''`, indexed) and the table `conversation_workspaces` (`conversation.ConversationWorkspace`, unique per conversation and workspace), both in `conversation.Models()`.
+- **A new conversation** takes the round's workspace (`SendArgs.Workspace`, already checked as the caller's by 16c), else `default`.
+- **`list`** (`ListArgs.Workspace`, REST `workspace`) lists one of the caller's workspaces: its own conversations and those shown there. Empty is *Default*, unless `ids` are given. An id that is not one of the caller's is `404 workspace_not_found`. Each conversation carries `workspace` (where it belongs) and `shownIn` (the caller's other workspaces it is shown in; rows for a workspace that is gone are left out).
+- **`POST /conversation/workspaces {conversationId, move?, shownIn?}`** (`SetWorkspaces`, action `conversation.write`): `move` sets where it belongs, and `shownIn` replaces every workspace it is shown in besides that one (`[]` for none, left out to keep them). Every id must be the caller's. Only the owner finds the conversation (another person's is `conversation_not_found`). Repeating a call changes nothing. Moving to a workspace it was shown in removes that row.
+- The service reads the caller's workspace ids through `conversationimpl.WithWorkspaceList(workspace.IDLister(deps))`, wired in both `serve.go`s, on every call. Without it (tests, stacks without workspaces) `list` ignores workspaces and `SetWorkspaces` is `503 no_workspaces`.
+- `workspace.delete`'s description says its chats move to *Default*.
+
+### In the browser
+- **`useChatStream(workspace, ready)`** lists the tab's workspace, once the workspaces are known. A switch starts the scroll again on the other workspace's latest conversation; a load for a workspace since left is dropped. A message still streaming keeps going on the server.
+- **The transcript loads earlier conversations by itself while it is too short to scroll**: before, a short latest conversation hid every earlier one, since no scroll event asked for them.
+- **Each conversation's divider** has a ⋮ menu (*Workspaces of <title>*): *Show in…* is a checklist of the person's other workspaces, each tick sent at once; *Move to…* lists them. A conversation that belongs to another workspace says *From your <name> workspace*. A moved chat stays in the scroll until the next load.
+- The Workspaces menu's *Delete…* confirmation says *Its chats move to <Default's name>; nothing is lost.*
+- `Conversations.setWorkspaces` is the client; `Conversation` has `workspace` and `shownIn`.
+
+### Tests
+- `go test ./features/conversation/services/conversationservice/impl -run 'Chats|Deleted|Old'` (`Chats_test.go`, with a map of each person's workspaces):
+  - a new conversation stores its workspace, and continuing it from another workspace keeps it;
+  - Support's list has Support's alone, Default's has Default's, none named is Default, `ids` ignore workspaces;
+  - another person's workspace, and an unknown one, are refused; Bo sees none of Ana's;
+  - *Show in* lists it in both, twice changes nothing; Bo can neither show nor move Ana's, and Ana cannot use Bo's workspace;
+  - *Move to* leaves the old workspace, keeps it shown elsewhere, and moving to a workspace it was shown in drops that row;
+  - a deleted workspace's chats are Default's at once, written down only once older than `settleAfter`, its rows deleted, others' chats untouched;
+  - a table from before workspaces is migrated, and its conversations are Default's.
+- Forge's walk `documentation/walks/16d.json` (64 steps) and its `forge conversations` and `forge workspaces --chats` tools cover the rest ([forge plans/016d-WorkspaceChats.md › Test](../../forge/documentation/plans/016d-WorkspaceChats.md#test)).
+
+![Show in… on a Support chat, Default ticked](../../forge/documentation/images/workspace-chats-show-in.png)
+![Default's Chat tab: its own chat and one shown from Support](../../forge/documentation/images/workspace-chats-default.png)

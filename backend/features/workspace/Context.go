@@ -104,3 +104,25 @@ func KnowledgeReader(deps func() Deps) conversation.WorkspaceReader {
 		return conversation.WorkspaceKnowledge{ID: w.ID, Name: w.Name, ExceptVolumeIDs: c.IDs(KindVolume), CheckedEntries: c.Differing(KindChronicle)}, true
 	}
 }
+
+// IDLister is how the chat lists the caller's workspaces (forge 16d,
+// conversationimpl.WithWorkspaceList): the ids of their own, read from the
+// projection on every call, so a deleted workspace's conversations are
+// Default's in every process at once. Agents, apps and services have none.
+func IDLister(deps func() Deps) conversation.WorkspaceList {
+	return func(args features.ServiceArgs) ([]string, error) {
+		p := args.Principal
+		if p.Kind != features.PrincipalUser || p.UserID == 0 {
+			return nil, nil
+		}
+		all, err := All(args.Context(), deps().Store, p.TenantID, p.UserID)
+		if err != nil {
+			return nil, err
+		}
+		ids := make([]string, len(all))
+		for i, w := range all {
+			ids[i] = w.ID
+		}
+		return ids, nil
+	}
+}

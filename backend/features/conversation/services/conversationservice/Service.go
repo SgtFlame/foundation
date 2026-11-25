@@ -22,6 +22,7 @@ type Service interface {
 	Modes(args ModesArgs) ModesResponse
 	Answer(args AnswerArgs) AnswerResponse
 	SetMode(args SetModeArgs) SetModeResponse
+	SetWorkspaces(args SetWorkspacesArgs) SetWorkspacesResponse
 }
 
 // ListArgs pages through the principal's conversations, newest first.
@@ -30,12 +31,42 @@ type ListArgs struct {
 	Before uint64   // only conversations older than this one; 0 starts at the newest
 	Limit  int      // 5 when 0, at most 50
 	IDs    []uint64 // optional; only these conversations (the Dashboard's top conversations)
+	// Workspace lists only the conversations of one of the caller's
+	// workspaces (forge 16d): its own and those shown there. It must be
+	// theirs (workspace_not_found); empty with IDs lists any, empty
+	// without them is their Default.
+	Workspace string
 }
 
 type ListResponse struct {
 	Common        features.ServiceResponse
 	Conversations []conversation.Conversation
 	More          bool // older conversations remain
+	// Places are the listed conversations' workspaces, by conversation id
+	// (forge 16d); empty when the server has no workspaces
+	Places map[uint64]Places
+}
+
+// Places are the workspaces a conversation is listed in (forge 16d).
+type Places struct {
+	Own     string   // the workspace it belongs to (conversation.OwnWorkspace)
+	ShownIn []string // the others it is shown in, in no order
+}
+
+// SetWorkspacesArgs moves one of the caller's conversations to another of
+// their workspaces, or sets the others it is shown in (forge 16d: Move
+// to…, Show in…). Every id must be one of the caller's workspaces.
+type SetWorkspacesArgs struct {
+	features.ServiceArgs
+	ConversationID uint64
+	Move           string    // the workspace it now belongs to; empty keeps it
+	ShownIn        *[]string // every workspace it is shown in besides its own; nil keeps them
+}
+
+type SetWorkspacesResponse struct {
+	Common       features.ServiceResponse
+	Conversation conversation.Conversation
+	Places       Places
 }
 
 // RoundsArgs names the conversation whose rounds to read, oldest first.

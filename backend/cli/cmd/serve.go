@@ -721,6 +721,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			conversationimpl.WithEngine(cognitionEngine),
 			conversationimpl.WithActivity(activitycontext.Reader(func() activity.Deps { return activityDeps })),
 			conversationimpl.WithWorkspaces(workspace.KnowledgeReader(func() workspace.Deps { return workspaceDeps })), // the round's workspace (forge 16c)
+			conversationimpl.WithWorkspaceList(workspace.IDLister(func() workspace.Deps { return workspaceDeps })),     // chats per workspace (forge 16d)
 		)
 
 		retrievalService = retrievalimpl.CreateService(
@@ -844,7 +845,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		authz.SetAgents(recordsdata.Agents{Deps: func() recordsdata.Deps { return recordDeps }}) // agents are records (forge 07j)
 		// Modes people made are listed after the chat.modes settings (forge 15h)
 		workspaceDeps = workspace.Deps{Store: projections, Bus: liveBus}
-		workbenchcontext.SetWorkspaceNames(func(args features.ServiceArgs, id string) (string, bool) { return workspace.Name(args, projections, id) })
+		workbenchcontext.SetWorkspaceNames(func(args features.ServiceArgs, id string) (string, bool) {
+			return workspace.Name(args, projections, id)
+		})
 		madeDeps = made.Deps{Store: projections, Bus: liveBus, Engine: cognitionEngine, Config: configService,
 			Apps: func(args features.ServiceArgs) []made.App {
 				resp := uiService.EditorKinds(uiservice.EditorKindsArgs{ServiceArgs: args})

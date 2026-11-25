@@ -38,7 +38,14 @@ interface ChronicleChanges {
 }
 
 function ChatEditor({ tabId, registry }: EditorProps<ChatObject>) {
-  const chat = useChatStream()
+  // Only the tab's workspace's conversations (forge 16d)
+  const ws = useWorkspace()
+  const workspaceId = ws.current?.id
+  const chat = useChatStream(workspaceId, ws.loaded)
+  const places = useMemo(
+    () => ({ workspaces: ws.workspaces.map((w) => ({ id: w.id, name: w.name })), current: workspaceId, onChange: chat.setWorkspaces }),
+    [ws.workspaces, workspaceId, chat.setWorkspaces],
+  )
   const { levels, models } = useLevels()
   const [levelId, setLevelId] = useState<string>()
   const level = levels.find((l) => l.id === levelId) ?? defaultLevel(levels)
@@ -120,7 +127,6 @@ function ChatEditor({ tabId, registry }: EditorProps<ChatObject>) {
   // The person chose the mode since the last message (the menu or /mode),
   // so the pre-mode leaves the next one alone (forge 15f)
   const modeChosen = useRef(false)
-  const workspaceId = useWorkspace().current?.id
   const sendWith = (text: string, mode: string | undefined, extra: { modeChosen?: boolean; undoes?: string } = {}) => {
     const key = current.key
     const chosen = extra.modeChosen ?? modeChosen.current
@@ -218,6 +224,7 @@ function ChatEditor({ tabId, registry }: EditorProps<ChatObject>) {
         }}
         onOpenSegment={(segment) => void openSegment(registry, segment)}
         tail={sendsActivity && !chat.pending ? <PendingActivity after={activityAfter} /> : undefined}
+        places={places}
         empty={
           <Stack sx={{ height: '100%', boxSizing: 'border-box', alignItems: 'center', justifyContent: 'center', p: 4, textAlign: 'center' }} spacing={1}>
             <Typography variant="h6">Ask anything</Typography>

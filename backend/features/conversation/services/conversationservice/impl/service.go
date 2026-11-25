@@ -26,6 +26,9 @@ type service struct {
 	activity conversation.ActivityReader // the person's recent gestures (forge 15d); nil sends none
 	// workspaces reads the workspace a round is sent from (forge 16c); nil gives rounds none
 	workspaces conversation.WorkspaceReader
+	// workspaceList lists the caller's workspaces (forge 16d); nil lists
+	// conversations without them
+	workspaceList conversation.WorkspaceList
 
 	mu      sync.Mutex
 	waiting map[string]*waiting // tool calls rounds are paused on, by waitKey

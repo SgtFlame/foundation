@@ -26,3 +26,26 @@ const DefaultWorkspace = "default"
 // ChronicleID is the Chronicle context provider's id (chroniclecontext.ID),
 // whose checked entries a round takes from its workspace.
 const ChronicleID = "chronicle"
+
+// WorkspaceList lists the ids of the caller's own workspaces (forge 16d),
+// Default's among them once made. It is wired by serve.go to the workspace
+// feature (conversationimpl.WithWorkspaceList), so a chat list, Show in…
+// and Move to… name only the caller's workspaces, and a conversation
+// whose workspace is gone is listed in Default.
+type WorkspaceList func(args features.ServiceArgs) ([]string, error)
+
+// OwnWorkspace is the workspace c belongs to, given the ids of its owner's
+// workspaces (forge 16d): its WorkspaceID while that workspace exists,
+// else their Default. So a deleted workspace's conversations are
+// Default's at once, in every process, and a conversation from before
+// workspaces (an empty id) is too.
+func OwnWorkspace(c Conversation, workspaces []string) string {
+	if c.WorkspaceID != "" && c.WorkspaceID != DefaultWorkspace {
+		for _, id := range workspaces {
+			if id == c.WorkspaceID {
+				return id
+			}
+		}
+	}
+	return DefaultWorkspace
+}
