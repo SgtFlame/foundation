@@ -13,6 +13,7 @@ import { NightHud } from '../defence/NightHud.ts'
 import { whistle } from '../defence/Whistle.ts'
 import { DialoguePanel } from './DialoguePanel.ts'
 import { FirstHourPanel } from '../objectives/FirstHour.ts'
+import { edgePoint, SensesLayer, senseCues, spread, type Source } from '../story/Senses.ts'
 import { dragMarks, drawCard, herbSpots, howl, nextStep, showCard, showHerbal, SIGNATURE_TEXT, storySteps } from '../story/FirstHourStory.ts'
 import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../story/DayCard.ts'
 import { clarity, ditchSpot, ReadingScene, wenlanAnswer, type Told } from '../story/Reading.ts'
@@ -222,6 +223,8 @@ export class AreaViewport {
   private bodySaved: Body | null = null
   private readonly herbs = new THREE.Group()
   private herbal: HTMLDivElement | null = null
+  private senses: SensesLayer | null = null // S12: the smells and sounds at the screen's edge
+  private focus = false // S12: F held
   private readonly storyPanel: FirstHourPanel
   private readonly marks = new THREE.Group()
   private signature: Point | null = null
@@ -292,6 +295,8 @@ export class AreaViewport {
 
     canvas.addEventListener('pointerdown', this.onPointerDown)
     canvas.addEventListener('keydown', this.onKey)
+    canvas.addEventListener('keyup', this.onKeyUp)
+    canvas.addEventListener('blur', this.onKeyUp)
     this.layout(true)
     this.syncPieces()
     this.syncNpcs()
@@ -517,6 +522,9 @@ export class AreaViewport {
       this.herbs.clear()
       this.herbal?.remove()
       this.herbal = null
+      this.senses?.dispose()
+      this.senses = null
+      this.focus = false
       this.storyPanel.show([], false)
       this.caption.style.display = 'none'
       if (this.home) {
@@ -671,6 +679,9 @@ export class AreaViewport {
     this.loop.stop()
     this.renderer.canvas.removeEventListener('pointerdown', this.onPointerDown)
     this.renderer.canvas.removeEventListener('keydown', this.onKey)
+    this.renderer.canvas.removeEventListener('keyup', this.onKeyUp)
+    this.renderer.canvas.removeEventListener('blur', this.onKeyUp)
+    this.senses?.dispose()
     this.input.dispose()
     this.overlay?.dispose()
     for (const r of this.remotes.values()) r.label.remove()
@@ -1192,6 +1203,13 @@ export class AreaViewport {
     this.select(this.placementAt(cell.x, cell.z))
   }
 
+  // S12: F held is focus, which sharpens the senses
+  private onKeyUp = (e: Event) => {
+    if (!this.focus || (e instanceof KeyboardEvent && e.key !== 'f' && e.key !== 'F')) return
+    this.focus = false
+    this.updateHint()
+  }
+
   private onKey = (e: KeyboardEvent) => {
     if (this.playing) {
       if (e.key === 'Escape') this.path = []
@@ -1204,6 +1222,10 @@ export class AreaViewport {
       if (this.story && (e.key === 'b' || e.key === 'B')) this.startStillness()
       if (this.story && (e.key === 'c' || e.key === 'C')) this.openCooking()
       if (this.story && (e.key === 'm' || e.key === 'M')) this.openAlmanac()
+      if (this.story && (e.key === 'f' || e.key === 'F') && !this.focus) {
+        this.focus = true
+        this.updateHint()
+      }
       if (this.combat && !this.talk.open) {
         const s = ({ '1': 'strike', '2': 'pivot', '3': 'guard' } as Record<string, Stance>)[e.key]
         if (s) this.setStance(s)
@@ -1855,7 +1877,50 @@ export class AreaViewport {
         this.say('The furrows end at the barn. Two of them, hunched in the snow, turn toward you. Ember eyes.')
       }
     }
+    this.stepSenses(p)
     this.savePlace()
+  }
+
+  // S12: what there is to smell and hear in the story's area now
+  senseSources(): Source[] {
+    const st = this.story
+    if (!st || this.area.id !== st.area) return []
+    const out: Source[] = []
+    if (st.done.howl && !st.done.signature && this.signature) {
+      out.push({ id: 'signature', ...this.signature, sense: 'smell', text: 'Old pennies, and scorched snow', from: 'out by the well', range: 30 })
+    }
+    if (st.done.signature && !st.done.fight && this.barnDoor) {
+      out.push({ id: 'hollowed', x: this.barnDoor.x, z: this.barnDoor.z, sense: 'smell', text: 'Burnt sugar and old iron', from: 'from the barn', range: 30 })
+      if (this.storyDay === false) out.push({ id: 'owls', x: this.barnDoor.x, z: this.barnDoor.z + 6, sense: 'sound', text: 'The owls have gone silent', from: 'toward the barn', range: 20 })
+    }
+    if (st.done.morning && !st.done.forage) {
+      for (const h of herbSpots(this.area.pieces, this.set.cell)) {
+        if (!st.picked[h.spot]) out.push({ id: `herb-${h.spot}`, x: h.x, z: h.z, sense: 'smell', text: `${h.herb.title}, green on the air`, from: 'by the trees', range: 18 })
+      }
+    }
+    if (st.done.reading && !st.done.ditch) {
+      const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
+      if (d) out.push({ id: 'ditch', x: d.x, z: d.z, sense: 'sound', text: 'Water, choked and gurgling', from: 'at the low corner of the east field', range: 35 })
+    }
+    return out
+  }
+
+  // S12: the senses' cues, each at the screen's edge toward its source
+  private stepSenses(p: { x: number; z: number }): void {
+    if (!this.senses) this.senses = new SensesLayer(this.container)
+    const cues = senseCues(p.x, p.z, this.senseSources(), this.focus)
+    const w = this.container.clientWidth
+    const h = this.container.clientHeight
+    const cam = this.orbit.camera
+    const me = new THREE.Vector3(p.x, 0, p.z).project(cam)
+    const at = spread(
+      cues.map((c) => {
+        const q = new THREE.Vector3(p.x + Math.cos(c.angle) * 10, 0, p.z + Math.sin(c.angle) * 10).project(cam)
+        return edgePoint(q.x - me.x, me.y - q.y, w, h)
+      }),
+      h,
+    )
+    this.senses.show(cues.map((c, i) => ({ ...c, at: at[i] })))
   }
 
   // The hearth of an interior the character stands by
@@ -2071,7 +2136,7 @@ export class AreaViewport {
     this.hint.textContent = this.talk.open
       ? 'Pick an answer · 1 to 9 · Esc to end the talk'
       : this.playing && this.story && !this.combat
-      ? `The story · click to walk, talk or go through a door · J hides the steps${this.nearHearth() && this.story.done.road && !this.story.done.rest ? ' · R to rest by the hearth' : ''}${this.story.done.morning ? ' · K: the herbal' : ''}${this.story.done.herbal && this.nearHearth() ? ' · B: stillness · C: cook' : ''}${this.story.done.rest ? ' · M: the almanac' : ''}${this.story.done.rest && this.nearHearth() && canSleep(this.story.clock) ? ' · R: sleep' : ''}`
+      ? `The story · click to walk, talk or go through a door · J hides the steps${this.nearHearth() && this.story.done.road && !this.story.done.rest ? ' · R to rest by the hearth' : ''}${this.story.done.morning ? ' · K: the herbal' : ''}${this.story.done.herbal && this.nearHearth() ? ' · B: stillness · C: cook' : ''}${this.story.done.rest ? ' · M: the almanac' : ''}${this.story.done.rest && this.nearHearth() && canSleep(this.story.clock) ? ' · R: sleep' : ''}${this.focus ? ' · focusing: your senses sharpen' : this.story.done.howl ? ' · hold F to focus your senses' : ''}`
       : this.playing && this.combat
       ? 'Fighting · click a Hollowed to attack it · 1 Strike · 2 Pivot · 3 Guard · click the ground to back away'
       : this.playing

@@ -293,6 +293,15 @@ The voxel game's fourteenth tracer bullet: the crafting ladder's first rung (the
 - **The field bench**: a new block type `bench` (a table on four legs with a vice), block 74 of the cabin (now 75 blocks). In play, U at a placed bench crafts (*U: craft a hand drill (2 m³ ore, 1 m³ rock)*), refused with the reason when the pack lacks the materials.
 - **`game.craft {item}`** (`cmd-game-craft`, target the cabin) refuses a ship that is not a cabin, a cabin whose bench is not placed, any item but `drill`, a drill the sender already has, or a pack without 2 m³ of ore and 1 m³ of rock; it emits `crafted {world, item, pack}`, which `game.packs` folds (the materials spent) and `game.players` folds into `tools: {drill: true}`. The recipe is in the engine's `RECIPES` and the graph alike. `TestCraftDrill` covers it.
 
+## Built in S12 (forge 375)
+
+The story game's twelfth tracer bullet: the senses layer (the design's rule 6), smells and sounds shown as soft cues at the screen's edge, pointing toward their source without a minimap marker.
+
+- **`story/Senses.ts`**: a `Source` (`sense` smell or sound, `text`, `from`, `range` in metres); `senseCues(x, z, sources, focus)` gives at most three cues within reach but not at hand (3 m), strongest first, each with its direction; `edgePoint` puts a cue on a box inset from the screen's edges along the direction from the screen's centre to its source's projection, and `spread` moves overlapping cues apart. `SensesLayer` draws them (`data-sense`), faded by strength.
+- **Focus**: holding F carries every sense 1.75 times as far, and the clearest cue names where it comes from (*Burnt sugar and old iron, from the barn*). The hint says *hold F to focus your senses* once the howl is heard.
+- **The first hour's sources** (`AreaViewport.senseSources()`): after the howl, *old pennies, and scorched snow* from the raid signature by the well; after the signature, *burnt sugar and old iron* from the barn and, at night, *the owls have gone silent*; on the first morning each unpicked herb (*Wild thyme, green on the air*); after the reading, *water, choked and gurgling* from the culvert.
+- Engine only: senses are not saved, and the server is unchanged.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
