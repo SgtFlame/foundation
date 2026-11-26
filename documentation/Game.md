@@ -348,6 +348,15 @@ The voxel game's seventeenth tracer bullet: the base defence's second step, a tu
 - `TestTurret` covers crafting, the refusals and moving the turret.
 - Known: drones are still each player's own, so a turret fires in each player's view at that player's drones; turrets cannot be damaged and need no power or ammunition.
 
+## Built in S15 (forge 375)
+
+The story game's fifteenth tracer bullet: the village remembers the night you held Wenlan's house.
+
+- New last step **`thanked`**, which `game.reachStory` takes. After `defended`, clicking Wenlan opens a new dialogue, `farmer-thanks` (`dialogues/farmer-thanks.json`, placeholder lines): the night behind the barred door, the Brannocks, and a gift.
+- **The knot of the last sheaf**: when that talk ends, Wenlan has given you a knot of straw cut from the last sheaf over his hearth. `game.stories` gives `items.knot` once when `thanked` is first reached (as `ditch` pays the silver). While you carry it, each Hum spent leaves a quarter less Chill (`KNOT_CHILL` 0.75, applied over the day's card in `dayEffect`).
+- **Word travels**: arriving at Hawk's Rest by the signpost after `defended`, the village greets you (a loaf and a cup of milk on the step, a nod at the well), once a session.
+- The dawn line now sends you to find Wenlan in the kitchen.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

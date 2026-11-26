@@ -40,6 +40,8 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'foretold', title: 'What the cards foretold', how: 'Press N to open your notes, then click the Ash card and the moon almanac: together they name the night the eyeless ones come back.' },
   { id: 'watch', title: 'The night with no moon', how: "Stand by a hearth and press R to wait for the night the notes foretold. Then keep the watch at Wenlan's farmhouse: go in by its door and listen for the hearth-watch's whistle." },
   { id: 'defended', title: 'Hold the house until dawn', how: 'One blast: the stone moved. Two: something came through. Three: the watch is about to die. Be by the hearth when they come up out of the dark.' },
+  // S15: the village remembers
+  { id: 'thanked', title: 'The village remembers', how: "Morning after the foretold night. Go into the farmhouse kitchen and click Wenlan: he has something for you." },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

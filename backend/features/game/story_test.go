@@ -71,4 +71,11 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || !p.Done["watch"] || p.Last != "defended" {
 		t.Fatalf("defended %+v", p)
 	}
+	// S15: Wenlan's thanks give the knot of the last sheaf, once
+	st.ok("game.reachStory", farm, map[string]any{"step": "thanked", "area": farm, "x": 3, "z": 3})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "thanked", "area": farm, "x": 3, "z": 3})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "thanked" || p.Items["knot"] != 1 {
+		t.Fatalf("thanked %+v", p)
+	}
 }

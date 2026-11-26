@@ -139,6 +139,11 @@ const EDGE_COLORS: Record<string, number> = { road: 0xff9800, grass: 0x8bc34a }
 // not, with its edges marked), selection, others' cursors, and day or
 // night lighting. It knows nothing of React or the live connection: the
 // host sends its intents as commands and gives it the area back.
+// S15: the village remembers the foretold night
+const KNOT_CHILL = 0.75 // the Chill a Hum leaves, carrying the knot of the last sheaf
+const KNOT_LINE = 'While you carry it, spending the Hum chills you a quarter less.'
+const VILLAGE_LINE = "Hawk's Rest knows you now. Someone has left a loaf and a cup of milk on the cottage step, and the woman at the well nods as you pass: \"You're the one who held Harrow's house.\""
+
 export class AreaViewport {
   readonly orbit = new OrbitCamera()
   readonly scene = new THREE.Scene()
@@ -236,6 +241,7 @@ export class AreaViewport {
   private resumeAt: { area: string; at: Point } | null = null
   private via = ''
   private talkingWith = ''
+  private welcomed = false // S15: Hawk's Rest's welcome said this session
   private saved = { x: 0, z: 0, t: 0 }
   private readonly caption: HTMLDivElement
 
@@ -419,7 +425,9 @@ export class AreaViewport {
   // Talks to a person now, as walking up to them does in play
   talkTo(id: string): boolean {
     const n = this.area.npcs?.[id]
-    const d = n?.dialogue ? this.dialogues[n.dialogue] : undefined
+    // S15: after the foretold night Wenlan has his thanks to give
+    const after = n?.dialogue === 'farmer' && this.story?.done.defended ? this.dialogues['farmer-thanks'] : undefined
+    const d = after ?? (n?.dialogue ? this.dialogues[n.dialogue] : undefined)
     if (!n || !d) return false
     if (d.id === 'farmer' && this.story?.done.sleep && !this.story.done.reading) return this.openReading('Wenlan Harrow')
     this.talkingWith = d.id
@@ -461,8 +469,15 @@ export class AreaViewport {
     this.grid.visible = false
     this.startCombat()
     this.drawMarks()
-    if (this.via === 'signpost') this.reach('road')
+    const bySign = this.via === 'signpost'
+    if (bySign) this.reach('road')
     this.via = ''
+    // S15: word of the night has gone up the road to Hawk's Rest ahead of you
+    const st = this.story
+    if (st?.done.defended && bySign && !this.welcomed) {
+      this.welcomed = true
+      this.say(VILLAGE_LINE)
+    }
   }
 
   setLighting(l: Lighting): void {
@@ -1499,7 +1514,7 @@ export class AreaViewport {
           // S14: the foretold night, survived
           if (this.story?.done.watch && !this.story.done.defended) {
             this.reach('defended')
-            this.say('Dawn. The hearthstone lies still, and the Harrows are alive, every one. Wenlan grips your hand: "My father said the eyeless ones were a tale. You came back for us."')
+            this.say('Dawn. The hearthstone lies still, and the Harrows are alive, every one. Wenlan grips your hand: "My father said the eyeless ones were a tale. You came back for us. Come and find me in the kitchen when you\'ve slept."')
           }
           break
       }
@@ -1588,7 +1603,9 @@ export class AreaViewport {
   // S11: the day's card and its light buff or warning (none before the first morning)
   private dayEffect(): CardEffect {
     const st = this.story
-    return (st && dayCard(hash(st.area), st.clock.day)?.effect) || NO_EFFECT
+    const e = (st && dayCard(hash(st.area), st.clock.day)?.effect) || NO_EFFECT
+    // S15: the knot of the last sheaf keeps the cold out of the hands
+    return st?.items.knot ? { ...e, chill: e.chill * KNOT_CHILL } : e
   }
 
   // Each frame of play: the body changes, a breath is drawn, the HUD follows
@@ -1706,6 +1723,13 @@ export class AreaViewport {
     const was = this.talkingWith
     this.talkingWith = ''
     this.updateHint()
+    // S15: the knot of the last sheaf, Wenlan's thanks
+    if (this.story && was === 'farmer-thanks' && !this.story.done.thanked) {
+      this.story.items.knot = 1
+      this.reach('thanked')
+      this.say(`You turn the straw knot over in your fingers. It is warm, as if it had been by the fire all night. ${KNOT_LINE}`)
+      return
+    }
     if (!this.story || was !== 'farmer' || this.story.done.farmer) return
     this.reach('farmer')
     setTimeout(() => {
