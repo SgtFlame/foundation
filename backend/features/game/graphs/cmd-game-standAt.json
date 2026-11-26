@@ -1,0 +1,347 @@
+{
+  "id": "cmd-game-standAt",
+  "name": "game.standAt",
+  "description": "Decides where a player stands in a world, saved so they come back there.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.standAt",
+    "title": "Save where I stand",
+    "description": "Saves where the sender stands in a world, so they come back there next time; the target is the world's id. The first one is their landing: until then game.player has no at, and the World tab brings them down in a drop pod. Refused when the world does not exist or the point is far from its bodies.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number",
+          "description": "Where they stand, metres from the moon's centre"
+        },
+        "y": {
+          "type": "number",
+          "description": "The point's y in metres"
+        },
+        "z": {
+          "type": "number",
+          "description": "The point's z in metres"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ]
+    },
+    "area": "game",
+    "targetType": "terrain",
+    "projection": "game.terrain",
+    "action": "game.play",
+    "events": [
+      "stood"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "x",
+            "type": "number",
+            "description": "The point's x in metres"
+          },
+          {
+            "id": "y",
+            "type": "number",
+            "description": "The point's y in metres"
+          },
+          {
+            "id": "z",
+            "type": "number",
+            "description": "The point's z in metres"
+          }
+        ]
+      }
+    },
+    {
+      "id": "worldKey",
+      "type": "data.expression",
+      "title": "World key",
+      "position": {
+        "x": 250,
+        "y": 0
+      },
+      "config": {
+        "expr": "\"gameWorld.\" + target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w",
+      "type": "live.readProjection",
+      "title": "Read the world",
+      "position": {
+        "x": 500,
+        "y": 0
+      },
+      "config": {
+        "projector": "game.worlds"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why it is refused",
+      "position": {
+        "x": 800,
+        "y": 150
+      },
+      "config": {
+        "expr": "!found || w?.deleted == true ? \"there is no world \" + target : x * x + y * y + z * z \u003e (w.generator.radius + w.generator.amplitude + 400) ** 2 ? \"the point is too far from the world's moon and asteroids\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Allowed?",
+      "position": {
+        "x": 1050,
+        "y": 150
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "position": {
+        "x": 1300,
+        "y": 0
+      }
+    },
+    {
+      "id": "stood",
+      "type": "data.expression",
+      "title": "Where",
+      "position": {
+        "x": 1300,
+        "y": 350
+      },
+      "config": {
+        "expr": "{x: round(x * 100) / 100, y: round(y * 100) / 100, z: round(z * 100) / 100}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "position": {
+        "x": 1600,
+        "y": -100
+      },
+      "config": {
+        "event": "stood"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "position": {
+        "x": 1600,
+        "y": 150
+      },
+      "config": {
+        "path": "args",
+        "fix": "save a point near the bodies of an existing world"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "worldKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "worldKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "w",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "w"
+      }
+    },
+    {
+      "from": {
+        "node": "w",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "check",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "x"
+      },
+      "to": {
+        "node": "check",
+        "pin": "x"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "y"
+      },
+      "to": {
+        "node": "check",
+        "pin": "y"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "z"
+      },
+      "to": {
+        "node": "check",
+        "pin": "z"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "x"
+      },
+      "to": {
+        "node": "stood",
+        "pin": "x"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "y"
+      },
+      "to": {
+        "node": "stood",
+        "pin": "y"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "z"
+      },
+      "to": {
+        "node": "stood",
+        "pin": "z"
+      }
+    },
+    {
+      "from": {
+        "node": "stood",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    }
+  ]
+}

@@ -16,6 +16,7 @@ export interface Progress {
   done: Record<string, boolean>
   xp: Record<string, number>
   levels: Record<string, number>
+  at?: [number, number, number] // V8: where the player last stood; missing until they land
 }
 
 export const OUTPOST_REACH = 40

@@ -171,6 +171,14 @@ The start of "the first hour above, end to end": a guide that leads a new player
 - **`objectives/FirstHour.ts`**: `firstHour(input)` works out nine steps (set foot on the moon, dig, lay out a skiff, build it, fly it, report to the outpost, build a prospector, refine iron, bring iron for the beacon) from what the server already keeps (the pack, the world's ships, `game.player`) and what this window saw (walking, flying). A later step done counts the earlier ones, so the list only moves forward. Nothing new is stored on the server.
 - **The panel** (`FirstHourPanel`, `data-first-hour`, a row per step with `data-step` and `data-done`) shows while walking, flying or riding, with the current step's how-to; J hides it. Stats add `firstHour`, the ids done.
 
+## Built in V8, second part (forge 360)
+
+The landing and the saved place.
+
+- **`game.standAt {x, y, z}`** (`cmd-game-standAt`, on the world's terrain target): saves where the sender stands. Its `stood` event is folded by `game.players` into `at`, so `game.player` gives `at` once the player has landed and not before. Refused for a missing world or a point far from its bodies.
+- **The drop pod** (`landing/DropPod.ts`): the first walk in a world with no `at` brings the player down in a pod that falls 160 m over 9 s onto the ground near the outpost, braking with its retro rocket at the end, watched from beside the landing point; the player steps out of the hatch and the place is saved. Later walks start where they last stood.
+- **Saving**: while walking, the place is saved every 15 s when the player has moved 3 m and stands on the ground, and when the tab closes. Stats add `landing`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

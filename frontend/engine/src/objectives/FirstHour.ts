@@ -29,7 +29,7 @@ export function firstHour(i: FirstHourInput): Step[] {
   const done = i.progress?.done ?? {}
   const carried = (i.pack?.dust ?? 0) + (i.pack?.rock ?? 0) > 0 || i.ships.some((s) => (s.cargo?.dust ?? 0) + (s.cargo?.rock ?? 0) + (s.cargo?.iron ?? 0) > 0)
   const steps: Step[] = [
-    { id: 'walk', title: 'Set foot on the moon', how: 'Choose Walk, click the view, and walk with WASD.', done: i.walked },
+    { id: 'walk', title: 'Land and set foot on the moon', how: 'Choose Walk: your drop pod brings you down by the outpost. Click the view and walk with WASD.', done: i.walked },
     { id: 'dig', title: 'Dig some regolith', how: 'Left click the ground near you; what you dig goes into your pack.', done: carried },
     { id: 'skiff', title: 'Lay out a skiff', how: 'Press Start a skiff: its outline appears ahead of you.', done: i.ships.some((s) => s.design === 'skiff') },
     { id: 'build', title: 'Build the skiff', how: 'Aim at each outline block and left click to place it.', done: finished('skiff') },

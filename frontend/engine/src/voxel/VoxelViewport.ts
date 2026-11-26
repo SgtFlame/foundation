@@ -8,6 +8,7 @@ import { Renderer } from '../render/Renderer.ts'
 import { mulberry32 } from './Noise.ts'
 import { CARGO_PER_HOLD, IDLE_HELM, lookQuat, type Helm, type Quat, type ShipDesign, type ShipState } from '../ship/Ship.ts'
 import { type GhostHit, ShipLayer } from '../ship/ShipLayer.ts'
+import { DropPod } from '../landing/DropPod.ts'
 import { firstHour, FirstHourPanel } from '../objectives/FirstHour.ts'
 import { atOutpost, ContractPanel, handInProblem, OutpostModel, thrustFor, type ContractList, type Progress } from '../outpost/Outpost.ts'
 import type { EditKind, MoonParams, VoxelEdit } from './Types.ts'
@@ -45,6 +46,7 @@ export type ShipIntent =
   | { kind: 'damage'; id: string; blocks: number[] } // V5: blocks a crash broke
   | { kind: 'handIn'; id: string; contract: string } // V6: a contract at the outpost
   | { kind: 'crew'; id: string; aboard: boolean } // V7: board or leave as crew
+  | { kind: 'stand'; x: number; y: number; z: number } // V8: save where the player stands
 
 export interface CameraState {
   x: number
@@ -110,8 +112,9 @@ export interface ViewportStats {
   levels: Record<string, number>
   // V7: the ship this player rides as crew
   crew: string | null
-  // V8: the first hour's steps done
+  // V8: the first hour's steps done, and whether the drop pod is coming down
   firstHour: string[]
+  landing: boolean
 }
 
 const MIN_BRUSH = 0.75
@@ -161,6 +164,11 @@ export class VoxelViewport {
   private walked = false
   private flew = false
   private journalAt = 0
+  // V8: the landing and the saved place
+  private readonly pod = new DropPod()
+  private placed = false // the walker has been put where it belongs this session
+  private savedAt: { x: number; y: number; z: number } | null = null
+  private saveTick = 15
   // V7: the ship this player rides as crew, as the server says
   private riding: string | null = null
   private nearGiver = false
@@ -180,6 +188,7 @@ export class VoxelViewport {
     this.scene.add(this.world.group)
     this.scene.add(this.shipLayer.group)
     this.scene.add(this.outpost.group)
+    this.scene.add(this.pod.group)
     this.contracts = new ContractPanel(container)
     this.journal = new FirstHourPanel(container)
     this.scene.background = new THREE.Color(0x05060a)
@@ -267,6 +276,10 @@ export class VoxelViewport {
         : 'Click to fly the ship'
       return
     }
+    if (this.pod.falling) {
+      this.hint.textContent = 'Your drop pod is coming down by the outpost…'
+      return
+    }
     if (this.riding) {
       const s = this.shipLayer.ships().find((x) => x.id === this.riding)
       this.hint.textContent = this.input.locked
@@ -306,6 +319,7 @@ export class VoxelViewport {
       const R = this.world.generator.params.radius
       const at = surfaceBelow(t, { x: p.x, y: p.y, z: p.z }) ?? surfaceBelow(t, { x: 0, y: R * 1.5, z: 0 }) ?? { x: 0, y: R + 2, z: 0 }
       this.walker = new Walker(t, at)
+      this.placed = false
       // Face the way the camera faced, along the ground
       const f = this.fly.forward()
       const u = this.walker.up
@@ -325,6 +339,7 @@ export class VoxelViewport {
     }
     this.fly.camera.updateProjectionMatrix()
     this.mode = m
+    if (m === 'walk') this.arrive()
     this.updateHint()
     this.drawPack()
     this.opts.onModeChange?.(m)
@@ -358,7 +373,7 @@ export class VoxelViewport {
       const total = c.dust + c.rock
       lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}`)
     }
-    if (w && !this.riding) {
+    if (w && !this.riding && !this.pod.falling) {
       const g = Math.hypot(w.gravity.x, w.gravity.y, w.gravity.z)
       lines.push(`Pull ${g.toFixed(2)} m/s² · ${Math.hypot(w.vel.x, w.vel.y, w.vel.z).toFixed(1)} m/s · thrust pack ${w.thrustPack ? 'on' : 'off'}${w.grounded ? '' : ' · in the air'}`)
     }
@@ -397,6 +412,11 @@ export class VoxelViewport {
       this.packTick = 0.2
       this.drawPack()
     }
+    this.saveTick -= dt
+    if (this.saveTick <= 0) {
+      this.saveTick = 15
+      this.saveStand()
+    }
   }
   private packTick = 0
 
@@ -409,6 +429,11 @@ export class VoxelViewport {
     }
     if (this.riding) {
       this.stepRider(dt)
+      input.endStep()
+      return
+    }
+    if (this.pod.falling) {
+      this.stepLanding(dt)
       input.endStep()
       return
     }
@@ -518,6 +543,67 @@ export class VoxelViewport {
     if (near && input.locked && input.pressed('KeyR')) this.opts.onShipIntent?.({ kind: 'refine', id: near.id })
     if (near && input.locked && input.pressed('KeyB') && this.canBoard(near)) this.opts.onShipIntent?.({ kind: 'crew', id: near.id, aboard: true })
     this.stepOutpost()
+  }
+
+  // --- Landing and the saved place (V8) ---
+
+  // Once a walk starts and the player's progress is known: back where they
+  // last stood, or, the first time in this world, down in a drop pod
+  private arrive(): void {
+    const w = this.walker
+    if (!w || this.placed || !this.progress) return
+    this.placed = true
+    const at = this.progress.at
+    if (at) {
+      w.pos = { x: at[0], y: at[1] + 0.3, z: at[2] }
+      w.vel = { x: 0, y: 0, z: 0 }
+      this.savedAt = { x: at[0], y: at[1], z: at[2] }
+      return
+    }
+    const g = this.world.generator.params
+    const ground = surfaceBelow(this.terrain(), { x: 22, y: g.radius + g.amplitude + 20, z: 14 }, 80)
+    if (!ground) return
+    const gr = this.terrain().gravity(ground.x, ground.y, ground.z, { x: 0, y: 0, z: 0 })
+    const gl = Math.hypot(gr.x, gr.y, gr.z) || 1
+    this.pod.start(ground, { x: -gr.x / gl, y: -gr.y / gl, z: -gr.z / gl })
+    this.updateHint()
+  }
+
+  // The pod's fall, the camera watching it from beside the landing point
+  private stepLanding(dt: number): void {
+    const landed = this.pod.step(dt)
+    const p = this.pod.position()
+    const cam = this.fly.camera
+    const g = this.terrain().gravity(p.x, p.y, p.z, { x: 0, y: 0, z: 0 })
+    const gl = Math.hypot(g.x, g.y, g.z) || 1
+    const up = { x: -g.x / gl, y: -g.y / gl, z: -g.z / gl }
+    const base = this.pod.hatch()
+    cam.position.set(base.x + up.x * 3 + 10, base.y + up.y * 3, base.z + up.z * 3 + 14)
+    cam.up.set(up.x, up.y, up.z)
+    cam.lookAt(p.x, p.y + 1.5, p.z)
+    this.fly.position.copy(cam.position)
+    this.input.takeMouse()
+    if (landed && this.walker) {
+      const out = this.pod.hatch()
+      this.walker.pos = { ...out }
+      this.walker.vel = { x: 0, y: 0, z: 0 }
+      this.walker.forward = { x: -0.8, y: 0, z: -0.6 }
+      this.saveStand(true)
+      this.hint.textContent = 'Landed. The beacon at the north pole is the outpost: walk there and press T by the quartermaster.'
+      setTimeout(() => this.updateHint(), 5000)
+    }
+  }
+
+  // Saves where the player stands now and then, when they have moved
+  private saveStand(force = false): void {
+    const w = this.walker
+    if (!w || this.pod.falling) return
+    const s = this.savedAt
+    if (!force && s && Math.hypot(w.pos.x - s.x, w.pos.y - s.y, w.pos.z - s.z) < 3) return
+    if (!force && !w.grounded) return
+    const r = (v: number) => Math.round(v * 100) / 100
+    this.savedAt = { ...w.pos }
+    this.opts.onShipIntent?.({ kind: 'stand', x: r(w.pos.x), y: r(w.pos.y), z: r(w.pos.z) })
   }
 
   // --- The first hour (V8) ---
@@ -667,6 +753,7 @@ export class VoxelViewport {
       }
     }
     if (this.shipLayer.body) this.shipLayer.body.thrustScale = thrustFor(p?.levels)
+    if (this.mode === 'walk') this.arrive()
     if (this.contracts.open) this.openContracts()
   }
 
@@ -1040,10 +1127,12 @@ export class VoxelViewport {
       levels: { ...(this.progress?.levels ?? {}) },
       crew: this.riding,
       firstHour: this.journalSteps().filter((x) => x.done).map((x) => x.id),
+      landing: this.pod.falling,
     }
   }
 
   dispose(): void {
+    if (this.mode === 'walk' && !this.shipLayer.pilotOf && !this.riding) this.saveStand()
     this.loop.stop()
     this.renderer.canvas.removeEventListener('click', this.onCanvasClick)
     document.removeEventListener('pointerlockchange', this.onLockChange)

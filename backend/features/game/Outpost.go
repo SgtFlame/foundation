@@ -29,6 +29,9 @@ const (
 	EventHandedIn = "handedIn"
 	// XPPerLevel is the experience each skill level takes.
 	XPPerLevel = 100
+	// EventStood is where a player stands in a world, saved now and then and
+	// when they stop (V8): {x, y, z}, on the world's terrain target
+	EventStood = "stood"
 )
 
 // Player is a player's progress in one world.
@@ -36,6 +39,8 @@ type Player struct {
 	Done   map[string]bool    `json:"done"`   // contracts handed in
 	XP     map[string]float64 `json:"xp"`     // experience per skill
 	Levels map[string]int     `json:"levels"` // 1 + xp / XPPerLevel
+	// V8: where they last stood, and so whether they have landed yet
+	At *[3]float64 `json:"at,omitempty"`
 }
 
 // Contracts are the outpost's quartermaster and contracts.
@@ -76,9 +81,16 @@ func foldPlayer(f live.Fold) (json.RawMessage, error) {
 		Contract string  `json:"contract"`
 		Skill    string  `json:"skill"`
 		XP       float64 `json:"xp"`
+		X        float64 `json:"x"`
+		Y        float64 `json:"y"`
+		Z        float64 `json:"z"`
 	}
 	if err := json.Unmarshal(f.Event.Data, &d); err != nil {
 		return nil, err
+	}
+	if f.Event.Type == EventStood {
+		p.At = &[3]float64{d.X, d.Y, d.Z}
+		return json.Marshal(p)
 	}
 	if p.Done == nil {
 		p.Done = map[string]bool{}
@@ -98,10 +110,16 @@ func foldPlayer(f live.Fold) (json.RawMessage, error) {
 func contributeOutpost(reg *extensions.Registry) {
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: PlayersProjector, Source: source}, Title: "Players' progress",
-		Description: "Each player's progress in each world, keyed <worldId>.<userId>: {done: {<contract>: true}, xp: {<skill>: n}, levels: {<skill>: n}}, folded from the contracts they hand in",
-		Area:        Area, Types: []string{ShipType},
+		Description: "Each player's progress in each world, keyed <worldId>.<userId>: {done: {<contract>: true}, xp: {<skill>: n}, levels: {<skill>: n}, at: [x, y, z]}, folded from the contracts they hand in and where they last stood",
+		Area:        Area, Types: []string{ShipType, TerrainType},
 		KeyOf: func(e live.Event) string {
-			if e.Type != EventHandedIn || e.UserID == 0 {
+			if e.UserID == 0 {
+				return ""
+			}
+			if e.Type == EventStood && e.Target.Type == TerrainType {
+				return PackKey(e.Target.ID, e.UserID)
+			}
+			if e.Type != EventHandedIn {
 				return ""
 			}
 			var d struct {
@@ -116,7 +134,7 @@ func contributeOutpost(reg *extensions.Registry) {
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.player", Source: source}, Title: "My progress",
-		Description: fmt.Sprintf("The caller's progress in a world: {done: {<contract>: true}, xp: {<skill>: n}, levels: {<skill>: n}} (a level each %d xp, from 1), then each change as they hand in contracts", XPPerLevel),
+		Description: fmt.Sprintf("The caller's progress in a world: {done: {<contract>: true}, xp: {<skill>: n}, levels: {<skill>: n} (a level each %d xp, from 1), at: [x, y, z] (where they last stood; missing until they have landed)}, then each change as they hand in contracts and move", XPPerLevel),
 		Params:      json.RawMessage(`{"type":"object","properties":{"world":{"type":"string","description":"The world's id"}},"required":["world"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"world":"w123"}`)},
 		Action:      "game.read",

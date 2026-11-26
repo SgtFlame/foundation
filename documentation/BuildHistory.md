@@ -1000,3 +1000,10 @@ The first-hour guide ([Game.md](Game.md) › *Built in V8, first part*). Later g
 
 - add a step to `firstHour` when a slice adds play a new player must learn, derived from server state where it can be;
 - keep the steps in order so a later step done implies the earlier ones.
+
+## Game V8, second part (forge 360)
+
+The drop pod and the saved place ([Game.md](Game.md) › *Built in V8, second part*). Later game work must:
+
+- treat a missing `at` in `game.player` as "not landed yet", and add any other per-player saved state to `game.players` the same way, from events on a target the sender may name (the world's terrain), keyed by the event's user;
+- keep saves infrequent: `stood` events share the terrain target with edits, so each one moves that target's expected sequence.

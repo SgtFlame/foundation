@@ -226,3 +226,16 @@ func TestShipCrew(t *testing.T) {
 		t.Fatalf("refine while flown: %q", r.Common.Message)
 	}
 }
+
+// V8: where a player stands is saved per world; the first save is their landing
+func TestStandAt(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Landing moon"}).Target
+	st.refused("game.standAt", world, map[string]any{"x": 0, "y": 5000, "z": 0})
+	st.refused("game.standAt", "nowhere", map[string]any{"x": 0, "y": 100, "z": 0})
+	res := st.ok("game.standAt", world, map[string]any{"x": 1.234, "y": 101.5, "z": -3})
+	var p game.Player
+	if !st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p) || p.At == nil || p.At[0] != 1.23 || p.At[1] != 101.5 {
+		t.Fatalf("stood %+v", p)
+	}
+}
