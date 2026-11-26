@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features/apps"
+	"github.com/SgtFlame/foundation/backend/features/apps/branches"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	"github.com/SgtFlame/foundation/backend/features/apps/ops"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
@@ -324,6 +325,58 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 			var h struct{ Commits []json.RawMessage }
 			_ = json.Unmarshal(raw, &h)
 			return tools.Result{Content: content, Summary: fmt.Sprintf("%s: %d commits", a.AppID, len(h.Commits))}, nil
+		},
+	})
+
+	tools.Tools.Register(reg, tools.Tool{
+		Descriptor: extensions.Descriptor{ID: "forge.approvals", Source: "apps"}, Title: "Read an app's approvals", Effect: tools.EffectRead,
+		Description: "Lists an app's commits with what each needs approved (forge 19d), newest first: its id, branch, message, the part kinds it touches (entities, pages, access, graphs), whether it is approved, the kinds still waiting, its approvals (who, kinds, comment), its semantic diff (summary and changes) and how many structured changes it holds; and the kinds the caller approves (mine). branch keeps the commits that branch's head reaches; pending keeps those not yet approved. Approve with app.approve {commit, comment}.",
+		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string","description":"The app's id (app.list)"},"branch":{"type":"string","description":"Only the commits this branch's head reaches"},"pending":{"type":"boolean","description":"Only commits not yet approved"}},"required":["appId"]}`),
+		Run: func(call tools.Call) (tools.Result, error) {
+			a, err := tools.Decode[struct {
+				AppID, Branch string
+				Pending       bool
+			}](call)
+			if err != nil {
+				return tools.Result{}, err
+			}
+			if !live.ValidToken(a.AppID) {
+				return tools.Result{}, fmt.Errorf("%q is not an app id", a.AppID)
+			}
+			params := map[string]any{"app": a.AppID}
+			if b := branchName(a.Branch); b != "" {
+				params["branch"] = b
+			}
+			hist, _, err := once(call, "app.history", params)
+			if err != nil {
+				return tools.Result{}, err
+			}
+			raw, _ := json.Marshal(hist)
+			var h branches.History
+			if err := json.Unmarshal(raw, &h); err != nil {
+				return tools.Result{}, err
+			}
+			out := []map[string]any{}
+			waiting := 0
+			for _, c := range h.Commits {
+				if a.Pending && c.Approved {
+					continue
+				}
+				if !c.Approved {
+					waiting++
+				}
+				var pd []branches.PartDiff
+				_ = json.Unmarshal(c.Structured, &pd)
+				n := 0
+				for _, d := range pd {
+					n += len(d.Changes)
+				}
+				out = append(out, map[string]any{"id": c.ID, "branch": c.Branch, "message": c.Message, "kinds": c.Kinds, "approved": c.Approved,
+					"waiting": c.Waiting, "approvals": c.Approvals, "semantic": c.Semantic, "structuredChanges": n})
+			}
+			mine := branches.ApproverKinds(call.ServiceArgs, a.AppID)
+			return tools.Result{Content: map[string]any{"app": a.AppID, "commits": out, "mine": mine},
+				Summary: fmt.Sprintf("%s: %d commits, %d waiting for approval", a.AppID, len(out), waiting)}, nil
 		},
 	})
 

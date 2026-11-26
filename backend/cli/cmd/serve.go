@@ -32,6 +32,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ai/settings"
 	"github.com/SgtFlame/foundation/backend/features/apps"
 	"github.com/SgtFlame/foundation/backend/features/apps/branches"
+	appdiff "github.com/SgtFlame/foundation/backend/features/apps/diff"
 	"github.com/SgtFlame/foundation/backend/features/apps/installs"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	"github.com/SgtFlame/foundation/backend/features/apps/ops"
@@ -534,6 +535,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		jobsnodes.Contribute(registry, func() jobsnodes.Deps { return jobNodeDeps })
 		authznodes.Contribute(registry)                                                  // Grant role, Revoke role (forge 07j)
 		textnodes.Contribute(registry)                                                   // Text diff, Anchor resolve (forge 18b)
+		appdiff.Contribute(registry)                                                     // Structured diff (forge 19d)
 		kbnodes.Contribute(registry, func() collabservice.Service { return collabLive }) // Edit text together (forge 18c)
 		// Parse transcript (forge 18e): parsed in a limited child process
 		textnodes.ContributeTranscripts(registry, func() textnodes.TranscriptDeps {
@@ -887,6 +889,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		jobRunner := jobs.New(jobDeps, jobs.Options{})
 		defer jobRunner.Close() // before the projections close
 		jobNodeDeps = jobsnodes.Deps{Runner: jobRunner, Store: projections}
+		branchDeps.Outbox = jobRunner.Outbox // a commit's semantic diff job (forge 19d)
 		tenantIDs := func() ([]uint64, error) {
 			ids := []uint64{features.LocalTenantID}
 			var rows []uint64

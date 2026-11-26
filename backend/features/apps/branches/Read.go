@@ -9,7 +9,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/apps"
+	"github.com/SgtFlame/foundation/backend/features/apps/diff"
+	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/nats-io/nats.go/jetstream"
@@ -47,6 +50,10 @@ func current(ctx context.Context, p Projections, tenant uint64, projector string
 // Deps are what the branches need, made after the registry.
 type Deps struct {
 	Projections Projections
+	// Outbox makes sure an area's job outbox is followed before a commit
+	// enqueues its semantic diff (jobs.Runner.Outbox); without it, and
+	// without the app-semanticDiff built-in, no job is enqueued.
+	Outbox func(args features.ServiceArgs, area live.Area) error
 }
 
 // reader reads parts at commits, caching what never changes: a target
@@ -401,4 +408,53 @@ func (r *reader) commit(ctx context.Context, tenant uint64, id string) (Commit, 
 	}
 	c, err := decode[Commit](v.Value)
 	return c, err == nil
+}
+
+// PartDiff is one changed part's structured diff (forge 19d): what changed
+// in it since the commit's parent.
+type PartDiff struct {
+	Type    string        `json:"type"`
+	ID      string        `json:"id"`
+	Changes []diff.Change `json:"changes"`
+}
+
+// Structured is the structured diff of parts changed since head: each part
+// as head holds it (none when head does not) against its state now.
+func (r *reader) Structured(ctx context.Context, tenant uint64, head string, parts []PartRef) ([]PartDiff, error) {
+	out := []PartDiff{}
+	for _, p := range parts {
+		var before, after json.RawMessage
+		if head != "" {
+			prev, ok, err := r.PartAt(ctx, tenant, head, live.Target{Type: p.Type, ID: p.ID})
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				before = prev.Value
+			}
+		}
+		if !p.Removed {
+			v, err := r.at(ctx, tenant, live.Target{Area: live.AreaDefinitions, Type: p.Type, ID: p.Target}, p.Seq)
+			if err != nil {
+				return nil, err
+			}
+			after = v
+		}
+		out = append(out, PartDiff{Type: p.Type, ID: p.ID, Changes: diff.Part(p.Type, p.ID, before, after)})
+	}
+	return out, nil
+}
+
+// semantic reports whether commits get a semantic diff job: the graph is
+// a built-in and the jobs' outbox can be followed.
+func (r *reader) semantic() bool {
+	if r.deps().Outbox == nil {
+		return false
+	}
+	for _, g := range cognition.Graphs.All(r.reg) {
+		if g.ID == SemanticDiffGraph {
+			return true
+		}
+	}
+	return false
 }

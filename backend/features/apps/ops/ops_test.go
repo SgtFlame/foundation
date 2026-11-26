@@ -557,7 +557,7 @@ func TestEveryOpUndoes(t *testing.T) {
 // 06b).
 func irreversible(command string) bool {
 	return slices.Contains([]string{"bp.publish", "prefab.publish", "entity.publish", "app.publish",
-		"app.install", "app.upgrade", "app.uninstall", "app.branch.create", "app.branch.abandon", "app.commit", "app.discard"}, command)
+		"app.install", "app.upgrade", "app.uninstall", "app.branch.create", "app.branch.abandon", "app.commit", "app.discard", "app.approve", "app.explain"}, command)
 }
 
 func mustJSON(v any) string {

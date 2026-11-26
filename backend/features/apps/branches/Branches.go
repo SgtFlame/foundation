@@ -127,6 +127,11 @@ type Commit struct {
 	Structured json.RawMessage `json:"structured,omitempty"`
 	Semantic   json.RawMessage `json:"semantic,omitempty"`
 	Approvals  []Approval      `json:"approvals,omitempty"`
+	// Kinds are the approval kinds it touches, Approved whether each is
+	// approved, Waiting those that are not yet (kept by the fold).
+	Kinds    []string `json:"kinds,omitempty"`
+	Approved bool     `json:"approved,omitempty"`
+	Waiting  []string `json:"waiting,omitempty"`
 }
 
 // KeyOf is a branch record's target id.
@@ -266,5 +271,7 @@ func foldCommit(f live.Fold) (json.RawMessage, error) {
 	default:
 		return f.State, nil
 	}
+	c.Kinds = KindsOf(c)
+	c.Approved, c.Waiting = ApprovalStatus(c)
 	return json.Marshal(c)
 }

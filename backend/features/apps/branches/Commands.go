@@ -234,10 +234,24 @@ func specs() []spec {
 			if len(parts) == 0 {
 				return nil, problem("nothing_to_commit", "branch", "the branch has no changes since its last commit", "")
 			}
+			// Each part's structured diff against the head, kept on the commit
+			pd, err := c.r.Structured(c.Context(), c.Principal.TenantID, rec.Head, parts)
+			if err != nil {
+				return nil, problem("", "", err.Error(), "")
+			}
+			structured, _ := json.Marshal(pd)
 			id := newCommitID(a.App)
+			// Its semantic diff is a job, enqueued if the commit is stored
+			if c.r.semantic() {
+				if err := c.r.deps().Outbox(c.ServiceArgs, live.AreaDefinitions); err != nil {
+					return nil, problem("", "", err.Error(), "")
+				}
+				inputs, _ := json.Marshal(map[string]any{"commit": id, "app": a.App, "message": strings.TrimSpace(a.Message), "structured": pd})
+				c.Enqueue(live.Job{ID: "app-diff-" + id, Graph: SemanticDiffGraph, Inputs: inputs, As: c.Principal.Ref()})
+			}
 			ct := live.Target{Area: live.AreaDefinitions, Type: CommitType, ID: id}
 			return append(events,
-				live.NewEvent{Type: EventCreated, Target: &ct, Data: Commit{ID: id, App: a.App, Branch: name, Parent: rec.Head, Parts: parts, Message: strings.TrimSpace(a.Message)}},
+				live.NewEvent{Type: EventCreated, Target: &ct, Data: Commit{ID: id, App: a.App, Branch: name, Parent: rec.Head, Parts: parts, Message: strings.TrimSpace(a.Message), Structured: structured}},
 				live.NewEvent{Type: EventCommitted, Data: map[string]string{"commit": id}}), nil
 		},
 	}, {
@@ -340,6 +354,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		})
 	}
 	contributeQueries(reg, r)
+	contributeReview(reg)
 }
 
 // PartAt is a part's state at a commit, for the features that publish,

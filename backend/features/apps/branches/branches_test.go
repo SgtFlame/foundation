@@ -15,6 +15,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/apps/branches"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	"github.com/SgtFlame/foundation/backend/features/apps/ops"
+	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/cognition/drafts"
 	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
@@ -256,6 +257,61 @@ func TestBranchDrafts(t *testing.T) {
 	}
 	if c.Parent != main.Head || !slices.Equal(keys, []string{"app.tasks:false", "entity.refund:false", "graph.qry-myTasks:true", "prefab.myTasks:false"}) {
 		t.Fatalf("the commit: parent %s, parts %v", c.Parent, keys)
+	}
+	// It carries each part's structured diff against the head (forge 19d)
+	var sd []branches.PartDiff
+	_ = json.Unmarshal(c.Structured, &sd)
+	kinds := map[string]string{}
+	for _, d := range sd {
+		for _, ch := range d.Changes {
+			kinds[ch.Path] = ch.Kind
+		}
+	}
+	if kinds["entity:refund"] != "added" || kinds["graph:qry-myTasks"] != "removed" || kinds["app:tasks.entities[refund]"] != "added" || len(sd) != 4 {
+		t.Fatalf("the commit's structured diff: %s", c.Structured)
+	}
+	// Approvals (forge 19d): the commit touches entities, pages and graphs;
+	// an approver of pages alone approves part of it
+	if got := branches.KindsOf(c); !slices.Equal(got, []string{"entities", "pages", "graphs"}) {
+		t.Fatalf("the commit's kinds: %v", got)
+	}
+	pagesOnly := authz.WithAs(context.Background(), authz.As{Name: "pages approver", Covers: func(action, _ string) (bool, bool) {
+		if strings.HasPrefix(action, "app.approve") {
+			return true, action == "app.approvePages"
+		}
+		return false, false
+	}})
+	approve := func(ctx context.Context, user uint64) bus.Result {
+		args := features.ServiceArgs{Ctx: ctx, Principal: features.Principal{Kind: features.PrincipalUser, UserID: user, TenantID: 1}}
+		raw, _ := json.Marshal(map[string]any{"commit": c.ID, "comment": "Fine"})
+		return f.bus.Execute(bus.Request{ServiceArgs: args, ID: fmt.Sprintf("c%d", f.n.Add(1)), Type: "app.approve", Args: raw})
+	}
+	if res := approve(pagesOnly, 2); res.Common.Code >= 300 {
+		t.Fatalf("approve as a pages approver: %s", res.Common.Message)
+	}
+	if res := approve(pagesOnly, 2); res.Common.ErrorCode != "already_approved" {
+		t.Fatalf("approving again: %s", res.Common.ErrorCode)
+	}
+	none := authz.WithAs(context.Background(), authz.As{Name: "author", Covers: func(action, _ string) (bool, bool) { return strings.HasPrefix(action, "app.approve"), false }})
+	if res := approve(none, 3); res.Common.ErrorCode != "app_not_approver" {
+		t.Fatalf("approve as no approver: %s", res.Common.ErrorCode)
+	}
+	_ = f.p.Settle(context.Background(), 1, branches.CommitProjector)
+	c, _ = branches.GetCommit(context.Background(), f.p, 1, c.ID)
+	if ok, waiting := branches.ApprovalStatus(c); ok || !slices.Equal(waiting, []string{"entities", "graphs"}) {
+		t.Fatalf("after a pages approval: %v, waiting %v", ok, waiting)
+	}
+	if res := approve(context.Background(), 1); res.Common.Code >= 300 {
+		t.Fatalf("approve as an approver of all: %s", res.Common.Message)
+	}
+	// Its semantic diff is set once; an error may be replaced
+	f.ok("tasks", "", "app.explain", "", map[string]any{"commit": c.ID, "semantic": map[string]any{"error": "the model was busy"}})
+	f.ok("tasks", "", "app.explain", "", map[string]any{"commit": c.ID, "semantic": map[string]any{"summary": "Adds refunds."}})
+	f.refused("semantic_set", "tasks", "", "app.explain", "", map[string]any{"commit": c.ID, "semantic": map[string]any{"summary": "Again"}})
+	_ = f.p.Settle(context.Background(), 1, branches.CommitProjector)
+	c, _ = branches.GetCommit(context.Background(), f.p, 1, c.ID)
+	if ok, _ := branches.ApprovalStatus(c); !ok || !strings.Contains(string(c.Semantic), "Adds refunds") {
+		t.Fatalf("the commit approved and described: %v %s", ok, c.Semantic)
 	}
 	// A racing commit is refused
 	f.ok("tasks", "refunds", "prefab.setInfo", "myTasks", map[string]any{"description": "Again"})
