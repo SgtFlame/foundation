@@ -1,0 +1,455 @@
+{
+  "id": "cmd-game-handIn",
+  "name": "game.handIn",
+  "description": "Decides whether a ship parked at the outpost meets a contract, and pays its skill.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.handIn",
+    "title": "Hand in a contract",
+    "description": "Hands in one of the outpost's contracts (game.contracts) with a ship parked within 40 m of the beacon at the moon's north pole; the target is the ship's id. first-flight needs every block of the ship's design placed; beacon-iron takes 1 m³ of iron from its hold. Each pays its skill's experience to the sender (game.player) once. Refused when the ship does not exist, is not at the outpost, does not meet the contract, or the sender has done it already.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "type": "string",
+          "description": "The contract's id: first-flight or beacon-iron"
+        }
+      },
+      "required": [
+        "contract"
+      ]
+    },
+    "area": "game",
+    "targetType": "gameShip",
+    "projection": "game.ships",
+    "action": "game.play",
+    "events": [
+      "handedIn"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "contract",
+            "type": "string",
+            "description": "The contract's id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "shipKey",
+      "type": "data.expression",
+      "title": "Ship key",
+      "position": {
+        "x": 250,
+        "y": 0
+      },
+      "config": {
+        "expr": "\"gameShip.\" + target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ship",
+      "type": "live.readProjection",
+      "title": "Read the ship",
+      "position": {
+        "x": 500,
+        "y": 0
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "worldKey",
+      "type": "data.expression",
+      "title": "World key",
+      "position": {
+        "x": 250,
+        "y": 250
+      },
+      "config": {
+        "expr": "found ? \"gameWorld.\" + ship.world : \"none.none\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w",
+      "type": "live.readProjection",
+      "title": "Read the world",
+      "position": {
+        "x": 500,
+        "y": 250
+      },
+      "config": {
+        "projector": "game.worlds"
+      }
+    },
+    {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 500
+      }
+    },
+    {
+      "id": "playerKey",
+      "type": "data.expression",
+      "title": "Player key",
+      "position": {
+        "x": 250,
+        "y": 500
+      },
+      "config": {
+        "expr": "found ? ship.world + \".\" + user : \"none.none\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "player",
+      "type": "live.readProjection",
+      "title": "Read the sender's progress",
+      "position": {
+        "x": 500,
+        "y": 500
+      },
+      "config": {
+        "projector": "game.players"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why it is refused",
+      "position": {
+        "x": 850,
+        "y": 200
+      },
+      "config": {
+        "expr": "let beacon = (w?.generator?.radius ?? 100) + (w?.generator?.amplitude ?? 0); let far = found ? (ship.x ** 2 + (ship.y - beacon) ** 2 + ship.z ** 2) ** 0.5 : 0; let done = known ? (me.done ?? {}) : {}; !found ? \"there is no ship \" + target : !(contract in [\"first-flight\", \"beacon-iron\"]) ? \"there is no contract \" + contract + \"; game.contracts lists them\" : far \u003e 40 ? \"park the ship within 40 m of the beacon at the north pole (it is \" + string(int(far)) + \" m away)\" : contract in done ? \"you have done that contract already\" : contract == \"first-flight\" \u0026\u0026 len(ship.placed) \u003c ship.blocks ? \"the ship still has \" + string(ship.blocks - len(ship.placed)) + \" blocks to place\" : contract == \"beacon-iron\" \u0026\u0026 (ship.cargo?.iron ?? 0) \u003c 1 ? \"the ship's hold has less than 1 m³ of iron\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Allowed?",
+      "position": {
+        "x": 1100,
+        "y": 200
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "position": {
+        "x": 1350,
+        "y": 0
+      }
+    },
+    {
+      "id": "paid",
+      "type": "data.expression",
+      "title": "What it pays",
+      "position": {
+        "x": 1350,
+        "y": 400
+      },
+      "config": {
+        "expr": "{world: ship.world, contract: contract, iron: contract == \"beacon-iron\" ? -1 : 0, skill: contract == \"beacon-iron\" ? \"prospecting\" : \"piloting\", xp: 100}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "position": {
+        "x": 1650,
+        "y": -100
+      },
+      "config": {
+        "event": "handedIn"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "position": {
+        "x": 1650,
+        "y": 200
+      },
+      "config": {
+        "path": "args.contract",
+        "fix": "park a ship that meets the contract at the outpost and hand in each contract once"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "shipKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "shipKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ship",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "worldKey",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "worldKey",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "worldKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "playerKey",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "playerKey",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "playerKey",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "playerKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "player",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "w",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "w"
+      }
+    },
+    {
+      "from": {
+        "node": "player",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "known"
+      }
+    },
+    {
+      "from": {
+        "node": "player",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "me"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "check",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "contract"
+      },
+      "to": {
+        "node": "check",
+        "pin": "contract"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "paid",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "contract"
+      },
+      "to": {
+        "node": "paid",
+        "pin": "contract"
+      }
+    },
+    {
+      "from": {
+        "node": "paid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    }
+  ]
+}

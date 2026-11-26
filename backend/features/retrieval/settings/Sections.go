@@ -119,7 +119,7 @@ const presetsSchema = `{
 }`
 
 const presetsDefaults = `{"presets": [
-  {"id": "code", "title": "Code lookup", "lexicalSemantic": -4, "chronicleLibrary": 3, "topK": 8},
-  {"id": "brainstorm", "title": "Brainstorm", "lexicalSemantic": 4, "chronicleLibrary": 0, "topK": 12},
-  {"id": "recall", "title": "Recall", "lexicalSemantic": 0, "chronicleLibrary": -4, "topK": 8}
+  {"id": "code", "title": "Look things up exactly", "lexicalSemantic": -4, "chronicleLibrary": 3, "topK": 8},
+  {"id": "brainstorm", "title": "Explore ideas", "lexicalSemantic": 4, "chronicleLibrary": 0, "topK": 12},
+  {"id": "recall", "title": "Remember what we said", "lexicalSemantic": 0, "chronicleLibrary": -4, "topK": 8}
 ]}`

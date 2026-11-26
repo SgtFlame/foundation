@@ -60,7 +60,7 @@ func (s *service) Retrieve(args retrievalservice.RetrieveArgs) retrievalservice.
 
 	var sources []retrieval.Source
 	for _, src := range retrieval.Sources.All(s.registry) {
-		if len(args.Sources) == 0 || slices.Contains(args.Sources, src.ID) {
+		if len(args.Sources) == 0 && !src.Optional || slices.Contains(args.Sources, src.ID) {
 			sources = append(sources, src)
 		}
 	}
@@ -80,7 +80,7 @@ func (s *service) Retrieve(args retrievalservice.RetrieveArgs) retrievalservice.
 	}
 
 	k := max(conf.CandidateFactor*topK, conf.MinCandidates, topK)
-	filter := retrieval.Filter{VolumeIDs: args.VolumeIDs}
+	filter := retrieval.Filter{VolumeIDs: args.VolumeIDs, ExceptVolumeIDs: args.ExceptVolumeIDs}
 	ctx := args.CallContext()
 	ranked := make([][]fuse.Ranked[retrieval.Segment], len(sources))
 	var wg sync.WaitGroup

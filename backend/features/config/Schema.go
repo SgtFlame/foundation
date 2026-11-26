@@ -30,6 +30,9 @@ type Schema struct {
 	Scopes      []string           `json:"scopes,omitempty"` // overrides the section's scopes for this key
 	Restart     bool               `json:"restart,omitempty"`
 	Ref         string             `json:"ref,omitempty"` // "<sectionId>#<arrayPath>": a string naming an item of another section's array by its key
+	// Widget picks how a form shows the field: "slider" shows an integer
+	// or number with min and max as a slider with marks (forge 15b)
+	Widget string `json:"widget,omitempty"`
 }
 
 type EnumOption struct {

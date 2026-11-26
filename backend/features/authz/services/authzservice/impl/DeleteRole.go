@@ -25,6 +25,9 @@ func (s *service) DeleteRole(args authzservice.DeleteRoleArgs) authzservice.Dele
 		if err := tx.Where("tenant_id = ?", args.Principal.TenantID).First(&row, args.RoleID).Error; err != nil {
 			return err
 		}
+		if row.AppID != "" {
+			return errAppRole
+		}
 		var grants []authz.RoleGrant
 		if err := tx.Where("role_id = ?", row.ID).Find(&grants).Error; err != nil {
 			return err
@@ -40,6 +43,8 @@ func (s *service) DeleteRole(args authzservice.DeleteRoleArgs) authzservice.Dele
 	switch {
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		return authzservice.DeleteRoleResponse{Common: *args.Fail(http.StatusNotFound, log.Code("role_not_found").With("roleId", args.RoleID).New("there is no such role"))}
+	case errors.Is(err, errAppRole):
+		return authzservice.DeleteRoleResponse{Common: *args.Fail(http.StatusConflict, log.Code("app_role").Public("This role is an app's; it goes when the app is uninstalled").Wrap(err))}
 	case err != nil:
 		return authzservice.DeleteRoleResponse{Common: *internal(args.ServiceArgs, err)}
 	}

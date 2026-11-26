@@ -16,7 +16,7 @@ type ListResponse struct {
 func ListResponseFrom(resp conversationservice.ListResponse) ListResponse {
 	out := ListResponse{Status: rest.StatusFrom(resp.Common), More: resp.More}
 	for _, c := range resp.Conversations {
-		out.Conversations = append(out.Conversations, ConversationFrom(c))
+		out.Conversations = append(out.Conversations, ConversationFrom(c).WithPlaces(resp.Places[c.ID]))
 	}
 	return out
 }

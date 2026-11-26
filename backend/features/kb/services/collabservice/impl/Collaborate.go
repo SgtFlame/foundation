@@ -3,11 +3,9 @@ package impl
 import (
 	"context"
 	"net/http"
-	"path/filepath"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
-	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 )
 
 // Collaborate joins args.Conn to the file's room and relays its messages until
@@ -18,15 +16,15 @@ func (s *service) Collaborate(args collabservice.CollaborateArgs) collabservice.
 	if r == nil {
 		return collabservice.CollaborateResponse{Common: *args.Fail(http.StatusNotFound, errNotOpen())}
 	}
-	dir := filepath.Dir(r.file)
-	if f := volumeservice.Check(args.ServiceArgs, s.root, dir, "read"); f != nil {
-		return collabservice.CollaborateResponse{Common: *f}
+	readOnly, failed := r.access(args.ServiceArgs)
+	if failed != nil {
+		return collabservice.CollaborateResponse{Common: *failed}
 	}
 
 	ctx, cancel := context.WithCancel(args.Context())
 	defer cancel()
 	c := newClient(args.Conn, cancel)
-	c.readOnly = !volumeservice.May(args.ServiceArgs, s.root, dir, "write")
+	c.readOnly, c.args = readOnly, args.ServiceArgs
 	go c.writeLoop(ctx)
 
 	if err := r.join(c); err != nil {

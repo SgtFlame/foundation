@@ -59,7 +59,7 @@ func Contribute(reg *extensions.Registry) {
 		Category:    []string{"AI", "Chat"},
 		Scopes:      []string{"app", "tenant", "user"},
 		Schema:      json.RawMessage(stagesSchema),
-		Defaults:    json.RawMessage(`{"match": "fast", "memory": "fast"}`),
+		Defaults:    json.RawMessage(`{"match": "fast", "memory": "fast", "premode": "fast"}`),
 		Version:     1,
 	})
 }
@@ -203,7 +203,8 @@ const stagesSchema = `{
   "type": "object",
   "properties": {
     "match": {"type": "string", "title": "Context matching", "ref": "ai.chat.levels#levels", "description": "Chronicle's stage 1: which memory entries a message needs"},
-    "memory": {"type": "string", "title": "Memory update", "ref": "ai.chat.levels#levels", "description": "Updates Chronicle entries and proposes new ones after each reply"}
+    "memory": {"type": "string", "title": "Memory update", "ref": "ai.chat.levels#levels", "description": "Updates Chronicle entries and proposes new ones after each reply"},
+    "premode": {"type": "string", "title": "Choosing the mode", "ref": "ai.chat.levels#levels", "description": "The chat's pre-mode: whether a message needs another chat mode"}
   }
 }`
 

@@ -7,10 +7,12 @@ package retrievalcontext
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 
 	"github.com/SgtFlame/foundation/backend/features/conversation"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/logging"
+	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	"github.com/SgtFlame/foundation/backend/features/retrieval/services/retrievalservice"
 )
 
@@ -37,7 +39,7 @@ func Contribute(reg *extensions.Registry, retriever func() retrievalservice.Serv
 		Descriptor: extensions.Descriptor{ID: ID, Order: 100, Source: "retrieval"},
 		Title:      "RAG Search",
 		Schema:     json.RawMessage(schema),
-		Defaults:   json.RawMessage(`{"enabled": true, "preset": "", "lexicalSemantic": 0, "chronicleLibrary": 0, "topK": 8, "sources": {"library": true, "chronicle": true}}`),
+		Defaults:   json.RawMessage(`{"enabled": true, "preset": "", "lexicalSemantic": 0, "chronicleLibrary": 0, "topK": 8, "sources": {"library": true, "chronicle": true, "records": false}}`),
 		Gather: func(args conversation.GatherArgs) ([]conversation.ContextItem, error) {
 			return gather(args, retriever())
 		},
@@ -63,10 +65,16 @@ func gather(args conversation.GatherArgs, service retrievalservice.Service) ([]c
 			}
 		}
 	}
+	// A run's Volumes narrow it (forge 15b: Run mode gathers on the run's options)
+	var volumes []uint64
+	if o, ok := retrieval.OptionsFrom(args.Context()); ok {
+		volumes = o.VolumeIDs
+	}
 	resp := service.Retrieve(retrievalservice.RetrieveArgs{
 		ServiceArgs: args.ServiceArgs, Query: args.Text,
 		LexicalSemantic: clamp(s.LexicalSemantic, -5, 5), ChronicleLibrary: clamp(s.ChronicleLibrary, -5, 5), TopK: clamp(s.TopK, 0, 50),
-		ContextWindow: args.ContextWindow, Sources: sources,
+		ContextWindow: args.ContextWindow, Sources: sources, VolumeIDs: volumes,
+		ExceptVolumeIDs: retrieval.ScopeFrom(args.Context()).ExceptVolumeIDs, // the workspace's unchecked Volumes (forge 16c)
 	})
 	if resp.Common.Code != http.StatusOK {
 		return nil, log.Code(resp.Common.ErrorCode).Errorf("retrieval failed with %d: %s", resp.Common.Code, resp.Common.Message)
@@ -80,6 +88,36 @@ func gather(args conversation.GatherArgs, service retrievalservice.Service) ([]c
 		})
 	}
 	return items, nil
+}
+
+// OptionsOf are a conversation's RAG Search settings as the options its
+// round's tools search with (forge 15a): the sources switched on, the two
+// dials and Top-K. kb.search in a chat round searches as the round's own
+// retrieval does.
+func OptionsOf(settings json.RawMessage) retrieval.Options {
+	var s Settings
+	if len(settings) > 0 {
+		_ = json.Unmarshal(settings, &s)
+	}
+	o := retrieval.Options{LexicalSemantic: clamp(s.LexicalSemantic, -5, 5), ChronicleLibrary: clamp(s.ChronicleLibrary, -5, 5), TopK: clamp(s.TopK, 0, 50)}
+	if len(s.Sources) > 0 {
+		o.Sources = []string{"none"} // every source turned off searches nothing
+		for _, id := range sortedKeys(s.Sources) {
+			if s.Sources[id] {
+				o.Sources = append(o.Sources, id)
+			}
+		}
+	}
+	return o
+}
+
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func clamp(v, lo, hi int) int {
@@ -96,7 +134,8 @@ const schema = `{
     "topK": {"type": "integer", "title": "Segments", "min": 1, "max": 50, "description": "How many passages are injected at most"},
     "sources": {"type": "object", "title": "Sources", "properties": {
       "library": {"type": "boolean", "title": "Volumes"},
-      "chronicle": {"type": "boolean", "title": "Chronicles"}
+      "chronicle": {"type": "boolean", "title": "Chronicles"},
+      "records": {"type": "boolean", "title": "Records", "description": "Applications' records, by their searchable fields"}
     }}
   }
 }`

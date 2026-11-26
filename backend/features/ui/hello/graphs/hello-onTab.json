@@ -1,0 +1,111 @@
+{
+  "id": "hello-onTab",
+  "name": "On tab",
+  "description": "Shows the sub-tab the user selected.",
+  "kind": "ui.handler",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "ui.onEvent",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "id",
+            "type": "string",
+            "description": "The selected tab's id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "known",
+      "type": "data.expression",
+      "position": {
+        "x": 300,
+        "y": 160
+      },
+      "config": {
+        "expr": "id in [\"graph\", \"items\"]",
+        "type": "bool"
+      },
+      "title": "Known tab?"
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 600,
+        "y": 0
+      }
+    },
+    {
+      "id": "set",
+      "type": "ui.setState",
+      "position": {
+        "x": 900,
+        "y": 0
+      },
+      "config": {
+        "path": "tab"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "known",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "known",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "set",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "set",
+        "pin": "value"
+      }
+    }
+  ]
+}

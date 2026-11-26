@@ -43,3 +43,21 @@ type SendFollowed struct {
 	Summary  string          `json:"summary"`
 	Data     json.RawMessage `json:"data,omitempty"`
 }
+
+// SendRetry is the data of a "retry" event: the provider was busy (429 or
+// 503), and the step is tried again after waitMs.
+type SendRetry struct {
+	Try    int   `json:"try"`
+	WaitMs int64 `json:"waitMs"`
+	Status int   `json:"status"`
+}
+
+// SendMode is the data of a "mode" event (forge 15f): the pre-mode
+// switched the round and its conversation from one chat.modes mode to
+// another, for reason.
+type SendMode struct {
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Reason string `json:"reason,omitempty"`
+	Round  Round  `json:"round"`
+}

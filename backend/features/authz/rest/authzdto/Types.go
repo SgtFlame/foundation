@@ -19,11 +19,12 @@ type ResourceType struct {
 	Source  string   `json:"source"`
 	Parent  string   `json:"parent"`
 	Owned   bool     `json:"owned,omitempty"`
+	Fence   string   `json:"fence,omitempty"`
 	Actions []Action `json:"actions"`
 }
 
 func ResourceTypeFrom(t authz.ResourceType) ResourceType {
-	out := ResourceType{ID: t.ID, Title: t.Title, Source: t.Source, Parent: t.Parent, Owned: t.Owned, Actions: make([]Action, len(t.Actions))}
+	out := ResourceType{ID: t.ID, Title: t.Title, Source: t.Source, Parent: t.Parent, Owned: t.Owned, Fence: t.Fence, Actions: make([]Action, len(t.Actions))}
 	for i, a := range t.Actions {
 		out.Actions[i] = Action{Name: a.Name, Title: a.Title, Class: string(a.Class), On: a.On}
 	}
@@ -38,15 +39,26 @@ type Role struct {
 	BuiltIn     bool     `json:"builtIn,omitempty"`
 	Permissions []string `json:"permissions"`
 	Revision    int      `json:"revision,omitempty"`
+	// App is the app whose role this is: read-only, changed by the app's
+	// upgrades (forge 05c question 2). AppRole is its id in the manifest
+	// and Rules its row rules by entity type.
+	App     string            `json:"app,omitempty"`
+	AppRole string            `json:"appRole,omitempty"`
+	Rules   map[string]string `json:"rules,omitempty"`
+	// AgentWarning is what the Share dialog says when the role is granted
+	// to an agent (forge 7p-4).
+	AgentWarning string `json:"agentWarning,omitempty"`
 }
 
 func RoleFrom(r authz.Role) Role {
-	return Role{ID: r.ID, Name: r.Name, Description: r.Description, Scope: r.Scope, BuiltIn: r.BuiltIn, Permissions: r.Permissions, Revision: r.Revision}
+	return Role{ID: r.ID, Name: r.Name, Description: r.Description, Scope: r.Scope, BuiltIn: r.BuiltIn, Permissions: r.Permissions, Revision: r.Revision,
+		App: r.App, AppRole: r.AppRole, Rules: r.Rules, AgentWarning: r.AgentWarning}
 }
 
 type Grant struct {
 	ID        uint64     `json:"id,string"`
 	UserID    uint64     `json:"userId,string"`
+	AgentID   uint64     `json:"agentId,string,omitempty"` // an agent's grant (forge 07j); userId is then 0
 	RoleID    uint64     `json:"roleId,string"`
 	Resource  string     `json:"resource"`
 	GrantedBy uint64     `json:"grantedBy,string"`
@@ -55,7 +67,7 @@ type Grant struct {
 }
 
 func GrantFrom(g authz.RoleGrant) Grant {
-	return Grant{ID: g.ID, UserID: g.UserID, RoleID: g.RoleID, Resource: g.Resource, GrantedBy: g.GrantedBy, CreatedAt: g.CreatedAt, ExpiresAt: g.ExpiresAt}
+	return Grant{ID: g.ID, UserID: g.UserID, AgentID: g.AgentID, RoleID: g.RoleID, Resource: g.Resource, GrantedBy: g.GrantedBy, CreatedAt: g.CreatedAt, ExpiresAt: g.ExpiresAt}
 }
 
 func GrantsFrom(gs []authz.RoleGrant) []Grant {
@@ -71,19 +83,24 @@ type Held struct {
 	Grant       Grant    `json:"grant"`
 	RoleName    string   `json:"roleName"`
 	Permissions []string `json:"permissions"`
+	// App and CrossesFences say which fences the role's grant crosses
+	// (authz.ResourceType.Fence): its app's, or every one.
+	App           string `json:"app,omitempty"`
+	CrossesFences bool   `json:"crossesFences,omitempty"`
 }
 
 type Effective struct {
-	All        bool     `json:"all,omitempty"`
-	Grants     []Held   `json:"grants"`
-	Self       []string `json:"self"`
-	OwnedTypes []string `json:"ownedTypes"`
+	All        bool              `json:"all,omitempty"`
+	Grants     []Held            `json:"grants"`
+	Self       []string          `json:"self"`
+	OwnedTypes []string          `json:"ownedTypes"`
+	Fences     map[string]string `json:"fences,omitempty"`
 }
 
 func EffectiveFrom(e authz.Effective) Effective {
-	out := Effective{All: e.All, Grants: make([]Held, len(e.Grants)), Self: e.Self, OwnedTypes: e.OwnedTypes}
+	out := Effective{All: e.All, Grants: make([]Held, len(e.Grants)), Self: e.Self, OwnedTypes: e.OwnedTypes, Fences: e.Fences}
 	for i, h := range e.Grants {
-		out.Grants[i] = Held{Grant: GrantFrom(h.Grant), RoleName: h.Role.Name, Permissions: h.Permissions}
+		out.Grants[i] = Held{Grant: GrantFrom(h.Grant), RoleName: h.Role.Name, Permissions: h.Permissions, App: h.Role.App, CrossesFences: h.Role.CrossesFences()}
 	}
 	if out.Self == nil {
 		out.Self = []string{}

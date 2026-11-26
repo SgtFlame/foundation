@@ -27,6 +27,14 @@ func WithFileEvents(events volumeservice.FileEvents) Option {
 	}
 }
 
+// WithDocumentKinds sets where the kinds of documents other than files
+// are found (the collab.document point).
+func WithDocumentKinds(kinds func(kind string) (collabservice.DocumentKind, bool)) Option {
+	return func(s *service) {
+		s.kinds = kinds
+	}
+}
+
 // WithGracePeriod sets how long a room with no clients is kept.
 func WithGracePeriod(d time.Duration) Option {
 	return func(s *service) {
@@ -46,6 +54,12 @@ func CreateService(opts ...Option) collabservice.Service {
 		instance = newService(opts...)
 	})
 	return instance
+}
+
+// New returns a service of its own, not the singleton: for a test's
+// stack (forge 18c's Requirements fixture edits drafts through it).
+func New(opts ...Option) collabservice.Service {
+	return newService(opts...)
 }
 
 func newService(opts ...Option) *service {

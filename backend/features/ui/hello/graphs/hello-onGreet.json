@@ -1,0 +1,154 @@
+{
+  "id": "hello-onGreet",
+  "name": "On greet",
+  "description": "Greets the name the user typed, kept in view state; asks for a name when there is none.",
+  "kind": "ui.handler",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "ui.onEvent",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "name",
+            "type": "string",
+            "description": "The name the user typed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "empty",
+      "type": "data.expression",
+      "position": {
+        "x": 300,
+        "y": 160
+      },
+      "config": {
+        "expr": "(name ?? \"\") == \"\"",
+        "type": "bool"
+      },
+      "title": "No name?"
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 600,
+        "y": 0
+      }
+    },
+    {
+      "id": "warn",
+      "type": "ui.toast",
+      "position": {
+        "x": 900,
+        "y": -120
+      },
+      "config": {
+        "severity": "warning",
+        "message": "Type a name first."
+      }
+    },
+    {
+      "id": "text",
+      "type": "data.template",
+      "position": {
+        "x": 600,
+        "y": 220
+      },
+      "config": {
+        "template": "Hello, {{name}}!"
+      }
+    },
+    {
+      "id": "set",
+      "type": "ui.setState",
+      "position": {
+        "x": 900,
+        "y": 80
+      },
+      "config": {
+        "path": "greeting"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "name"
+      },
+      "to": {
+        "node": "empty",
+        "pin": "name"
+      }
+    },
+    {
+      "from": {
+        "node": "empty",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "warn",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "set",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "name"
+      },
+      "to": {
+        "node": "text",
+        "pin": "name"
+      }
+    },
+    {
+      "from": {
+        "node": "text",
+        "pin": "text"
+      },
+      "to": {
+        "node": "set",
+        "pin": "value"
+      }
+    }
+  ]
+}

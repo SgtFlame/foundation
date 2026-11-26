@@ -51,6 +51,15 @@ func TestStore(t *testing.T) {
 	if len(got) != 2 || got[0].VolumeID != bigID {
 		t.Fatalf("filtered keyword search: %+v", got)
 	}
+	// A workspace's unchecked Volumes are left out (forge 16c), alone and with a list
+	got, _ = s.VectorSearch(ctx, []float32{1, 0, 0}, 5, indexservice.Filter{ExceptVolumeIDs: []uint64{bigID}})
+	if len(got) != 3 || got[0].VolumeID != 2 {
+		t.Fatalf("excepted: %+v", got)
+	}
+	got, _ = s.KeywordSearch(ctx, "zebra", 5, indexservice.Filter{VolumeIDs: []uint64{2}, ExceptVolumeIDs: []uint64{2}})
+	if len(got) != 0 {
+		t.Fatalf("listed and excepted: %+v", got)
+	}
 	if err := s.Delete(ctx, "w/c.md"); err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,112 @@
+{
+  "id": "qry-hello-openTasks",
+  "name": "hello.openTasks",
+  "description": "How many tasks are open: {open, label}.",
+  "kind": "data.query",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onQuery",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "count",
+      "type": "records.aggregate",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "config": {
+        "entity": "task",
+        "where": {
+          "done": false
+        },
+        "aggregates": [
+          {
+            "op": "count"
+          }
+        ]
+      },
+      "title": "Count open"
+    },
+    {
+      "id": "result",
+      "type": "data.expression",
+      "position": {
+        "x": 600,
+        "y": 200
+      },
+      "config": {
+        "expr": "{open: values.count, label: values.count == 1 ? \"1 open\" : string(values.count) + \" open\"}",
+        "type": "json"
+      },
+      "title": "Label"
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 900,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "result",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "count",
+        "pin": "values"
+      },
+      "to": {
+        "node": "result",
+        "pin": "values"
+      }
+    },
+    {
+      "from": {
+        "node": "result",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "result"
+      }
+    }
+  ],
+  "spec": {
+    "query": "hello.openTasks",
+    "title": "Open Hello tasks",
+    "description": "How many of the Hello app's tasks are not done: {open, label}.",
+    "params": {
+      "type": "object",
+      "properties": {}
+    },
+    "action": "record.read"
+  }
+}

@@ -1,0 +1,190 @@
+{
+  "id": "taskRow-onRename",
+  "name": "On rename",
+  "description": "Task row's title was left or Enter pressed in it: raises renamed with the task's id and the new title, when it has one and it changed.",
+  "kind": "ui.handler",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "ui.onEvent",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "value",
+            "type": "any",
+            "description": "The title typed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "id",
+      "type": "ui.getProp",
+      "position": {
+        "x": 300,
+        "y": 350
+      },
+      "config": {
+        "path": "task._id"
+      },
+      "title": "Task id"
+    },
+    {
+      "id": "old",
+      "type": "ui.getProp",
+      "position": {
+        "x": 300,
+        "y": 500
+      },
+      "config": {
+        "path": "task.title"
+      },
+      "title": "Title now"
+    },
+    {
+      "id": "title",
+      "type": "data.expression",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "config": {
+        "expr": "trim(value ?? \"\")",
+        "type": "string"
+      },
+      "title": "Trimmed"
+    },
+    {
+      "id": "changed",
+      "type": "data.expression",
+      "position": {
+        "x": 600,
+        "y": 200
+      },
+      "config": {
+        "expr": "title != \"\" && title != (old ?? \"\")",
+        "type": "bool"
+      },
+      "title": "Changed?"
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 600,
+        "y": 0
+      }
+    },
+    {
+      "id": "raise",
+      "type": "ui.raiseEvent",
+      "position": {
+        "x": 900,
+        "y": 0
+      },
+      "config": {
+        "event": "renamed",
+        "inputs": [
+          {
+            "id": "id",
+            "type": "string",
+            "description": "The task's id"
+          },
+          {
+            "id": "title",
+            "type": "string",
+            "description": "Its new title"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "value"
+      },
+      "to": {
+        "node": "title",
+        "pin": "value"
+      }
+    },
+    {
+      "from": {
+        "node": "title",
+        "pin": "value"
+      },
+      "to": {
+        "node": "changed",
+        "pin": "title"
+      }
+    },
+    {
+      "from": {
+        "node": "old",
+        "pin": "value"
+      },
+      "to": {
+        "node": "changed",
+        "pin": "old"
+      }
+    },
+    {
+      "from": {
+        "node": "changed",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "raise",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "raise",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "title",
+        "pin": "value"
+      },
+      "to": {
+        "node": "raise",
+        "pin": "title"
+      }
+    }
+  ]
+}

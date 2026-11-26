@@ -90,3 +90,14 @@ func (ah *AuthzHandler) Explain(c *gin.Context) {
 	resp := ah.service.Explain(req.ToArgs(args))
 	c.JSON(int(resp.Common.Code), authzdto.ExplainResponseFrom(resp))
 }
+
+// Agents handles POST /api/v1/authz/agents.
+func (ah *AuthzHandler) Agents(c *gin.Context) {
+	var req authzdto.AgentsRequest
+	args, ok := rest.Bind(c, &req)
+	if !ok {
+		return
+	}
+	resp := ah.service.Agents(req.ToArgs(args))
+	c.JSON(int(resp.Common.Code), authzdto.AgentsResponseFrom(resp))
+}

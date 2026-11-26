@@ -1,0 +1,24 @@
+{
+  "id": "skiff",
+  "title": "Skiff",
+  "description": "A small open ship of 1 m blocks for one pilot: a floor of armour, a cockpit at the front, a gyroscope, lights, and thrusters on every side, so it can hover in the moon's pull, turn and fly. Placed block by block from its outline (forge 360 V3).",
+  "blockSize": 1,
+  "blocks": [
+    {"type": "cockpit", "at": [0, 1, -1]},
+    {"type": "armor", "at": [-1, 0, -1]}, {"type": "armor", "at": [0, 0, -1]}, {"type": "armor", "at": [1, 0, -1]},
+    {"type": "armor", "at": [-1, 0, 0]}, {"type": "armor", "at": [0, 0, 0]}, {"type": "armor", "at": [1, 0, 0]},
+    {"type": "armor", "at": [-1, 0, 1]}, {"type": "armor", "at": [0, 0, 1]}, {"type": "armor", "at": [1, 0, 1]},
+    {"type": "armor", "at": [-1, 0, 2]}, {"type": "armor", "at": [0, 0, 2]}, {"type": "armor", "at": [1, 0, 2]},
+    {"type": "gyro", "at": [0, 1, 1]},
+    {"type": "armor", "at": [-1, 1, 1]}, {"type": "armor", "at": [1, 1, 1]}, {"type": "armor", "at": [0, 1, 2]},
+    {"type": "light", "at": [-1, 1, -1]}, {"type": "light", "at": [1, 1, -1]},
+    {"type": "thruster", "at": [-1, -1, 0], "push": "up"},
+    {"type": "thruster", "at": [1, -1, 0], "push": "up"},
+    {"type": "thruster", "at": [0, -1, 2], "push": "up"},
+    {"type": "thruster", "at": [0, 0, 3], "push": "forward"},
+    {"type": "thruster", "at": [0, 0, -2], "push": "back"},
+    {"type": "thruster", "at": [-2, 0, 1], "push": "right"},
+    {"type": "thruster", "at": [2, 0, 1], "push": "left"},
+    {"type": "thruster", "at": [0, 2, 1], "push": "down"}
+  ]
+}

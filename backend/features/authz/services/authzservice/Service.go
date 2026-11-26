@@ -30,6 +30,9 @@ type Service interface {
 	Grant(args GrantArgs) GrantResponse
 	// Revoke removes a grant, with the same rule as Grant.
 	Revoke(args RevokeArgs) RevokeResponse
+	// Agents lists the tenant's agents (forge 07j), for the Share dialog;
+	// it needs grant.read on Resource (the tenant when empty).
+	Agents(args AgentsArgs) AgentsResponse
 	// Explain decides whether a user may do an action on a resource, and
 	// why, without auditing a denial: the Access checker.
 	Explain(args ExplainArgs) ExplainResponse
@@ -100,9 +103,21 @@ type GrantsResponse struct {
 	Grants []authz.RoleGrant
 }
 
+type AgentsArgs struct {
+	features.ServiceArgs
+	Resource string
+}
+
+type AgentsResponse struct {
+	Common features.ServiceResponse
+	Agents []authz.AgentInfo
+}
+
+// GrantArgs grants to a member (UserID) or an agent (AgentID).
 type GrantArgs struct {
 	features.ServiceArgs
 	UserID    uint64
+	AgentID   uint64
 	RoleID    uint64
 	Resource  string
 	ExpiresAt *time.Time
@@ -127,6 +142,7 @@ type RevokeResponse struct {
 type ExplainArgs struct {
 	features.ServiceArgs
 	UserID   uint64
+	AgentID  uint64 // an agent of the tenant in place of a user
 	Action   string
 	Resource string
 }

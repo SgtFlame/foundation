@@ -110,8 +110,9 @@ type Level struct {
 // Stages is the ai.chat.stages section: the level of each internal call, by
 // stage. A level that is not found falls back to the default level.
 type Stages struct {
-	Match  string `json:"match"`  // Chronicle's stage 1
-	Memory string `json:"memory"` // Chronicle's memory update
+	Match   string `json:"match"`   // Chronicle's stage 1
+	Memory  string `json:"memory"`  // Chronicle's memory update
+	PreMode string `json:"premode"` // the chat's pre-mode, choosing each message's mode (forge 15f)
 }
 
 // Find is the level with id, or the default level when id is empty.

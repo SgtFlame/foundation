@@ -4,7 +4,9 @@ import (
 	"sync"
 
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
+	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
 	"github.com/SgtFlame/foundation/backend/features/config"
+	"github.com/SgtFlame/foundation/backend/features/conversation"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"gorm.io/gorm"
@@ -35,10 +37,41 @@ func WithConfig(reader config.Reader) Option {
 	}
 }
 
+// WithEngine sets the Cognition engine that runs each round's mode graph.
+func WithEngine(e *engine.Engine) Option {
+	return func(s *service) {
+		s.engine = e
+	}
+}
+
 // WithRegistry sets the registry holding the chat.contextProvider contributions.
 func WithRegistry(reg *extensions.Registry) Option {
 	return func(s *service) {
 		s.registry = reg
+	}
+}
+
+// WithActivity sets where a round reads the person's recent gestures
+// (forge 15d); without it no activity is sent.
+func WithActivity(read conversation.ActivityReader) Option {
+	return func(s *service) {
+		s.activity = read
+	}
+}
+
+// WithWorkspaces sets how a round reads the workspace it was sent from
+// (forge 16c); without it rounds have no workspace and search as before.
+func WithWorkspaces(read conversation.WorkspaceReader) Option {
+	return func(s *service) {
+		s.workspaces = read
+	}
+}
+
+// WithWorkspaceList sets how the caller's workspaces are listed (forge
+// 16d); without it conversations are listed in none and cannot be moved.
+func WithWorkspaceList(list conversation.WorkspaceList) Option {
+	return func(s *service) {
+		s.workspaceList = list
 	}
 }
 
@@ -54,6 +87,12 @@ func CreateService(opts ...Option) conversationservice.Service {
 		instance = newService(opts...)
 	})
 	return instance
+}
+
+// New returns a service of its own, apart from the singleton, for tests
+// that run several stacks in one process (forge 06h's golden tests).
+func New(opts ...Option) conversationservice.Service {
+	return newService(opts...)
 }
 
 func newService(opts ...Option) *service {

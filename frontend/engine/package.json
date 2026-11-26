@@ -1,0 +1,25 @@
+{
+  "name": "@foundation/engine",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "dev": "vite demo",
+    "build": "tsc -b && vite build demo",
+    "lint": "oxlint",
+    "test": "node --test 'src/**/*.test.ts'"
+  },
+  "dependencies": {
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/three": "0.187.0",
+    "oxlint": "^1.88.0",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4"
+  }
+}

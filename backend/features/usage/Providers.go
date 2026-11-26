@@ -47,6 +47,7 @@ func (c *chatProvider) Stream(ctx context.Context, in chatservice.ChatInput, onD
 func (c *chatProvider) record(ctx context.Context, in chatservice.ChatInput, out chatservice.ChatOutput, err error, start time.Time) {
 	u := out.Usage
 	rec := newRecord(ctx, "chat", c.name, in.Model, err, start)
+	rec.Temperature = in.Temperature
 	rec.InputTokens, rec.CachedTokens, rec.OutputTokens, rec.ThinkingTokens = u.InputTokens, u.CachedTokens, u.OutputTokens, u.ThinkingTokens
 	tokens := aisettings.Tokens{Input: u.InputTokens, Cached: u.CachedTokens, Output: u.OutputTokens, Thinking: u.ThinkingTokens}
 	if !c.recorder.Capturing(ctx) {

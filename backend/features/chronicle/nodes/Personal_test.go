@@ -23,6 +23,8 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	"github.com/SgtFlame/foundation/backend/features/retrieval/services/retrievalservice"
+	"github.com/SgtFlame/foundation/backend/features/tools"
+	"github.com/SgtFlame/foundation/backend/features/tools/nodes"
 )
 
 // fakeChat answers each feature with its canned reply, or fails it.
@@ -97,8 +99,9 @@ func newFixture(t *testing.T) *fixture {
 	reg := extensions.NewRegistry()
 	cognitionnodes.Contribute(reg)
 	conversationnodes.Contribute(reg)
-	Contribute(reg, func() chroniclesteps.Steps { return f.steps })
-	f.engine = engine.New(gdb, reg, nil)
+	toolsnodes.Contribute(reg, func() toolsnodes.Deps { return toolsnodes.Deps{Chat: f.chat, Registry: reg} })
+	Contribute(reg, func() Deps { return Deps{Steps: f.steps} })
+	f.engine = engine.New(gdb, reg, sections{"chat": `{"systemPrompt": "Be kind.", "titleLevel": "fast"}`})
 	return f
 }
 
@@ -108,76 +111,256 @@ func (f *fixture) args() features.ServiceArgs {
 
 func TestPersonalIsValid(t *testing.T) {
 	f := newFixture(t)
-	g, ok := f.engine.Graph(PersonalID)
+	g, ok := f.engine.Graph(f.args(), PersonalID)
 	if !ok {
 		t.Fatal("Personal is not registered")
 	}
 	if res := f.engine.Resolve(g); len(res.Problems) > 0 {
 		t.Errorf("Personal has problems: %+v", res.Problems)
 	}
+	if b, _ := f.engine.BuiltIn(PersonalID); !b.Editable {
+		t.Error("Personal is not an editable built-in")
+	}
 }
 
-// Personal's On user message gives the items slice 6's provider made by
-// calling the steps itself.
-func TestPersonalGathersAsTheStepsDo(t *testing.T) {
+// The seed's prompts are the steps' defaults, so editing either is seen.
+func TestPersonalSeedsTheDefaultPrompts(t *testing.T) {
+	f := newFixture(t)
+	g, _ := f.engine.Graph(f.args(), PersonalID)
+	for id, want := range map[string][2]string{"match": {chroniclesteps.MatchSystem, chroniclesteps.MatchPrompt}, "update": {chroniclesteps.UpdateSystem, chroniclesteps.UpdatePrompt}} {
+		n, _ := g.NodeByID(id)
+		var c chroniclesteps.Prompts
+		_ = json.Unmarshal(n.Config, &c)
+		if c.System != want[0] || c.Prompt != want[1] {
+			t.Errorf("%s's prompts are not the defaults", id)
+		}
+	}
+}
+
+// host is a chat round as Personal's chat nodes see it.
+type host struct {
+	turn      conversation.Turn
+	settings  map[string]string
+	replied   conversation.ReplyArgs
+	reply     string
+	segments  []retrieval.RoundSegment
+	gathered  [][]string
+	title     string
+	followed  []conversation.Followed
+	providers []string
+}
+
+func (h *host) Turn() conversation.Turn           { return h.turn }
+func (h *host) Settings(p string) json.RawMessage { return json.RawMessage(h.settings[p]) }
+func (h *host) ServerTools() []tools.Tool {
+	return []tools.Tool{{Descriptor: extensions.Descriptor{ID: "kb.search"}, Effect: tools.EffectRead}}
+}
+func (h *host) ClientTools() []tools.Tool                  { return nil }
+func (h *host) Say(string) error                           { return nil }
+func (h *host) SetTitle(title string)                      { h.title = title }
+func (h *host) Followed(_ string, f conversation.Followed) { h.followed = append(h.followed, f) }
+func (h *host) Gather(providers []string) []conversation.ContextItem {
+	h.gathered = append(h.gathered, providers)
+	return []conversation.ContextItem{{Kind: "workbench", Title: "Workspace", Text: "a note is open", Score: 1}}
+}
+func (h *host) AddContext(system string, items []conversation.ContextItem, header, cite string) (string, []retrieval.RoundSegment) {
+	var b strings.Builder
+	b.WriteString(system + "\n\n" + header + "\n")
+	for _, item := range items {
+		if item.Segment != nil {
+			seg := *item.Segment
+			seg.Number = len(h.segments) + 1
+			h.segments = append(h.segments, retrieval.RoundSegmentFrom(h.turn.Round.ID, h.turn.Round.Tenanted, seg))
+		}
+		b.WriteString("## " + item.Title + "\n" + item.Text + "\n")
+	}
+	return b.String(), h.segments
+}
+func (h *host) Reply(args conversation.ReplyArgs) (conversation.ReplyOutcome, error) {
+	h.replied = args
+	r := h.turn.Round
+	r.Reply, r.Status = h.reply, 200
+	return conversation.ReplyOutcome{Round: r, OK: true, Segments: h.segments}, nil
+}
+
+func (f *fixture) round(t *testing.T, h *host) engine.Result {
+	t.Helper()
+	all := map[string]json.RawMessage{}
+	for k, v := range h.settings {
+		all[k] = json.RawMessage(v)
+	}
+	res, err := f.engine.Run(engine.RunArgs{ServiceArgs: f.args(), GraphID: PersonalID, Event: conversationnodes.EventUserMessage, Trigger: "chat", Host: h,
+		Inputs: cognition.Values{conversationnodes.PinText: h.turn.Round.Text, conversationnodes.PinWindow: h.turn.Window, conversationnodes.PinSettings: all,
+			conversationnodes.PinTitle: h.turn.Conversation.Title, conversationnodes.PinRound: h.turn.Round}})
+	if err != nil {
+		t.Fatalf("Personal failed on %s: %v", res.FailedNode, err)
+	}
+	return res
+}
+
+// A round in Personal chooses entries as the steps do, adds them with the
+// workbench to the chat's system prompt, replies with the tools, names the
+// conversation and updates the entries it used.
+func TestPersonalRunsARound(t *testing.T) {
 	f := newFixture(t)
 	ada, engineID := strconv.FormatUint(f.entries["Ada"].ID, 10), strconv.FormatUint(f.entries["Engine"].ID, 10)
 	f.chat.replies["chronicle-match"] = `{"shift": false, "entries": [{"id": "` + engineID + `", "rank": 1}]}`
+	f.chat.replies["chat-title"] = `"The Analytical Engine."`
+	f.chat.replies["chronicle-memory"] = `{"updates": [{"id": "` + engineID + `", "shortSummary": "Babbage's.", "fullSummary": "Engine facts. Babbage's."}], "proposals": []}`
 	window := []conversation.Round{{Model: db.Model{ID: 40}, Text: "Hi", Reply: "Hello"}}
-	settings := json.RawMessage(`{"topK": 2, "checked": ["` + ada + `"]}`)
+	h := &host{
+		turn:     conversation.Turn{Round: conversation.Round{Model: db.Model{ID: 8}, ConversationID: 7, Text: "the engine?"}, Window: window},
+		settings: map[string]string{"chronicle": `{"topK": 2, "checked": ["` + ada + `"]}`, "tools": `{"enabled": true}`},
+		reply:    "Babbage designed it.",
+	}
 
 	candidates, err := f.steps.Candidates(chroniclesteps.CandidatesIn{ServiceArgs: f.args(), Text: "the engine?", Window: window, Checked: []uint64{f.entries["Ada"].ID}, Retrieve: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := ContextItems(f.steps.Match(chroniclesteps.MatchIn{ServiceArgs: f.args(), Text: "the engine?", Window: window, Candidates: candidates, TopK: 2}))
+	f.chat.got = nil
 
-	res, err := f.engine.Run(engine.RunArgs{ServiceArgs: f.args(), GraphID: PersonalID, Event: conversationnodes.EventUserMessage, Trigger: "chat",
-		Inputs: cognition.Values{conversationnodes.PinText: "the engine?", conversationnodes.PinWindow: window, conversationnodes.PinSettings: settings}})
-	if err != nil {
-		t.Fatal(err)
+	res := f.round(t, h)
+	system := h.replied.System
+	if !strings.HasPrefix(system, "Be kind.") || !strings.Contains(system, "# Tools\nYou can call tools") || !strings.Contains(system, "# Context\n") {
+		t.Errorf("system prompt:\n%s", system)
 	}
-	got, err := cognition.Get[[]conversation.ContextItem](res.Outputs, OutItems)
-	if err != nil {
-		t.Fatal(err)
+	for _, item := range append(want, conversation.ContextItem{Title: "Workspace"}) {
+		if !strings.Contains(system, "## "+item.Title+"\n") {
+			t.Errorf("the prompt lacks %s", item.Title)
+		}
 	}
-	wantJSON, _ := json.Marshal(want)
-	gotJSON, _ := json.Marshal(got)
-	if string(gotJSON) != string(wantJSON) || len(got) != 2 || got[1].Title != "Engine" {
-		t.Errorf("items\n got %s\nwant %s", gotJSON, wantJSON)
+	if len(h.gathered) != 1 || strings.Join(h.gathered[0], ",") != "workbench,activity,rag" {
+		t.Errorf("gathered %v", h.gathered)
 	}
-	// The graph's stage 1 call is attributed to its run and node
-	if call := f.chat.got[len(f.chat.got)-1]; call.Meta.RunID != res.RunID || call.Meta.NodeID != "match" || call.Meta.RoundID != 8 {
+	if len(h.replied.Tools) != 1 || h.replied.Tools[0].ID != "kb.search" || len(h.replied.Messages) != 3 || h.replied.Messages[2].Content != "the engine?" {
+		t.Errorf("reply args %+v", h.replied)
+	}
+	features := []string{}
+	for _, c := range f.chat.got {
+		features = append(features, c.Meta.Feature)
+	}
+	if strings.Join(features, ",") != "chronicle-match,chat-title,chronicle-memory" {
+		t.Fatalf("model calls %v", features)
+	}
+	// Each call is attributed to the run and its node
+	if call := f.chat.got[0]; call.Meta.RunID != res.RunID || call.Meta.NodeID != "match" || call.Meta.RoundID != 8 {
 		t.Errorf("stage 1 meta %+v", call.Meta)
+	}
+	if call := f.chat.got[1]; call.Level != "fast" || !strings.Contains(call.Messages[0].Content, "Assistant: Babbage designed it.") {
+		t.Errorf("title call %+v", call)
+	}
+	if h.title != "The Analytical Engine" {
+		t.Errorf("title %q", h.title)
+	}
+	if call := f.chat.got[2]; call.Meta.NodeID != "update" || !strings.Contains(call.Messages[0].Content, "## id "+engineID) {
+		t.Errorf("memory update call %+v", call)
+	}
+	if len(h.followed) != 1 || h.followed[0].Summary != "Memory: updated *Engine*" || !strings.Contains(string(h.followed[0].Data), `"title":"Engine"`) {
+		t.Errorf("followed %+v", h.followed)
 	}
 }
 
-func TestPersonalUpdatesMemoryOnlyWhenOn(t *testing.T) {
+// With memory and tools off, a named conversation's round only replies.
+func TestPersonalWithMemoryOff(t *testing.T) {
 	f := newFixture(t)
-	ada := strconv.FormatUint(f.entries["Ada"].ID, 10)
-	f.chat.replies["chronicle-memory"] = `{"updates": [{"id": "` + ada + `", "shortSummary": "Programmer.", "fullSummary": "Ada facts. Programmer."}], "proposals": []}`
-	round := conversation.Round{Model: db.Model{ID: 8}, ConversationID: 7, Text: "Ada programmed.", Reply: "Indeed."}
-	segments := []retrieval.RoundSegment{{SourceID: chroniclesteps.SourceID, SegmentKey: ada}, {SourceID: "library", SegmentKey: "x"}}
-	reply := func(settings string) (cognition.Values, error) {
-		res, err := f.engine.Run(engine.RunArgs{ServiceArgs: f.args(), GraphID: PersonalID, Event: conversationnodes.EventReply,
-			Inputs: cognition.Values{conversationnodes.PinRound: round, conversationnodes.PinSegments: segments, conversationnodes.PinSettings: json.RawMessage(settings)}})
-		return res.Outputs, err
+	h := &host{
+		turn:     conversation.Turn{Conversation: conversation.Conversation{Title: "Named"}, Round: conversation.Round{Model: db.Model{ID: 8}, Text: "hi"}},
+		settings: map[string]string{"chronicle": `{"enabled": false}`, "tools": `{"enabled": false}`},
+		reply:    "Hello.",
 	}
+	f.round(t, h)
+	if len(f.chat.got) != 0 || h.title != "" || len(h.followed) != 0 {
+		t.Errorf("calls %+v, title %q, followed %+v", f.chat.got, h.title, h.followed)
+	}
+	if len(h.replied.Tools) != 0 || strings.Contains(h.replied.System, "# Tools") {
+		t.Errorf("reply args %+v", h.replied)
+	}
+}
 
-	for _, off := range []string{`{"update": false}`, `{"enabled": false}`} {
-		if out, err := reply(off); err != nil || len(out) != 0 || len(f.chat.got) != 0 {
-			t.Errorf("%s: %v, %v, %d calls", off, out, err, len(f.chat.got))
-		}
-	}
-	out, err := reply(`{}`)
-	if err != nil {
+// Forge 15b: Run mode runs Personal inside a function graph on a headless
+// host: it gives the reply and the passages it numbered, stores no round
+// and changes no memory entry.
+func TestRunModeRunsPersonalHeadless(t *testing.T) {
+	f := newFixture(t)
+	gdb := f.steps.DB
+	if err := db.Migrate(gdb, tools.Models()...); err != nil {
 		t.Fatal(err)
 	}
-	changes, err := cognition.Get[chroniclesteps.Changes](out, OutChanges)
-	if err != nil || len(changes.Updated) != 1 || changes.Updated[0].ShortSummary != "Programmer." {
-		t.Errorf("changes %+v, %v", changes, err)
+	f.chat.replies["run-mode"] = "Ada and Byron built the Engine [1]."
+	cfg := sections{
+		"chat":              `{"systemPrompt": "Be kind.", "titleLevel": "fast"}`,
+		"chat.modes":        `{"modes": [{"id": "personal", "label": "Personal", "graphRef": "personal", "default": true}]}`,
+		aisettings.LevelsID: `{"levels": [{"id": "fast"}, {"id": "standard", "default": true}]}`,
+		aisettings.ModelsID: `{"models": []}`,
 	}
-	if call := f.chat.got[0]; call.Meta.NodeID != "update" || !strings.Contains(call.Messages[0].Content, "## id "+ada) || !strings.Contains(call.Messages[0].Content, "Ada programmed.") {
-		t.Errorf("memory update call %+v", call)
+	reg := extensions.NewRegistry()
+	cognitionnodes.Contribute(reg)
+	conversationnodes.Contribute(reg)
+	deps := func() toolsnodes.Deps { return toolsnodes.Deps{Chat: f.chat, Registry: reg, Config: cfg, DB: gdb} }
+	toolsnodes.Contribute(reg, deps)
+	conversationnodes.ContributeRunMode(reg, deps)
+	Contribute(reg, func() Deps { return Deps{Steps: f.steps} })
+	e := engine.New(gdb, reg, cfg)
+
+	g := cognition.Graph{ID: "ask", Kind: cognition.KindFunction,
+		Nodes: []cognition.Node{
+			{ID: "on", Type: cognition.EventCall, Config: json.RawMessage(`{"outputs": [{"id": "message", "type": "string", "description": "what to ask"}]}`)},
+			{ID: "mode", Type: conversationnodes.RunModeID, Config: json.RawMessage(`{"mode": "personal", "temperature": 0.2}`)},
+			{ID: "ret", Type: "flow.return", Config: json.RawMessage(`{"outputs": [{"id": "reply", "type": "string", "description": "r"}, {"id": "segments", "type": "RoundSegment[]", "description": "s"}]}`)},
+		},
+		Edges: []cognition.Edge{
+			{From: cognition.PinRef{Node: "on", Pin: "then"}, To: cognition.PinRef{Node: "mode", Pin: "then"}},
+			{From: cognition.PinRef{Node: "on", Pin: "message"}, To: cognition.PinRef{Node: "mode", Pin: "message"}},
+			{From: cognition.PinRef{Node: "mode", Pin: "then"}, To: cognition.PinRef{Node: "ret", Pin: "then"}},
+			{From: cognition.PinRef{Node: "mode", Pin: "reply"}, To: cognition.PinRef{Node: "ret", Pin: "reply"}},
+			{From: cognition.PinRef{Node: "mode", Pin: "segments"}, To: cognition.PinRef{Node: "ret", Pin: "segments"}},
+		},
+	}
+	if res := e.Resolve(g); res.Errors() {
+		t.Fatalf("the graph has problems: %+v", res.Problems)
+	}
+	before := map[uint64]string{}
+	for _, entry := range f.entries {
+		before[entry.ID] = entry.FullSummary
+	}
+	res, err := e.Run(engine.RunArgs{ServiceArgs: f.args(), Graph: &g, Event: cognition.EventCall, Inputs: cognition.Values{"message": "Who built the Engine?"}})
+	if err != nil {
+		t.Fatalf("the run failed on %s: %v", res.FailedNode, err)
+	}
+	if res.Outputs["reply"] != "Ada and Byron built the Engine [1]." {
+		t.Fatalf("reply = %v", res.Outputs["reply"])
+	}
+	segments, _ := res.Outputs["segments"].([]retrieval.RoundSegment)
+	if len(segments) == 0 || segments[0].Number != 1 || segments[0].SourceID != chroniclesteps.SourceID {
+		t.Fatalf("segments = %+v", res.Outputs["segments"])
+	}
+	var reply *chatservice.CompleteArgs
+	for i, c := range f.chat.got {
+		if c.Meta.Feature == "chronicle-memory" {
+			t.Errorf("the memory update asked the model: %+v", c.Meta)
+		}
+		if c.Meta.Feature == "run-mode" {
+			reply = &f.chat.got[i]
+		}
+	}
+	if reply == nil || reply.Temperature == nil || *reply.Temperature != float32(0.2) {
+		t.Fatalf("the reply did not take Run mode's temperature: %+v", reply)
+	}
+	var rounds int64
+	gdb.Model(&conversation.Round{}).Count(&rounds)
+	if rounds != 0 {
+		t.Errorf("%d rounds were stored", rounds)
+	}
+	var after []chronicle.Entry
+	gdb.Find(&after)
+	for _, entry := range after {
+		if before[entry.ID] != entry.FullSummary || entry.Status != chronicle.StatusActive {
+			t.Errorf("entry %s changed: %+v", entry.Title, entry)
+		}
+	}
+	if len(after) != len(before) {
+		t.Errorf("%d entries, want %d: Run mode proposed some", len(after), len(before))
 	}
 }

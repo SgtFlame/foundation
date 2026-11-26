@@ -2,6 +2,7 @@ package impl
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
@@ -21,6 +22,24 @@ func (s *service) List(args conversationservice.ListArgs) conversationservice.Li
 		limit = 50
 	}
 	q := s.owned(args.ServiceArgs)
+	ids, wired, failed := s.workspaceIDs(args.ServiceArgs)
+	if failed != nil {
+		return conversationservice.ListResponse{Common: *failed}
+	}
+	// One workspace's conversations (forge 16d): the one named, else
+	// Default unless only some conversations are asked for
+	if ws := strings.TrimSpace(args.Workspace); wired && (ws != "" || len(args.IDs) == 0) {
+		if ws == "" {
+			ws = conversation.DefaultWorkspace
+		}
+		if failed := knownWorkspace(args.ServiceArgs, ids, ws); failed != nil {
+			return conversationservice.ListResponse{Common: *failed}
+		}
+		if ws == conversation.DefaultWorkspace && args.Before == 0 {
+			s.settle(args.ServiceArgs, ids)
+		}
+		q = s.inWorkspace(args.ServiceArgs, q, ws, ids)
+	}
 	if len(args.IDs) > 0 {
 		q = q.Where("id IN ?", args.IDs)
 	}
@@ -34,6 +53,13 @@ func (s *service) List(args conversationservice.ListArgs) conversationservice.Li
 	resp := conversationservice.ListResponse{Common: features.OK(), Conversations: list, More: len(list) > limit}
 	if resp.More {
 		resp.Conversations = list[:limit]
+	}
+	if wired {
+		places, err := s.placesOf(args.ServiceArgs, resp.Conversations, ids)
+		if err != nil {
+			return conversationservice.ListResponse{Common: *args.Fail(http.StatusInternalServerError, log.Wrap(err))}
+		}
+		resp.Places = places
 	}
 	return resp
 }

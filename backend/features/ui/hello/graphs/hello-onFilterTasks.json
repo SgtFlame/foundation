@@ -1,0 +1,114 @@
+{
+  "id": "hello-onFilterTasks",
+  "name": "On filter tasks",
+  "description": "Shows all, open or done tasks: sets the view state the task query's where is bound to.",
+  "kind": "ui.handler",
+  "version": 1,
+  "owner": "app:hello",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "ui.onEvent",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "value",
+            "type": "string",
+            "description": "all, open or done"
+          }
+        ]
+      }
+    },
+    {
+      "id": "where",
+      "type": "data.expression",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "config": {
+        "expr": "value == \"open\" ? {done: false} : value == \"done\" ? {done: true} : {}",
+        "type": "json"
+      },
+      "title": "Where"
+    },
+    {
+      "id": "show",
+      "type": "ui.setState",
+      "position": {
+        "x": 300,
+        "y": 0
+      },
+      "config": {
+        "path": "show"
+      }
+    },
+    {
+      "id": "set",
+      "type": "ui.setState",
+      "position": {
+        "x": 600,
+        "y": 0
+      },
+      "config": {
+        "path": "where"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "show",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "value"
+      },
+      "to": {
+        "node": "show",
+        "pin": "value"
+      }
+    },
+    {
+      "from": {
+        "node": "show",
+        "pin": "then"
+      },
+      "to": {
+        "node": "set",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "value"
+      },
+      "to": {
+        "node": "where",
+        "pin": "value"
+      }
+    },
+    {
+      "from": {
+        "node": "where",
+        "pin": "value"
+      },
+      "to": {
+        "node": "set",
+        "pin": "value"
+      }
+    }
+  ]
+}

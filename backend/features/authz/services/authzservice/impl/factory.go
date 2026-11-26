@@ -39,6 +39,9 @@ func CreateService(opts ...Option) authzservice.Service {
 	return instance
 }
 
+// New makes a service that is not the singleton, for tests.
+func New(opts ...Option) authzservice.Service { return newService(opts...) }
+
 func newService(opts ...Option) *service {
 	s := &service{member: func(uint64, uint64) (bool, error) { return true, nil }}
 	for _, opt := range opts {

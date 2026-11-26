@@ -122,3 +122,6 @@ Chronicle's calls are recorded like every other, under their own features: `chro
 - **Every step of a tool loop is a chat call**, and so its own usage record, attributed to the round (`Feature` `chat`) or to the Agent node's run and node (`Feature` `agent`). A round's tokens and cost sum its steps, each priced on its own.
 - **A tool's own calls** (the query embedding of `kb.search`) carry `Feature` `tool.<name>`.
 - **The debug capture** keeps each message's tool calls and results, and appends the reply's calls to the captured reply.
+
+## Changed in forge 15b
+- **A usage record keeps the call's temperature** (`Record.Temperature`, `temperature` in `usagedto.UsageRecord` and `Usage.ts`), since a model node may now set it; the model was already recorded.

@@ -1,0 +1,25 @@
+{
+  "id": "farmland",
+  "title": "Farmland",
+  "description": "Sheaflands farmland: grass, roads, fences, fields, trees, a farmhouse, a barn and a farmstead yard. Placeholder models made in code (forge 375 S1).",
+  "cell": 10,
+  "edgeTypes": {
+    "grass": "Open ground: meets grass",
+    "road": "A road's end: meets a road"
+  },
+  "meets": [],
+  "pieces": [
+    {"id": "grass", "title": "Grass", "description": "Open grass ground", "size": [1, 1], "model": "grass", "edges": {"n": ["grass"], "e": ["grass"], "s": ["grass"], "w": ["grass"]}},
+    {"id": "road", "title": "Road", "description": "A straight dirt road, north to south", "size": [1, 1], "model": "road", "edges": {"n": ["road"], "e": ["grass"], "s": ["road"], "w": ["grass"]}},
+    {"id": "roadCorner", "title": "Road corner", "description": "A road turning from north to east", "size": [1, 1], "model": "roadCorner", "edges": {"n": ["road"], "e": ["road"], "s": ["grass"], "w": ["grass"]}},
+    {"id": "roadT", "title": "Road junction", "description": "A road meeting another from the north, east and west", "size": [1, 1], "model": "roadT", "edges": {"n": ["road"], "e": ["road"], "s": ["grass"], "w": ["road"]}},
+    {"id": "roadEnd", "title": "Road end", "description": "A road ending in grass, open to the north", "size": [1, 1], "model": "roadEnd", "edges": {"n": ["road"], "e": ["grass"], "s": ["grass"], "w": ["grass"]}},
+    {"id": "fence", "title": "Fence", "description": "Grass with a wooden fence along its north side", "size": [1, 1], "model": "fence", "edges": {"n": ["grass"], "e": ["grass"], "s": ["grass"], "w": ["grass"]}},
+    {"id": "tree", "title": "Tree", "description": "One broad tree on grass", "size": [1, 1], "model": "tree", "edges": {"n": ["grass"], "e": ["grass"], "s": ["grass"], "w": ["grass"]}},
+    {"id": "copse", "title": "Copse", "description": "A stand of trees", "size": [2, 2], "model": "copse", "edges": {"n": ["grass", "grass"], "e": ["grass", "grass"], "s": ["grass", "grass"], "w": ["grass", "grass"]}},
+    {"id": "field", "title": "Field", "description": "A ploughed field of late barley, two cells long", "size": [1, 2], "model": "field", "edges": {"n": ["grass"], "e": ["grass", "grass"], "s": ["grass"], "w": ["grass", "grass"]}},
+    {"id": "farmhouse", "title": "Farmhouse", "description": "A stone farmhouse with a hearth; its path leaves from the south-east", "size": [2, 2], "model": "farmhouse", "door": true, "edges": {"n": ["grass", "grass"], "e": ["grass", "grass"], "s": ["grass", "road"], "w": ["grass", "grass"]}},
+    {"id": "barn", "title": "Barn", "description": "A timber barn; its doors open onto a road at the south-west", "size": [2, 3], "model": "barn", "door": true, "edges": {"n": ["grass", "grass"], "e": ["grass", "grass", "grass"], "s": ["road", "grass"], "w": ["grass", "grass", "grass"]}},
+    {"id": "yard", "title": "Farmstead yard", "description": "A packed-earth yard with a well; roads leave it to the north, east and south", "size": [3, 3], "model": "yard", "edges": {"n": ["grass", "road", "grass"], "e": ["grass", "road", "grass"], "s": ["grass", "road", "grass"], "w": ["grass", "grass", "grass"]}}
+  ]
+}

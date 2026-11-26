@@ -10,9 +10,12 @@ type ListRequest struct {
 	Before uint64         `json:"before,string,omitempty"` // only conversations older than this one
 	Limit  int            `json:"limit,omitempty"`         // 5 by default, at most 50
 	IDs    indexdto.TSIDs `json:"ids,omitempty"`           // only these conversations
+	// Workspace lists one of the caller's workspaces' conversations (forge
+	// 16d); empty is Default, unless ids are given
+	Workspace string `json:"workspace,omitempty"`
 }
 
 // ToArgs converts the request to the service's ListArgs.
 func (r ListRequest) ToArgs(args features.ServiceArgs) conversationservice.ListArgs {
-	return conversationservice.ListArgs{ServiceArgs: args, Before: r.Before, Limit: r.Limit, IDs: r.IDs}
+	return conversationservice.ListArgs{ServiceArgs: args, Before: r.Before, Limit: r.Limit, IDs: r.IDs, Workspace: r.Workspace}
 }

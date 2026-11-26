@@ -54,9 +54,11 @@ type NodeTypesArgs struct {
 }
 
 type NodeTypesResponse struct {
-	Common    features.ServiceResponse
-	NodeTypes []cognition.NodeType // with their fixed Pins; nodes whose pins follow their config get them from GetGraph
-	Types     []cognition.DataType
+	Common      features.ServiceResponse
+	NodeTypes   []cognition.NodeType // with their fixed Pins; nodes whose pins follow their config get them from GetGraph
+	Types       []cognition.DataType
+	Kinds       []cognition.Kind
+	Conversions []cognition.Conversion
 }
 
 // ListRunsArgs pages through the principal's runs of a graph, newest first.

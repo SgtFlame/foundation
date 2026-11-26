@@ -13,7 +13,7 @@
 
 ## The remaining first sections
 - **`ai.embed`**: `modelRef` and `dimensions`. Saving a change warns that it triggers a full reindex.
-- **`chat.modes`**: the modes offered in the composer (`id`, `label`, `icon`, `graphRef` to a published Cognition graph, `default`). See [ChatCompletion.md](ChatCompletion.md) and [Cognition.md](Cognition.md).
+- **`chat.modes`** (built in slice 44, [Configuration.md › Since slice 44](../Configuration.md#since-slice-44)): the modes offered in the composer (`id`, `label`, `icon`, `graphRef` to a published Cognition graph, `default`). See [ChatCompletion.md](ChatCompletion.md) and [Cognition.md](Cognition.md).
 - **`index`**: `debounce`, `chunkSize`, `overlap` (`restart`).
 - **`ui.appearance`** (client-only): theme and density. A theme that follows the browser's dark preference also fixes the app-wide contrast issue in [Backlog.md](Backlog.md).
 - **`ui.dashboard`** (client-only): the Dashboard's hidden widgets and layout ([Usage.md](Usage.md)).
@@ -28,6 +28,6 @@
 - Export and import, and reverting to a revision.
 - Storage for browser-only (`ui.*`) sections, and schema `migrate` in the browser.
 - Custom section editors.
-- The sections `ai.embed`, `chat.modes`, `index`, `ui.appearance`, `ui.dashboard` and `ai.budget`.
+- The sections `ai.embed`, `index`, `ui.appearance`, `ui.dashboard` and `ai.budget`.
 - App-scope settings in the application database, with the `db.ForTenant` resolver ([MultiTenant.md](MultiTenant.md)).
 - **Seen while verifying**: the scope selector's *App* tooltip says "read-only for you" to an *Application Administrator*, who may write its secrets; and a read-only field still shows its reset button.

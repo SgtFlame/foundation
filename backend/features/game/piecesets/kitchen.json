@@ -1,0 +1,21 @@
+{
+  "id": "kitchen",
+  "title": "Farmhouse rooms",
+  "description": "The inside of a Sheaflands farmhouse: a room with walls round its edge and a wooden floor, cells of 2 m; a hearth, a table, benches, a box bed, shelves, barrels, a door and windows. Placeholder models made in code (forge 375 S3).",
+  "cell": 2,
+  "interior": true,
+  "edgeTypes": {
+    "floor": "Open floor: meets floor"
+  },
+  "meets": [],
+  "pieces": [
+    {"id": "hearth", "title": "Hearth", "description": "A stone hearth with its fire and the hearthstone before it; stands against a wall", "size": [2, 1], "model": "hearth", "boundary": true, "edges": {"n": ["floor", "floor"], "e": ["floor"], "s": ["floor", "floor"], "w": ["floor"]}},
+    {"id": "table", "title": "Table", "description": "A long scrubbed kitchen table", "size": [2, 1], "model": "table", "edges": {"n": ["floor", "floor"], "e": ["floor"], "s": ["floor", "floor"], "w": ["floor"]}},
+    {"id": "bench", "title": "Bench", "description": "A plank bench", "size": [1, 1], "model": "bench", "edges": {"n": ["floor"], "e": ["floor"], "s": ["floor"], "w": ["floor"]}},
+    {"id": "bed", "title": "Box bed", "description": "A box bed built into a corner, with its curtain", "size": [1, 2], "model": "bed", "edges": {"n": ["floor"], "e": ["floor", "floor"], "s": ["floor"], "w": ["floor", "floor"]}},
+    {"id": "shelf", "title": "Shelves", "description": "Shelves of crocks and the milk jug; stands against a wall", "size": [1, 1], "model": "shelf", "boundary": true, "edges": {"n": ["floor"], "e": ["floor"], "s": ["floor"], "w": ["floor"]}},
+    {"id": "barrel", "title": "Barrels", "description": "Two barrels of meal and apples", "size": [1, 1], "model": "barrel", "edges": {"n": ["floor"], "e": ["floor"], "s": ["floor"], "w": ["floor"]}},
+    {"id": "door", "title": "Door", "description": "A door in the wall; game.linkDoor sets where it leads", "size": [1, 1], "model": "door", "boundary": true, "door": true, "edges": {"n": ["floor"], "e": ["floor"], "s": ["floor"], "w": ["floor"]}},
+    {"id": "window", "title": "Window", "description": "A small window in the wall, with a cup of milk on its sill", "size": [1, 1], "model": "window", "boundary": true, "edges": {"n": ["floor"], "e": ["floor"], "s": ["floor"], "w": ["floor"]}}
+  ]
+}

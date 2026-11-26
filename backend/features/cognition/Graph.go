@@ -23,8 +23,41 @@ type Graph struct {
 	Description string `json:"description"`
 	Kind        string `json:"kind"`
 	Version     int    `json:"version"` // the published version; a run records it
-	Nodes       []Node `json:"nodes"`
-	Edges       []Edge `json:"edges"`
+	// Owner is what the graph belongs to, such as "app:hello" or
+	// "prefab:card"; empty for a tenant's own graphs.
+	Owner string `json:"owner,omitempty"`
+	// Spec is what its kind needs beyond the nodes, such as a command
+	// graph's command type and args schema (Kind.Spec).
+	Spec      json.RawMessage `json:"spec,omitempty"`
+	Variables []Variable      `json:"variables,omitempty"`
+	Nodes     []Node          `json:"nodes"`
+	Edges     []Edge          `json:"edges"`
+}
+
+// ModeSpec is a mode graph's Spec (forge 06i).
+type ModeSpec struct {
+	// Settings are the context settings the mode uses, by
+	// chat.contextProvider id; the composer hides the others. Empty shows
+	// them all.
+	Settings []string `json:"settings,omitempty"`
+}
+
+// ModeSpecOf decodes a mode graph's Spec; an empty or invalid one is empty.
+func ModeSpecOf(g Graph) ModeSpec {
+	var s ModeSpec
+	if len(g.Spec) > 0 {
+		_ = json.Unmarshal(g.Spec, &s)
+	}
+	return s
+}
+
+// Variable is per-run state, read and written by Get and Set variable.
+type Variable struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Default     any    `json:"default,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 // Node is one node of a graph.
@@ -52,6 +85,16 @@ type Edge struct {
 type PinRef struct {
 	Node string `json:"node"`
 	Pin  string `json:"pin"`
+}
+
+// VariableByID is the graph's variable with the given ID.
+func (g Graph) VariableByID(id string) (Variable, bool) {
+	for _, v := range g.Variables {
+		if v.ID == id {
+			return v, true
+		}
+	}
+	return Variable{}, false
 }
 
 // NodeByID is the graph's node with the given ID.

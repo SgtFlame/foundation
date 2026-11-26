@@ -39,6 +39,19 @@ type Action struct {
 	// On is where a grant must be held for the action to apply: OnApp for
 	// tenant.create, OnTenant (the default) for content.
 	On string
+	// Apps is held by every app principal in its own tenant with no grant
+	// (forge 7m: job.create, so an app's triggers enqueue jobs that run as
+	// the app, as its roles allow).
+	Apps bool
+	// Agents is held by every agent principal in its own tenant with no
+	// grant (forge 15a: retrieval.read, so an agent can search at all;
+	// what it finds stays held to its other checks).
+	Agents bool
+	// AsMaker is decided for an agent principal by the grants of the
+	// person its run acts for (Principal.OnBehalfOf), not its own (forge
+	// 15a: volume.read, so an agent never reads a Volume its maker could
+	// not; a run's own Volume list narrows it further).
+	AsMaker bool
 }
 
 // ResourceType is a kind of resource and its actions, contributed by the
@@ -50,7 +63,13 @@ type ResourceType struct {
 	Parent                string // the type it lives under: "app" or "tenant"
 	// Owned types are user-owned: an action on a resource whose path names
 	// the principal (".../user:<id>/...") is allowed, the implied Owner.
-	Owned   bool
+	Owned bool
+	// Fence is a kind of path segment ("app") that grants above it reach
+	// only through the roles that may cross it (forge 05c question 5): the
+	// Super Administrator, the tenant's Owner and Administrator, and the
+	// roles of the app the segment names. An Editor of the tenant does not
+	// reach an installed app's records.
+	Fence   string
 	Actions []Action
 }
 

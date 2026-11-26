@@ -52,14 +52,20 @@ func (s *service) input(args *chatservice.CompleteArgs) (context.Context, chatse
 	}
 
 	in := chatservice.ChatInput{
-		Model:       args.Model,
-		System:      args.System,
-		Messages:    args.Messages,
-		Temperature: args.Temperature,
-		MaxTokens:   args.MaxTokens,
-		JSONSchema:  args.JSONSchema,
-		Tools:       args.Tools,
-		ToolChoice:  args.ToolChoice,
+		Model:          args.Model,
+		System:         args.System,
+		Messages:       args.Messages,
+		Temperature:    args.Temperature,
+		MaxTokens:      args.MaxTokens,
+		ThinkingBudget: args.ThinkingBudget,
+		JSONSchema:     args.JSONSchema,
+		Tools:          args.Tools,
+		ToolChoice:     args.ToolChoice,
+	}
+	if in.Model == "" && args.ModelRef != "" {
+		if failed := s.applyModelRef(args, &in); failed != nil {
+			return nil, chatservice.ChatInput{}, failed
+		}
 	}
 	if args.Level != "" {
 		if failed := s.applyLevel(args, &in); failed != nil {
@@ -105,8 +111,28 @@ func (s *service) applyLevel(args *chatservice.CompleteArgs, in *chatservice.Cha
 	if in.MaxTokens == nil && level.MaxOutputTokens > 0 {
 		in.MaxTokens = &level.MaxOutputTokens
 	}
-	in.ThinkingBudget = level.ThinkingBudget
+	if in.ThinkingBudget == nil {
+		in.ThinkingBudget = level.ThinkingBudget
+	}
 	args.Meta.Level = level.ID
+	return nil
+}
+
+// applyModelRef resolves an ai.models ID to the provider's model (forge 15b).
+func (s *service) applyModelRef(args *chatservice.CompleteArgs, in *chatservice.ChatInput) *features.ServiceResponse {
+	if s.config == nil {
+		return args.Fail(http.StatusServiceUnavailable, log.Code("no_models").New("the model catalog is not configured"))
+	}
+	models, err := config.Read[aisettings.Models](s.config, args.ServiceArgs, aisettings.ModelsID)
+	if err != nil {
+		return args.Fail(http.StatusInternalServerError, log.Wrap(err))
+	}
+	model, ok := models.ByID(args.ModelRef)
+	if !ok || model.Kind == "embed" {
+		return args.Fail(http.StatusBadRequest, log.Code("unknown_model").With("model", args.ModelRef).
+			Errorf("%q is not a chat model in the model catalog", args.ModelRef))
+	}
+	in.Model = model.Model
 	return nil
 }
 

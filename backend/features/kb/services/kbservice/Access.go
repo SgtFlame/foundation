@@ -19,7 +19,7 @@ func ContributeAccess(reg *extensions.Registry) {
 	authz.ResourceTypes.Register(reg, authz.ResourceType{
 		Descriptor: extensions.Descriptor{ID: "volume", Source: "kb", Order: 91}, Title: "Volumes", Parent: "tenant",
 		Actions: []authz.Action{
-			{Name: "read", Title: "Open the Volume and its files", Class: authz.ClassRead},
+			{Name: "read", Title: "Open the Volume and its files", Class: authz.ClassRead, AsMaker: true},
 			{Name: "write", Title: "Edit its files and make folders and files", Class: authz.ClassWrite},
 		},
 	})

@@ -25,6 +25,7 @@ type RetrieveArgs struct {
 	ContextWindow    int      // the round's model's, in tokens; the budget is a share of it. 0 uses the largest budget
 	Sources          []string // the source IDs to search; empty searches every source
 	VolumeIDs        []uint64 // optional; only these volumes
+	ExceptVolumeIDs  []uint64 // optional; never these volumes (forge 16c)
 }
 
 type RetrieveResponse struct {

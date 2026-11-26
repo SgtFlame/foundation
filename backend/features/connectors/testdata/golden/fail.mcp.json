@@ -1,0 +1,46 @@
+{
+  "name": "test_echo_fail",
+  "title": "Fail",
+  "description": "Fails with the typed error asked for, for testing error paths",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "code": {
+        "type": "string",
+        "enum": [
+          "auth",
+          "notFound",
+          "conflict",
+          "invalid",
+          "rateLimited",
+          "unavailable",
+          "notSupported"
+        ],
+        "description": "The error code to fail with"
+      },
+      "message": {
+        "type": "string",
+        "description": "The error's message"
+      }
+    },
+    "required": [
+      "code"
+    ]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean",
+        "description": "Never: it always fails"
+      }
+    }
+  },
+  "annotations": {
+    "title": "Fail",
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": false
+  }
+}

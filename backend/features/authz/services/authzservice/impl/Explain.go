@@ -21,6 +21,16 @@ func (s *service) Explain(args authzservice.ExplainArgs) authzservice.ExplainRes
 		}
 		who = features.Principal{Kind: features.PrincipalUser, UserID: args.UserID, TenantID: args.Principal.TenantID}
 	}
+	if args.AgentID != 0 {
+		guard := args.Resource
+		if authz.TenantOf(guard) != args.Principal.TenantID {
+			guard = authz.Tenant(args.Principal)
+		}
+		if f := check(args.ServiceArgs, "grant.read", guard); f != nil {
+			return authzservice.ExplainResponse{Common: *f}
+		}
+		who = features.AgentPrincipal(args.Principal.TenantID, args.AgentID, args.Principal.UserID)
+	}
 	d := s.pol.Explain(args.Context(), who, args.Action, args.Resource)
 	return authzservice.ExplainResponse{Common: features.OK(), Decision: d}
 }

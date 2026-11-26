@@ -10,14 +10,10 @@ import (
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
-	"github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	"github.com/SgtFlame/foundation/backend/features/tools"
-	"github.com/SgtFlame/foundation/backend/features/tools/settings"
 )
-
-const toolsPrompt = "\n\n# Tools\nYou can call tools to search and read the user's Volumes and Chronicles, to ask them to choose, to open things in their workbench, and to change their files and Chronicles. Every change is shown to the user to approve first, so propose it with the tool rather than asking in words. When a tool's result has passages with a cite such as [5], cite them like the context's passages. Never say something was changed unless a tool's result says so."
 
 // maxClientTools bounds the client tools a message may declare.
 const maxClientTools = 20
@@ -133,20 +129,6 @@ func allowed(r *round) map[string]bool {
 	return out
 }
 
-// offered is the tools the round may call: none when the conversation's
-// tools setting is off, else the server's and the browser's, less those
-// the tools section turns off.
-func (s *service) offered(args conversationservice.SendArgs, r *round) ([]tools.Tool, toolssettings.Tools) {
-	settings, err := config.Read[toolssettings.Tools](s.config, args.ServiceArgs, toolssettings.ID)
-	if err != nil {
-		settings = toolssettings.Defaults
-	}
-	if !enabled(s.settingsOf(args, r, tools.ContextID, nil)) {
-		return nil, settings
-	}
-	return tools.Enabled(tools.Tools.All(s.registry), args.ClientTools, settings), settings
-}
-
 // checkClientTools rejects client tools the browser may not declare.
 func checkClientTools(args conversationservice.SendArgs) *features.ServiceResponse {
 	if len(args.ClientTools) > maxClientTools {
@@ -179,15 +161,17 @@ type citer struct {
 func (c *citer) cite(segments []retrieval.Scored) []retrieval.Scored {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	var added []retrieval.RoundSegment
-	for i, seg := range segments {
-		at := slices.IndexFunc(c.r.segments, func(rs retrieval.RoundSegment) bool { return rs.SourceID == seg.SourceID && rs.SegmentKey == seg.Key })
-		if at >= 0 {
-			segments[i].Number = c.r.segments[at].Number
-			continue
+	numbered, cited := tools.Cite(func(source, key string) (int, bool) {
+		at := slices.IndexFunc(c.r.segments, func(rs retrieval.RoundSegment) bool { return rs.SourceID == source && rs.SegmentKey == key })
+		if at < 0 {
+			return 0, false
 		}
-		segments[i].Number = len(c.r.segments) + len(added) + 1
-		added = append(added, retrieval.RoundSegmentFrom(c.r.round.ID, c.r.round.Tenanted, segments[i]))
+		return c.r.segments[at].Number, true
+	}, len(c.r.segments), segments)
+	segments = numbered
+	added := make([]retrieval.RoundSegment, len(cited))
+	for i, seg := range cited {
+		added[i] = retrieval.RoundSegmentFrom(c.r.round.ID, c.r.round.Tenanted, seg)
 	}
 	if len(added) == 0 {
 		return segments

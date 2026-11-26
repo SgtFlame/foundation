@@ -8,6 +8,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
 	"github.com/SgtFlame/foundation/backend/features/authz"
+	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
 	"github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
 	"github.com/SgtFlame/foundation/backend/features/db"
@@ -21,6 +22,13 @@ type service struct {
 	chat     chatservice.Service
 	config   config.Reader
 	registry *extensions.Registry
+	engine   *engine.Engine              // runs the rounds' mode graphs
+	activity conversation.ActivityReader // the person's recent gestures (forge 15d); nil sends none
+	// workspaces reads the workspace a round is sent from (forge 16c); nil gives rounds none
+	workspaces conversation.WorkspaceReader
+	// workspaceList lists the caller's workspaces (forge 16d); nil lists
+	// conversations without them
+	workspaceList conversation.WorkspaceList
 
 	mu      sync.Mutex
 	waiting map[string]*waiting // tool calls rounds are paused on, by waitKey

@@ -39,6 +39,12 @@ func CreateService(opts ...Option) chatservice.Service {
 	return instance
 }
 
+// New returns a service of its own, apart from the singleton, for tests
+// that run several stacks in one process (forge 06h's golden tests).
+func New(opts ...Option) chatservice.Service {
+	return newService(opts...)
+}
+
 func newService(opts ...Option) *service {
 	s := &service{}
 	for _, opt := range opts {

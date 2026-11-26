@@ -14,6 +14,7 @@ type UsageRecord struct {
 	Provider       string    `json:"provider"`
 	Model          string    `json:"model"`
 	Level          string    `json:"level,omitempty"`
+	Temperature    *float32  `json:"temperature,omitempty"`
 	ConversationID uint64    `json:"conversationId,string,omitempty"`
 	RoundID        uint64    `json:"roundId,string,omitempty"`
 	FileID         uint64    `json:"fileId,string,omitempty"`
@@ -32,7 +33,7 @@ type UsageRecord struct {
 
 func UsageRecordFrom(r usage.Record) UsageRecord {
 	return UsageRecord{
-		ID: r.ID, Time: r.CreatedAt, UserID: r.UserID, Feature: r.Feature, Provider: r.Provider, Model: r.ModelName, Level: r.Level,
+		ID: r.ID, Time: r.CreatedAt, UserID: r.UserID, Feature: r.Feature, Provider: r.Provider, Model: r.ModelName, Level: r.Level, Temperature: r.Temperature,
 		ConversationID: r.ConversationID, RoundID: r.RoundID, FileID: r.FileID,
 		InputTokens: r.InputTokens, CachedTokens: r.CachedTokens, OutputTokens: r.OutputTokens, ThinkingTokens: r.ThinkingTokens,
 		EmbedTokens: r.EmbedTokens, Estimated: r.Estimated, CostMicros: r.CostMicros, Currency: r.Currency,

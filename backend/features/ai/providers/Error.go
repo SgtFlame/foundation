@@ -14,7 +14,14 @@ import (
 type Error struct {
 	Code    uint16
 	Message string
+	// Busy is the provider refusing for load (Gemini's 503 "overloaded",
+	// or 429 for its rate): worth trying again after a wait, unlike a
+	// missing key, which is also 503 (forge 06g)
+	Busy bool
 }
+
+// BusyCode is the error code of a busy provider's failure.
+const BusyCode = "provider_busy"
 
 func (e *Error) Error() string {
 	return e.Message
@@ -44,6 +51,9 @@ func Wrap(err error) error {
 	code := "provider_failed"
 	if errors.Is(err, ErrNotConfigured) {
 		code = "provider_not_configured"
+	}
+	if e, ok := errors.AsType[*Error](err); ok && e.Busy {
+		code = BusyCode
 	}
 	return Log.Code(code).Public(err.Error()).Wrap(err)
 }

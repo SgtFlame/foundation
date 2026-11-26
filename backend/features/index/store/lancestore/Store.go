@@ -300,14 +300,22 @@ func score(row map[string]any) float64 {
 
 // where is filter as a LanceDB SQL condition, "" for no condition.
 func where(filter indexservice.Filter) string {
-	if len(filter.VolumeIDs) == 0 {
-		return ""
+	var conds []string
+	if len(filter.VolumeIDs) > 0 {
+		conds = append(conds, "volume_id IN ("+quotedIDs(filter.VolumeIDs)+")")
 	}
-	ids := make([]string, len(filter.VolumeIDs))
-	for i, id := range filter.VolumeIDs {
+	if len(filter.ExceptVolumeIDs) > 0 {
+		conds = append(conds, "volume_id NOT IN ("+quotedIDs(filter.ExceptVolumeIDs)+")")
+	}
+	return strings.Join(conds, " AND ")
+}
+
+func quotedIDs(in []uint64) string {
+	ids := make([]string, len(in))
+	for i, id := range in {
 		ids[i] = quote(strconv.FormatUint(id, 10))
 	}
-	return "volume_id IN (" + strings.Join(ids, ", ") + ")"
+	return strings.Join(ids, ", ")
 }
 
 func matches(rows []map[string]any) []indexservice.Match {

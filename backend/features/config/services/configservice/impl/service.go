@@ -48,19 +48,23 @@ type failure struct {
 
 func fail(status uint16, err error) *failure { return &failure{status, err} }
 
-// section is a registered section with its parsed schema.
+// section is a registered section with its parsed schema; sourced when a
+// config.SectionSource gave it.
 type section struct {
 	config.Section
 	schema   *config.Schema
 	defaults map[string]any
+	sourced  bool
 }
 
-func (s *service) section(id string) (*section, *failure) {
-	i := slices.IndexFunc(config.Sections.All(s.registry), func(sec config.Section) bool { return sec.ID == id })
+// section finds a section as args' principal's tenant has it.
+func (s *service) section(args features.ServiceArgs, id string) (*section, *failure) {
+	all, sourced := config.SectionsFor(args.Context(), s.registry, args.Principal.TenantID)
+	i := slices.IndexFunc(all, func(sec config.Section) bool { return sec.ID == id })
 	if i < 0 {
 		return nil, fail(http.StatusNotFound, log.Code("section_not_found").With("section", id).Errorf("there is no settings section %q", id))
 	}
-	sec := config.Sections.All(s.registry)[i]
+	sec := all[i]
 	schema, err := config.ParseSchema(sec.Schema)
 	if err != nil {
 		return nil, fail(http.StatusInternalServerError, log.With("section", id).Wrapf(err, "section %s has a bad schema", id))
@@ -69,7 +73,7 @@ func (s *service) section(id string) (*section, *failure) {
 	if err != nil {
 		return nil, fail(http.StatusInternalServerError, log.With("section", id).Wrapf(err, "section %s has bad defaults", id))
 	}
-	return &section{Section: sec, schema: schema, defaults: defaults}, nil
+	return &section{Section: sec, schema: schema, defaults: defaults, sourced: i >= len(all)-sourced}, nil
 }
 
 // layer is one scope of a chain, e.g. {kind: "tenant", key: "tenant:1"}.
@@ -321,7 +325,7 @@ func (s *service) Resolved(args features.ServiceArgs, sectionID string) (json.Ra
 		return cached, nil
 	}
 
-	sec, f := s.section(sectionID)
+	sec, f := s.section(args, sectionID)
 	if f != nil {
 		return nil, f.err
 	}
@@ -334,7 +338,9 @@ func (s *service) Resolved(args features.ServiceArgs, sectionID string) (json.Ra
 	if err != nil {
 		return nil, log.Wrap(err)
 	}
-	if s.unreadable.Load() == unreadable { // a secret that could not be read is tried again next time
+	// A secret that could not be read is tried again next time, and a
+	// sourced section is read afresh, since its source may change it
+	if s.unreadable.Load() == unreadable && !sec.sourced {
 		s.mu.Lock()
 		s.cache[key] = raw
 		s.mu.Unlock()

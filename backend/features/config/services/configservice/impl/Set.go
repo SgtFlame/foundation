@@ -19,7 +19,7 @@ func (s *service) Set(args configservice.SetArgs) configservice.SetResponse {
 	if f != nil {
 		return configservice.SetResponse{Common: *args.Fail(f.status, f.err)}
 	}
-	sec, f := s.section(args.Section)
+	sec, f := s.section(args.ServiceArgs, args.Section)
 	if f != nil {
 		return configservice.SetResponse{Common: *args.Fail(f.status, f.err)}
 	}
@@ -143,7 +143,7 @@ func (s *service) refKeys(args features.ServiceArgs, sec *section, value map[str
 		if other, err = config.Decode(raw); err != nil {
 			return nil
 		}
-		t, f := s.section(target)
+		t, f := s.section(args, target)
 		if f != nil {
 			return nil
 		}
