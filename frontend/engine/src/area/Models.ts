@@ -211,6 +211,19 @@ export function buildModel(model: string, w: number, d: number, cell: number, se
       g.add(ground(W, D))
       tree(g, (rand() - 0.5) * 2, (rand() - 0.5) * 2, 1.2, rand)
       break
+    case 'signpost': {
+      // S6: where the road leaves the area, a post with a board pointing on
+      // and a lantern; its door is the way on to the area it leads to
+      g.add(ground(W, D))
+      tufts(g, W, D, 4, rand)
+      g.add(box(0.22, 2.6, 0.22, palette.wood, 0, 0, 0))
+      g.add(box(1.6, 0.4, 0.08, palette.plank, 0.55, 2.0, 0.12))
+      g.add(box(0.25, 0.3, 0.25, palette.window, -0.05, 2.65, 0, 1.4))
+      blockers(g, [[-0.3, -0.3, 0.3, 0.3]])
+      door(g, 0, 2)
+      lights(g, [[0, 2.7, 0.6]])
+      break
+    }
     case 'copse':
       g.add(ground(W, D, palette.grassDark))
       for (let i = 0; i < 7; i++) tree(g, (rand() - 0.5) * (W - 4), (rand() - 0.5) * (D - 4), 0.9 + rand() * 0.6, rand)

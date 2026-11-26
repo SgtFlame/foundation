@@ -189,6 +189,15 @@ A reason to leave the moon (the user, 2026-11-26: the moon has what a first ship
 - **Names** (placeholders, the user, 2026-11-26): the farmer is Wenlan Harrow and the quartermaster Ines Varga.
 - The first-hour guide has twelve steps: mine ore on an asteroid, hand in the cobalt, build a hauler.
 
+## Built in S6 (forge 375)
+
+The story game's sixth tracer bullet: the first hour end to end, with saves (the user, 2026-11-26: as written in the play design's first hour).
+
+- **Saves**: `game.reachStory {step, area, x, z}` (`cmd-game-reachStory`) on the target `story.<areaId>`, where the story is known by its starting area (the farmstead). It is refused for a step not in the first hour (`StorySteps`: arrive, farmer, howl, signature, trail, fight, road, rest), a missing area, or a point outside it; an empty step saves only the place. `game.stories` folds it per player, keyed `<areaId>.<userId>`, and the `game.story {story}` query gives `{done, last, area, at}`. `game.storyLog` (keyed by target) is the command's own state.
+- **`story/FirstHourStory.ts`**: the steps with their how-to (the ids are the server's; a test checks them), the raid signature's text, the drag marks (`dragMarks`), a howl made with Web Audio, and a lesser deck of five placeholder cards (`drawCard`, `showCard`).
+- **The signpost** (farmland piece `signpost`, a door) stands where the north road leaves the farmstead (`Samples.SIGNPOST`) and leads to **Hawk's Rest** (`Samples.hawksRest`), an empty one-room cottage of the kitchen set.
+- **In the viewport**: `playStory(place)` plays the first hour from the area shown, resuming from the saved place: the steps done, and the area and point last stood at (in another area, through `onTravel`). Talking to the farmer brings the first howl; the raid signature (a scorched ring and a dropped lantern by the well) and three furrows to the barn's door appear; standing by the signature reads it, reaching the barn shows the two Hollowed (hidden until then and gone after the fight) and starts the fight; going through the signpost reaches the road, and R by Hawk's Rest's hearth rests and draws the first card. Each step is sent through `onStory`, and the place every 15 s after moving 3 m and on Stop. The steps panel is `FirstHourPanel` below the moons; a caption tells the story at the bottom. Stats add `story`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

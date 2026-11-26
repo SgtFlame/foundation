@@ -12,6 +12,8 @@ import { HearthNight, WATCHER_HP } from '../defence/HearthNight.ts'
 import { NightHud } from '../defence/NightHud.ts'
 import { whistle } from '../defence/Whistle.ts'
 import { DialoguePanel } from './DialoguePanel.ts'
+import { FirstHourPanel } from '../objectives/FirstHour.ts'
+import { dragMarks, drawCard, howl, nextStep, showCard, SIGNATURE_TEXT, storySteps } from '../story/FirstHourStory.ts'
 import { ashPile, buildModel, CharacterModel, interiorShell, material } from './Models.ts'
 import { fit, pieceOf, turned, type AreaDef, type Dialogue, type Npc, type PieceSet, type Placement } from './PieceSet.ts'
 
@@ -67,6 +69,17 @@ export interface AreaViewportOptions {
   // S4: the weapon in hand in play (WEAPONS: sword, pitchfork) and the character's skills
   weapon?: string
   skills?: Skills
+  // S6: a step of the first hour reached (step empty: only the place, saved
+  // now and then); the host sends it as game.reachStory to the story's area
+  onStory?: (s: { step: string; area: string; x: number; z: number }) => void
+}
+
+// S6: a player's place in a story as the server keeps it (game.story)
+export interface StoryPlace {
+  done: Record<string, boolean>
+  last?: string
+  area?: string
+  at?: [number, number]
 }
 
 // The thimble's skills at the first fight (375 › the first hour): a little
@@ -95,6 +108,8 @@ export interface AreaStats {
   combat: { hp: number; stance: Stance; weapon: string; foes: number; alive: number; over: 'won' | 'fallen' | null; target: string | null } | null
   // A night of hearth defence (S5)
   hearth: { house: string; time: number; left: number; watcherHp: number; barrel: boolean; inside: number; outcome: 'held' | 'taken' | null; signals: number[] } | null
+  // The first hour (S6): the story's area, the steps done and the next, and the card drawn
+  story: { area: string; done: string[]; next: string | null; card: string | null } | null
 }
 
 const GOOD = 0x4caf50
@@ -178,6 +193,19 @@ export class AreaViewport {
   private skills: Skills
   private approachTick = 0
   private loopTime = 0
+  // S6: the first hour being played: its area, the steps done, the marks the
+  // raid left, where to stand after resuming in another area, the door last
+  // taken, the last place saved and the card drawn
+  private story: { area: string; done: Record<string, boolean>; card: string | null } | null = null
+  private readonly storyPanel: FirstHourPanel
+  private readonly marks = new THREE.Group()
+  private signature: Point | null = null
+  private barnDoor: Point | null = null
+  private resumeAt: { area: string; at: Point } | null = null
+  private via = ''
+  private talkingWith = ''
+  private saved = { x: 0, z: 0, t: 0 }
+  private readonly caption: HTMLDivElement
 
   private constructor(container: HTMLElement, renderer: Renderer, opts: AreaViewportOptions) {
     this.container = container
@@ -220,12 +248,19 @@ export class AreaViewport {
       'position:absolute;bottom:10px;left:50%;transform:translateX(-50%);padding:4px 10px;border-radius:4px;z-index:2;' +
       'font:13px system-ui,sans-serif;color:#eee;background:rgba(0,0,0,0.55);pointer-events:none;white-space:nowrap'
     container.appendChild(this.hint)
-    this.talk = new DialoguePanel(container, () => this.updateHint())
+    this.talk = new DialoguePanel(container, () => this.talkEnded())
     this.hud = new CombatHud(container, (s) => this.setStance(s))
     this.nightHud = new NightHud(container)
     this.weapon = opts.weapon ?? 'sword'
     this.skills = opts.skills ?? STARTING_SKILLS
-    this.scene.add(this.ash)
+    this.scene.add(this.ash, this.marks)
+    this.storyPanel = new FirstHourPanel(container, 96)
+    this.caption = document.createElement('div')
+    this.caption.dataset.storyCaption = ''
+    this.caption.style.cssText =
+      'position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:min(560px,calc(100% - 32px));z-index:3;display:none;pointer-events:none;' +
+      'padding:8px 12px;border-radius:6px;background:rgba(16,14,12,0.85);border:1px solid #6b5a43;font:italic 14px Georgia,serif;color:#eadfc8;line-height:1.4;text-align:center'
+    container.appendChild(this.caption)
 
     canvas.addEventListener('pointerdown', this.onPointerDown)
     canvas.addEventListener('keydown', this.onKey)
@@ -349,6 +384,8 @@ export class AreaViewport {
     const n = this.area.npcs?.[id]
     const d = n?.dialogue ? this.dialogues[n.dialogue] : undefined
     if (!n || !d) return false
+    this.talkingWith = d.id
+    this.caption.style.display = 'none'
     this.talk.start(d, n.name)
     this.updateHint()
     return true
@@ -375,7 +412,9 @@ export class AreaViewport {
     this.syncPieces()
     this.syncNpcs()
     this.buildWalk()
-    const at = this.doorTo(from) ?? this.spawnPoint()
+    const resume = this.resumeAt?.area === area.id ? this.resumeAt.at : null
+    this.resumeAt = null
+    const at = resume ?? this.doorTo(from) ?? this.spawnPoint()
     this.path = []
     this.arrival = null
     this.character?.group.position.set(at.x, 0, at.z)
@@ -383,6 +422,9 @@ export class AreaViewport {
     this.orbit.distance = this.set.interior ? 16 : 32
     this.grid.visible = false
     this.startCombat()
+    this.drawMarks()
+    if (this.via === 'signpost') this.reach('road')
+    this.via = ''
   }
 
   setLighting(l: Lighting): void {
@@ -423,7 +465,13 @@ export class AreaViewport {
       this.selectNpc(null)
       this.startCombat()
       this.grid.visible = false
+      if (this.story) {
+        this.saved = { x: at.x, z: at.z, t: this.loopTime }
+        this.reach('arrive')
+        this.drawMarks()
+      }
     } else {
+      if (this.story) this.savePlace(true)
       if (this.character) this.scene.remove(this.character.group)
       this.character = null
       this.walk = null
@@ -434,6 +482,11 @@ export class AreaViewport {
       this.endCombat()
       this.hearth = null
       this.nightHud.show(false)
+      this.story = null
+      this.resumeAt = null
+      this.marks.clear()
+      this.storyPanel.show([], false)
+      this.caption.style.display = 'none'
       if (this.home) {
         // back to the area being edited
         const { area, set } = this.home
@@ -576,6 +629,9 @@ export class AreaViewport {
             signals: [...this.hearthSignals],
           }
         : null,
+      story: this.story
+        ? { area: this.story.area, done: Object.keys(this.story.done).filter((k) => this.story!.done[k]), next: nextStep(this.story.done), card: this.story.card }
+        : null,
     }
   }
 
@@ -590,6 +646,8 @@ export class AreaViewport {
     this.talk.dispose()
     this.hud.dispose()
     this.nightHud.dispose()
+    this.storyPanel.dispose()
+    this.caption.remove()
     this.hint.remove()
     this.moonHud?.remove()
     this.renderer.dispose()
@@ -763,7 +821,8 @@ export class AreaViewport {
 
   // Adds, moves and removes the people to match the area (S3)
   private syncNpcs(force = false): void {
-    const want = this.area.npcs ?? {}
+    const hide = this.foesHidden()
+    const want = Object.fromEntries(Object.entries(this.area.npcs ?? {}).filter(([, n]) => !(hide && isHostile(n.kind))))
     if (force) {
       for (const have of this.npcs.values()) {
         this.scene.remove(have.model.group)
@@ -806,6 +865,7 @@ export class AreaViewport {
   // Starts the fight with the area's foes, if it has any (play, travel, a new weapon)
   private startCombat(): void {
     this.endCombat()
+    if (this.foesHidden()) return
     const foes = Object.values(this.area.npcs ?? {}).filter((n) => isHostile(n.kind))
     if (!foes.length || !this.playing) return
     const walk = this.walk
@@ -925,7 +985,13 @@ export class AreaViewport {
           have.label.remove()
           this.npcs.delete(e.foe)
         }
-        if (this.combat?.over === 'won') this.hud.say('Quiet again. Nothing left but ash and rags.')
+        if (this.combat?.over === 'won') {
+          this.hud.say('Quiet again. Nothing left but ash and rags.')
+          if (this.story && this.area.id === this.story.area) {
+            this.reach('fight')
+            this.say("Whatever took the Brannocks is gone west. The road north leads on to Hawk's Rest.")
+          }
+        }
         break
       }
       case 'claw':
@@ -1050,7 +1116,10 @@ export class AreaViewport {
           return
         }
         if (!this.walkNear(door.at)) this.flash('No way there')
-        else this.arrival = { kind: 'travel', area: door.link }
+        else {
+          this.arrival = { kind: 'travel', area: door.link }
+          this.via = this.area.pieces[door.id]?.piece ?? ''
+        }
         return
       }
       if (!this.walkTo(hit.x, hit.z)) this.flash('No way there')
@@ -1088,6 +1157,11 @@ export class AreaViewport {
   private onKey = (e: KeyboardEvent) => {
     if (this.playing) {
       if (e.key === 'Escape') this.path = []
+      if (this.story && (e.key === 'j' || e.key === 'J')) {
+        this.storyPanel.shown = !this.storyPanel.shown
+        this.showStory()
+      }
+      if (this.story && (e.key === 'r' || e.key === 'R')) this.rest()
       if (this.combat && !this.talk.open) {
         const s = ({ '1': 'strike', '2': 'pivot', '3': 'guard' } as Record<string, Stance>)[e.key]
         if (s) this.setStance(s)
@@ -1360,6 +1434,167 @@ export class AreaViewport {
     }
   }
 
+  // --- The first hour (S6) ---
+
+  // Plays the first hour from this area (the farmstead) at night, resuming
+  // from the place the server keeps: the steps done, and the area and point
+  // the player last stood at (the host travels there through onTravel)
+  playStory(place: StoryPlace | null): void {
+    if (this.playing) this.play(false)
+    this.story = { area: this.area.id, done: { ...(place?.done ?? {}) }, card: null }
+    const at = place?.at ? { x: place.at[0], z: place.at[1] } : null
+    this.play(true)
+    this.syncNpcs(true) // the Hollowed hide until the trail is followed
+    if (at && place?.area && place.area !== this.area.id) {
+      this.resumeAt = { area: place.area, at }
+      this.opts.onTravel?.(place.area)
+    } else if (at && this.walk?.walkable(...this.walk.cellOf(at))) {
+      this.character?.group.position.set(at.x, 0, at.z)
+      this.orbit.target.set(at.x, 0, at.z)
+      this.saved = { ...at, t: this.loopTime }
+    }
+    const next = nextStep(this.story.done)
+    this.say(next === 'arrive' || next === 'farmer' ? 'The night of the first snow. The light from the capital is gone; the farmhouse is warm.' : next ? (storySteps(this.story.done).find((s) => s.id === next)?.how ?? '') : 'The first hour is over.')
+    this.showStory()
+    this.updateHint()
+  }
+
+  // Marks a step reached, once, and tells the host where
+  private reach(step: string): void {
+    const st = this.story
+    if (!st || st.done[step]) return
+    st.done[step] = true
+    const p = this.player()
+    this.opts.onStory?.({ step, area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0) })
+    if (p) this.saved = { x: p.x, z: p.z, t: this.loopTime }
+    this.showStory()
+    this.updateHint()
+  }
+
+  // Saves where the player stands every 15 s after moving 3 m, and on stopping
+  private savePlace(now = false): void {
+    const p = this.player()
+    if (!this.story || !p) return
+    const moved = Math.hypot(p.x - this.saved.x, p.z - this.saved.z)
+    if (!now && (moved < 3 || this.loopTime - this.saved.t < 15)) return
+    if (now && moved < 0.5) return
+    this.saved = { x: p.x, z: p.z, t: this.loopTime }
+    this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z) })
+  }
+
+  private showStory(): void {
+    this.storyPanel.show(this.story ? storySteps(this.story.done) : [], !!this.story)
+  }
+
+  // A line of the story at the top of the view for a while
+  private say(text: string): void {
+    if (!text) return
+    this.caption.textContent = text
+    this.caption.style.display = 'block'
+    const shown = text
+    setTimeout(() => {
+      if (this.caption.textContent === shown) this.caption.style.display = 'none'
+    }, 9000)
+  }
+
+  // The Hollowed wait unseen in the story's area until the drag marks are
+  // followed, and are gone once the fight is won
+  private foesHidden(): boolean {
+    const st = this.story
+    if (!st || this.area.id !== st.area) return false
+    return !st.done.trail || !!st.done.fight
+  }
+
+  // The talk ended: with the farmer, the first howl follows
+  private talkEnded(): void {
+    const was = this.talkingWith
+    this.talkingWith = ''
+    this.updateHint()
+    if (!this.story || was !== 'farmer' || this.story.done.farmer) return
+    this.reach('farmer')
+    setTimeout(() => {
+      if (!this.story || this.story.done.howl) return
+      howl()
+      this.reach('howl')
+      this.say('A howl, long and low, out by the well. Then a dog barking, cut off. Next door, the Brannocks\' hearth has gone dark.')
+      this.drawMarks()
+    }, 2500)
+  }
+
+  // The raid signature by the well and the drag marks to the barn's door,
+  // in the story's area once the howl is heard
+  private drawMarks(): void {
+    this.marks.clear()
+    const st = this.story
+    if (!st || this.area.id !== st.area || !st.done.howl) return
+    const c = this.set.cell
+    const yard = Object.values(this.area.pieces).find((p) => p.piece === 'yard')
+    const barn = Object.values(this.area.pieces).find((p) => p.piece === 'barn')
+    this.signature = yard ? { x: (yard.x + 1.5) * c - 5, z: (yard.z + 1.5) * c } : null
+    this.barnDoor = barn ? (this.doors().find((d) => d.id === barn.id)?.at ?? null) : null
+    if (!this.signature) return
+    const scorch = new THREE.Mesh(new THREE.RingGeometry(0.9, 2.2, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicNodeMaterial({ color: 0x1b1612, transparent: true, opacity: 0.85 }))
+    scorch.position.set(this.signature.x, 0.05, this.signature.z)
+    this.marks.add(scorch)
+    const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.3), new THREE.MeshStandardNodeMaterial({ color: 0xffb347, emissive: 0x6a3a10 }))
+    lantern.position.set(this.signature.x + 1.2, 0.2, this.signature.z + 0.6)
+    lantern.rotation.z = 1.2
+    this.marks.add(lantern)
+    if (!this.barnDoor) return
+    const furrow = new THREE.MeshBasicNodeMaterial({ color: 0x241c15, transparent: true, opacity: 0.8 })
+    for (const m of dragMarks(this.signature, this.barnDoor, hash(st.area))) {
+      for (const off of [-0.45, 0, 0.45]) {
+        const g = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 1.1).rotateX(-Math.PI / 2), furrow)
+        g.position.set(m.x + Math.cos(m.heading) * off, 0.04, m.z - Math.sin(m.heading) * off)
+        g.rotation.y = m.heading
+        this.marks.add(g)
+      }
+    }
+  }
+
+  // Each frame of the first hour: the signature found, the trail followed,
+  // and the place saved now and then
+  private stepStory(): void {
+    const st = this.story!
+    const p = this.player()
+    if (!p) return
+    if (this.area.id === st.area && st.done.howl) {
+      if (!st.done.signature && this.signature && Math.hypot(p.x - this.signature.x, p.z - this.signature.z) < 4) {
+        this.reach('signature')
+        this.say(SIGNATURE_TEXT)
+      } else if (st.done.signature && !st.done.trail && this.barnDoor && Math.hypot(p.x - this.barnDoor.x, p.z - this.barnDoor.z) < 10) {
+        this.reach('trail')
+        this.syncNpcs(true)
+        this.startCombat()
+        this.say('The furrows end at the barn. Two of them, hunched in the snow, turn toward you. Ember eyes.')
+      }
+    }
+    this.savePlace()
+  }
+
+  // The hearth of an interior the character stands by
+  private nearHearth(): boolean {
+    const p = this.player()
+    if (!p || !this.set.interior) return false
+    const c = this.set.cell
+    return Object.values(this.area.pieces).some((pl) => pl.piece === 'hearth' && Math.hypot((pl.x + 1) * c - p.x, (pl.z + 0.5) * c - p.z) < 3.5)
+  }
+
+  // R by Hawk's Rest's hearth: rest, and draw the first card
+  private rest(): void {
+    const st = this.story
+    if (!st || !st.done.road || st.done.rest) return
+    if (!this.nearHearth()) {
+      this.flash('Stand by the hearth to rest')
+      return
+    }
+    const card = drawCard(hash(st.area))
+    st.card = card.id
+    this.reach('rest')
+    showCard(this.container, card)
+    this.say('Stillness. The cottage settles around you, and your hand finds the old deck on the shelf. The first hour is over.')
+  }
+
   private flash(text: string): void {
     this.hint.textContent = text
     setTimeout(() => this.updateHint(), 1500)
@@ -1370,6 +1605,7 @@ export class AreaViewport {
     this.loopTime += dt
     if (this.playing && this.combat) this.stepCombat(Math.min(dt, 0.1))
     if (this.playing && this.hearth) this.stepHearth(dt)
+    if (this.playing && this.story) this.stepStory()
     this.orbit.step(dt, this.input)
     if (this.playing && this.walk) {
       // The context cursor: a hand where the ground may be walked to
@@ -1508,6 +1744,8 @@ export class AreaViewport {
   private updateHint(): void {
     this.hint.textContent = this.talk.open
       ? 'Pick an answer · 1 to 9 · Esc to end the talk'
+      : this.playing && this.story && !this.combat
+      ? `The first hour · click the ground to walk · click a person to talk · click a door to go through · J hides the steps${this.nearHearth() && this.story.done.road && !this.story.done.rest ? ' · R to rest by the hearth' : ''}`
       : this.playing && this.combat
       ? 'Fighting · click a Hollowed to attack it · 1 Strike · 2 Pivot · 3 Guard · click the ground to back away'
       : this.playing

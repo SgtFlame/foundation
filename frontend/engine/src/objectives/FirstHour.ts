@@ -58,11 +58,13 @@ export class FirstHourPanel {
   private last = ''
   shown = true
 
-  constructor(container: HTMLElement) {
+  // top: how far down the view it sits (the story game's moons take the corner)
+  constructor(container: HTMLElement, top = 12) {
     this.el = document.createElement('div')
     this.el.dataset.firstHour = ''
     this.el.style.cssText =
-      'position:absolute;right:12px;top:12px;z-index:3;width:270px;padding:8px 10px;border-radius:6px;pointer-events:none;' +
+      `position:absolute;right:12px;top:${top}px;` +
+      'z-index:3;width:270px;padding:8px 10px;border-radius:6px;pointer-events:none;' +
       'background:rgba(14,16,22,0.78);border:1px solid #39424f;font:12px system-ui,sans-serif;color:#e4e9f2;display:none'
     container.appendChild(this.el)
   }
