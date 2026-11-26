@@ -105,6 +105,19 @@ The story game's fourth tracer bullet: the first fight, two Hollowed at the barn
   - Stop ends the fight and stands the foes back where they were placed.
   - `setWeapon`, `setSkills`, `setStance`, `fight(id)` and `doorPoints()` serve hosts and tests, and stats add `combat`.
 
+## Built in V3 (forge 360)
+
+The voxel game's third tracer bullet: lay out a small ship from a premade design, place its blocks one by one, sit in its cockpit and fly it.
+
+- **Designs** are JSON files embedded from `features/game/designs/` (`skiff.json` first), read with the `game.shipDesigns` query: a grid of 1 m blocks (`armor`, `cockpit`, `gyro`, `light`, `thruster` with the way it pushes), x right, y up and -z forward. The skiff has 27 blocks: a cockpit at the nose, a gyroscope, two lights, three lift thrusters below and one thruster each other way. `ShipDesign.Check` refuses a design without exactly one cockpit or with two blocks in one cell.
+- **Ships** are play on the `game` area, not ops (target type `gameShip`), decided by three blueprints:
+  - `game.startShip {world, design, x, y, z, q}` (`cmd-game-startShip`) starts a ship with no block placed; the sender makes its id. It is refused when the ship exists, the world does not, the design is unknown or the point is far from the world's bodies.
+  - `game.placeBlock {index}` (`cmd-game-placeBlock`) places one block of the design, in any order; it is refused for an index outside the design or a block already placed.
+  - `game.flyShip {x, y, z, q, v?, pilot}` (`cmd-game-flyShip`) sets where it is, how it moves and whether the sender sits in it. It needs the cockpit placed and is refused while someone else flies it.
+  - `game.ships` folds them by ship, and `game.worldShips {world}` lists a world's ships from `game.worldShips` (keyed `<worldId>.<shipId>`).
+- **The flight model** (`ship/Ship.ts`, `ShipBody`, a thin 364 and 365) runs in the pilot's browser and in Node tests. Only placed blocks count: their mass, the thrust each way of the placed thrusters (6 kN each), and turning only with the gyroscope. Inertial dampeners hold the ship still against the pull of the nearest body when the helm is let go, within what its thrusters can give, so a skiff without lift thrusters falls. It rests on the ground, lifted along up from its lowest block faces. `lookQuat`, `rotate` and `blockWorld` are its quaternion helpers.
+- **In the viewport** (`ship/ShipLayer.ts`): placed blocks are boxes, thrusters with a nozzle; blocks still to place are a translucent outline. Walking, an outline block within 8 m and nearer than the ground lights up, and a left click places it (`onShipIntent({kind: 'place'})`). F within 3 m of a placed cockpit sits in it. Flying, W and S push forward and back, A and D sideways, Space up, C down, the mouse turns and Q and E roll. A chase camera follows it, and its place goes to the server four times a second. F leaves the seat, standing beside the cockpit. Other people's ships are eased toward the server's place, carried on by their velocity. `startShip(design)` lays a ship out a few metres ahead on the ground, facing the player's way; `sit(id)`, `leaveSeat()`, `setShips`, `setShipDesigns` serve hosts and tests, and stats add `ships` and `piloting`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
@@ -117,3 +130,4 @@ The story game's fourth tracer bullet: the first fight, two Hollowed at the barn
 - S3's people stand still and have one dialogue each; schedules and routines come later (375 open question on NPC routines). Dialogues are built-in files; editing them in Forge comes with the dialogue editor.
 - Travel through a door reads the other area in the browser and shows it as it was read; the server holds the player's area when play moves to the server (S4).
 - S4's fight runs in the browser and nothing of it is stored. The Node runner (346) takes it to the server, with the same `Combat` rules. Skills are fixed at the thimble's start until the character sheet (379) arrives.
+- V3's pilot's browser decides where the ship is and the server keeps what it sends (one pilot at a time); the Node runner (346) takes the flight model to the server. Blocks are placed from the design for free; costing them from the pack comes with crafting (363).

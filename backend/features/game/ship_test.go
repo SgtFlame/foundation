@@ -1,0 +1,62 @@
+package game_test
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/SgtFlame/foundation/backend/features/game"
+)
+
+// V3: a ship is started from a design, its blocks placed, then flown by one pilot at a time
+func TestShips(t *testing.T) {
+	d, ok := game.DesignOf("skiff")
+	if !ok || d.Check() != "" || d.Blocks[0].Type != "cockpit" {
+		t.Fatalf("skiff %+v", d)
+	}
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Ship moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	res := st.ok("game.startShip", "s1", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 104, "z": 0, "q": q})
+	read := func(seq uint64) game.Ship {
+		var s game.Ship
+		if !st.read(game.ShipsProjector, game.ShipType+".s1", seq, &s) {
+			t.Fatal("no ship")
+		}
+		return s
+	}
+	if s := read(res.Seq); s.World != world || s.Blocks != len(d.Blocks) || len(s.Placed) != 0 {
+		t.Fatalf("started %+v", s)
+	}
+	var byWorld game.Ship
+	if !st.read(game.WorldShipsProjector, world+".s1", res.Seq, &byWorld) || byWorld.Design != "skiff" {
+		t.Fatalf("by world %+v", byWorld)
+	}
+	st.refused("game.startShip", "s1", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 104, "z": 0, "q": q})
+	st.refused("game.startShip", "s2", map[string]any{"world": world, "design": "dreadnought", "x": 0, "y": 104, "z": 0, "q": q})
+	st.refused("game.startShip", "s2", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 9000, "z": 0, "q": q})
+
+	// Flying needs the cockpit
+	if r := st.refused("game.flyShip", "s1", map[string]any{"x": 0, "y": 105, "z": 0, "q": q, "pilot": true}); !strings.Contains(r.Common.Message, "cockpit") {
+		t.Fatalf("fly before the cockpit: %q", r.Common.Message)
+	}
+	st.ok("game.placeBlock", "s1", map[string]any{"index": 5})
+	res = st.ok("game.placeBlock", "s1", map[string]any{"index": 0})
+	if s := read(res.Seq); len(s.Placed) != 2 || s.Placed[0] != 0 || s.Placed[1] != 5 {
+		t.Fatalf("placed %+v", s.Placed)
+	}
+	st.refused("game.placeBlock", "s1", map[string]any{"index": 0})
+	st.refused("game.placeBlock", "s1", map[string]any{"index": len(d.Blocks)})
+
+	res = st.ok("game.flyShip", "s1", map[string]any{"x": 1, "y": 106, "z": 2, "q": q, "v": []float64{0, 1, 0}, "pilot": true})
+	if s := read(res.Seq); s.Pilot != "1" || s.Y != 106 || s.V[1] != 1 {
+		t.Fatalf("flown %+v", s)
+	}
+	// One pilot at a time
+	if r := st.send(2, "game.flyShip", "s1", map[string]any{"x": 1, "y": 106, "z": 2, "q": q, "pilot": true}); r.Common.Code < 300 || !strings.Contains(r.Common.Message, "someone else") {
+		t.Fatalf("a second pilot: %d %q", r.Common.Code, r.Common.Message)
+	}
+	st.ok("game.flyShip", "s1", map[string]any{"x": 1, "y": 106, "z": 2, "q": q, "pilot": false})
+	if r := st.send(2, "game.flyShip", "s1", map[string]any{"x": 1, "y": 107, "z": 2, "q": q, "pilot": true}); r.Common.Code >= 300 {
+		t.Fatalf("after leaving: %q", r.Common.Message)
+	}
+}

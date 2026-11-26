@@ -946,3 +946,11 @@ The first fight ([Game.md](Game.md) › *Built in S4*). Later game work must:
 - keep combat rules in `combat/Combat.ts`, pure and seeded, so the Node runner (346) can run the same fight on the server;
 - add a creature as a `CREATURES` entry and give people of that kind no dialogue; the viewport treats any creature kind as a foe;
 - decide outcomes from the character's skills, never from the player's aim or reflexes (the user, 2026-11-26).
+
+## Game V3 (forge 360)
+
+The first ship ([Game.md](Game.md) › *Built in V3*). Later game work must:
+
+- keep the flight model in `ship/Ship.ts`, free of rendering, so the Node runner (346) can fly ships on the server;
+- add a design as a JSON file in `features/game/designs/` and its id and block count to `cmd-game-startShip`'s checks (the list of designs and the `{skiff: 27}` table);
+- read the terrain's density as a signed distance, negative inside the ground, as the walker does.

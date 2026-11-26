@@ -6,6 +6,8 @@ import { StatsOverlay } from '../debug/StatsOverlay.ts'
 import { Input } from '../input/Input.ts'
 import { Renderer } from '../render/Renderer.ts'
 import { mulberry32 } from './Noise.ts'
+import { IDLE_HELM, lookQuat, type Helm, type Quat, type ShipDesign, type ShipState } from '../ship/Ship.ts'
+import { type GhostHit, ShipLayer } from '../ship/ShipLayer.ts'
 import type { EditKind, MoonParams, VoxelEdit } from './Types.ts'
 import { VoxelWorld } from './VoxelWorld.ts'
 
@@ -30,6 +32,12 @@ export interface Carried {
 }
 
 export type ViewMode = 'fly' | 'walk'
+
+// What the player asks of a ship (V3); the host sends each as a command
+export type ShipIntent =
+  | { kind: 'start'; id: string; design: string; x: number; y: number; z: number; q: Quat }
+  | { kind: 'place'; id: string; index: number }
+  | { kind: 'fly'; id: string; x: number; y: number; z: number; q: Quat; v: [number, number, number]; pilot: boolean }
 
 export interface CameraState {
   x: number
@@ -57,6 +65,10 @@ export interface VoxelViewportOptions {
   // Start by flying the camera (the editor's view) or walking (V2)
   mode?: ViewMode
   onModeChange?: (m: ViewMode) => void
+  // Ships (V3): what the player asks of them, and who the player is, to
+  // know which ship they fly
+  onShipIntent?: (i: ShipIntent) => void
+  userId?: string
 }
 
 export interface ViewportStats {
@@ -83,6 +95,8 @@ export interface ViewportStats {
   thrustPack: boolean
   gravity: number
   speed: number
+  ships: number
+  piloting: string | null
 }
 
 const MIN_BRUSH = 0.75
@@ -118,6 +132,9 @@ export class VoxelViewport {
   private walker: Walker | null = null
   private carried: Carried | null = null
   private readonly pack: HTMLDivElement
+  readonly shipLayer = new ShipLayer()
+  private ghostHit: GhostHit | null = null
+  private flyTick = 0
 
   private readonly container: HTMLElement
   private readonly renderer: Renderer
@@ -132,6 +149,7 @@ export class VoxelViewport {
     this.input = new Input(canvas)
     this.world = new VoxelWorld({ params: opts.params, viewDistance: opts.viewDistance })
     this.scene.add(this.world.group)
+    this.scene.add(this.shipLayer.group)
     this.scene.background = new THREE.Color(0x05060a)
     this.addLightsAndSky()
     renderer.track(this.fly.camera)
@@ -211,9 +229,15 @@ export class VoxelViewport {
   }
 
   private updateHint(): void {
+    if (this.shipLayer.pilotOf) {
+      this.hint.textContent = this.input.locked
+        ? 'W/S forward and back · A/D sideways · Space up · C down · mouse to turn · Q/E roll · F to leave the seat · Esc: release'
+        : 'Click to fly the ship'
+      return
+    }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -335,9 +359,15 @@ export class VoxelViewport {
 
   private step(dt: number): void {
     const input = this.input
+    if (this.shipLayer.pilotOf && this.shipLayer.body) {
+      this.stepPilot(dt)
+      input.endStep()
+      return
+    }
     if (input.pressed('KeyG') && input.locked) this.setMode(this.mode === 'fly' ? 'walk' : 'fly')
     if (this.mode === 'walk' && this.walker) this.stepWalker(dt)
     else this.fly.step(dt, input)
+    this.stepShipsOnFoot()
     const wheel = input.takeWheel()
     if (wheel !== 0) {
       this.brushRadius = Math.max(MIN_BRUSH, Math.min(MAX_BRUSH, this.brushRadius * (wheel < 0 ? 1.15 : 1 / 1.15)))
@@ -349,6 +379,15 @@ export class VoxelViewport {
       const dir = this.walker ? (({ x, y, z }) => new THREE.Vector3(x, y, z))(this.walker.look()) : this.fly.forward()
       const hit = this.world.raycast(from, dir, this.walker ? HAND_REACH : REACH)
       this.brushHit = hit ? hit.point.clone() : null
+      // An outline block nearer than the ground is placed rather than dug
+      if (this.ghostHit && (!hit || this.ghostHit.distance < hit.distance)) {
+        this.brushHit = null
+        if (input.clicked(0)) {
+          this.opts.onShipIntent?.({ kind: 'place', id: this.ghostHit.ship, index: this.ghostHit.index })
+        }
+        input.endStep()
+        return
+      }
       const digging = input.isButtonDown(0)
       const filling = input.isButtonDown(2)
       this.brushKind = filling && !digging ? 'fill' : digging ? 'dig' : this.brushKind
@@ -365,6 +404,143 @@ export class VoxelViewport {
       this.brushHit = null
     }
     input.endStep()
+  }
+
+  // --- Ships (V3) ---
+
+  private nearSeat: string | null = null
+
+  // On foot: aim at outline blocks, and F sits in a cockpit within reach
+  private stepShipsOnFoot(): void {
+    const input = this.input
+    let ghost: GhostHit | null = null
+    if (input.locked && this.walker) {
+      const l = this.walker.look()
+      const p = this.fly.camera.position
+      ghost = this.shipLayer.pickGhost({ x: p.x, y: p.y, z: p.z }, l, HAND_REACH)
+    }
+    const seat = this.walker ? this.shipLayer.cockpitNear(this.walker.eye()) : null
+    if ((ghost?.index ?? -1) !== (this.ghostHit?.index ?? -1) || ghost?.ship !== this.ghostHit?.ship || seat !== this.nearSeat) {
+      this.ghostHit = ghost
+      this.nearSeat = seat
+      this.shipLayer.aim(ghost)
+      this.updateHint()
+    }
+    if (seat && input.locked && input.pressed('KeyF')) this.sit(seat)
+  }
+
+  // Sits in a ship's cockpit and flies it from here on
+  sit(id: string): boolean {
+    const st = this.shipLayer.ships().find((s) => s.id === id)
+    if (!st || (st.pilot && st.pilot !== (this.opts.userId ?? ''))) return false
+    const body = this.shipLayer.sit(id, this.terrain())
+    if (!body) return false
+    this.ghostHit = null
+    this.shipLayer.aim(null)
+    this.brushHit = null
+    this.sendFly(true)
+    this.updateHint()
+    return true
+  }
+
+  // Leaves the seat, standing beside the cockpit
+  leaveSeat(): void {
+    const id = this.shipLayer.pilotOf
+    if (!id) return
+    const out = this.shipLayer.exitPoint()
+    this.sendFly(false)
+    this.shipLayer.leave()
+    if (this.walker && out) {
+      this.walker.pos = { ...out }
+      this.walker.vel = { x: 0, y: 0, z: 0 }
+    }
+    this.updateHint()
+  }
+
+  private sendFly(pilot: boolean): void {
+    const b = this.shipLayer.body
+    const id = this.shipLayer.pilotOf
+    if (!b || !id) return
+    const s = b.state()
+    const r = (v: number) => Math.round(v * 1000) / 1000
+    this.opts.onShipIntent?.({ kind: 'fly', id, x: r(s.x), y: r(s.y), z: r(s.z), q: s.q.map((c) => Math.round(c * 1e5) / 1e5) as Quat, v: s.v.map(r) as [number, number, number], pilot })
+  }
+
+  // The helm from the keys and mouse: the mouse turns at a rate
+  private helm(): Helm {
+    const input = this.input
+    if (!input.locked) return IDLE_HELM
+    const k = (code: string) => (input.isDown(code) ? 1 : 0)
+    const { dx, dy } = input.takeMouse()
+    const c = (v: number) => Math.max(-1, Math.min(1, v))
+    return {
+      forward: k('KeyW') - k('KeyS'),
+      right: k('KeyD') - k('KeyA'),
+      up: k('Space') - k('KeyC') - k('ControlLeft'),
+      yaw: c(dx * 0.08),
+      pitch: c(-dy * 0.08),
+      roll: k('KeyE') - k('KeyQ'),
+    }
+  }
+
+  private stepPilot(dt: number): void {
+    const input = this.input
+    if (input.locked && input.pressed('KeyF')) {
+      this.leaveSeat()
+      return
+    }
+    this.shipLayer.step(dt, this.helm())
+    this.flyTick -= dt
+    if (this.flyTick <= 0) {
+      this.flyTick = 0.25
+      this.sendFly(true)
+    }
+    const c = this.shipLayer.chase()
+    if (c) {
+      const cam = this.fly.camera
+      cam.position.set(c.eye.x, c.eye.y, c.eye.z)
+      cam.up.set(c.up.x, c.up.y, c.up.z)
+      cam.lookAt(c.look.x, c.look.y, c.look.z)
+      this.fly.position.copy(cam.position)
+    }
+  }
+
+  setShipDesigns(designs: readonly ShipDesign[]): void {
+    this.shipLayer.setDesigns(designs)
+  }
+
+  // The world's ships from the server
+  setShips(ships: readonly ShipState[]): void {
+    this.shipLayer.setShips(ships)
+    // Someone else took the seat (or the ship is gone): stand up
+    const id = this.shipLayer.pilotOf
+    if (id) {
+      const st = ships.find((s) => s.id === id)
+      if (!st || (st.pilot && st.pilot !== (this.opts.userId ?? ''))) this.leaveSeat()
+    }
+  }
+
+  // Starts a ship of a design a few metres ahead, on the ground, facing
+  // the way the player faces; gives its id, or null without a design
+  startShip(design: string): string | null {
+    if (!this.shipLayer.design(design)) return null
+    const t = this.terrain()
+    const w = this.walker
+    const f = w ? w.forward : (({ x, y, z }) => ({ x, y, z }))(this.fly.forward())
+    const from = w ? w.pos : (({ x, y, z }) => ({ x, y, z }))(this.fly.position)
+    const ahead = { x: from.x + f.x * 7, y: from.y + f.y * 7, z: from.z + f.z * 7 }
+    const g = t.gravity(ahead.x, ahead.y, ahead.z, { x: 0, y: 0, z: 0 })
+    const gl = Math.hypot(g.x, g.y, g.z) || 1
+    const up = { x: -g.x / gl, y: -g.y / gl, z: -g.z / gl }
+    const lift = { x: ahead.x + up.x * 20, y: ahead.y + up.y * 20, z: ahead.z + up.z * 20 }
+    const ground = surfaceBelow(t, lift, 80) ?? ahead
+    // its lowest blocks are one below block 0 0 0: stand them on the ground
+    const at = { x: ground.x + up.x * 2.05, y: ground.y + up.y * 2.05, z: ground.z + up.z * 2.05 }
+    const q = lookQuat(f, up)
+    const id = 's' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36)
+    const r = (v: number) => Math.round(v * 1000) / 1000
+    this.opts.onShipIntent?.({ kind: 'start', id, design, x: r(at.x), y: r(at.y), z: r(at.z), q: q.map((c) => Math.round(c * 1e5) / 1e5) as Quat })
+    return id
   }
 
   private sendEdit(kind: EditKind, at: THREE.Vector3): void {
@@ -389,8 +565,12 @@ export class VoxelViewport {
     })
   }
 
+  private lastFrame = performance.now()
   private render(alpha: number): void {
-    if (this.mode === 'fly') this.fly.apply(alpha)
+    if (this.mode === 'fly' && !this.shipLayer.pilotOf) this.fly.apply(alpha)
+    const now = performance.now()
+    this.shipLayer.frame(Math.min(0.1, (now - this.lastFrame) / 1000))
+    this.lastFrame = now
     this.world.update(this.fly.camera.position)
     if (this.brushHit) {
       this.brush.visible = true
@@ -550,7 +730,13 @@ export class VoxelViewport {
       grounded: this.walker?.grounded ?? false,
       thrustPack: this.walker?.thrustPack ?? false,
       gravity: this.walker ? Math.hypot(this.walker.gravity.x, this.walker.gravity.y, this.walker.gravity.z) : 0,
-      speed: this.walker ? Math.hypot(this.walker.vel.x, this.walker.vel.y, this.walker.vel.z) : 0,
+      speed: this.shipLayer.body
+        ? Math.hypot(this.shipLayer.body.v.x, this.shipLayer.body.v.y, this.shipLayer.body.v.z)
+        : this.walker
+          ? Math.hypot(this.walker.vel.x, this.walker.vel.y, this.walker.vel.z)
+          : 0,
+      ships: this.shipLayer.ships().length,
+      piloting: this.shipLayer.pilotOf,
     }
   }
 
@@ -560,6 +746,7 @@ export class VoxelViewport {
     document.removeEventListener('pointerlockchange', this.onLockChange)
     this.input.dispose()
     this.world.dispose()
+    this.shipLayer.dispose()
     this.setRemoteCameras([])
     this.overlay?.dispose()
     this.crosshair.remove()
