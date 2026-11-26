@@ -65,6 +65,7 @@ export type ShipIntent =
   | { kind: 'stand'; x: number; y: number; z: number; needs?: Needs } // V8: save where the player stands (V10: and their needs)
   | { kind: 'eat' } // V10: one ration from the pack
   | { kind: 'forage'; what: 'fish' | 'hunt'; animal?: string; x: number; y: number; z: number } // V12: a fish caught, a grazer hunted
+  | { kind: 'sleep'; id: string } // V13: a night in a cabin's bed
   | { kind: 'plant'; x: number; y: number; z: number } // V9: barley in the planet's soil
   | { kind: 'harvest'; crop: string } // V9: a ripe crop, as food
 
@@ -573,7 +574,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -586,7 +587,9 @@ export class VoxelViewport {
 
   private terrain(): WalkerTerrain {
     const w = this.world
-    return { density: (x, y, z) => w.densityAt(x, y, z), gravity: (x, y, z, out) => w.generator.gravity(x, y, z, out) }
+    // V13: buildings' blocks are solid to the walker as the ground is
+    const ships = this.shipLayer
+    return { density: (x, y, z) => Math.min(w.densityAt(x, y, z), ships.densityAt({ x, y, z })), gravity: (x, y, z, out) => w.generator.gravity(x, y, z, out) }
   }
 
   get viewMode(): ViewMode {
@@ -775,6 +778,7 @@ export class VoxelViewport {
   // --- Ships (V3) ---
 
   private nearSeat: string | null = null
+  private nearBed: string | null = null
 
   // What a ship within reach offers: its hold and its refinery (V4)
   private nearShip: ShipState | null = null
@@ -823,6 +827,13 @@ export class VoxelViewport {
       this.updateHint()
     }
     if (seat && input.locked && input.pressed('KeyF')) this.sit(seat)
+    // V13: F by a cabin's bed sleeps in it
+    const bed = this.walker && !seat ? this.shipLayer.bedNear(this.walker.pos) : null
+    if (bed !== this.nearBed) {
+      this.nearBed = bed
+      this.updateHint()
+    }
+    if (bed && input.locked && input.pressed('KeyF')) this.sleepIn(bed)
     const near = this.walker ? this.shipLayer.shipNear(this.walker.eye()) : null
     if (near?.id !== this.nearShip?.id || near?.seq !== this.nearShip?.seq) {
       this.nearShip = near
@@ -911,6 +922,14 @@ export class VoxelViewport {
     if (this.needs.health <= 0) this.blackOut()
   }
 
+  // V13: a night in a cabin's bed: full health, and the cabin is home
+  sleepIn(id: string): void {
+    this.needs = { ...this.needs, health: 100 }
+    this.opts.onShipIntent?.({ kind: 'sleep', id })
+    this.saveStand(true)
+    this.flashHint('You sleep a while in the cabin. You wake rested; this cabin is home now')
+  }
+
   // E: one ration from the pack, when there is one and it would help
   private eatRation(): void {
     if ((this.carried?.food ?? 0) < 1) {
@@ -940,7 +959,12 @@ export class VoxelViewport {
     if (this.riding) this.opts.onShipIntent?.({ kind: 'crew', id: this.riding, aboard: false })
     const w = this.walker
     this.needs = { air: 100, fed: Math.max(this.needs.fed, 40), health: 60 }
-    if (w && this.outpostPlaced) {
+    // V13: home is the cabin whose bed they last slept in, while it stands
+    const home = this.progress?.home ? this.shipLayer.bedPoint(this.progress.home) : null
+    if (w && home) {
+      w.pos = home
+      w.vel = { x: 0, y: 0, z: 0 }
+    } else if (w && this.outpostPlaced) {
       const g = this.outpost.giver()
       w.pos = { x: g.x + 3, y: g.y + 0.5, z: g.z + 3 }
       w.vel = { x: 0, y: 0, z: 0 }
@@ -949,7 +973,7 @@ export class VoxelViewport {
     const fade = document.createElement('div')
     fade.dataset.blackout = ''
     fade.style.cssText = 'position:absolute;inset:0;background:#000;opacity:1;transition:opacity 2.5s;z-index:3;display:flex;align-items:center;justify-content:center;font:16px Georgia,serif;color:#ddd'
-    fade.textContent = 'You black out. The outpost\'s medic brings you round.'
+    fade.textContent = home ? 'You black out, and come round in your own bed.' : 'You black out. The outpost\'s medic brings you round.'
     this.container.appendChild(fade)
     setTimeout(() => (fade.style.opacity = '0'), 1200)
     setTimeout(() => fade.remove(), 4000)
@@ -1108,6 +1132,8 @@ export class VoxelViewport {
 
   setProgress(p: Progress | null): void {
     const before = this.progress
+    // a player who has only stood or slept somewhere has no contracts, xp or levels yet
+    if (p) p = { ...p, done: p.done ?? {}, xp: p.xp ?? {}, levels: p.levels ?? {} }
     this.progress = p
     if (before && p) {
       for (const [skill, lv] of Object.entries(p.levels)) {

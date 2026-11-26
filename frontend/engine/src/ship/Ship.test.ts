@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
-import { axisAngle, IDLE_HELM, lookQuat, rotate, ShipBody, type ShipDesign, type ShipTerrain } from './Ship.ts'
+import { axisAngle, buildingDistance, IDLE_HELM, lookQuat, rotate, ShipBody, type ShipDesign, type ShipTerrain } from './Ship.ts'
 
 const skiff = JSON.parse(readFileSync(new URL('../../../../backend/features/game/designs/skiff.json', import.meta.url), 'utf8')) as ShipDesign
 const all = skiff.blocks.map((_, i) => i)
@@ -111,4 +111,18 @@ test('a finished hauler holds six holds and still hovers on the moon (V8)', () =
   assert.ok(b.reach().y[1] > 1.62 * 2, `lift ${b.reach().y[1]}`)
   run(b, 5)
   assert.ok(Math.abs(b.y - 10) < 0.5, `holds its height: ${b.y}`)
+})
+
+test('a cabin is solid to the walker but for its doorway, and holds them up on its roof', () => {
+  const cabin = JSON.parse(readFileSync(new URL('../../../../backend/features/game/designs/cabin.json', import.meta.url), 'utf8')) as ShipDesign
+  const placed = cabin.blocks.map((_, i) => i)
+  const pose = { x: 10, y: 0, z: 0, q: [0, 0, 0, 1] as [number, number, number, number] }
+  assert.equal(cabin.static, true)
+  // inside the back wall, and in the open doorway
+  assert.ok(buildingDistance(cabin, placed, pose, { x: 10, y: 0, z: 2 }) < 0)
+  assert.ok(buildingDistance(cabin, placed, pose, { x: 10, y: -1, z: -2 }) > 0.4)
+  // just above the roof: half a metre over it
+  assert.ok(Math.abs(buildingDistance(cabin, placed, pose, { x: 10, y: 2, z: 0 }) - 0.5) < 1e-9)
+  // nothing placed, nothing solid
+  assert.equal(buildingDistance(cabin, [], pose, { x: 10, y: 0, z: 2 }), Infinity)
 })

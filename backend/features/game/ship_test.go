@@ -323,3 +323,30 @@ func TestJobBoard(t *testing.T) {
 		t.Fatalf("freighter %+v", s)
 	}
 }
+
+// V13: a cabin is a building on the planet; sleeping in its bed heals and makes it home
+func TestCabin(t *testing.T) {
+	d, ok := game.DesignOf("cabin")
+	if !ok || !d.Static || d.Check() != "" || d.Blocks[73].Type != "bed" || len(d.Blocks) != 74 {
+		t.Fatalf("cabin %+v", d)
+	}
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Cabin moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	if r := st.refused("game.startShip", "c1", map[string]any{"world": world, "design": "cabin", "x": 0, "y": 104, "z": 0, "q": q}); !strings.Contains(r.Common.Message, "planet") {
+		t.Fatalf("cabin on the moon: %q", r.Common.Message)
+	}
+	st.ok("game.startShip", "c1", map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": 0, "q": q})
+	st.ok("game.startShip", "s1", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 104, "z": 0, "q": q})
+	st.refused("game.sleep", "s1", map[string]any{})
+	if r := st.refused("game.sleep", "c1", map[string]any{}); !strings.Contains(r.Common.Message, "bed") {
+		t.Fatalf("sleep before the bed: %q", r.Common.Message)
+	}
+	st.ok("game.standAt", world, map[string]any{"x": 1600, "y": 142, "z": 0, "needs": map[string]any{"air": 100, "fed": 50, "health": 20}})
+	st.ok("game.placeBlock", "c1", map[string]any{"index": 73})
+	res := st.ok("game.sleep", "c1", map[string]any{})
+	var p game.Player
+	if !st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p) || p.Home != "c1" || p.Needs == nil || p.Needs.Health != 100 || p.Needs.Fed != 50 {
+		t.Fatalf("player %+v %+v", p, p.Needs)
+	}
+}

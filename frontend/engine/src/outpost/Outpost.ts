@@ -33,6 +33,7 @@ export interface Progress {
   at?: [number, number, number] // V8: where the player last stood; missing until they land
   needs?: { air: number; fed: number; health: number } // V10: their body's needs when last saved
   jobs?: Record<string, number> // V11: how many times they did each job
+  home?: string // V13: the cabin whose bed they last slept in
 }
 
 export const OUTPOST_REACH = 40

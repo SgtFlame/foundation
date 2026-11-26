@@ -1,0 +1,260 @@
+{
+  "id": "cmd-game-sleep",
+  "name": "game.sleep",
+  "description": "Decides a night in a cabin's bed: the sender heals and the cabin becomes their home.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.sleep",
+    "title": "Sleep in a cabin's bed",
+    "description": "Sleeps in the bed of a cabin (V13); the target is the cabin's id (a ship of the cabin design). Heals the sender to full health and makes the cabin their home: game.player gives it as home, and a blackout wakes them there instead of at the outpost. Refused for a ship that is not a cabin, or one whose bed is not placed yet.",
+    "args": {
+      "type": "object",
+      "properties": {}
+    },
+    "area": "game",
+    "targetType": "gameShip",
+    "projection": "game.ships",
+    "action": "game.play",
+    "events": [
+      "slept"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "shipKey",
+      "type": "data.expression",
+      "title": "Ship key",
+      "position": {
+        "x": 250,
+        "y": 150
+      },
+      "config": {
+        "expr": "\"gameShip.\" + target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ship",
+      "type": "live.readProjection",
+      "title": "Read the cabin",
+      "position": {
+        "x": 500,
+        "y": 150
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why it is refused",
+      "position": {
+        "x": 800,
+        "y": 150
+      },
+      "config": {
+        "expr": "!found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a bed\" : !(73 in ship.placed) ? \"the cabin's bed is not placed yet\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Allowed?",
+      "position": {
+        "x": 1050,
+        "y": 150
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "position": {
+        "x": 1300,
+        "y": 0
+      }
+    },
+    {
+      "id": "slept",
+      "type": "data.expression",
+      "title": "Slept",
+      "position": {
+        "x": 1300,
+        "y": 350
+      },
+      "config": {
+        "expr": "{world: ship.world}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "position": {
+        "x": 1600,
+        "y": -100
+      },
+      "config": {
+        "event": "slept"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "position": {
+        "x": 1600,
+        "y": 150
+      },
+      "config": {
+        "path": "args",
+        "fix": "place the cabin's bed (block 73) with game.placeBlock first"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "shipKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "shipKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ship",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "check",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "slept",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "slept",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    }
+  ]
+}

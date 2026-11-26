@@ -267,6 +267,16 @@ The story game's tenth tracer bullet: a three-card reading for Wenlan Harrow (th
 - **In the viewport**: once the first day is over (`sleep`), clicking Wenlan opens the reading instead of his talk; the choice reaches `reading` with `told`. On the farmstead a willow bough lies across the culvert at the east field's low corner and water stands over the barley; walking up to the bough clears it and reaches `ditch`, and Wenlan pays a silver.
 - **Server**: `StorySteps` gains `reading` and `ditch`; `game.reachStory` takes `told` (`all` or `ditch`), kept as `told` in `game.story`, and the first `ditch` adds one `silver` to `items`.
 
+## Built in V13 (forge 360)
+
+The voxel game's thirteenth tracer bullet: a cabin on the planet with air (the user's progression: a cabin), and the engine's first **buildings**.
+
+- **Static designs**: a `ShipDesign` with `static: true` is a building: no cockpit (`ShipDesign.Check`), never flown, and its placed blocks are **solid to the walker** (`buildingDistance` in `ship/Ship.ts`, a box distance per placed block, taken as the lesser with the terrain's in the viewport's walker terrain), so walls stop the player and a roof holds them up; `door` blocks stay open. New block types `log`, `door` (an open frame) and `bed` (a slab half a block high with a pillow).
+- **The cabin** (`designs/cabin.json`, 74 blocks): walls three logs high with a doorway at the front, a roof with a lamp, and a bed (block 73). `game.startShip` builds it only on the planet (120 to 160 m from its centre).
+- **`game.sleep`** (`cmd-game-sleep`, target the cabin) refuses a ship that is not a cabin or a cabin without its bed; it emits `slept`, which `game.players` folds into `home` and full health. In play, F by the bed sleeps (*F: sleep in the bed*), and a blackout wakes the player by their home's bed instead of at the outpost.
+- Fixed on the way: a player who has only stood or slept somewhere has no `levels`, which broke the viewport's progress (it now fills the empty maps).
+- Known: a building is placed as a ship is (ahead of the player, its lowest blocks half sunk), so on a slope its downhill side floats a little, and a second building started where one stands goes on its roof.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

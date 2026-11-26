@@ -34,6 +34,7 @@ const (
 	EventShipRefined    = "refined" // {world, rock, iron, charge} (V4: the changes)
 	EventShipDamaged    = "damaged" // {world, blocks} (V5: the indices a crash broke)
 	EventShipCrewed     = "crewed"  // {world, user, aboard} (V7: who boards or leaves the crew seat)
+	EventSlept          = "slept"   // {world} (V13: the sender slept in this cabin's bed: their home)
 )
 
 // ShipDesign is a premade ship: its blocks in its own grid, x right, y up
@@ -44,10 +45,13 @@ type ShipDesign struct {
 	Description string        `json:"description"`
 	BlockSize   float64       `json:"blockSize"`
 	Blocks      []DesignBlock `json:"blocks"`
+	// V13: a building (a static grid): never flown, no cockpit
+	Static bool `json:"static,omitempty"`
 }
 
-// DesignBlock is one block of a design: armor, cockpit, gyro, light or
-// thruster (push: the way it pushes the ship: up, down, forward, back,
+// DesignBlock is one block of a design: armor, cockpit, gyro, light,
+// battery, cargo, refinery, solar, a building's log, door (an opening) or
+// bed (V13), or thruster (push: the way it pushes the ship: up, down, forward, back,
 // left, right).
 type DesignBlock struct {
 	Type string `json:"type"`
@@ -131,7 +135,7 @@ func (d ShipDesign) Check() string {
 		switch b.Type {
 		case "cockpit":
 			cockpits++
-		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar":
+		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar", "log", "door", "bed":
 		case "thruster":
 			switch b.Push {
 			case "up", "down", "forward", "back", "left", "right":
@@ -141,6 +145,12 @@ func (d ShipDesign) Check() string {
 		default:
 			return fmt.Sprintf("blocks %d: unknown block type %q", i, b.Type)
 		}
+	}
+	if d.Static {
+		if cockpits != 0 {
+			return "a building has no cockpit"
+		}
+		return ""
 	}
 	if cockpits != 1 {
 		return "a design has one cockpit"
