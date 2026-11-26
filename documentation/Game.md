@@ -164,6 +164,13 @@ The voxel game's seventh tracer bullet: a second player crews the ship (a thin 3
 - **The crew's job**: `game.refineShip` now also runs while the ship is flown when its sender is the crew, so one player flies and the other refines.
 - **In the viewport**: B beside a finished ship boards it. The rider's camera follows the ship as others see it move (`ShipLayer.ride`), R refines and B leaves, standing on the ship's right (`ShipLayer.exitOf`). The pack panel shows the ship's line. Stats add `crew`.
 
+## Built in V8, first part (forge 360)
+
+The start of "the first hour above, end to end": a guide that leads a new player through V1 to V7's play.
+
+- **`objectives/FirstHour.ts`**: `firstHour(input)` works out nine steps (set foot on the moon, dig, lay out a skiff, build it, fly it, report to the outpost, build a prospector, refine iron, bring iron for the beacon) from what the server already keeps (the pack, the world's ships, `game.player`) and what this window saw (walking, flying). A later step done counts the earlier ones, so the list only moves forward. Nothing new is stored on the server.
+- **The panel** (`FirstHourPanel`, `data-first-hour`, a row per step with `data-step` and `data-done`) shows while walking, flying or riding, with the current step's how-to; J hides it. Stats add `firstHour`, the ids done.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

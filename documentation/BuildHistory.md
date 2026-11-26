@@ -993,3 +993,10 @@ A second player crews the ship ([Game.md](Game.md) › *Built in V7*). Later gam
 
 - give a design more crew seats by its entry in `cmd-game-crewShip`'s seat table, and a crew station's work by a check on `ship.crew` in that work's blueprint (refining is the first);
 - keep the rider's camera on the ship's eased pose, so a crew member sees what everyone else sees, not a second simulation.
+
+## Game V8, first part (forge 360)
+
+The first-hour guide ([Game.md](Game.md) › *Built in V8, first part*). Later game work must:
+
+- add a step to `firstHour` when a slice adds play a new player must learn, derived from server state where it can be;
+- keep the steps in order so a later step done implies the earlier ones.
