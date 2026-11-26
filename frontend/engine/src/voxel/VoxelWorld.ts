@@ -154,7 +154,10 @@ export class VoxelWorld {
           if (!editTouchesChunk(e, cx, cy, cz, this.params.voxelSize)) continue
           const k = chunkKey(cx, cy, cz)
           const list = this.editsByChunk.get(k) ?? []
-          list.push(e)
+          // Edits apply in the server's order: one that arrives late goes in place.
+          let i = list.length
+          while (i > 0 && list[i - 1].seq > e.seq) i--
+          if (list[i - 1]?.seq !== e.seq) list.splice(i, 0, e)
           this.editsByChunk.set(k, list)
           keys.push(k)
         }

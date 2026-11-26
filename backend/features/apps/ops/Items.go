@@ -98,6 +98,20 @@ func itemsOf(command string, raw json.RawMessage, add func(kind, key string)) {
 		}
 	}
 	switch family {
+	case "game": // game worlds (forge 360 V1): made, deleted and restored whole, changed per field
+		switch name {
+		case "createWorld", "deleteWorld", "restoreWorld":
+			add("", "")
+		default:
+			if g, ok := a["generator"].(map[string]any); ok {
+				for k := range g {
+					add("field", "generator."+k)
+				}
+			}
+			if _, ok := a["name"]; ok {
+				add("field", "name")
+			}
+		}
 	case "prefab":
 		switch name {
 		case "setInfo":

@@ -218,7 +218,8 @@ func contributeWorlds(reg *extensions.Registry) {
 			undo["name"] = w.Name
 		}
 		if c.Generator != nil {
-			undo["generator"] = w.Generator
+			// Only the fields it changes, so undoing leaves others' changes
+			undo["generator"] = changedFields(w.Generator, *c.Generator)
 		}
 		d.Undo("", live.OpOf("game.setWorld", d.Target.ID, undo))
 		return []live.NewEvent{{Type: EventChanged, Data: c}}, nil
@@ -318,4 +319,20 @@ func liveWorlds(f live.Feed) error {
 		}
 	}
 	return nil
+}
+
+// changedFields is old's value of each field that differs in new.
+func changedFields(old, new Moon) map[string]any {
+	var a, b map[string]any
+	ra, _ := json.Marshal(old)
+	rb, _ := json.Marshal(new)
+	_ = json.Unmarshal(ra, &a)
+	_ = json.Unmarshal(rb, &b)
+	out := map[string]any{}
+	for k, v := range a {
+		if b[k] != v {
+			out[k] = v
+		}
+	}
+	return out
 }
