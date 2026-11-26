@@ -19,6 +19,7 @@ import { dragMarks, drawCard, herbSpots, howl, nextStep, showCard, showHerbal, S
 import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../story/DayCard.ts'
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
+import { HEART, nextWaking, ringSpot, STARLORE_LINE, starlorePool, stonePoints, STONES_MEMORY, stonesWake } from '../story/Stones.ts'
 import { clarity, ditchSpot, ReadingScene, wenlanAnswer, type Told } from '../story/Reading.ts'
 import { canSleep, CLOCK_START, clockText, FIRST_NIGHT, isDay, nightOf, showAlmanac, sleep, stepClock, type Clock } from '../story/Clock.ts'
 import { BODY_START, BodyHud, breathe, BreathPrompt, humPool, rounded as roundBody, showCooking, stepBody, type Body } from '../story/Hum.ts'
@@ -238,6 +239,10 @@ export class AreaViewport {
   private focus = false // S12: F held
   private readonly storyPanel: FirstHourPanel
   private readonly marks = new THREE.Group()
+  private readonly stones = new THREE.Group() // S18: the Nine Sisters
+  private stonesAwake: boolean | null = null
+  private ringHeart: { x: number; z: number } | null = null
+  private ringVisited = false
   private signature: Point | null = null
   private barnDoor: Point | null = null
   private resumeAt: { area: string; at: Point } | null = null
@@ -296,7 +301,7 @@ export class AreaViewport {
     this.nightHud = new NightHud(container)
     this.weapon = opts.weapon ?? 'sword'
     this.skills = opts.skills ?? STARTING_SKILLS
-    this.scene.add(this.ash, this.marks, this.herbs)
+    this.scene.add(this.ash, this.marks, this.herbs, this.stones)
     this.storyPanel = new FirstHourPanel(container, 96)
     this.storyPanel.title = 'Your story'
     this.bodyHud = new BodyHud(container, 116)
@@ -545,6 +550,8 @@ export class AreaViewport {
       this.resumeAt = null
       this.marks.clear()
       this.herbs.clear()
+      this.stones.clear()
+      this.stonesAwake = null
       this.herbal?.remove()
       this.herbal = null
       this.senses?.dispose()
@@ -1604,7 +1611,7 @@ export class AreaViewport {
   }
 
   private humPool(): number {
-    return humPool(this.night) + (this.story ? this.dayEffect().hum : 0)
+    return humPool(this.night) + (this.story ? this.dayEffect().hum + starlorePool(this.night, !!this.story.items.starlore) : 0)
   }
 
   // S11: the day's card and its light buff or warning (none before the first morning)
@@ -1734,7 +1741,7 @@ export class AreaViewport {
     // S17: the veteran walks with you from now on
     if (this.story && was === VETERAN.id && !this.story.done.companion) {
       this.reach('companion')
-      this.say(`${VETERAN.name}, ${VETERAN.title}, picks up his pike and falls in a step behind you. In a fight he takes the flank.`)
+      this.say(`${VETERAN.name}, ${VETERAN.title}, picks up his pike and falls in a step behind you. In a fight he takes the flank. On the road he nods at the rise by the signpost: "Nine stones up there. The old folk say they wake when the little moon is full."`)
       return
     }
     // S15: the knot of the last sheaf, Wenlan's thanks
@@ -1760,6 +1767,7 @@ export class AreaViewport {
   private drawMarks(): void {
     this.marks.clear()
     this.drawHerbs()
+    this.drawStones()
     const st = this.story
     if (!st || this.area.id !== st.area || !st.done.howl) return
     const c = this.set.cell
@@ -1928,8 +1936,83 @@ export class AreaViewport {
         this.say('The furrows end at the barn. Two of them, hunched in the snow, turn toward you. Ember eyes.')
       }
     }
+    this.stepStones(p)
     this.stepSenses(p)
     this.savePlace()
+  }
+
+  // S18: the Nine Sisters, on the open ground nearest the signpost, once
+  // the veteran has told of them
+  private drawStones(): void {
+    this.stones.clear()
+    this.stonesAwake = null
+    this.ringHeart = null
+    const st = this.story
+    if (!st || this.area.id !== st.area || !st.done.companion) return
+    const sign = Object.values(this.area.pieces).find((p) => p.piece === 'signpost')
+    const pieces = Object.values(this.area.pieces)
+    const sizeOf = (p: { piece: string; rot: number }) => {
+      const piece = pieceOf(this.set, p.piece)
+      return piece ? turned(piece, p.rot) : { w: 1, d: 1 }
+    }
+    const heart = ringSpot(pieces, sizeOf, this.area.width, this.area.depth, this.set.cell, sign ?? { x: 0, z: 0 })
+    if (!heart) return
+    this.ringHeart = heart
+    const stone = new THREE.MeshStandardNodeMaterial({ color: 0x7d8278, roughness: 1 })
+    const lichen = new THREE.MeshStandardNodeMaterial({ color: 0x8f9a5c, roughness: 1 })
+    const pine = new THREE.MeshStandardNodeMaterial({ color: 0x2f4a32, roughness: 0.9 })
+    for (const [i, s] of stonePoints(heart).entries()) {
+      const g = new THREE.Group()
+      const h = 2.2 + ((i * 5) % 3) * 0.35
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, h, 0.55), stone)
+      body.position.y = h / 2
+      const patch = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.5, 0.57), lichen)
+      patch.position.y = h * 0.35
+      const crown = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.1, 6), pine)
+      crown.position.y = h + 0.5
+      g.add(body, patch, crown)
+      g.position.set(s.x, 0, s.z)
+      g.rotation.set(s.tilt, Math.atan2(s.x - heart.x, s.z - heart.z), 0)
+      g.userData.stone = true
+      this.stones.add(g)
+    }
+    const glow = new THREE.Mesh(new THREE.RingGeometry(3.6, 4.8, 36).rotateX(-Math.PI / 2), new THREE.MeshBasicNodeMaterial({ color: 0x9fc4ff, transparent: true, opacity: 0.35, depthWrite: false }))
+    glow.position.set(heart.x, 0.06, heart.z)
+    glow.visible = false
+    glow.userData.wake = true
+    this.stones.add(glow)
+  }
+
+  // S18: the stones wake at the lesser full moon; at the ring's heart then, the ground remembers
+  private stepStones(p: { x: number; z: number }): void {
+    const st = this.story!
+    const heart = this.ringHeart
+    if (!heart) return
+    const awake = stonesWake(this.night, isDay(st.clock))
+    if (awake !== this.stonesAwake) {
+      this.stonesAwake = awake
+      for (const c of this.stones.children) if (c.userData.wake) c.visible = awake && !st.done.stones
+      if (awake && !st.done.stones) this.say('The lesser moon is full. Up by the signpost, something hums, low, like a held note.')
+    }
+    const inside = Math.hypot(p.x - heart.x, p.z - heart.z) < HEART
+    if (!inside) {
+      this.ringVisited = false
+      return
+    }
+    if (st.done.stones || this.ringVisited || this.combat) return
+    this.ringVisited = true
+    if (!awake) {
+      const n = nextWaking(this.night)
+      this.say(`Nine lichened stones, pines on their crowns. The ground under them feels like it is listening. ${n === this.night ? 'They wake after dark tonight.' : `The lesser moon is full in ${n - this.night} night${n - this.night === 1 ? '' : 's'}.`}`)
+      return
+    }
+    this.path = []
+    showDream(this.container, STONES_MEMORY, () => {
+      st.items.starlore = 1
+      this.reach('stones')
+      for (const c of this.stones.children) if (c.userData.wake) c.visible = false
+      this.say(STARLORE_LINE)
+    })
   }
 
   // S12: what there is to smell and hear in the story's area now
@@ -1948,6 +2031,9 @@ export class AreaViewport {
       for (const h of herbSpots(this.area.pieces, this.set.cell)) {
         if (!st.picked[h.spot]) out.push({ id: `herb-${h.spot}`, x: h.x, z: h.z, sense: 'smell', text: `${h.herb.title}, green on the air`, from: 'by the trees', range: 18 })
       }
+    }
+    if (this.ringHeart && this.stonesAwake && !st.done.stones) {
+      out.push({ id: 'stones', ...this.ringHeart, sense: 'sound', text: 'A low hum, like a held note', from: 'from the stones by the signpost', range: 45 })
     }
     if (st.done.reading && !st.done.ditch) {
       const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())

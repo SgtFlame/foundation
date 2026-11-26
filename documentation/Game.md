@@ -401,6 +401,15 @@ The forge: ore becomes iron over time, the second rung of the crafting ladder af
 - `game.takeIngots` (`cmd-game-takeIngots`): once 45 s a m³ have passed (`SmeltMs`), takes 0.8 m³ of iron a m³ of ore (`IronYield`) into the pack (event `ingots {world, iron, pack}`); refused while smelting or without room. The pack gains `iron`, which counts against its 4 m³ in `game.editTerrain`, `game.salvage` and `game.downDrone`.
 - Engine: `craft/Forge.ts` (`forgeAction`, `smeltLeft`, `ironFrom`), the forge's mesh (a stone furnace with a glowing mouth and a chimney), `ShipLayer.forgeNear`, and U at the forge in `VoxelViewport` (`forgeAt`, `forgeHint`: "The forge is smelting: n s left"). `TestForge` covers it.
 
+## Built in S18 (forge 375)
+
+The Nine Sisters†, the design's ring of nine lichened standing stones where "the ground remembers", a ritual site the moons wake (the play design: the moons set "when the Nine Sisters wake").
+
+- **The ring** (`story/Stones.ts`): nine stones crowned with pines on the free 3 × 3 cells nearest the signpost (`ringSpot`, `stonePoints`), shown in the story's area once the veteran has joined. When he joins he tells of them: they wake when the little moon is full.
+- **Waking**: on a night the lesser moon is more than 90 % lit (`stonesWake`, `nextWaking`), a pale ring glows on the ground, the caption says something hums by the signpost, and the senses layer hears it.
+- **Remembering**: at the ring's heart on such a night, the ground gives up a memory (`STONES_MEMORY`, shown like a dream): the queen of the First Flight, silver charms in her braids, naming the winter stars for a child and telling her the Wanderer is a world, not a star. It is the new last step **`stones`** (`game.reachStory` takes it), and `game.story`'s `items.starlore` is 1. On other nights the ring says how many nights until the lesser moon is full.
+- **Star lore**: on nights the lesser moon is more than half lit, the Hum pool holds one more (`starlorePool`).
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

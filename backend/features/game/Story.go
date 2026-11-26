@@ -31,7 +31,7 @@ const (
 
 // StorySteps are the first hour's steps in order (375 › the first hour).
 // S7 adds the first day: the morning's card, foraging and the herbal.
-var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch", "foretold", "watch", "defended", "thanked", "dream", "companion"}
+var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch", "foretold", "watch", "defended", "thanked", "dream", "companion", "stones"}
 
 // S10: the step that pays for Wenlan's reading, and the coin it pays
 const (
@@ -45,6 +45,10 @@ const (
 	// night (spent with use: wound)
 	StepDream = "dream"
 	Wound     = "wound"
+	// S18: the Nine Sisters remember at a lesser full moon, and the star
+	// lore they give, which makes card readings clearer
+	StepStones = "stones"
+	Starlore   = "starlore"
 )
 
 // StoryItems are what a player may gather in a story (S7: herbs for the herbal).
@@ -124,6 +128,12 @@ func foldStory(f live.Fold) (json.RawMessage, error) {
 			p.Items = map[string]int{}
 		}
 		p.Items[Wound] = 1
+	}
+	if d.Step == StepStones && !p.Done[StepStones] {
+		if p.Items == nil {
+			p.Items = map[string]int{}
+		}
+		p.Items[Starlore] = 1
 	}
 	if d.Told != "" {
 		p.Told = d.Told

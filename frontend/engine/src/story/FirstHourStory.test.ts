@@ -32,7 +32,8 @@ test('a later step done counts the earlier ones, and the next is the first left'
   assert.equal(nextStep({ defended: true }), 'thanked')
   assert.equal(nextStep({ thanked: true }), 'dream')
   assert.equal(nextStep({ dream: true }), 'companion')
-  assert.equal(nextStep({ companion: true }), null)
+  assert.equal(nextStep({ companion: true }), 'stones')
+  assert.equal(nextStep({ stones: true }), null)
 })
 
 test('three herbs grow by the farmstead trees, one per tree, the same each time (S7)', () => {

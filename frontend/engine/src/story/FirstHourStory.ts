@@ -46,6 +46,8 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'dream', title: 'A dream at the ford', how: "Sleep in the empty cottage at Hawk's Rest: stand by its hearth after 19:00 and press R." },
   // S17: the first companion
   { id: 'companion', title: 'Someone to take the flank', how: "The morning after the dream, someone knocks at the cottage door at Hawk's Rest. Answer, and ask them to walk with you." },
+  // S18: the Nine Sisters
+  { id: 'stones', title: 'The Nine Sisters', how: 'On a night of the lesser full moon (the almanac, M, shows when), stand at the heart of the ring of nine stones by the signpost.' },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

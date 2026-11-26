@@ -99,4 +99,9 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "companion" {
 		t.Fatalf("companion %+v", p)
 	}
+	// S18: the Nine Sisters remember, and give star lore
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "stones", "area": farm, "x": 12, "z": 4})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "stones" || p.Items["starlore"] != 1 {
+		t.Fatalf("stones %+v", p)
+	}
 }
