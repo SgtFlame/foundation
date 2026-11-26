@@ -66,6 +66,12 @@ func Resolve(d Dials, presets []Preset, defaults Options) Options {
 // with o's. It never widens: a source o does not search stays off.
 func (o Options) Narrow(pin Options) Options {
 	o.VolumeIDs = pin.VolumeIDs
+	if len(pin.Collections) > 0 {
+		o.Collections = Within(o.Collections, pin.Collections)
+	}
+	if len(pin.Partitions) > 0 {
+		o.Partitions = pin.Partitions
+	}
 	if len(pin.Sources) == 0 {
 		return o
 	}
@@ -84,6 +90,28 @@ func (o Options) Narrow(pin Options) Options {
 	}
 	o.Sources = out
 	return o
+}
+
+// Within is what a narrowing leaves of a list where empty means every one
+// (forge 18f: collections): want when have is empty, else what both name,
+// ["none"] when nothing is left, so it never widens.
+func Within(have, want []string) []string {
+	if len(want) == 0 {
+		return have
+	}
+	if len(have) == 0 {
+		return want
+	}
+	out := []string{}
+	for _, w := range want {
+		if slices.Contains(have, w) && !slices.Contains(out, w) {
+			out = append(out, w)
+		}
+	}
+	if len(out) == 0 {
+		return []string{"none"}
+	}
+	return out
 }
 
 func clampInt(v, lo, hi int) int {

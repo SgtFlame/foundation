@@ -6,6 +6,13 @@ import FlagIcon from '@mui/icons-material/Flag'
 import CategoryIcon from '@mui/icons-material/Category'
 import SyncIcon from '@mui/icons-material/Sync'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
+// Branches and merges (forge 18d)
+import MergeIcon from '@mui/icons-material/Merge'
+import CallSplitIcon from '@mui/icons-material/CallSplit'
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
+// Meetings (forge 18e)
+import RecordVoiceOverIcon from '@mui/icons-material/RecordVoiceOver'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
 // Discussions (forge 18c)
 import FormatQuoteIcon from '@mui/icons-material/FormatQuote'
 import DoneAllIcon from '@mui/icons-material/DoneAll'
@@ -149,6 +156,9 @@ export const icons: Record<string, ComponentType<SvgIconProps>> = {
   category: CategoryIcon,
   sync: SyncIcon,
   person_add: PersonAddIcon,
+  merge: MergeIcon,
+  call_split: CallSplitIcon,
+  compare_arrows: CompareArrowsIcon,
   unfold_less: UnfoldLessIcon,
   verified_user: VerifiedUserIcon,
   reply: ReplyIcon,
@@ -158,6 +168,8 @@ export const icons: Record<string, ComponentType<SvgIconProps>> = {
   group: GroupIcon,
   link: LinkIcon,
   undo: UndoIcon,
+  record_voice_over: RecordVoiceOverIcon,
+  upload_file: UploadFileIcon,
 }
 
 // An icon by name, as a component for places that take one (the Editors view)

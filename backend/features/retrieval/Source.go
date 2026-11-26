@@ -34,7 +34,12 @@ type Source struct {
 	Axis  Axis
 	// Optional sources are searched only when a retrieval names them, such
 	// as records (off unless RAG Search's switch turns them on).
-	Optional      bool
+	Optional bool
+	// InChat searches an optional source in chat's RAG Search unless its
+	// switch is off (forge 18f: Blackboards, which chat reads like Volumes
+	// and Chronicles, while agents search them only when their run names
+	// them).
+	InChat        bool
 	VectorSearch  func(ctx context.Context, vector []float32, k int, filter Filter) ([]Segment, error)
 	KeywordSearch func(ctx context.Context, query string, k int, filter Filter) ([]Segment, error)
 }
@@ -43,6 +48,12 @@ type Source struct {
 type Filter struct {
 	VolumeIDs       []uint64
 	ExceptVolumeIDs []uint64 // never these Volumes (forge 16c: a workspace's unchecked ones)
+	// Partitions and Collections narrow a source that has them (forge 18f:
+	// Blackboards, whose partitions are branches and collections spaces);
+	// a source without them ignores them. No partitions is the source's
+	// default one (main); no collections is every one.
+	Partitions  []string
+	Collections []string
 }
 
 // Segment is one piece of content a source found.
@@ -69,6 +80,12 @@ type Location struct {
 	Heading   string `json:"heading,omitempty"`
 	Entity    string `json:"entity,omitempty"` // a record: its entity type and id
 	RecordID  string `json:"recordId,omitempty"`
+	// Board and Version are a Blackboards section's board and version
+	// (forge 18f), and Link the workbench: link a citation opens, at the
+	// section, for a source whose content no other field locates.
+	Board   string `json:"board,omitempty"`
+	Version string `json:"version,omitempty"`
+	Link    string `json:"link,omitempty"`
 }
 
 // Scored is a segment as retrieval selected it, with every number that

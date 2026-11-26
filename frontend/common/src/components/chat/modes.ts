@@ -35,7 +35,18 @@ export function editorBefore(state: WorkbenchState, chatTab: string): { kind?: s
   return { kind: editor?.kind, subject: editor?.subject?.type }
 }
 
+// Whether a mode is offered beside an editor: its focus's kinds and
+// subjects, and its offerIn patterns (forge 18f; '*' is every tab, and none)
 export function inFocus(mode: ChatMode, editor: { kind?: string; subject?: string }): boolean {
+  const { focus } = mode
+  if (!focus) return true
+  const { kind } = editor
+  return chooses(mode, editor) || !!focus.offerIn?.some((k) => k === '*' || (!!kind && kindMatches(k, kind)))
+}
+
+// Whether a mode's own focus holds an editor, leaving out offerIn: where it
+// may be chosen for a new conversation
+export function chooses(mode: ChatMode, editor: { kind?: string; subject?: string }): boolean {
   const { focus } = mode
   if (!focus) return true
   const { kind } = editor
@@ -57,5 +68,5 @@ export function offeredModes(modes: readonly ChatMode[], editor: { kind?: string
 // A new conversation's mode: the first whose focus the editor matches and
 // chooses (not offerOnly), else the default
 export function startingMode(modes: readonly ChatMode[], editor: { kind?: string; subject?: string }): ChatMode | undefined {
-  return modes.find((m) => m.focus && !m.focus.offerOnly && inFocus(m, editor)) ?? modes.find((m) => m.default) ?? modes[0]
+  return modes.find((m) => m.focus && !m.focus.offerOnly && chooses(m, editor)) ?? modes.find((m) => m.default) ?? modes[0]
 }

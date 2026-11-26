@@ -1,7 +1,10 @@
 // Package textnodes contributes the text nodes (forge 18b): Text diff, a
 // Myers diff by lines or words whose hunks carry their markdown heading
 // path, and Anchor resolve, which finds a short quote again in a text that
-// may have changed. Both are pure and allowed in every graph kind.
+// may have changed; and (forge 18d) Three-way merge. All are pure and
+// allowed in every graph kind. Parse transcript (forge 18e, transcript.go,
+// ContributeTranscripts) reads a meeting transcript through a child
+// process and is allowed only in kinds that may do I/O.
 package textnodes
 
 import (
@@ -18,6 +21,8 @@ const source = "text"
 const (
 	DiffID   = "text.diff"
 	AnchorID = "text.anchor"
+	MergeID  = "text.merge3"
+	PartsID  = "text.sections"
 )
 
 // Contribute registers the nodes.
@@ -112,6 +117,87 @@ func Contribute(reg *extensions.Registry) {
 				anchors[i] = map[string]any{"id": m.ID, "found": r.Found, "start": r.Start, "end": r.End, "headingPath": strings(r.HeadingPath), "exact": r.Exact, "score": r.Score}
 			}
 			return cognition.Values{"found": a.Found, "start": a.Start, "end": a.End, "headingPath": strings(a.HeadingPath), "exact": a.Exact, "score": a.Score, "anchors": anchors}, "", nil
+		},
+	})
+	cognition.Nodes.Register(reg, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: PartsID, Source: source, Order: 473}, Title: "Split sections", Category: "Text",
+		Description: "Splits a markdown text into its sections for search (forge 18f): each heading's own part, from its heading line to the next heading of any level, with its heading path (outermost first), its own heading and its 1-based lines; the text before the first heading is a section with an empty path. A section longer than Max characters is cut at blank lines into pieces with the same path. Sections holding only spaces are left out.",
+		Example:     "Split sections of a board version's text, for the sections a Blackboards search finds",
+		Tags:        []string{"sections", "split", "chunk", "headings", "markdown", "search", "text"},
+		Config:      json.RawMessage(`{"type":"object","properties":{"maxChars":{"type":"integer","title":"Max characters","min":0,"description":"Cut longer sections at blank lines; 0 never cuts. The Max pin wins"}}}`),
+		Pins: cognition.Pins{
+			In: []cognition.Pin{
+				{ID: "text", Name: "Text", Type: "string", Optional: true, Description: "The markdown text"},
+				{ID: "maxChars", Name: "Max", Type: "number", Optional: true, Description: "Max characters, in place of its config's"},
+			},
+			Out: []cognition.Pin{
+				cognition.DataPin("sections", "Sections", "json", "The sections in order: [{headingPath, heading, text, startLine, endLine}]"),
+				cognition.DataPin("count", "Count", "number", "How many"),
+			},
+		},
+		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
+			var c struct{ MaxChars int }
+			if err := x.Config(&c); err != nil {
+				return nil, "", err
+			}
+			s, _ := cognition.Get[string](in, "text")
+			if m, err := cognition.Get[float64](in, "maxChars"); err == nil && m > 0 {
+				c.MaxChars = int(m)
+			}
+			out, err := plain(text.Parts(s, c.MaxChars))
+			if err != nil {
+				return nil, "", err
+			}
+			return cognition.Values{"sections": out, "count": len(out)}, "", nil
+		},
+	})
+	cognition.Nodes.Register(reg, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: MergeID, Source: source, Order: 472}, Title: "Three-way merge", Category: "Text",
+		Description: "Merges two texts changed from one base, by lines: a region only one side changed takes that side's text, a region both changed alike takes it once, and a region both changed differently is a conflict. Conflicts are [{index, base, source, target, headingPath, baseLines, merged: {start, end}, text, resolved}], where merged is where the region's text sits in the merged text (character offsets, end exclusive) and text what was put there: the resolution given for its index, else the target's text (or the source's, with prefer source). Run it once to find the conflicts, then again with resolutions [{index, text}] to write the merged text. Clean is true when nothing is left in conflict.",
+		Example:     "Three-way merge of a board's text at a branch's base, on the branch and on main, for the semantic merge",
+		Tags:        []string{"merge", "three-way", "conflict", "branch", "markdown", "text"},
+		Config:      json.RawMessage(`{"type":"object","properties":{"prefer":{"type":"string","title":"In a conflict","enum":["target","source"],"description":"Whose text fills a conflict without a resolution; the target's by default"}}}`),
+		Sample:      cognition.Values{"merged": "", "conflicts": []any{}, "clean": true, "sourceChanged": false, "targetChanged": false},
+		Pins: cognition.Pins{
+			In: []cognition.Pin{
+				{ID: "base", Name: "Base", Type: "string", Optional: true, Description: "The text both sides started from"},
+				{ID: "source", Name: "Source", Type: "string", Optional: true, Description: "One side's text (the branch merged in)"},
+				{ID: "target", Name: "Target", Type: "string", Optional: true, Description: "The other side's text (the branch merged into)"},
+				{ID: "resolutions", Name: "Resolutions", Type: "json", Optional: true, Description: "Text for conflicts by index: [{index, text}]"},
+			},
+			Out: []cognition.Pin{
+				cognition.DataPin("merged", "Merged", "string", "The merged text"),
+				cognition.DataPin("conflicts", "Conflicts", "json", "The regions both sides changed differently: [{index, base, source, target, headingPath, baseLines, merged, text, resolved}]"),
+				cognition.DataPin("clean", "Clean", "bool", "Whether no conflict is left without a resolution"),
+				cognition.DataPin("sourceChanged", "Source changed", "bool", "Whether the source differs from the base"),
+				cognition.DataPin("targetChanged", "Target changed", "bool", "Whether the target differs from the base"),
+			},
+		},
+		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
+			var c struct{ Prefer string }
+			if err := x.Config(&c); err != nil {
+				return nil, "", err
+			}
+			base, _ := cognition.Get[string](in, "base")
+			src, _ := cognition.Get[string](in, "source")
+			tgt, _ := cognition.Get[string](in, "target")
+			var given []struct {
+				Index int    `json:"index"`
+				Text  string `json:"text"`
+			}
+			if raw, err := json.Marshal(in["resolutions"]); err == nil {
+				_ = json.Unmarshal(raw, &given)
+			}
+			res := map[int]string{}
+			for _, g := range given {
+				res[g.Index] = g.Text
+			}
+			r := text.Merge3(base, src, tgt, res, c.Prefer)
+			conflicts, err := plain(r.Conflicts)
+			if err != nil {
+				return nil, "", err
+			}
+			return cognition.Values{"merged": r.Merged, "conflicts": conflicts, "clean": r.Clean, "sourceChanged": r.SourceChanged, "targetChanged": r.TargetChanged}, "", nil
 		},
 	})
 }

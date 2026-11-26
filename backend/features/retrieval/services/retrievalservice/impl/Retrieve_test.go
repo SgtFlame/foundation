@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -223,5 +224,47 @@ func TestOptionalSourcesAreSearchedWhenNamed(t *testing.T) {
 	resp := s.Retrieve(retrievalservice.RetrieveArgs{ServiceArgs: local, Query: "q", Sources: []string{"library", "records"}})
 	if len(resp.Segments) != 2 {
 		t.Errorf("named %+v", resp.Segments)
+	}
+}
+
+// Switches choose the sources (forge 18f): one switched off is never
+// searched, an InChat optional source is searched unless switched off,
+// another optional one only when switched on; partitions and collections
+// reach the sources' filter.
+func TestSwitchesChooseTheSources(t *testing.T) {
+	a := seg("library", "a.md", 0, 100, "ha")
+	r := seg("records", "", 0, 0, "page.1@2")
+	r.Text = "a record"
+	b := seg("boards", "", 0, 0, "s1#x")
+	b.Text = "a section"
+	records := source("records", retrieval.AxisLibrary, nil, []retrieval.Segment{r})
+	records.Optional = true
+	var got retrieval.Filter
+	boards := retrieval.Source{Descriptor: extensions.Descriptor{ID: "boards"}, Axis: retrieval.AxisLibrary, Optional: true, InChat: true,
+		KeywordSearch: func(_ context.Context, _ string, _ int, f retrieval.Filter) ([]retrieval.Segment, error) {
+			got = f
+			return []retrieval.Segment{b}, nil
+		}}
+	s := newTestService(t, fakeEmbedder{}, source("library", retrieval.AxisLibrary, nil, []retrieval.Segment{a}), records, boards)
+	ids := func(resp retrievalservice.RetrieveResponse) []string {
+		var out []string
+		for _, sg := range resp.Segments {
+			out = append(out, sg.SourceID)
+		}
+		slices.Sort(out)
+		return out
+	}
+	if got := ids(s.Retrieve(retrievalservice.RetrieveArgs{ServiceArgs: local, Query: "q", LexicalSemantic: -5})); !slices.Equal(got, []string{"library"}) {
+		t.Errorf("without switches %v", got)
+	}
+	resp := s.Retrieve(retrievalservice.RetrieveArgs{ServiceArgs: local, Query: "q", LexicalSemantic: -5, Switches: map[string]bool{}, Partitions: []string{"b1"}, Collections: []string{"s1"}})
+	if got := ids(resp); !slices.Equal(got, []string{"boards", "library"}) {
+		t.Errorf("no switch set %v", got)
+	}
+	if !slices.Equal(got.Partitions, []string{"b1"}) || !slices.Equal(got.Collections, []string{"s1"}) {
+		t.Errorf("filter %+v", got)
+	}
+	if got := ids(s.Retrieve(retrievalservice.RetrieveArgs{ServiceArgs: local, Query: "q", LexicalSemantic: -5, Switches: map[string]bool{"boards": false, "records": true, "library": false}})); !slices.Equal(got, []string{"records"}) {
+		t.Errorf("switched %v", got)
 	}
 }

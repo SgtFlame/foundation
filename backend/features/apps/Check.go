@@ -248,6 +248,15 @@ func (c *check) editorKinds() {
 		if strings.TrimSpace(k.Title) == "" {
 			c.add(path+".title", "an editor kind needs a title", "a template over the page's data, such as {record.title}")
 		}
+		routeNames, _ := RouteParams(k.Page)
+		for _, name := range k.Params {
+			switch {
+			case !live.ValidToken(name):
+				c.add(path+".params", fmt.Sprintf("%q is not a param's name", name), "use letters, digits, _ and -, such as board")
+			case slices.Contains(routeNames, name):
+				c.add(path+".params", fmt.Sprintf("%s is already a param of the route %s", name, k.Page), "leave it out of params")
+			}
+		}
 		if k.Subject != nil {
 			for name := range k.Subject.Details {
 				if !live.ValidToken(name) {

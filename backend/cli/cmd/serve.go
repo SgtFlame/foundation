@@ -147,6 +147,7 @@ import (
 	bootstrapimpl "github.com/SgtFlame/foundation/backend/features/secrets/services/bootstrapservice/impl"
 	secretsimpl "github.com/SgtFlame/foundation/backend/features/secrets/services/secretsservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/secrets/vaultstore"
+	"github.com/SgtFlame/foundation/backend/features/text"
 	textnodes "github.com/SgtFlame/foundation/backend/features/text/nodes"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 	toolsbuiltin "github.com/SgtFlame/foundation/backend/features/tools/builtin"
@@ -437,6 +438,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var chatLive chatservice.Service
 		var conversationLive conversationservice.Service
 		var collabLive collabservice.Service
+		var transcriptFiles *recordsfiles.Store // Parse transcript's files, once the store is made (forge 18e)
 		registry := extensions.NewRegistry()
 		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.Modes, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, tools.Sources, authz.ResourceTypes,
 			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents, connectors.Contracts, connectors.Types, connections.Validators, authz.ContributedRoles)
@@ -530,6 +532,17 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		authznodes.Contribute(registry)                                                  // Grant role, Revoke role (forge 07j)
 		textnodes.Contribute(registry)                                                   // Text diff, Anchor resolve (forge 18b)
 		kbnodes.Contribute(registry, func() collabservice.Service { return collabLive }) // Edit text together (forge 18c)
+		// Parse transcript (forge 18e): parsed in a limited child process
+		textnodes.ContributeTranscripts(registry, func() textnodes.TranscriptDeps {
+			d := textnodes.TranscriptDeps{}
+			if exe, err := os.Executable(); err == nil {
+				d.Read = text.ChildTranscripts(exe)
+			}
+			if transcriptFiles != nil {
+				d.Open = transcriptFiles.Open
+			}
+			return d
+		})
 		// Connectors (forge 07b): the registry's queries and the connector
 		// nodes; builtin contracts and types are contributed beside them
 		connectors.Contribute(registry, func() connectors.Deps { return connectorDeps })
@@ -814,6 +827,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		liveSubscriptions = subscriptions
 		recordEmbedder = embedService
 		recordFiles := recordsfiles.New(nats.JS())
+		transcriptFiles = recordFiles
 		recordTables, err := recordsdata.NewTables(gdb, projections) // large tables in the tenant database (forge 07k)
 		if err != nil {
 			return err

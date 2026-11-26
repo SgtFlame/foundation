@@ -60,7 +60,7 @@ func (s *service) Retrieve(args retrievalservice.RetrieveArgs) retrievalservice.
 
 	var sources []retrieval.Source
 	for _, src := range retrieval.Sources.All(s.registry) {
-		if len(args.Sources) == 0 && !src.Optional || slices.Contains(args.Sources, src.ID) {
+		if searched(args, src) {
 			sources = append(sources, src)
 		}
 	}
@@ -80,7 +80,7 @@ func (s *service) Retrieve(args retrievalservice.RetrieveArgs) retrievalservice.
 	}
 
 	k := max(conf.CandidateFactor*topK, conf.MinCandidates, topK)
-	filter := retrieval.Filter{VolumeIDs: args.VolumeIDs, ExceptVolumeIDs: args.ExceptVolumeIDs}
+	filter := retrieval.Filter{VolumeIDs: args.VolumeIDs, ExceptVolumeIDs: args.ExceptVolumeIDs, Partitions: args.Partitions, Collections: args.Collections}
 	ctx := args.CallContext()
 	ranked := make([][]fuse.Ranked[retrieval.Segment], len(sources))
 	var wg sync.WaitGroup
@@ -125,6 +125,19 @@ func (s *service) Retrieve(args retrievalservice.RetrieveArgs) retrievalservice.
 	resp.Candidates = len(candidates)
 	resp.Segments = assemble(candidates, topK, budget)
 	return resp
+}
+
+// searched reports whether a retrieval searches a source: by its switch
+// when it has switches (forge 18f), else by the sources named, none naming
+// every source that is not optional.
+func searched(args retrievalservice.RetrieveArgs, src retrieval.Source) bool {
+	if args.Switches != nil {
+		if on, set := args.Switches[src.ID]; set {
+			return on
+		}
+		return !src.Optional || src.InChat
+	}
+	return len(args.Sources) == 0 && !src.Optional || slices.Contains(args.Sources, src.ID)
 }
 
 // embed returns the query's vector, or nil when embedding fails: the

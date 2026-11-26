@@ -252,3 +252,65 @@ func ink(rs []rune, r Range) Range {
 	}
 	return Range{start, end}
 }
+
+// Part is one heading's own part of a markdown text, for search (forge
+// 18f): from its heading line to the next heading of any level, the text
+// before the first heading being the part with an empty path. A part longer
+// than a limit is cut at blank lines into pieces sharing its path.
+type Part struct {
+	Path      []string `json:"headingPath"`
+	Heading   string   `json:"heading"` // its own title; "" before the first heading
+	Text      string   `json:"text"`
+	StartLine int      `json:"startLine"` // 1-based
+	EndLine   int      `json:"endLine"`
+}
+
+// Parts are a markdown text's parts in order, each at most maxChars runes
+// when it can be cut at a blank line (0: no limit), without the parts that
+// hold nothing but spaces.
+func Parts(s string, maxChars int) []Part {
+	starts := lineStarts(s)
+	rs := []rune(s)
+	var out []Part
+	for _, l := range leaves(s) {
+		heading := ""
+		if len(l.path) > 0 {
+			heading = l.path[len(l.path)-1]
+		}
+		for _, r := range cut(rs, l.r, maxChars) {
+			t := string(rs[r.Start:r.End])
+			if strings.TrimSpace(t) == "" {
+				continue
+			}
+			in := ink(rs, r)
+			out = append(out, Part{Path: append([]string{}, l.path...), Heading: heading, Text: strings.TrimRight(t, "\n "),
+				StartLine: lineAt(starts, in.Start), EndLine: lineAt(starts, max(in.Start, in.End-1))})
+		}
+	}
+	return out
+}
+
+// cut splits r into pieces of at most max runes at blank lines; a piece
+// with no blank line to cut at stays whole.
+func cut(rs []rune, r Range, limit int) []Range {
+	if limit <= 0 || r.End-r.Start <= limit {
+		return []Range{r}
+	}
+	var out []Range
+	start := r.Start
+	for r.End-start > limit {
+		at := -1
+		for i := start + limit; i > start+1; i-- {
+			if rs[i-1] == '\n' && rs[i-2] == '\n' {
+				at = i
+				break
+			}
+		}
+		if at < 0 {
+			break
+		}
+		out = append(out, Range{start, at})
+		start = at
+	}
+	return append(out, Range{start, r.End})
+}

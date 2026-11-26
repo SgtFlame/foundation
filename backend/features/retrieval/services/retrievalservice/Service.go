@@ -26,6 +26,15 @@ type RetrieveArgs struct {
 	Sources          []string // the source IDs to search; empty searches every source
 	VolumeIDs        []uint64 // optional; only these volumes
 	ExceptVolumeIDs  []uint64 // optional; never these volumes (forge 16c)
+	// Switches, when set, choose the sources in place of Sources (forge
+	// 18f): a source switched on or off is or is not searched; one left out
+	// is searched unless it is optional and not InChat. RAG Search's
+	// sources settings are switches.
+	Switches map[string]bool
+	// Partitions and Collections narrow the sources that have them (forge
+	// 18f: Blackboards' branches and spaces); see retrieval.Filter.
+	Partitions  []string
+	Collections []string
 }
 
 type RetrieveResponse struct {

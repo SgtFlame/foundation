@@ -487,3 +487,11 @@ Forge 7p-5 ([forge MailApp.md](../../forge/documentation/MailApp.md#built-in-par
 - `doc.markdown` takes `value`, `highlights` and `focus`, raises `selected` and `highlightClicked`, and no longer requires `entity`, `id` and `field` ([MarkdownEditor.md › Changed in forge 18c](MarkdownEditor.md#changed-in-forge-18c)).
 - `mui.textField` takes **`clearOnSubmit`**: once Enter has sent `submit` (its payload read first), the field is emptied, as a message box is. A prefab's `local.*` values are per instance, so a handler cannot empty one.
 - `mui.box` takes **`size`**, its width in a `mui.grid`'s 12 columns (the grid's renderer reads its children's `size`, which only a box may now declare).
+
+## Changed in forge 18e
+
+Forge's part 18e (meeting import, [forge RequirementsApp.md](../../forge/documentation/RequirementsApp.md#built-in-part-18e)):
+- **`record.fieldEditor` keeps a value bound to `local.*`**, as `mui.textField` and `mui.select` do. A file uploaded or people picked in it are then sent by a button's payload (`"file": "local.file"`). Forge's *Import meeting* dialog needs it. Before, it only raised `change`.
+- Common's icon map gains `record_voice_over` and `upload_file`.
+
+Verification: forge's walk `documentation/walks/18e.json` uploads nothing but picks people in the dialog and sends them; `yarn build` in common type-checks.

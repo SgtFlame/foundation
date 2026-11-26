@@ -178,11 +178,13 @@ func pageOf(args features.ServiceArgs, d Deps, id string) (ui.Page, bool, error)
 	return kindPage(page, v, m.EditorKinds[i]), true, nil
 }
 
-// routeParams are the route's params from a page's params, as text.
-func routeParams(route string, raw json.RawMessage) map[string]any {
+// routeParams are the route's params from a page's params, as text, and
+// the extra params an editor kind takes (forge 18f) when given.
+func routeParams(route string, raw json.RawMessage, extra ...string) map[string]any {
 	var given map[string]any
 	_ = json.Unmarshal(raw, &given)
 	names, _ := apps.RouteParams(route)
+	names = append(names, extra...)
 	out := map[string]any{}
 	for _, n := range names {
 		if v, ok := given[n]; ok && v != nil {
@@ -265,7 +267,7 @@ func kindPage(page ui.Page, v apps.Version, k apps.EditorKind) ui.Page {
 	m := v.Manifest
 	pg, _, _ := m.FindPage(k.Page)
 	out := ui.AppPage(func(r *ui.Render) *ui.Node {
-		return &ui.Node{Type: ui.PrefabPrefix + pg.Prefab, Key: "root", Props: routeParams(k.Page, r.Params())}
+		return &ui.Node{Type: ui.PrefabPrefix + pg.Prefab, Key: "root", Props: routeParams(k.Page, r.Params(), k.Params...)}
 	})
 	out.Descriptor, out.App, out.Description = page.Descriptor, page.App, page.Description
 	out.Reach, out.Pins, out.Graph, out.AppCommands, out.AppQueries, out.Stale = page.Reach, page.Pins, page.Graph, page.AppCommands, page.AppQueries, page.Stale

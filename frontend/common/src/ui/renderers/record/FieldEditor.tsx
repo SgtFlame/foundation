@@ -327,9 +327,18 @@ export function RecordFieldEditor(p: RendererProps) {
       disabled={!!p.props.disabled} entity={str(p.props.entity) || undefined} record={str(p.props.record) || undefined}
       onChange={(v) => {
         setOwn(v)
-        if (!textual) p.emit('change', { value: v })
+        // A value bound to local.* is kept there, as other inputs keep theirs
+        // (forge 18e: the Import meeting dialog's file and people)
+        if (!textual) {
+          p.setLocal('value', v)
+          p.emit('change', { value: v })
+        }
       }}
-      onCommit={() => !same(own, server) && p.emit('change', { value: own })} />
+      onCommit={() => {
+        if (same(own, server)) return
+        p.setLocal('value', own)
+        p.emit('change', { value: own })
+      }} />
   )
 }
 

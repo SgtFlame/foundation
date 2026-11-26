@@ -71,6 +71,9 @@ test('an unknown name lists the modes here with their descriptions', () => {
 test('where a mode is offered, from its focus', () => {
   assert.equal(whereOffered(agents, kindName), "on any app's tab")
   assert.equal(whereOffered(apps, kindName), 'on Prefab or Blueprint tabs')
+  // forge 18f: offerIn adds places, '*' everywhere
+  assert.equal(whereOffered({ ...apps, focus: { ...apps.focus, offerIn: ['blueprint'] } }, kindName), 'on Prefab or Blueprint tabs')
+  assert.equal(whereOffered({ ...agents, focus: { kinds: ['app:requirements:*'], offerIn: ['*'] } }, kindName), 'everywhere')
   assert.equal(whereOffered(personal, kindName), 'everywhere')
   assert.equal(whereOffered(mode('x', 'X', { focus: { subjects: ['graph'] } }), kindName), 'on graph tabs')
   const text = modeMatchMessage('app builder', { kind: 'notOffered', mode: apps }, [personal], kindName)

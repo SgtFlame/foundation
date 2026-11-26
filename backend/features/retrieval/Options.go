@@ -23,6 +23,11 @@ type Options struct {
 	// VolumeIDs narrow the library to these Volumes; empty searches every
 	// Volume the principal may read.
 	VolumeIDs []uint64 `json:"-"`
+	// Partitions and Collections narrow the sources that have them (forge
+	// 18f: Blackboards' branches and spaces; an agent's run is limited to
+	// the spaces its record names).
+	Partitions  []string `json:"partitions,omitempty"`
+	Collections []string `json:"collections,omitempty"`
 }
 
 type optionsKey struct{}

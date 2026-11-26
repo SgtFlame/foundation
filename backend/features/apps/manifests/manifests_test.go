@@ -393,6 +393,9 @@ func TestBadChangesAreRefusedWithPaths(t *testing.T) {
 	f.rejected("app.setInfo", "tasks", map[string]any{"requires": map[string]any{"primitives": []string{"blink"}}}, "manifest.requires.primitives[0]", "no primitive")
 	f.rejected("app.addEditorKind", "tasks", map[string]any{"kind": "task", "page": "/mine", "title": "x"}, "args.kind", "already")
 	f.rejected("app.addEditorKind", "tasks", map[string]any{"kind": "other", "page": "/gone", "title": "x"}, "manifest.editorKinds[other].page", "no page")
+	// forge 18f: params a link may add, never a route's own
+	f.rejected("app.addEditorKind", "tasks", map[string]any{"kind": "other", "page": "/task/:id", "title": "x", "params": []string{"id"}}, "manifest.editorKinds[other].params", "already a param")
+	f.rejected("app.addEditorKind", "tasks", map[string]any{"kind": "other", "page": "/task/:id", "title": "x", "params": []string{"a b"}}, "manifest.editorKinds[other].params", "not a param")
 	f.rejected("app.addCommand", "tasks", map[string]any{"type": "task.other", "graph": "tasks-handler"}, "manifest.commands[task.other].graph", "not a command graph")
 	f.rejected("app.addCommand", "tasks", map[string]any{"type": "task.other", "graph": "cmd-task-reassign"}, "manifest.commands[task.other].graph", "defines the command \"task.reassign\"")
 	f.rejected("app.addCommand", "tasks", map[string]any{"type": "task.other", "graph": "missing"}, "manifest.commands[task.other].graph", "no graph")

@@ -51,11 +51,25 @@ type Focus struct {
 	// app's tab, where the default mode stays the one a conversation
 	// starts in).
 	OfferOnly bool `json:"offerOnly,omitempty"`
+	// OfferIn are more kind patterns where the mode is offered but never
+	// chosen for a new conversation (forge 18f: the Requirements Builder,
+	// chosen on the Requirements app's tabs and offered everywhere, "*"
+	// matching every tab and none; the App Builder offered on them too).
+	OfferIn []string `json:"offerIn,omitempty"`
 }
 
 // Matches reports whether an editor of kind, with a subject of type
 // subject (maybe empty), is in the focus.
 func (f *Focus) Matches(kind, subject string) bool {
+	if f == nil {
+		return true
+	}
+	return f.Chooses(kind, subject) || slices.ContainsFunc(f.OfferIn, func(k string) bool { return k == "*" || KindMatches(k, kind) })
+}
+
+// Chooses reports whether the focus's own kinds and subjects (not OfferIn)
+// hold an editor of kind with a subject of type subject.
+func (f *Focus) Chooses(kind, subject string) bool {
 	if f == nil {
 		return true
 	}

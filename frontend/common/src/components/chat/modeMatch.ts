@@ -57,9 +57,9 @@ export function modePickerShown(modes: readonly ChatMode[], value?: ChatMode): b
 // "on Prefab or Blueprint tabs". kindName names an editor kind.
 export function whereOffered(mode: ChatMode, kindName: (kind: string) => string | undefined): string {
   const { focus } = mode
-  if (!focus) return 'everywhere'
+  if (!focus || focus.offerIn?.includes('*')) return 'everywhere'
   const places: string[] = []
-  for (const kind of focus.kinds ?? []) {
+  for (const kind of [...(focus.kinds ?? []), ...(focus.offerIn ?? [])]) {
     if (kind === '*') places.push('any')
     else if (kind.endsWith(':*')) places.push(`any ${kind.slice(0, -2)}'s`)
     else if (kind.endsWith('*')) places.push(`any ${kind.slice(0, -1)}`)

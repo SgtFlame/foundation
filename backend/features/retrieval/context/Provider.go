@@ -56,24 +56,16 @@ func gather(args conversation.GatherArgs, service retrievalservice.Service) ([]c
 			return nil, log.Code("bad_settings").Wrapf(err, "the RAG Search settings are not valid")
 		}
 	}
-	var sources []string
-	if len(s.Sources) > 0 {
-		sources = []string{"none"} // every source turned off searches nothing
-		for id, on := range s.Sources {
-			if on {
-				sources = append(sources, id)
-			}
-		}
-	}
 	// A run's Volumes narrow it (forge 15b: Run mode gathers on the run's options)
 	var volumes []uint64
+	var collections []string
 	if o, ok := retrieval.OptionsFrom(args.Context()); ok {
-		volumes = o.VolumeIDs
+		volumes, collections = o.VolumeIDs, o.Collections
 	}
 	resp := service.Retrieve(retrievalservice.RetrieveArgs{
 		ServiceArgs: args.ServiceArgs, Query: args.Text,
 		LexicalSemantic: clamp(s.LexicalSemantic, -5, 5), ChronicleLibrary: clamp(s.ChronicleLibrary, -5, 5), TopK: clamp(s.TopK, 0, 50),
-		ContextWindow: args.ContextWindow, Sources: sources, VolumeIDs: volumes,
+		ContextWindow: args.ContextWindow, Switches: switches(s.Sources), VolumeIDs: volumes, Collections: collections,
 		ExceptVolumeIDs: retrieval.ScopeFrom(args.Context()).ExceptVolumeIDs, // the workspace's unchecked Volumes (forge 16c)
 	})
 	if resp.Common.Code != http.StatusOK {
@@ -88,6 +80,18 @@ func gather(args conversation.GatherArgs, service retrievalservice.Service) ([]c
 		})
 	}
 	return items, nil
+}
+
+// switches are the sources settings as retrieval's switches (forge 18f): a
+// source switched off is never searched, one left out is searched unless
+// it is optional and not searched in chat, such as records. Never nil, so
+// a retrieval with no setting still searches by switch.
+func switches(set map[string]bool) map[string]bool {
+	out := map[string]bool{}
+	for id, on := range set {
+		out[id] = on
+	}
+	return out
 }
 
 // OptionsOf are a conversation's RAG Search settings as the options its

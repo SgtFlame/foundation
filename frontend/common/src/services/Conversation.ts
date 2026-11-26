@@ -37,6 +37,9 @@ export interface SegmentLocation {
   heading?: string
   entity?: string // a record: its entity type and id
   recordId?: string
+  board?: string // a Blackboards section's board and version (forge 18f)
+  version?: string
+  link?: string // a workbench: link that opens it (forge 18f)
 }
 
 // One segment a round injected, cited as [number], with the numbers the
@@ -268,6 +271,7 @@ export interface ModeFocus {
   kinds?: string[] // a kind ending in * matches every kind it begins (app:*, forge 7p-6)
   subjects?: string[]
   offerOnly?: boolean // offered there, never chosen for a new conversation started there
+  offerIn?: string[] // more kind patterns where it is offered, never chosen ('*' every tab; forge 18f)
 }
 
 export interface ChatMode {

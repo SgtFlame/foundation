@@ -211,6 +211,7 @@ func searchArgs(call tools.Call, query string, count int) retrievalservice.Retri
 	out := retrievalservice.RetrieveArgs{ServiceArgs: call.ServiceArgs, Query: query, TopK: count, Sources: []string{"library"}}
 	if o, ok := retrieval.OptionsFrom(call.Context()); ok {
 		out.Sources, out.LexicalSemantic, out.ChronicleLibrary, out.VolumeIDs = o.Sources, o.LexicalSemantic, o.ChronicleLibrary, o.VolumeIDs
+		out.Partitions, out.Collections = o.Partitions, o.Collections // forge 18f: Blackboards' branches and spaces
 		if o.TopK > 0 {
 			out.TopK = o.TopK
 		}

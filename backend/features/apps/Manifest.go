@@ -85,6 +85,10 @@ type EditorKind struct {
 	Title   string   `json:"title"`
 	Icon    string   `json:"icon,omitempty"`
 	Subject *Subject `json:"subject,omitempty"`
+	// Params are more params a link may give the tab beyond its page's
+	// route's, passed to the page's prefab as props when given (forge 18f:
+	// a Blackboards citation opening a space at a board and branch).
+	Params []string `json:"params,omitempty"`
 }
 
 // Subject is what the chat's workbench context says an editor-kind tab
