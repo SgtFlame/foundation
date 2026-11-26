@@ -8,6 +8,7 @@ import { Renderer } from '../render/Renderer.ts'
 import { mulberry32 } from './Noise.ts'
 import { CARGO_PER_HOLD, IDLE_HELM, lookQuat, type Helm, type Quat, type ShipDesign, type ShipState } from '../ship/Ship.ts'
 import { type GhostHit, ShipLayer } from '../ship/ShipLayer.ts'
+import { firstHour, FirstHourPanel } from '../objectives/FirstHour.ts'
 import { atOutpost, ContractPanel, handInProblem, OutpostModel, thrustFor, type ContractList, type Progress } from '../outpost/Outpost.ts'
 import type { EditKind, MoonParams, VoxelEdit } from './Types.ts'
 import { VoxelWorld } from './VoxelWorld.ts'
@@ -109,6 +110,8 @@ export interface ViewportStats {
   levels: Record<string, number>
   // V7: the ship this player rides as crew
   crew: string | null
+  // V8: the first hour's steps done
+  firstHour: string[]
 }
 
 const MIN_BRUSH = 0.75
@@ -153,6 +156,11 @@ export class VoxelViewport {
   private contractList: ContractList | null = null
   private progress: Progress | null = null
   private outpostPlaced = false
+  // V8: the first hour, and what this window saw of it
+  private readonly journal: FirstHourPanel
+  private walked = false
+  private flew = false
+  private journalAt = 0
   // V7: the ship this player rides as crew, as the server says
   private riding: string | null = null
   private nearGiver = false
@@ -173,6 +181,7 @@ export class VoxelViewport {
     this.scene.add(this.shipLayer.group)
     this.scene.add(this.outpost.group)
     this.contracts = new ContractPanel(container)
+    this.journal = new FirstHourPanel(container)
     this.scene.background = new THREE.Color(0x05060a)
     this.addLightsAndSky()
     renderer.track(this.fly.camera)
@@ -404,6 +413,10 @@ export class VoxelViewport {
       return
     }
     if (input.pressed('KeyG') && input.locked) this.setMode(this.mode === 'fly' ? 'walk' : 'fly')
+    if (input.pressed('KeyJ') && input.locked) {
+      this.journal.shown = !this.journal.shown
+      this.drawJournal()
+    }
     if (this.mode === 'walk' && this.walker) this.stepWalker(dt)
     else this.fly.step(dt, input)
     this.stepShipsOnFoot()
@@ -505,6 +518,24 @@ export class VoxelViewport {
     if (near && input.locked && input.pressed('KeyR')) this.opts.onShipIntent?.({ kind: 'refine', id: near.id })
     if (near && input.locked && input.pressed('KeyB') && this.canBoard(near)) this.opts.onShipIntent?.({ kind: 'crew', id: near.id, aboard: true })
     this.stepOutpost()
+  }
+
+  // --- The first hour (V8) ---
+
+  private journalSteps() {
+    const blocks: Record<string, number> = {}
+    for (const id of ['skiff', 'prospector']) {
+      const d = this.shipLayer.design(id)
+      if (d) blocks[id] = d.blocks.length
+    }
+    return firstHour({ walked: this.walked, flew: this.flew, pack: this.carried, ships: this.shipLayer.ships(), blocks, progress: this.progress })
+  }
+
+  private drawJournal(): void {
+    if (this.mode === 'walk') this.walked = true
+    if (this.shipLayer.pilotOf && this.shipLayer.body && Math.hypot(this.shipLayer.body.v.x, this.shipLayer.body.v.y, this.shipLayer.body.v.z) > 1) this.flew = true
+    const playing = this.mode === 'walk' || !!this.shipLayer.pilotOf || !!this.riding
+    this.journal.show(this.journalSteps(), playing && !this.contracts.open)
   }
 
   // --- Crew (V7) ---
@@ -832,6 +863,10 @@ export class VoxelViewport {
     this.shipLayer.frame(Math.min(0.1, (now - this.lastFrame) / 1000))
     this.placeOutpost()
     this.placeRider()
+    if (now - this.journalAt > 500) {
+      this.journalAt = now
+      this.drawJournal()
+    }
     this.outpost.blink(now / 1000)
     this.lastFrame = now
     this.world.update(this.fly.camera.position)
@@ -1004,6 +1039,7 @@ export class VoxelViewport {
       outpost: this.contracts.open,
       levels: { ...(this.progress?.levels ?? {}) },
       crew: this.riding,
+      firstHour: this.journalSteps().filter((x) => x.done).map((x) => x.id),
     }
   }
 
@@ -1015,6 +1051,7 @@ export class VoxelViewport {
     this.world.dispose()
     this.shipLayer.dispose()
     this.contracts.dispose()
+    this.journal.dispose()
     this.setRemoteCameras([])
     this.overlay?.dispose()
     this.crosshair.remove()
