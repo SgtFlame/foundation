@@ -25,6 +25,15 @@ const palette = {
   furrow: 0x6d5236,
   window: 0xffb347,
   water: 0x3b5d7a,
+  plank: 0x8c6a48,
+  plankDark: 0x6f523a,
+  plaster: 0xcdbfa6,
+  fire: 0xff7a1a,
+  cloth: 0x7d3b32,
+  wool: 0xb9ad94,
+  crock: 0xa86a4a,
+  dusk: 0x6d86b0,
+  milk: 0xf2efe6,
 }
 
 const materials = new Map<string, THREE.MeshStandardNodeMaterial>()
@@ -126,6 +135,42 @@ function lights(g: THREE.Group, points: [number, number, number][]): void {
   g.userData.lights = points
 }
 
+// Where a character stands to go through a model's door (S3), in the
+// model's own metres (userData.door): the viewport walks there, then
+// travels to the area the door leads to; arriving from that area, the
+// character starts there
+function door(g: THREE.Group, x: number, z: number): void {
+  g.userData.door = [x, z]
+}
+
+// An interior's floor and the walls round its edge (S3), W × D metres with
+// the area's corner at the origin: walls stand just outside the cells, so
+// every cell is floor
+export function interiorShell(W: number, D: number): THREE.Group {
+  const g = new THREE.Group()
+  const floor = box(W, 0.3, D, palette.plank, W / 2, -0.3, D / 2)
+  floor.castShadow = false
+  g.add(floor)
+  // board seams along x
+  for (let z = 0.5; z < D; z += 0.5) {
+    const seam = box(W, 0.01, 0.03, palette.plankDark, W / 2, 0, z)
+    seam.castShadow = false
+    g.add(seam)
+  }
+  const t = 0.3
+  const h = 2.8
+  g.add(
+    box(W + 2 * t, h, t, palette.plaster, W / 2, 0, -t / 2),
+    box(W + 2 * t, h, t, palette.plaster, W / 2, 0, D + t / 2),
+    box(t, h, D, palette.plaster, -t / 2, 0, D / 2),
+    box(t, h, D, palette.plaster, W + t / 2, 0, D / 2),
+  )
+  // a dark beam along the top of each wall
+  g.add(box(W + 2 * t, 0.2, t + 0.04, palette.timber, W / 2, h, -t / 2), box(W + 2 * t, 0.2, t + 0.04, palette.timber, W / 2, h, D + t / 2))
+  g.add(box(t + 0.04, 0.2, D, palette.timber, -t / 2, h, D / 2), box(t + 0.04, 0.2, D, palette.timber, W + t / 2, h, D / 2))
+  return g
+}
+
 export function buildModel(model: string, w: number, d: number, cell: number, seed = 1): THREE.Group {
   const W = w * cell
   const D = d * cell
@@ -191,6 +236,7 @@ export function buildModel(model: string, w: number, d: number, cell: number, se
       g.add(gable(13, 3.5, 9.4, palette.thatch, -1, 4.5, -2))
       g.add(box(1.2, 3.5, 1.2, palette.stoneDark, -5.2, 5, -3.2)) // the hearth's chimney
       g.add(box(1.4, 2.2, 0.2, palette.timber, W / 4, 0, 2.05)) // the door, facing the path
+      door(g, W / 4, 3.4)
       for (const x of [-5, -1.5, 2]) g.add(box(1.2, 1, 0.15, palette.window, x, 2, 2.05, 1.6)) // windows
       lights(g, [
         [-1.5, 2.2, 3.2],
@@ -207,6 +253,7 @@ export function buildModel(model: string, w: number, d: number, cell: number, se
       blockers(g, [[-8, -13, 6, 7]])
       g.add(gable(21.5, 4.5, 15, palette.roofSlate, -1, 6, -3).rotateY(Math.PI / 2))
       g.add(box(5, 4.2, 0.2, palette.wood, -W / 4, 0, 7.05))
+      door(g, -W / 4, 8.6)
       g.add(box(1, 0.8, 0.15, palette.window, 3, 3.5, 7.05, 0.8))
       lights(g, [[3, 3.5, 8]])
       break
@@ -230,6 +277,85 @@ export function buildModel(model: string, w: number, d: number, cell: number, se
         [7.5, -9.6, 10.5, -8.4], // the cart
       ])
       lights(g, [[-7, 3.2, -6]])
+      break
+    }
+    // The farmhouse's rooms (S3): cells of 2 m, the wall at the model's
+    // north (-z) for the pieces that stand against one
+    case 'hearth': {
+      const back = -D / 2
+      g.add(box(W - 0.2, 1.4, 1.1, palette.stone, 0, 0, back + 0.55))
+      g.add(box(W - 1.4, 0.8, 0.7, 0x1a1410, 0, 0.15, back + 0.5)) // the firebox
+      g.add(box(W - 1.8, 0.35, 0.45, palette.fire, 0, 0.15, back + 0.55, 2.5)) // the fire
+      g.add(box(W - 0.6, 1.5, 0.8, palette.stoneDark, 0, 1.4, back + 0.4)) // the chimney breast
+      g.add(box(W, 0.12, 1.2, palette.stoneDark, 0, 0, back + 1.6)) // the hearthstone
+      g.add(box(0.5, 0.35, 0.5, 0x2a2a2a, 0.9, 0, back + 1.6)) // a pot
+      blockers(g, [[-W / 2, back, W / 2, back + 1.2]])
+      lights(g, [[0, 0.8, back + 1.3]])
+      break
+    }
+    case 'table': {
+      g.add(box(W - 0.6, 0.1, D - 0.9, palette.wood, 0, 0.75, 0))
+      for (const x of [-W / 2 + 0.5, W / 2 - 0.5]) for (const z of [-D / 2 + 0.6, D / 2 - 0.6]) g.add(box(0.12, 0.75, 0.12, palette.plankDark, x, 0, z))
+      g.add(box(0.6, 0.12, 0.6, palette.barley, -0.6, 0.85, 0)) // hot cakes on a board
+      g.add(box(0.25, 0.3, 0.25, palette.crock, 0.8, 0.85, 0.1))
+      blockers(g, [[-W / 2 + 0.3, -D / 2 + 0.45, W / 2 - 0.3, D / 2 - 0.45]])
+      break
+    }
+    case 'bench': {
+      g.add(box(W - 0.4, 0.08, 0.4, palette.wood, 0, 0.42, 0))
+      for (const x of [-W / 2 + 0.4, W / 2 - 0.4]) g.add(box(0.08, 0.42, 0.34, palette.plankDark, x, 0, 0))
+      blockers(g, [[-W / 2 + 0.2, -0.2, W / 2 - 0.2, 0.2]])
+      break
+    }
+    case 'bed': {
+      const x0 = -W / 2 + 0.1
+      g.add(box(W - 0.4, 0.6, D - 0.4, palette.timber, 0, 0, 0)) // the box
+      g.add(box(W - 0.6, 0.15, D - 0.6, palette.wool, 0, 0.6, 0)) // the blanket
+      g.add(box(W - 0.8, 0.15, 0.5, palette.milk, 0, 0.7, -D / 2 + 0.6)) // the pillow
+      g.add(box(0.12, 2.2, D - 0.4, palette.timber, x0, 0, 0), box(W - 0.4, 0.15, D - 0.4, palette.timber, 0, 2.1, 0)) // its frame and canopy
+      g.add(box(0.05, 1.5, D * 0.45, palette.cloth, W / 2 - 0.25, 0.6, -D / 4)) // the drawn curtain
+      blockers(g, [[-W / 2 + 0.2, -D / 2 + 0.2, W / 2 - 0.2, D / 2 - 0.2]])
+      break
+    }
+    case 'shelf': {
+      const back = -D / 2
+      g.add(box(W - 0.4, 2, 0.4, palette.plankDark, 0, 0, back + 0.2))
+      for (const y of [0.6, 1.2, 1.8]) {
+        g.add(box(W - 0.4, 0.05, 0.42, palette.wood, 0, y, back + 0.22))
+        for (let i = 0; i < 3; i++) g.add(box(0.22, 0.28, 0.22, i === 1 && y === 1.2 ? palette.milk : palette.crock, -0.5 + i * 0.5, y + 0.05, back + 0.25))
+      }
+      blockers(g, [[-W / 2 + 0.2, back, W / 2 - 0.2, back + 0.5]])
+      break
+    }
+    case 'barrel': {
+      for (const [x, z] of [
+        [-0.4, -0.2],
+        [0.45, 0.3],
+      ]) {
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.32, 0.9, 10), material(palette.wood))
+        b.position.set(x, 0.45, z)
+        b.castShadow = true
+        g.add(b)
+        g.add(box(0.8, 0.05, 0.05, palette.stoneDark, x, 0.75, z), box(0.8, 0.05, 0.05, palette.stoneDark, x, 0.15, z))
+      }
+      blockers(g, [[-0.8, -0.6, 0.85, 0.7]])
+      break
+    }
+    case 'door': {
+      const back = -D / 2
+      g.add(box(1.3, 2.2, 0.12, palette.timber, 0, 0, back + 0.08))
+      g.add(box(1.5, 0.15, 0.16, palette.plankDark, 0, 2.2, back + 0.08)) // the lintel
+      g.add(box(0.1, 0.1, 0.1, palette.stoneDark, 0.45, 1.05, back + 0.18)) // the latch
+      g.add(box(1.2, 0.02, 0.8, palette.cloth, 0, 0, back + 0.7)) // a rag rug
+      door(g, 0, back + 1)
+      break
+    }
+    case 'window': {
+      const back = -D / 2
+      g.add(box(1, 0.9, 0.06, palette.dusk, 0, 1.1, back + 0.04, 0.6)) // the dusk outside
+      g.add(box(1.2, 0.08, 0.3, palette.wood, 0, 1.05, back + 0.15)) // the sill
+      g.add(box(0.06, 0.9, 0.08, palette.plankDark, 0, 1.1, back + 0.08), box(1, 0.06, 0.08, palette.plankDark, 0, 1.55, back + 0.08))
+      g.add(box(0.14, 0.16, 0.14, palette.milk, 0.3, 1.13, back + 0.17)) // the cup of milk on the sill
       break
     }
     default:

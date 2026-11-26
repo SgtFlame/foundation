@@ -78,6 +78,17 @@ The voxel game's second tracer bullet: walk on the moon, fly to an asteroid with
 - **The pack** (a thin 362d and 363d): the `cmd-game-editTerrain` blueprint now reads the sender's pack (`game.packs`, keyed `<worldId>.<userId>`). A dig adds what it took, bounded by its sphere's volume, and is refused when the pack (4 m³) would overflow; a fill spends dust first, then rock, is made of whichever it spent more of, and is refused when the pack holds too little. Edits without `took` or `needs`, the editor's, leave the pack alone. Each edit carries the pack's change as `pack: {dust, rock}`. `game.pack {world}` gives the caller's own pack. The engine's `LocalEditLog` (the demo) runs the same rules.
 - The edit's distance limit now reaches the asteroids: the moon's radius plus its hills plus 150 m.
 
+## Built in S3 (forge 375)
+
+The story game's third tracer bullet: go into the farmhouse and talk to the farmer.
+
+- **Interiors** are separate areas (375 open question 7). A piece set may be `interior`: walls stand round the area's edge and every cell is floor. `kitchen.json` is the first, with cells of 2 m: hearth, table, bench, box bed, shelves, barrels, a door and a window. A piece marked `boundary` (hearth, shelves, door, window) must stand on the area's edge; `Fit` and `fit` refuse it elsewhere with "the Hearth at cell 2, 2 must stand on the area's edge". Such pieces draw their wall side at the model's north, so a piece on the south wall is turned twice.
+- **Doors**: a piece marked `door` (the farmhouse, the barn, the kitchen's door) may lead to another area. `game.linkDoor {id, area}` sets the placement's `link`, or clears it with `area: ""`. It is refused for a piece with no door (`not_a_door`), for the area itself and for an area that does not exist. Its inverse restores the old link, and `removePiece`'s inverse keeps the link.
+- **People** stand in an area in metres: `game.placeNpc {id?, name, kind, x, z, facing, dialogue}`, `game.moveNpc` (fields left out keep their value) and `game.removeNpc`, each with its inverse. They are kept as the area's `npcs`. `apps/ops` knows their items (a person by id, a door's link), and `TestEveryOpUndoes` covers all four ops.
+- **Dialogues** are JSON files embedded from `features/game/dialogues/` (`farmer.json` first), read with the `game.dialogues` query: a speaker, a start node, and nodes of a line with answers that lead to another node or end the talk. `Dialogue.Check` refuses an answer that leads nowhere. The farmer's lines are placeholders drawn from the first hour's beats.
+- `game.describeArea` lists the people and where each door leads.
+- **In the viewport**: `interiorShell` draws an interior's plank floor and walls. People are `CharacterModel`s with their names above them. With a person in hand (`setNpcTool(kind)`) a click stands one there; a click on a person selects them, Alt and the arrows move them half a metre, Delete removes them. In Play, clicking a person walks up to them and opens the talk panel (`area/DialoguePanel.ts`: their line and numbered answers, keys 1 to 9 and Escape). Clicking a linked door walks to the point its model names (`userData.door`) and calls `onTravel(area)`. The host reads that area and calls `travel(area, set)`, and the character comes in by the door that leads back. Stop returns to the area being edited. People block the walk grid. Stats add `areaShown`, `npcs` and `talking`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
@@ -87,3 +98,5 @@ The voxel game's second tracer bullet: walk on the moon, fly to an asteroid with
 - The moons are drawn in a corner of the view rather than in the sky, since the camera looks down. Bloom is left out until it is needed.
 - V2's pack trusts the browser's reckoning of what a dig takes or a fill needs, bounded by the brush's volume. The server reckons it itself once the generator runs on the server (346).
 - Asteroids are generated from the world's seed, not placed one by one; bodies as their own definitions come with 361a.
+- S3's people stand still and have one dialogue each; schedules and routines come later (375 open question on NPC routines). Dialogues are built-in files; editing them in Forge comes with the dialogue editor.
+- Travel through a door reads the other area in the browser and shows it as it was read; the server holds the player's area when play moves to the server (S4).

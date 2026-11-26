@@ -23,6 +23,8 @@ export interface Piece {
   size: [number, number] // [width (x), depth (z)] in cells, unturned
   model: string
   edges: Edges
+  boundary?: boolean // stands on the area's edge (an interior's hearth, door, window; S3)
+  door?: boolean // a door the player walks through: game.linkDoor sets where it leads (S3)
 }
 
 export interface PieceSet {
@@ -30,6 +32,7 @@ export interface PieceSet {
   title: string
   description: string
   cell: number
+  interior?: boolean // walls round the area's edge and a floor (the kitchen's rooms, S3)
   edgeTypes: Record<string, string>
   meets: [string, string][]
   pieces: Piece[]
@@ -41,6 +44,27 @@ export interface Placement {
   x: number
   z: number
   rot: number // 0 to 3
+  link?: string // the area a door piece leads to (S3)
+}
+
+// A person standing in an area (game.placeNpc, S3), in metres
+export interface Npc {
+  id: string
+  name: string
+  kind?: string
+  x: number
+  z: number
+  facing?: number
+  dialogue?: string
+}
+
+// What a person says (the game.dialogues query): nodes of lines, each with answers
+export interface Dialogue {
+  id: string
+  title?: string
+  speaker: string
+  start: string
+  nodes: Record<string, { text: string; choices: { text: string; next?: string }[] }>
 }
 
 export interface AreaDef {
@@ -50,6 +74,7 @@ export interface AreaDef {
   width: number
   depth: number
   pieces: Record<string, Placement>
+  npcs?: Record<string, Npc> // the people standing in it (S3)
   deleted?: boolean
   version: number
 }
@@ -105,6 +130,9 @@ export function fit(set: PieceSet, width: number, depth: number, others: Record<
   const { w, d } = turned(p, pl.rot)
   if (pl.x < 0 || pl.z < 0 || pl.x + w > width || pl.z + d > depth) {
     return `the ${p.title} (${w} × ${d} cells) at cell ${pl.x}, ${pl.z} does not fit inside the ${width} × ${depth} area`
+  }
+  if (p.boundary && pl.x !== 0 && pl.z !== 0 && pl.x + w !== width && pl.z + d !== depth) {
+    return `the ${p.title} at cell ${pl.x}, ${pl.z} must stand on the area's edge`
   }
   const cover = new Map<string, string>()
   const edges = new Map<string, string>()

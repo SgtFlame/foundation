@@ -29,6 +29,7 @@ type LegendEntry struct {
 	X     int    `json:"x"`
 	Z     int    `json:"z"`
 	Rot   int    `json:"rot"`
+	Link  string `json:"link,omitempty"` // the area a door leads to (S3)
 }
 
 // PieceDigest is a piece of the set in brief: its footprint and edges unturned.
@@ -73,7 +74,7 @@ func DescribeArea(ctx context.Context, store live.Store, tenant uint64, id strin
 		if i < len(mapChars) {
 			ch = mapChars[i]
 		}
-		d.Legend = append(d.Legend, LegendEntry{Char: string(ch), ID: pl.ID, Piece: pl.Piece, X: pl.X, Z: pl.Z, Rot: pl.Rot})
+		d.Legend = append(d.Legend, LegendEntry{Char: string(ch), ID: pl.ID, Piece: pl.Piece, X: pl.X, Z: pl.Z, Rot: pl.Rot, Link: pl.Link})
 		p, ok := set.Piece(pl.Piece)
 		if !ok {
 			continue
@@ -97,7 +98,7 @@ func DescribeArea(ctx context.Context, store live.Store, tenant uint64, id strin
 func contributeAreaTools(reg *extensions.Registry, deps func() Deps) {
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "game.describeArea", Source: source}, Title: "Describe a game area", Effect: tools.EffectRead,
-		Description: "Describes a game area: its definition, a map with a character per 10 × 10 m cell (north row first, west first; . is empty) and a legend naming each character's placement, and its piece set's pieces with their footprints [width, depth] and edge types per side unturned (n and s west to east, e and w north to south; a turn of 90° clockwise takes n to e). Two pieces may touch only where their edge types are the same, so a road's end must meet a road. Lay an area out with game.placePiece, game.movePiece and game.removePiece.",
+		Description: "Describes a game area: its definition, a map with a character per cell of the set's size (10 m for farmland, 2 m for the kitchen's rooms) (north row first, west first; . is empty) and a legend naming each character's placement, and its piece set's pieces with their footprints [width, depth] and edge types per side unturned (n and s west to east, e and w north to south; a turn of 90° clockwise takes n to e). Two pieces may touch only where their edge types are the same, so a road's end must meet a road. Lay an area out with game.placePiece, game.movePiece and game.removePiece. In an interior set (walls round the edge) pieces marked boundary stand on the edge. The area's npcs are the people standing in it (metres, not cells; game.placeNpc), and a door piece's link is the area it leads to (game.linkDoor).",
 		Input:       json.RawMessage(`{"type":"object","properties":{"area":{"type":"string","description":"The area's id"}},"required":["area"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
 			var a struct {
@@ -123,6 +124,17 @@ func contributeAreaTools(reg *extensions.Registry, deps func() Deps) {
 				return tools.Result{}, fmt.Errorf("there is no area %q", a.Area)
 			}
 			summary := fmt.Sprintf("**%s**: %d × %d cells of the %s set, %d pieces\n\n```\n%s\n```", desc.Area.Name, desc.Area.Width, desc.Area.Depth, desc.Area.PieceSet, len(desc.Area.Pieces), strings.Join(desc.Map, "\n"))
+			for _, n := range desc.Area.Npcs {
+				summary += fmt.Sprintf("\n- %s stands at %g, %g m", n.Name, n.X, n.Z)
+				if n.Dialogue != "" {
+					summary += " (says the " + n.Dialogue + " dialogue)"
+				}
+			}
+			for _, l := range desc.Legend {
+				if l.Link != "" {
+					summary += fmt.Sprintf("\n- %s (%s) leads to area %s", l.ID, l.Piece, l.Link)
+				}
+			}
 			raw, _ := json.Marshal(desc)
 			var content map[string]any
 			_ = json.Unmarshal(raw, &content)

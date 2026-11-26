@@ -104,6 +104,10 @@ func itemsOf(command string, raw json.RawMessage, add func(kind, key string)) {
 			add("", "")
 		case "placePiece", "movePiece", "removePiece": // areas (forge 375 S1): per placed piece
 			add("piece", str("id"))
+		case "linkDoor": // doors (forge 375 S3): a piece's link
+			add("piece", str("id"))
+		case "placeNpc", "moveNpc", "removeNpc": // people (forge 375 S3): per person
+			add("npc", str("id"))
 		case "setArea":
 			for _, k := range []string{"name", "width", "depth"} {
 				if _, ok := a[k]; ok {

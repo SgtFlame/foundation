@@ -6,14 +6,19 @@ import { Input } from '../input/Input.ts'
 import { Renderer } from '../render/Renderer.ts'
 import { WalkGrid, type Point } from '../nav/WalkGrid.ts'
 import { moonLight, moons, type MoonPhase } from '../sky/Moons.ts'
-import { buildModel, CharacterModel, material } from './Models.ts'
-import { fit, pieceOf, turned, type AreaDef, type PieceSet, type Placement } from './PieceSet.ts'
+import { DialoguePanel } from './DialoguePanel.ts'
+import { buildModel, CharacterModel, interiorShell, material } from './Models.ts'
+import { fit, pieceOf, turned, type AreaDef, type Dialogue, type Npc, type PieceSet, type Placement } from './PieceSet.ts'
 
 // What the editor asks for; the host sends it to the server, which decides
 export type AreaIntent =
   | { kind: 'place'; piece: string; x: number; z: number; rot: number }
   | { kind: 'move'; id: string; x?: number; z?: number; rot?: number }
   | { kind: 'remove'; id: string }
+  // people (S3), in metres
+  | { kind: 'placeNpc'; npcKind: string; x: number; z: number }
+  | { kind: 'moveNpc'; id: string; x: number; z: number }
+  | { kind: 'removeNpc'; id: string }
 
 // Where this viewport's person is: the cell under the pointer, the piece
 // in hand and its turn, the selected placement and the camera
@@ -49,6 +54,11 @@ export interface AreaViewportOptions {
   lighting?: Lighting
   // The calendar night, which sets the moons' phases (default 11)
   night?: number
+  // Play (S3): the character walked through a linked door; the host
+  // fetches the area it leads to and gives it back with travel()
+  onTravel?: (area: string) => void
+  // A person was selected in the editor (null: none)
+  onNpcSelect?: (id: string | null) => void
 }
 
 export interface AreaStats {
@@ -65,6 +75,10 @@ export interface AreaStats {
   playing: boolean
   // How long the walk grid took to build from the pieces, last time
   navMs: number
+  // S3: the area shown (another while play has gone through a door), the people in it and the talk
+  areaShown: string
+  npcs: number
+  talking: { dialogue: string; node: string } | null
 }
 
 const GOOD = 0x4caf50
@@ -127,6 +141,16 @@ export class AreaViewport {
   private moving = 0
   private readonly marker: THREE.Mesh
   private editCamera: { target: THREE.Vector3; yaw: number; pitch: number; distance: number } | null = null
+  // S3: an interior's floor and walls, the people, the talk, and the area
+  // being edited while play has gone through a door into another
+  private readonly shell = new THREE.Group()
+  private readonly npcs = new Map<string, { key: string; model: CharacterModel; label: HTMLDivElement }>()
+  private npcTool: string | null = null
+  private selectedNpc: string | null = null
+  private dialogues: Record<string, Dialogue> = {}
+  private readonly talk: DialoguePanel
+  private arrival: { kind: 'talk'; id: string } | { kind: 'travel'; area: string } | null = null
+  private home: { area: AreaDef; set: PieceSet } | null = null
 
   private constructor(container: HTMLElement, renderer: Renderer, opts: AreaViewportOptions) {
     this.container = container
@@ -147,7 +171,7 @@ export class AreaViewport {
     this.ground.rotation.x = -Math.PI / 2
     this.ground.position.y = -0.32
     this.ground.receiveShadow = true
-    this.scene.add(this.ground, this.grid, this.piecesGroup, this.preview, this.lightsGroup)
+    this.scene.add(this.ground, this.grid, this.piecesGroup, this.preview, this.lightsGroup, this.shell)
     for (const l of [this.sun, this.greaterMoon, this.lesserMoon]) {
       l.castShadow = true
       l.shadow.mapSize.set(2048, 2048)
@@ -169,11 +193,13 @@ export class AreaViewport {
       'position:absolute;bottom:10px;left:50%;transform:translateX(-50%);padding:4px 10px;border-radius:4px;z-index:2;' +
       'font:13px system-ui,sans-serif;color:#eee;background:rgba(0,0,0,0.55);pointer-events:none;white-space:nowrap'
     container.appendChild(this.hint)
+    this.talk = new DialoguePanel(container, () => this.updateHint())
 
     canvas.addEventListener('pointerdown', this.onPointerDown)
     canvas.addEventListener('keydown', this.onKey)
     this.layout(true)
     this.syncPieces()
+    this.syncNpcs()
     this.applyLighting()
     this.updateHint()
 
@@ -192,16 +218,29 @@ export class AreaViewport {
 
   // The area as the server has it now
   setArea(area: AreaDef): void {
+    if (this.home) {
+      // play has gone through a door: the edited area waits until play stops
+      if (area.id === this.home.area.id) this.home.area = area
+      return
+    }
     const resized = area.width !== this.area.width || area.depth !== this.area.depth
     this.area = area
     if (resized) this.layout(false)
     this.syncPieces()
+    this.syncNpcs()
     this.previewKey = ''
     if (this.selected && !area.pieces[this.selected]) this.select(null)
+    if (this.selectedNpc && !area.npcs?.[this.selectedNpc]) this.selectNpc(null)
   }
 
   setPieceSet(set: PieceSet): void {
+    if (this.home) {
+      this.home.set = set
+      return
+    }
+    const relayout = set.cell !== this.set.cell || !!set.interior !== !!this.set.interior
     this.set = set
+    if (relayout) this.layout(true)
     for (const p of this.pieces.values()) this.piecesGroup.remove(p.group)
     this.pieces.clear()
     this.syncPieces()
@@ -212,10 +251,79 @@ export class AreaViewport {
     if (this.playing && piece) return // no building while playing
     this.tool = piece
     this.rot = ((rot % 4) + 4) % 4
-    if (piece) this.select(null)
+    if (piece) {
+      this.select(null)
+      this.npcTool = null
+    }
     this.previewKey = ''
     this.updateHint()
     this.toolChanged()
+  }
+
+  // A person in hand (their kind, e.g. farmer): clicking stands one there (S3)
+  setNpcTool(kind: string | null): void {
+    if (this.playing && kind) return
+    this.npcTool = kind
+    if (kind) {
+      this.tool = null
+      this.select(null)
+    }
+    this.previewKey = ''
+    this.updateHint()
+    this.toolChanged()
+  }
+
+  // What people say: the game.dialogues query
+  setDialogues(d: Record<string, Dialogue>): void {
+    this.dialogues = d
+  }
+
+  selectNpc(id: string | null): void {
+    this.selectedNpc = id
+    if (id) this.select(null)
+    for (const [nid, n] of this.npcs) n.label.style.outline = nid === id ? '2px solid #ffd54f' : ''
+    this.updateHint()
+    this.opts.onNpcSelect?.(id)
+  }
+
+  // Talks to a person now, as walking up to them does in play
+  talkTo(id: string): boolean {
+    const n = this.area.npcs?.[id]
+    const d = n?.dialogue ? this.dialogues[n.dialogue] : undefined
+    if (!n || !d) return false
+    this.talk.start(d, n.name)
+    this.updateHint()
+    return true
+  }
+
+  // Answers the talk shown (0 the first answer)
+  answer(i: number): void {
+    this.talk.choose(i)
+  }
+
+  // Play went through a door (onTravel): the area it leads to and its
+  // piece set. The character comes in by the door that leads back to the
+  // area it left, else at the area's spawn point.
+  travel(area: AreaDef, set: PieceSet): void {
+    if (!this.playing) return
+    const from = this.area.id
+    this.home ??= { area: this.area, set: this.set }
+    this.talk.end()
+    this.area = area
+    this.set = set
+    for (const p of this.pieces.values()) this.piecesGroup.remove(p.group)
+    this.pieces.clear()
+    this.layout(true)
+    this.syncPieces()
+    this.syncNpcs()
+    this.buildWalk()
+    const at = this.doorTo(from) ?? this.spawnPoint()
+    this.path = []
+    this.arrival = null
+    this.character?.group.position.set(at.x, 0, at.z)
+    this.orbit.target.set(at.x, 0, at.z)
+    this.orbit.distance = this.set.interior ? 16 : 32
+    this.grid.visible = false
   }
 
   setLighting(l: Lighting): void {
@@ -251,14 +359,30 @@ export class AreaViewport {
       this.scene.add(this.character.group)
       this.orbit.keyPan = false
       this.orbit.target.set(at.x, 0, at.z)
-      this.orbit.distance = 32
+      this.orbit.distance = this.set.interior ? 16 : 32
+      this.setNpcTool(null)
+      this.selectNpc(null)
       this.grid.visible = false
     } else {
       if (this.character) this.scene.remove(this.character.group)
       this.character = null
       this.walk = null
       this.path = []
+      this.arrival = null
       this.marker.visible = false
+      this.talk.end()
+      if (this.home) {
+        // back to the area being edited
+        const { area, set } = this.home
+        this.home = null
+        this.area = area
+        this.set = set
+        for (const p of this.pieces.values()) this.piecesGroup.remove(p.group)
+        this.pieces.clear()
+        this.layout(false)
+        this.syncPieces()
+        this.syncNpcs()
+      }
       this.orbit.keyPan = true
       if (this.editCamera) {
         this.orbit.target.copy(this.editCamera.target)
@@ -292,6 +416,15 @@ export class AreaViewport {
     this.marker.position.set(end.x, 0.08, end.z)
     this.marker.visible = this.path.length > 0
     return true
+  }
+
+  // Walks to the walkable cell nearest a point (a person, a door)
+  private walkNear(p: Point): boolean {
+    if (this.walkTo(p.x, p.z)) return true
+    const near = this.walk?.nearestWalkable(p, 6)
+    if (!near || !this.walk) return false
+    const c = this.walk.centre(near[0], near[1])
+    return this.walkTo(c.x, c.z)
   }
 
   select(id: string | null): void {
@@ -354,6 +487,9 @@ export class AreaViewport {
       heapMB: mem ? mem.usedJSHeapSize / 1048576 : null,
       playing: this.playing,
       navMs: this.navMs,
+      areaShown: this.area.id,
+      npcs: this.npcs.size,
+      talking: this.talk.state(),
     }
   }
 
@@ -364,6 +500,8 @@ export class AreaViewport {
     this.input.dispose()
     this.overlay?.dispose()
     for (const r of this.remotes.values()) r.label.remove()
+    for (const n of this.npcs.values()) n.label.remove()
+    this.talk.dispose()
     this.hint.remove()
     this.moonHud?.remove()
     this.renderer.dispose()
@@ -377,6 +515,9 @@ export class AreaViewport {
     const D = this.area.depth * c
     this.ground.scale.set(W + 400, D + 400, 1)
     this.ground.position.set(W / 2, -0.32, D / 2)
+    this.ground.material = material(this.set.interior ? 0x121010 : 0x2c3424)
+    this.shell.clear()
+    if (this.set.interior) this.shell.add(interiorShell(W, D))
     this.scene.remove(this.grid)
     this.grid.clear()
     const pts: number[] = []
@@ -402,7 +543,7 @@ export class AreaViewport {
     this.applyLighting()
     if (first) {
       this.orbit.target.set(W / 2, 0, D / 2)
-      this.orbit.distance = Math.max(40, Math.max(W, D) * 1.1)
+      this.orbit.distance = Math.max(this.set.interior ? 18 : 40, Math.max(W, D) * 1.1)
       this.orbit.maxDistance = Math.max(400, Math.max(W, D) * 3)
       this.orbit.apply()
     }
@@ -430,7 +571,7 @@ export class AreaViewport {
     this.hemi.intensity = night ? 0.35 : 1.1
     this.scene.background = new THREE.Color(night ? 0x070a14 : 0x9fb6cf)
     this.scene.fog = night ? new THREE.Fog(0x0a0e1a, far * 0.35, far * 1.4) : new THREE.Fog(0x9fb6cf, far * 0.6, far * 2.5)
-    this.lightsGroup.visible = night
+    this.lightsGroup.visible = night || !!this.set.interior // a room's hearth burns by day too
     this.drawMoonHud(night ? m : null)
   }
 
@@ -507,6 +648,7 @@ export class AreaViewport {
     g.add(model)
     g.position.set((pl.x + t.w / 2) * c, 0, (pl.z + t.d / 2) * c)
     g.userData.lights = model.userData.lights
+    g.userData.door = model.userData.door
     return g
   }
 
@@ -531,6 +673,78 @@ export class AreaViewport {
     }
   }
 
+  // Adds, moves and removes the people to match the area (S3)
+  private syncNpcs(): void {
+    const want = this.area.npcs ?? {}
+    for (const [id, n] of Object.entries(want)) {
+      const key = JSON.stringify(n)
+      let have = this.npcs.get(id)
+      if (have?.key === key) continue
+      if (!have) {
+        const model = new CharacterModel(npcColor(n))
+        this.scene.add(model.group)
+        const label = document.createElement('div')
+        label.dataset.npc = id
+        label.style.cssText =
+          'position:absolute;z-index:2;padding:1px 6px;border-radius:3px;font:12px Georgia,serif;color:#f3e7cf;pointer-events:none;' +
+          'background:rgba(20,16,12,0.75);transform:translate(-50%,-160%);white-space:nowrap'
+        this.container.appendChild(label)
+        have = { key, model, label }
+        this.npcs.set(id, have)
+      }
+      have.key = key
+      have.label.textContent = n.name
+      have.model.group.position.set(n.x, 0, n.z)
+      // facing 0 is north (-z), turning clockwise; the model faces +z at rotation 0
+      have.model.group.rotation.y = Math.PI - (n.facing ?? 0)
+    }
+    for (const [id, have] of this.npcs) {
+      if (want[id]) continue
+      this.scene.remove(have.model.group)
+      have.label.remove()
+      this.npcs.delete(id)
+    }
+    if (this.playing) this.buildWalk()
+  }
+
+  // The person standing nearest a point on the ground, within reach
+  private npcAt(x: number, z: number, reach = 1.2): Npc | null {
+    let best: Npc | null = null
+    let bestD = reach
+    for (const n of Object.values(this.area.npcs ?? {})) {
+      const d = Math.hypot(n.x - x, n.z - z)
+      if (d < bestD) {
+        best = n
+        bestD = d
+      }
+    }
+    return best
+  }
+
+  // The linked doors with where a character stands to go through each
+  private doors(): { id: string; link: string; at: Point }[] {
+    const out: { id: string; link: string; at: Point }[] = []
+    const v = new THREE.Vector3()
+    for (const [id, { group }] of this.pieces) {
+      const d = group.userData.door as [number, number] | undefined
+      const pl = this.area.pieces[id]
+      if (!d || !pl) continue
+      group.updateMatrixWorld(true)
+      v.set(d[0], 0, d[1])
+      group.children[0].localToWorld(v)
+      out.push({ id, link: pl.link ?? '', at: { x: v.x, z: v.z } })
+    }
+    return out
+  }
+
+  // Where a character comes in from another area: the door leading back there
+  private doorTo(area: string): Point | null {
+    const d = this.doors().find((x) => x.link === area)
+    if (!d) return null
+    const near = this.walk?.nearestWalkable(d.at, 6)
+    return near && this.walk ? this.walk.centre(near[0], near[1]) : d.at
+  }
+
   private drawSelection(): void {
     const pl = this.selected ? this.area.pieces[this.selected] : undefined
     const p = pl && pieceOf(this.set, pl.piece)
@@ -549,8 +763,46 @@ export class AreaViewport {
     if (e.button !== 0) return
     if (this.playing) {
       const hit = this.groundAt(e.offsetX, e.offsetY)
-      if (hit && !this.walkTo(hit.x, hit.z)) this.flash('No way there')
+      if (!hit) return
+      this.talk.end()
+      this.arrival = null
+      // a person: walk up to them and talk
+      const n = this.npcAt(hit.x, hit.z)
+      if (n) {
+        if (!this.walkNear({ x: n.x, z: n.z })) this.flash('No way there')
+        else this.arrival = { kind: 'talk', id: n.id }
+        return
+      }
+      // a linked door: walk to it and go through
+      const door = this.doors().find((d) => Math.hypot(d.at.x - hit.x, d.at.z - hit.z) < 3.5)
+      if (door) {
+        if (!door.link) {
+          this.flash('This door leads nowhere yet')
+          return
+        }
+        if (!this.walkNear(door.at)) this.flash('No way there')
+        else this.arrival = { kind: 'travel', area: door.link }
+        return
+      }
+      if (!this.walkTo(hit.x, hit.z)) this.flash('No way there')
       return
+    }
+    if (this.npcTool) {
+      const hit = this.groundAt(e.offsetX, e.offsetY)
+      const W = this.area.width * this.set.cell
+      const D = this.area.depth * this.set.cell
+      if (!hit || hit.x < 0 || hit.z < 0 || hit.x > W || hit.z > D) return
+      this.opts.onIntent?.({ kind: 'placeNpc', npcKind: this.npcTool, x: round1(hit.x), z: round1(hit.z) })
+      return
+    }
+    {
+      const hit = this.groundAt(e.offsetX, e.offsetY)
+      const n = hit && !this.tool ? this.npcAt(hit.x, hit.z) : null
+      if (n) {
+        this.selectNpc(n.id)
+        return
+      }
+      if (this.selectedNpc) this.selectNpc(null)
     }
     const cell = this.cellAt(e.offsetX, e.offsetY)
     if (!cell) return
@@ -567,6 +819,26 @@ export class AreaViewport {
   private onKey = (e: KeyboardEvent) => {
     if (this.playing) {
       if (e.key === 'Escape') this.path = []
+      return
+    }
+    if (this.selectedNpc) {
+      const n = this.area.npcs?.[this.selectedNpc]
+      if (!n) return
+      if (e.key === 'Delete' || e.key === 'Backspace') this.opts.onIntent?.({ kind: 'removeNpc', id: n.id })
+      else if (e.key === 'Escape') this.selectNpc(null)
+      else if (e.key.startsWith('Arrow') && e.altKey) {
+        const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key] ?? [0, 0]
+        const W = this.area.width * this.set.cell
+        const D = this.area.depth * this.set.cell
+        const x = Math.min(W, Math.max(0, n.x + d[0] * 0.5))
+        const z = Math.min(D, Math.max(0, n.z + d[1] * 0.5))
+        this.opts.onIntent?.({ kind: 'moveNpc', id: n.id, x, z })
+        e.preventDefault()
+      }
+      return
+    }
+    if (e.key === 'Escape' && this.npcTool) {
+      this.setNpcTool(null)
       return
     }
     if (e.key === 'r' || e.key === 'R') {
@@ -629,7 +901,8 @@ export class AreaViewport {
   private buildWalk(): void {
     const t0 = performance.now()
     const c = this.set.cell
-    const grid = new WalkGrid(this.area.width * c, this.area.depth * c, 1)
+    // rooms (2 m cells) need a finer grid than the farmstead to pass between furniture
+    const grid = new WalkGrid(this.area.width * c, this.area.depth * c, c < 5 ? 0.25 : 1)
     const v = new THREE.Vector3()
     for (const { group } of this.pieces.values()) {
       const model = group.children[0]
@@ -657,6 +930,7 @@ export class AreaViewport {
         grid.block(minX, minZ, maxX - minX, maxZ - minZ)
       }
     }
+    for (const n of Object.values(this.area.npcs ?? {})) grid.block(n.x - 0.4, n.z - 0.4, 0.8, 0.8)
     this.walk = grid
     this.navMs = performance.now() - t0
     // A piece laid on the character, or on its way, moves it aside or finds another way
@@ -715,7 +989,18 @@ export class AreaViewport {
         budget = 0
       }
     }
-    if (!this.path.length) this.marker.visible = false
+    if (!this.path.length) {
+      this.marker.visible = false
+      const a = this.arrival
+      this.arrival = null
+      if (a?.kind === 'talk') {
+        const n = this.area.npcs?.[a.id]
+        if (n) ch.group.rotation.y = Math.atan2(n.x - pos.x, n.z - pos.z)
+        if (!this.talkTo(a.id)) this.flash(`${n?.name ?? 'They'} has nothing to say`)
+      } else if (a?.kind === 'travel') {
+        this.opts.onTravel?.(a.area)
+      }
+    }
     const target = this.path.length ? 1 : 0
     this.moving += (target - this.moving) * Math.min(1, dt * 10)
     this.stride += dt * speed * 2.4 * (this.path.length ? 1 : 0)
@@ -846,6 +1131,15 @@ export class AreaViewport {
     const w = this.renderer.canvas.clientWidth
     const h = this.renderer.canvas.clientHeight
     const v = new THREE.Vector3()
+    for (const n of this.npcs.values()) {
+      v.copy(n.model.group.position)
+      v.y = 2.4
+      v.project(this.orbit.camera)
+      const visible = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1
+      n.label.style.display = visible ? 'block' : 'none'
+      n.label.style.left = `${((v.x + 1) / 2) * w}px`
+      n.label.style.top = `${((1 - v.y) / 2) * h}px`
+    }
     for (const r of this.remotes.values()) {
       const a = r.group.userData.anchor as THREE.Vector3 | undefined
       if (!a) {
@@ -861,8 +1155,14 @@ export class AreaViewport {
   }
 
   private updateHint(): void {
-    this.hint.textContent = this.playing
-      ? 'Playing · click the ground to walk there · right-drag to turn the view · wheel to zoom · Esc to stop walking'
+    this.hint.textContent = this.talk.open
+      ? 'Pick an answer · 1 to 9 · Esc to end the talk'
+      : this.playing
+      ? 'Playing · click the ground to walk there · click a person to talk · click a door to go through · Esc to stop walking'
+      : this.npcTool
+      ? 'Click to stand a person there · Esc to stop'
+      : this.selectedNpc
+      ? 'Alt+arrows to move · Delete to remove · Esc to deselect'
       : this.tool
       ? `Placing ${pieceOf(this.set, this.tool)?.title ?? this.tool} · click to place · R to turn · Esc to stop`
       : this.selected
@@ -893,6 +1193,15 @@ function rectLines(x: number, z: number, w: number, d: number, y: number): THREE
     x + w, y, z + d, x, y, z + d,  x, y, z + d, x, y, z,
   ], 3))
   return g
+}
+
+function round1(v: number): number {
+  return Math.round(v * 10) / 10
+}
+
+// A person's cloak, by their look
+function npcColor(n: Npc): number {
+  return { farmer: 0x7a6a3a, wife: 0x6b3b4a, child: 0x4a6b5a }[n.kind ?? ''] ?? 0x8a5a3a
 }
 
 function hash(s: string): number {

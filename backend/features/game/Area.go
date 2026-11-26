@@ -32,7 +32,24 @@ const (
 	EventPlaced  = "placed"  // {placement}
 	EventMoved   = "moved"   // {placement}
 	EventRemoved = "removed" // {id}
+	// S3: doors and people
+	EventLinked     = "linked"     // {id, link}
+	EventNpcPlaced  = "npcPlaced"  // {npc}
+	EventNpcMoved   = "npcMoved"   // {npc}
+	EventNpcRemoved = "npcRemoved" // {id}
 )
+
+// Npc is a person standing in an area (S3): where, facing which way, and
+// what they say when the player talks to them.
+type Npc struct {
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	Kind     string  `json:"kind,omitempty"` // a look, e.g. farmer
+	X        float64 `json:"x"`              // metres from the west edge
+	Z        float64 `json:"z"`              // metres from the north edge
+	Facing   float64 `json:"facing"`         // radians, 0 facing north, clockwise
+	Dialogue string  `json:"dialogue,omitempty"`
+}
 
 // GameArea is an area definition as the projection keeps it.
 type GameArea struct {
@@ -42,13 +59,14 @@ type GameArea struct {
 	Width     int                  `json:"width"`
 	Depth     int                  `json:"depth"`
 	Pieces    map[string]Placement `json:"pieces"`
+	Npcs      map[string]Npc       `json:"npcs,omitempty"`
 	Deleted   bool                 `json:"deleted,omitempty"`
 	Version   uint64               `json:"version"`
 	CreatedAt time.Time            `json:"createdAt"`
 	UpdatedAt time.Time            `json:"updatedAt"`
 }
 
-const areaFields = `{id, name, pieceSet, width, depth (cells of 10 m), pieces: {<id>: {id, piece, x, z, rot}}, deleted, version, createdAt, updatedAt}`
+const areaFields = `{id, name, pieceSet, width, depth (cells of the set's size, 10 m for farmland), pieces: {<id>: {id, piece, x, z, rot, link (the area a door leads to)}}, npcs: {<id>: {id, name, kind, x, z (metres), facing, dialogue}}, deleted, version, createdAt, updatedAt}`
 
 type areaChange struct {
 	Area      *GameArea  `json:"area,omitempty"`
@@ -57,6 +75,8 @@ type areaChange struct {
 	Depth     int        `json:"depth,omitempty"`
 	Placement *Placement `json:"placement,omitempty"`
 	ID        string     `json:"id,omitempty"`
+	Link      string     `json:"link,omitempty"`
+	Npc       *Npc       `json:"npc,omitempty"`
 }
 
 func foldArea(f live.Fold) (json.RawMessage, error) {
@@ -100,6 +120,21 @@ func foldArea(f live.Fold) (json.RawMessage, error) {
 		a.Pieces[c.Placement.ID] = *c.Placement
 	case EventRemoved:
 		delete(a.Pieces, c.ID)
+	case EventLinked:
+		if pl, ok := a.Pieces[c.ID]; ok {
+			pl.Link = c.Link
+			a.Pieces[c.ID] = pl
+		}
+	case EventNpcPlaced, EventNpcMoved:
+		if c.Npc == nil {
+			return f.State, nil
+		}
+		if a.Npcs == nil {
+			a.Npcs = map[string]Npc{}
+		}
+		a.Npcs[c.Npc.ID] = *c.Npc
+	case EventNpcRemoved:
+		delete(a.Npcs, c.ID)
 	case EventDeleted:
 		a.Deleted = true
 	case EventRestored:
@@ -121,7 +156,8 @@ func NewPieceID() string { return "p" + strconv.FormatUint(features.NewTSID(), 3
 const placementSchema = `"piece":{"type":"string","description":"The piece's id in the area's piece set, e.g. farmhouse (game.pieceSet lists them)"},
   "x":{"type":"integer","minimum":0,"description":"The cell of the footprint's north-west corner after turning, from the west edge"},
   "z":{"type":"integer","minimum":0,"description":"That cell from the north edge"},
-  "rot":{"type":"integer","minimum":0,"maximum":3,"description":"Turns of 90° clockwise seen from above (0 to 3)"}`
+  "rot":{"type":"integer","minimum":0,"maximum":3,"description":"Turns of 90° clockwise seen from above (0 to 3)"},
+  "link":{"type":"string","description":"For a door piece: the area it leads to (game.linkDoor sets it later)"}`
 
 func contributeAreas(reg *extensions.Registry) {
 	live.Projectors.Register(reg, live.Projector{
@@ -315,6 +351,9 @@ func contributeAreas(reg *extensions.Registry) {
 		if msg := Fit(set, a.Width, a.Depth, a.Pieces, pl); msg != "" {
 			return nil, misfit(msg)
 		}
+		if pl.Link != "" && !live.ValidToken(pl.Link) {
+			return nil, problem("", "args.link", "a link is an area's id", "")
+		}
 		d.Undo("", live.OpOf("game.removePiece", d.Target.ID, map[string]any{"id": pl.ID}))
 		return []live.NewEvent{{Type: EventPlaced, Data: areaChange{Placement: &pl}}}, nil
 	})
@@ -389,7 +428,11 @@ func contributeAreas(reg *extensions.Registry) {
 			d.Undo("") // already gone
 			return nil, nil
 		}
-		d.Undo("", live.OpOf("game.placePiece", d.Target.ID, map[string]any{"id": old.ID, "piece": old.Piece, "x": old.X, "z": old.Z, "rot": old.Rot}))
+		back := map[string]any{"id": old.ID, "piece": old.Piece, "x": old.X, "z": old.Z, "rot": old.Rot}
+		if old.Link != "" {
+			back["link"] = old.Link
+		}
+		d.Undo("", live.OpOf("game.placePiece", d.Target.ID, back))
 		return []live.NewEvent{{Type: EventRemoved, Data: areaChange{ID: old.ID}}}, nil
 	})
 
@@ -427,5 +470,6 @@ func contributeAreas(reg *extensions.Registry) {
 		return []live.NewEvent{{Type: EventRestored, Data: areaChange{}}}, nil
 	})
 
+	contributeAreaPeople(register, alive, missing)
 	areaQueries(reg)
 }

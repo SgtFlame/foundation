@@ -38,6 +38,10 @@ type Piece struct {
 	Size        [2]int `json:"size"` // [width (x), depth (z)] in cells, unturned
 	Model       string `json:"model"`
 	Edges       Edges  `json:"edges"`
+	// Boundary pieces (doors and windows of an interior) stand on the area's edge
+	Boundary bool `json:"boundary,omitempty"`
+	// Door pieces lead to another area once game.linkDoor links them
+	Door bool `json:"door,omitempty"`
 }
 
 // PieceSet is a set of pieces that fit together.
@@ -49,6 +53,8 @@ type PieceSet struct {
 	EdgeTypes   map[string]string `json:"edgeTypes"`
 	Meets       [][2]string       `json:"meets"` // pairs of different types that may touch
 	Pieces      []Piece           `json:"pieces"`
+	// Interior sets (S3) are rooms: walls round the area's edge, a floor
+	Interior bool `json:"interior,omitempty"`
 }
 
 // Piece is the set's piece of that id.
@@ -144,6 +150,8 @@ type Placement struct {
 	X     int    `json:"x"`
 	Z     int    `json:"z"`
 	Rot   int    `json:"rot"`
+	// Link is the area a door piece leads to (game.linkDoor, S3)
+	Link string `json:"link,omitempty"`
 }
 
 func reverse(s []string) []string {
@@ -205,6 +213,9 @@ func Fit(set *PieceSet, width, depth int, others map[string]Placement, pl Placem
 	w, d, _ := Turned(p, pl.Rot)
 	if pl.X < 0 || pl.Z < 0 || pl.X+w > width || pl.Z+d > depth {
 		return fmt.Sprintf("the %s (%d × %d cells) at cell %d, %d does not fit inside the %d × %d area", p.Title, w, d, pl.X, pl.Z, width, depth)
+	}
+	if p.Boundary && pl.X != 0 && pl.Z != 0 && pl.X+w != width && pl.Z+d != depth {
+		return fmt.Sprintf("the %s at cell %d, %d must stand on the area's edge", p.Title, pl.X, pl.Z)
 	}
 	// Who covers each cell, and each neighbour's edges
 	cover := map[[2]int]string{}

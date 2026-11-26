@@ -49,3 +49,32 @@ test('the farmstead sample fits, piece by piece', async () => {
     placed[pl.id] = pl
   })
 })
+
+test('an interior piece marked boundary stands on the edge', () => {
+  const kitchen = JSON.parse(readFileSync(new URL('../../../../backend/features/game/piecesets/kitchen.json', import.meta.url), 'utf8')) as PieceSet
+  assert.equal(kitchen.interior, true)
+  assert.equal(fit(kitchen, 6, 5, {}, { id: 'h', piece: 'hearth', x: 2, z: 0, rot: 0 }), '')
+  assert.match(fit(kitchen, 6, 5, {}, { id: 'h', piece: 'hearth', x: 2, z: 2, rot: 0 }), /must stand on the area's edge/)
+  assert.equal(fit(kitchen, 6, 5, {}, { id: 't', piece: 'table', x: 2, z: 2, rot: 0 }), '')
+  assert.equal(pieceOf(kitchen, 'door')?.door, true)
+})
+
+test('the kitchen sample fits, piece by piece, and its people stand on the floor', async () => {
+  const { kitchen } = await import('./Samples.ts')
+  const ks = JSON.parse(readFileSync(new URL('../../../../backend/features/game/piecesets/kitchen.json', import.meta.url), 'utf8')) as PieceSet
+  const placed: Record<string, Placement> = {}
+  kitchen.pieces.forEach((p, i) => {
+    const pl = { ...p, id: p.id ?? `p${i}` }
+    assert.equal(fit(ks, kitchen.width, kitchen.depth, placed, pl), '', `${JSON.stringify(pl)}`)
+    placed[pl.id] = pl
+  })
+  for (const n of kitchen.npcs) {
+    const cx = Math.floor(n.x / ks.cell)
+    const cz = Math.floor(n.z / ks.cell)
+    const under = Object.values(placed).find((pl) => {
+      const t = turned(pieceOf(ks, pl.piece)!, pl.rot)
+      return cx >= pl.x && cx < pl.x + t.w && cz >= pl.z && cz < pl.z + t.d
+    })
+    assert.equal(under, undefined, `${n.name} stands on ${under?.piece}`)
+  }
+})

@@ -930,3 +930,11 @@ Walking the moon and its asteroids ([Game.md](Game.md) › *Built in V2*). Later
 - read the terrain only through `WorldGenerator` (and `VoxelWorld.densityAt` for edits), never a `MoonGenerator` alone, since a world has several bodies;
 - keep pack rules in the `cmd-game-editTerrain` blueprint and mirror them in `LocalEdits.ts` for the demo;
 - give any new play state that follows a player a projector keyed `<worldId>.<userId>`, as `game.packs` is.
+
+## Game S3 (forge 375)
+
+The farmhouse kitchen and the farmer ([Game.md](Game.md) › *Built in S3*). Later game work must:
+
+- make interiors separate areas of an `interior` piece set, joined by doors linked with `game.linkDoor`;
+- keep a door's stand point in its model (`userData.door`), so travel arrives by the door that leads back;
+- give dialogues answers that lead to a node or end the talk, checked by `Dialogue.Check`, and keep their text out of Go.
