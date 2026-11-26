@@ -375,6 +375,14 @@ The story game's sixteenth tracer bullet: Remembering (the play design's referen
 - **The dream wound**: `game.stories` gives `items.wound` when `dream` is first reached. While it aches the Chill never fades below 30 (`aching`, `WOUND_CHILL`). A night's sleep after eating something hot (cooking at a hearth since waking) is a warm, dreamless night: it heals the wound (`use: "wound"`).
 - The Area tab's *Play the story again* now follows the last of `STORY_STEPS`, so a new step never cuts the story short.
 
+## Built in V19 (forge 360)
+
+Working the ground by holding (the user, 2026-11-26: "use a tool to harvest resources over time by holding down the action button", as in Space Engineers and 7 Days to Die). Engine only; the server's commands are unchanged.
+
+- **Mining** (`craft/Mining.ts`): on foot, holding the dig button on a spot works it. Each material takes work per m³ by its hardness (`HARDNESS`: dust 1, rock 3, ore 5), and the tool in hand brings work each second (`toolPower`: bare hands 1, hand drill 6, powered drill 16). When the bite under the brush has had its work (`workFor` over `VoxelWorld.contentsOf`), it comes away as one `game.editTerrain`, and the next bite starts. A bigger brush is a longer hold; turning to another spot starts over (`Hold`, `spotKey`). A ring around the crosshair fills in the colour of what is mostly there (ore blue, rock tan, dust pale), with *drill · rock · 1.4 s* under it, and chips fly from the tool.
+- **Hold actions**: holding Z cuts a wreck's plate free (3 s by hand, under a second with the powered drill), and holding H cuts a ripe crop (1.5 s), with the same ring.
+- Filling (right button) and digging from the flying camera act at once, as before.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

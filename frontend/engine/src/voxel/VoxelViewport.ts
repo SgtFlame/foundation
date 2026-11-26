@@ -19,6 +19,7 @@ import { eat, FRESH, hungry, NeedsHud, rounded, stepNeeds, type Needs } from '..
 import { countdown, DRONE_HIT, DRONE_SCRAP, dronesOf, shotHits, surgeAt, TURRET_RANGE, TURRET_RELOAD, turretPick, type Drone } from '../surge/Surge.ts'
 import { MANUAL_BLOCK, nearestSalvage, SALVAGE_ORE, salvageKey, wreckSites, type Vec3 as WVec3 } from '../wreck/Wreck.ts'
 import { digLimits, missing, nextRecipe, spend, type DigLimits } from '../craft/Crafting.ts'
+import { Hold, secondsFor, spotKey, toolPower, workFor, type Contents } from '../craft/Mining.ts'
 
 // What the player asks for; the host sends it to the server, which decides
 export interface EditIntent {
@@ -157,6 +158,9 @@ export interface ViewportStats {
 
 const MIN_BRUSH = 0.75
 const MAX_BRUSH = 6
+const HARVEST_SECONDS = 1.5 // holding H on a ripe crop
+const SALVAGE_WORK = 3 // work to cut a wreck's plate free (3 s by hand)
+const CHIP_GEOMETRY = new THREE.BoxGeometry(0.07, 0.07, 0.07)
 const REACH = 80
 // A hand tool reaches this far from the eyes
 const HAND_REACH = 8
@@ -181,6 +185,18 @@ export class VoxelViewport {
   private repeat = 0
   // When each edit still on its way was asked for, oldest first
   private sentAt: number[] = []
+  // Working the ground by holding (the user, 2026-11-26): the spot held, its
+  // contents, the ring that fills and the chips that fly
+  private readonly mining = new Hold()
+  private miningSpot: { key: string; has: Contents & { empty: number }; centre: THREE.Vector3; radius: number } | null = null
+  private readonly workRing: HTMLDivElement
+  private readonly workLabel: HTMLDivElement
+  private readonly chips = new THREE.Group()
+  private chipList: { mesh: THREE.Mesh; v: THREE.Vector3; life: number }[] = []
+  private chipTick = 0
+  // Hold actions by key (salvaging, harvesting): the target held and when it is done
+  private readonly actionHold = new Hold()
+  private frameDt = 0
   private readonly remotes = new Map<string, { mesh: THREE.Mesh; label: HTMLDivElement; state: RemoteCamera }>()
   private editRoundTripMs: number | null = null
   private lastCamera: CameraState | null = null
@@ -283,6 +299,16 @@ export class VoxelViewport {
       'position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;pointer-events:none;z-index:2;' +
       'border:2px solid rgba(255,255,255,0.75);border-radius:50%;display:none'
     container.appendChild(this.crosshair)
+    this.workRing = document.createElement('div')
+    this.workRing.dataset.work = ''
+    this.workRing.style.cssText =
+      'position:absolute;left:50%;top:50%;width:38px;height:38px;margin:-19px 0 0 -19px;pointer-events:none;z-index:2;border-radius:50%;display:none;' +
+      '-webkit-mask:radial-gradient(circle,transparent 13px,#000 14px);mask:radial-gradient(circle,transparent 13px,#000 14px)'
+    container.appendChild(this.workRing)
+    this.workLabel = document.createElement('div')
+    this.workLabel.style.cssText =
+      'position:absolute;left:50%;top:50%;transform:translate(-50%,26px);pointer-events:none;z-index:2;display:none;font:11px system-ui,sans-serif;color:#eee;text-shadow:0 0 3px #000;white-space:nowrap'
+    container.appendChild(this.workLabel)
     this.hint = document.createElement('div')
     this.hint.style.cssText =
       'position:absolute;bottom:10px;left:50%;transform:translateX(-50%);padding:4px 10px;border-radius:4px;z-index:2;' +
@@ -346,7 +372,7 @@ export class VoxelViewport {
     this.scene.add(globe, glow, this.cropsGroup)
     // V12: the sea in the planet's hollows, its herd and a fishing float
     this.float.visible = false
-    this.scene.add(seaMesh(), this.wildGroup, this.float, this.wreckGroup, this.surgeGroup, this.turretGroup)
+    this.scene.add(seaMesh(), this.wildGroup, this.float, this.wreckGroup, this.surgeGroup, this.turretGroup, this.chips)
   }
 
   // V9: the sky turns blue and the stars fade as the camera goes down into the planet's air
@@ -415,7 +441,7 @@ export class VoxelViewport {
     this.nearCrop = best
     if (changed) this.updateHint()
     if (!this.input.locked) return
-    if (this.input.pressed('KeyH') && best?.ripe) this.opts.onShipIntent?.({ kind: 'harvest', crop: best.id })
+    if (best?.ripe && this.holdKey('KeyH', `crop:${best.id}`, HARVEST_SECONDS, 'cutting the barley', '#e8c95a')) this.opts.onShipIntent?.({ kind: 'harvest', crop: best.id })
     if (this.input.pressed('KeyP') && this.brushHit && this.onPlanet(this.brushHit)) {
       const h = this.brushHit
       this.opts.onShipIntent?.({ kind: 'plant', x: round2(h.x), y: round2(h.y), z: round2(h.z) })
@@ -571,7 +597,7 @@ export class VoxelViewport {
   // V9: what P and H do here
   private farmHint(): string {
     const c = this.nearCrop
-    if (c) return c.ripe ? 'H: harvest the barley · ' : `Barley: ripe in ${c.left} s · `
+    if (c) return c.ripe ? 'Hold H: harvest the barley · ' : `Barley: ripe in ${c.left} s · `
     const wild = `${this.nearGrazer ? 'V: hunt the grazer · ' : ''}${this.fishing.state !== 'idle' ? 'N: strike · ' : this.facingWater ? 'N: cast a line · ' : ''}`
     return wild + (this.walker && this.onPlanet(this.fly.camera.position) ? 'P: plant barley where you look · ' : '')
   }
@@ -596,7 +622,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.benchHint()}${this.nearWreck ? 'Z: salvage scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -732,6 +758,7 @@ export class VoxelViewport {
   private packTick = 0
 
   private step(dt: number): void {
+    this.frameDt = dt
     const input = this.input
     this.stepNeeds(dt)
     if (this.shipLayer.pilotOf && this.shipLayer.body) {
@@ -785,7 +812,10 @@ export class VoxelViewport {
       const digging = input.isButtonDown(0)
       const filling = input.isButtonDown(2)
       this.brushKind = filling && !digging ? 'fill' : digging ? 'dig' : this.brushKind
-      if ((digging || filling) && this.brushHit) {
+      if (digging && !filling && this.brushHit && this.mode === 'walk') {
+        this.workGround(dt, this.brushHit)
+      } else if ((digging || filling) && this.brushHit) {
+        this.endWork()
         this.repeat -= dt
         if (input.clicked(0) || input.clicked(2) || this.repeat <= 0) {
           this.repeat = this.mode === 'walk' ? this.dig().repeat : 0.18
@@ -793,11 +823,116 @@ export class VoxelViewport {
         }
       } else {
         this.repeat = 0
+        this.endWork()
       }
     } else {
       this.brushHit = null
+      this.endWork()
     }
+    this.stepChips(dt)
     input.endStep()
+  }
+
+  // On foot, the dig button held on a spot works it with the tool in hand:
+  // harder ground takes longer; when the bite has had its work, it comes away
+  private workGround(dt: number, at: THREE.Vector3): void {
+    const { centre, radius } = this.editCentre('dig', at)
+    const key = `${spotKey(centre, Math.max(0.3, radius * 0.45))}@${radius}`
+    if (this.miningSpot?.key !== key) {
+      const has = this.world.contentsOf(centre.x, centre.y, centre.z, radius)
+      this.miningSpot = { key, has, centre, radius }
+    }
+    const spot = this.miningSpot
+    const { work, main } = workFor(spot.has)
+    const tools = this.progress?.tools
+    const done = this.mining.step(dt, key, work, toolPower(tools))
+    if (main) {
+      const left = (1 - this.mining.fraction) * secondsFor(spot.has, tools)
+      const color = main === 'ore' ? '#5fd3ff' : main === 'rock' ? '#c9b48a' : '#e8e2d6'
+      this.workRing.style.display = 'block'
+      this.workRing.style.background = `conic-gradient(${color} ${Math.round(this.mining.fraction * 360)}deg, rgba(255,255,255,0.18) 0)`
+      this.workLabel.style.display = 'block'
+      this.workLabel.textContent = `${this.dig().name} · ${main} · ${left.toFixed(1)} s`
+      this.chipTick -= dt
+      if (this.chipTick <= 0) {
+        this.chipTick = 0.12
+        this.chip(at, color)
+      }
+    } else this.hideWork()
+    if (done) {
+      this.sendEditAt('dig', spot.centre, spot.radius, spot.has)
+      this.miningSpot = null
+    }
+  }
+
+  // A key held on one target for a while: the ring fills, and it is done
+  // once; letting go or turning to another target starts over
+  private holdKey(code: string, target: string, seconds: number, label: string, color: string): boolean {
+    const key = `${code}:${target}`
+    if (!this.input.isDown(code)) {
+      if (this.actionHold.key.startsWith(code + ':')) {
+        this.actionHold.release()
+        this.hideWork()
+      }
+      return false
+    }
+    const done = this.actionHold.step(this.frameDt, key, seconds, 1)
+    this.workRing.style.display = done ? 'none' : 'block'
+    this.workRing.style.background = `conic-gradient(${color} ${Math.round(this.actionHold.fraction * 360)}deg, rgba(255,255,255,0.18) 0)`
+    this.workLabel.style.display = done ? 'none' : 'block'
+    this.workLabel.textContent = `${label} · ${((1 - this.actionHold.fraction) * seconds).toFixed(1)} s`
+    if (done) this.actionHold.release()
+    return done
+  }
+
+  // How long a wreck's plate takes to cut free with the tool in hand
+  private salvageSeconds(): number {
+    return SALVAGE_WORK / toolPower(this.progress?.tools)
+  }
+
+  private endWork(): void {
+    if (!this.mining.key && !this.miningSpot) return
+    this.mining.release()
+    this.miningSpot = null
+    this.hideWork()
+  }
+
+  private hideWork(): void {
+    this.workRing.style.display = 'none'
+    this.workLabel.style.display = 'none'
+  }
+
+  // A chip of ground flying off the tool
+  private chip(at: THREE.Vector3, color: string): void {
+    if (this.chipList.length > 40) return
+    const mesh = new THREE.Mesh(CHIP_GEOMETRY, new THREE.MeshBasicNodeMaterial({ color }))
+    mesh.position.copy(at)
+    const up = at.clone().normalize()
+    const v = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(2.5).addScaledVector(up, 2.5)
+    this.chips.add(mesh)
+    this.chipList.push({ mesh, v, life: 0.6 })
+  }
+
+  private stepChips(dt: number): void {
+    if (!this.chipList.length) return
+    for (const c of this.chipList) {
+      c.life -= dt
+      c.v.addScaledVector(c.mesh.position.clone().normalize(), -4 * dt)
+      c.mesh.position.addScaledVector(c.v, dt)
+    }
+    for (const c of this.chipList.filter((x) => x.life <= 0)) {
+      this.chips.remove(c.mesh)
+      ;(c.mesh.material as THREE.Material).dispose()
+    }
+    this.chipList = this.chipList.filter((x) => x.life > 0)
+  }
+
+  // Where a hold or click at a surface point acts, and how wide
+  private editCentre(kind: EditKind, at: THREE.Vector3): { centre: THREE.Vector3; radius: number } {
+    const g = this.world.generator.gravity(at.x, at.y, at.z, { x: 0, y: 0, z: 0 })
+    const n = new THREE.Vector3(-g.x, -g.y, -g.z).normalize()
+    const centre = kind === 'dig' ? at.clone().addScaledVector(n, this.brushRadius * 0.35) : at.clone().addScaledVector(n, -this.brushRadius * 0.2)
+    return { centre, radius: Number(this.brushRadius.toFixed(2)) }
   }
 
   // --- Ships (V3) ---
@@ -898,7 +1033,7 @@ export class VoxelViewport {
       this.nearWreck = near ? { wreck: near.wreck, index: near.index } : null
       this.updateHint()
     }
-    if (near && w && this.input.locked && this.input.pressed('KeyZ')) this.salvage(near.wreck, near.index)
+    if (near && w && this.input.locked && this.holdKey('KeyZ', `wreck:${near.wreck}.${near.index}`, this.salvageSeconds(), 'cutting a plate free', '#c98a5a')) this.salvage(near.wreck, near.index)
   }
 
   salvage(wreck: string, index: number): void {
@@ -1679,13 +1814,13 @@ export class VoxelViewport {
 
   private sendEdit(kind: EditKind, at: THREE.Vector3): void {
     // A fill sits on the surface; a dig is centred a little above it, so a
-    // click carves a bowl rather than a buried bubble
-    // Up at that spot: away from the pull of the body it is on
-    const g = this.world.generator.gravity(at.x, at.y, at.z, { x: 0, y: 0, z: 0 })
-    const n = new THREE.Vector3(-g.x, -g.y, -g.z).normalize()
-    const c = kind === 'dig' ? at.clone().addScaledVector(n, this.brushRadius * 0.35) : at.clone().addScaledVector(n, -this.brushRadius * 0.2)
-    const radius = Number(this.brushRadius.toFixed(2))
-    const has = this.world.contentsOf(c.x, c.y, c.z, radius)
+    // click carves a bowl rather than a buried bubble (up being away from
+    // the pull of the body it is on)
+    const { centre, radius } = this.editCentre(kind, at)
+    this.sendEditAt(kind, centre, radius, this.world.contentsOf(centre.x, centre.y, centre.z, radius))
+  }
+
+  private sendEditAt(kind: EditKind, c: THREE.Vector3, radius: number, has: Contents & { empty: number }): void {
     const r2 = (v: number) => Math.round(v * 100) / 100
     this.sentAt.push(performance.now())
     if (this.sentAt.length > 64) this.sentAt.shift()
@@ -1910,6 +2045,8 @@ export class VoxelViewport {
     this.setRemoteCameras([])
     this.overlay?.dispose()
     this.crosshair.remove()
+    this.workRing.remove()
+    this.workLabel.remove()
     this.hint.remove()
     this.pack.remove()
     this.renderer.canvas.remove()
