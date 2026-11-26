@@ -138,7 +138,12 @@ export const LESSER_DECK: readonly Card[] = [
 
 // The first card drawn, the same for the same seed
 export function drawCard(seed: number): Card {
-  const i = Math.abs(Math.imul(seed | 0, 2654435761) >>> 0) % LESSER_DECK.length
+  // a full integer mix, so seeds a day apart draw unrelated cards (S11)
+  let h = (seed | 0) ^ 0x9e3779b9
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b)
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35)
+  h ^= h >>> 16
+  const i = (h >>> 0) % LESSER_DECK.length
   return LESSER_DECK[i]
 }
 

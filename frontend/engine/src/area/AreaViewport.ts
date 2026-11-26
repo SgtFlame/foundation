@@ -14,9 +14,10 @@ import { whistle } from '../defence/Whistle.ts'
 import { DialoguePanel } from './DialoguePanel.ts'
 import { FirstHourPanel } from '../objectives/FirstHour.ts'
 import { dragMarks, drawCard, herbSpots, howl, nextStep, showCard, showHerbal, SIGNATURE_TEXT, storySteps } from '../story/FirstHourStory.ts'
+import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../story/DayCard.ts'
 import { clarity, ditchSpot, ReadingScene, wenlanAnswer, type Told } from '../story/Reading.ts'
 import { canSleep, CLOCK_START, clockText, isDay, nightOf, showAlmanac, sleep, stepClock, type Clock } from '../story/Clock.ts'
-import { BODY_START, BodyHud, breathe, BreathPrompt, cook, humPool, rounded as roundBody, showCooking, spendHum, stepBody, type Body } from '../story/Hum.ts'
+import { BODY_START, BodyHud, breathe, BreathPrompt, humPool, rounded as roundBody, showCooking, stepBody, type Body } from '../story/Hum.ts'
 import { ashPile, buildModel, CharacterModel, interiorShell, material } from './Models.ts'
 import { fit, pieceOf, turned, type AreaDef, type Dialogue, type Npc, type PieceSet, type Placement } from './PieceSet.ts'
 
@@ -1033,7 +1034,7 @@ export class AreaViewport {
         break
       case 'cadence':
         if (this.story?.done.stillness) {
-          this.story.body = spendHum(this.story.body)
+          this.story.body = spendWith(this.story.body, this.dayEffect())
           this.hud.say('Strike, Pivot, Guard: the Hum answers the old cadence. Your next strike is aimed; your hands go cold.')
           break
         }
@@ -1357,7 +1358,7 @@ export class AreaViewport {
   private stepCharacter(dt: number): void {
     const ch = this.character
     if (!ch) return
-    const speed = 4
+    const speed = 4 * this.dayEffect().speed
     let budget = speed * dt
     const pos = ch.group.position
     while (budget > 0 && this.path.length) {
@@ -1546,7 +1547,13 @@ export class AreaViewport {
   }
 
   private humPool(): number {
-    return humPool(this.night)
+    return humPool(this.night) + (this.story ? this.dayEffect().hum : 0)
+  }
+
+  // S11: the day's card and its light buff or warning (none before the first morning)
+  private dayEffect(): CardEffect {
+    const st = this.story
+    return (st && dayCard(hash(st.area), st.clock.day)?.effect) || NO_EFFECT
   }
 
   // Each frame of play: the body changes, a breath is drawn, the HUD follows
@@ -1586,7 +1593,8 @@ export class AreaViewport {
       this.wasNearHearth = near
       this.updateHint()
     }
-    this.bodyHud.show(st.done.herbal ? st.body : null, this.humPool(), clockText(st.clock))
+    const today = dayCard(hash(st.area), st.clock.day)
+    this.bodyHud.show(st.done.herbal ? st.body : null, this.humPool(), clockText(st.clock) + (today && st.done.morning ? ` · ${today.card.title}: ${today.effect.line}` : ''))
   }
 
   // B by a hearth: stillness, breath by breath
@@ -1619,7 +1627,7 @@ export class AreaViewport {
       this.cooking = null
       if ((st.items[d.herb] ?? 0) < 1) return
       st.items[d.herb]--
-      st.body = cook(st.body, d)
+      st.body = cookWith(st.body, d, this.dayEffect())
       const p = this.player()
       st.done.cook = true
       this.opts.onStory?.({ step: 'cook', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: d.herb, ...this.stateToSave() })
@@ -1724,6 +1732,7 @@ export class AreaViewport {
       g.position.set(h.x, 0, h.z)
       g.userData.spot = h.spot
       this.herbs.add(g)
+      if (this.dayEffect().reveal) this.herbs.add(this.glowAt(h.x, h.z))
     }
     // S10: the willow bough in the culvert and the water backed up into the wheat, until cleared
     const ditch = st.done.reading && !st.done.ditch ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
@@ -1747,6 +1756,7 @@ export class AreaViewport {
       bough.rotation.y = 0.5
       bough.userData.ditch = true
       this.herbs.add(bough)
+      if (this.dayEffect().reveal) this.herbs.add(this.glowAt(ditch.x, ditch.z))
     }
   }
 
@@ -1765,6 +1775,14 @@ export class AreaViewport {
       this.say(wenlanAnswer(told))
     })
     return true
+  }
+
+  // S11: the Lantern's glow over something hidden: a soft column of light
+  private glowAt(x: number, z: number): THREE.Mesh {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.6, 6, 12, 1, true), new THREE.MeshBasicNodeMaterial({ color: 0xffd98a, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide }))
+    m.position.set(x, 3, z)
+    m.userData.glow = true
+    return m
   }
 
   // The field piece's size in cells, east and south (the bough's corner)
@@ -1884,7 +1902,9 @@ export class AreaViewport {
     setTimeout(() => (fade.style.opacity = '0'), 600)
     setTimeout(() => fade.remove(), 2800)
     showCard(this.container, card)
-    this.say(`You sleep by the hearth. Day ${st.clock.day + 1}; the day's card: ${card.title}.`)
+    this.drawMarks() // S11: the new day's card may light what is hidden
+    const e = dayCard(hash(st.area), st.clock.day)?.effect
+    this.say(`You sleep by the hearth. Day ${st.clock.day + 1}; the day's card: ${card.title}${e?.line ? `: ${e.line}` : ''}.`)
   }
 
   // S9: M, the moon almanac

@@ -277,6 +277,14 @@ The voxel game's thirteenth tracer bullet: a cabin on the planet with air (the u
 - Fixed on the way: a player who has only stood or slept somewhere has no `levels`, which broke the viewport's progress (it now fills the empty maps).
 - Known: a building is placed as a ship is (ahead of the player, its lowest blocks half sunk), so on a slope its downhill side floats a little, and a second building started where one stands goes on its roof.
 
+## Built in S11 (forge 375)
+
+The story game's eleventh tracer bullet: the day's card gives a light buff or a warning (the design's rule 7: "a daily one-card draw gives a tone for the day").
+
+- **`story/DayCard.ts`**: `dayCard(seed, day)` is the card of a story's day (the card the morning and sleeping show, `drawCard(seed + day)`, so nothing new is saved), with its `CardEffect`: *The Hearth* makes hot food do half again as much, *The Lantern* lights what is hidden nearby (a soft column of light over unpicked herbs and the willow bough), *The Hare* walks a quarter faster, *The Frost* is a warning (a spent Hum chills half again as much), *The Wren* adds one Hum to the sky's pool. `spendWith` and `cookWith` apply it.
+- **In the viewport**: the walking speed, the cadence's Hum, cooking and the Hum pool follow the day's card; the body HUD shows it beside the clock (*Day 4 · 09:01 · The Lantern: what is hidden nearby glows*), and sleeping names it.
+- `drawCard` now mixes its seed fully, so days in a row draw varied cards (before, neighbouring seeds often drew the same one).
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
