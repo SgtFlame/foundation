@@ -156,7 +156,7 @@ export class VoxelViewport {
     container.appendChild(this.hint)
     this.pack = document.createElement('div')
     this.pack.style.cssText =
-      'position:absolute;left:10px;bottom:10px;padding:4px 10px;border-radius:4px;z-index:2;display:none;' +
+      'position:absolute;left:10px;bottom:44px;padding:4px 10px;border-radius:4px;z-index:2;display:none;' +
       'font:12px system-ui,sans-serif;color:#eee;background:rgba(0,0,0,0.55);pointer-events:none;white-space:pre'
     this.pack.dataset.pack = ''
     container.appendChild(this.pack)

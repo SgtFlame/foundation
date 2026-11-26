@@ -67,6 +67,17 @@ The story game's first two tracer bullets: areas laid out from pieces, then walk
 - **Play** (`play(true)`) builds a walk grid from the placed pieces' blockers, turned and moved with each piece, and stands a placeholder character (`CharacterModel`) on the yard. A click on the ground walks it there along an A* path, straightened by line of sight, at 4 m/s with a walk animation; the camera follows. The cursor shows whether the ground under it can be reached. A piece laid while playing rebuilds the grid. `walkTo(x, z)` and `player()` serve tests and tools.
 - `nav/WalkGrid.ts` is the walk grid: 1 m cells, blocked rectangles grown by the walker's radius, 8-way A* without cutting corners. It stands in for the Recast navigation mesh until areas have height levels, and it is deterministic, so the server can run the same grid when it takes movement over (S4).
 
+## Built in V2 (forge 360)
+
+The voxel game's second tracer bullet: walk on the moon, fly to an asteroid with a thrust pack, carry what you dug.
+
+- **Bodies** (`voxel/Bodies.ts`, a thin 361a): `WorldGenerator` joins the moon and the generator's `asteroids` (0 to 8, default 2 for new worlds) into one terrain, the smallest signed distance of each body's own `MoonGenerator`. A seed places each asteroid, 8 to 16 m in radius, 50 to 90 m above the moon; the first floats over the north pole, in sight of a new player. The chunk sampler, the mesh workers and collisions all read the joined terrain. `VoxelWorld.densityAt` and `sampleAt` give the terrain at a point with the edits that reach it.
+- **Gravity** (361b, thin): each body pulls toward its centre with its surface pull (the moon 1.62 m/s² at 100 m, scaling with radius; an asteroid at least 0.35 m/s²) up to its highest ground, falling off as the 7th power of distance beyond it, so an asteroid's own pull wins a short way up.
+- **The walker** (`character/Walker.ts`, a thin 362a and 362b): a character of three spheres that walks on whichever body pulls it, its up turning toward away-from-the-pull, with ground snapping so it does not launch off crests in the low pull. Space jumps; X turns the thrust pack on, which flies in the view's direction (Space up, C down) with dampeners that stop it when let go. It reads only a terrain (density and gravity), so its tests run in Node.
+- **`VoxelViewport`** has two modes: **fly** (the editor's camera, as in V1) and **walk** (G switches; `setMode`, `onModeChange`). Walking, the brush reaches 8 m from the eyes, and each dig or fill sends what it takes (`took: {dust, rock}`) or needs (`needs`), reckoned from the terrain with `VoxelWorld.contentsOf`. A panel shows the pack, the pull, the speed and the thrust pack.
+- **The pack** (a thin 362d and 363d): the `cmd-game-editTerrain` blueprint now reads the sender's pack (`game.packs`, keyed `<worldId>.<userId>`). A dig adds what it took, bounded by its sphere's volume, and is refused when the pack (4 m³) would overflow; a fill spends dust first, then rock, is made of whichever it spent more of, and is refused when the pack holds too little. Edits without `took` or `needs`, the editor's, leave the pack alone. Each edit carries the pack's change as `pack: {dust, rock}`. `game.pack {world}` gives the caller's own pack. The engine's `LocalEditLog` (the demo) runs the same rules.
+- The edit's distance limit now reaches the asteroids: the moon's radius plus its hills plus 150 m.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
@@ -74,3 +85,5 @@ The story game's first two tracer bullets: areas laid out from pieces, then walk
 - Undo covers world definitions only; digging is play and is not an op.
 - S2 walks on a 1 m grid rather than a Recast navigation mesh, and moves the character in the browser. Recast comes with height levels; the server takes movement over in S4.
 - The moons are drawn in a corner of the view rather than in the sky, since the camera looks down. Bloom is left out until it is needed.
+- V2's pack trusts the browser's reckoning of what a dig takes or a fill needs, bounded by the brush's volume. The server reckons it itself once the generator runs on the server (346).
+- Asteroids are generated from the world's seed, not placed one by one; bodies as their own definitions come with 361a.

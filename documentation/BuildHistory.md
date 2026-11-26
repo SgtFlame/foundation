@@ -922,3 +922,11 @@ Story game areas ([Game.md](Game.md) › *Built in S1 and S2*): piece sets, the 
 - give every area op its inverse and its items in `apps/ops` (`Items.go`), as the piece ops do;
 - read a piece's footprint and edges only through `Turned`/`turned`, never by hand;
 - treat the walk grid as a stand-in: movement moves to the server in S4, and Recast replaces the grid when areas get height levels.
+
+## Game V2 (forge 360)
+
+Walking the moon and its asteroids ([Game.md](Game.md) › *Built in V2*). Later game work must:
+
+- read the terrain only through `WorldGenerator` (and `VoxelWorld.densityAt` for edits), never a `MoonGenerator` alone, since a world has several bodies;
+- keep pack rules in the `cmd-game-editTerrain` blueprint and mirror them in `LocalEdits.ts` for the demo;
+- give any new play state that follows a player a projector keyed `<worldId>.<userId>`, as `game.packs` is.
