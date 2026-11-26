@@ -1,5 +1,5 @@
 import { SAMPLES } from './ChunkSampler.ts'
-import { CHUNK_SIZE, MATERIAL_ROCK, type ChunkMesh } from './Types.ts'
+import { CHUNK_SIZE, MATERIAL_ORE, MATERIAL_ROCK, MATERIAL_SOIL, type ChunkMesh } from './Types.ts'
 
 // Surface nets over one chunk's samples: one vertex per cell the surface
 // crosses, placed at the mean of the crossings on the cell's edges, and one
@@ -47,6 +47,8 @@ export function surfaceNets(density: Float32Array, material: Uint8Array, voxelSi
         let mask = 0
         let solid = 0
         let rocky = 0
+        let ore = 0
+        let soil = 0
         for (let c = 0; c < 8; c++) {
           const s = sIdx(mi + CORNERS[c][0], mj + CORNERS[c][1], mk + CORNERS[c][2])
           const v = density[s]
@@ -55,6 +57,10 @@ export function surfaceNets(density: Float32Array, material: Uint8Array, voxelSi
             mask |= 1 << c
             solid++
             if (material[s] === MATERIAL_ROCK) rocky++
+            else if (material[s] === MATERIAL_ORE) {
+              rocky++
+              ore++
+            } else if (material[s] === MATERIAL_SOIL) soil++
           }
         }
         if (mask === 0 || mask === 255) continue
@@ -87,7 +93,9 @@ export function surfaceNets(density: Float32Array, material: Uint8Array, voxelSi
         // Local sample index s is grid point s - 1, so cell m starts at m - 1
         pos.push((mi - 1 + fx) * voxelSize, (mj - 1 + fy) * voxelSize, (mk - 1 + fz) * voxelSize)
         nrm.push(gx / gl, gy / gl, gz / gl)
-        rock.push(rocky / solid)
+        // 0 (dust) to 1 (rock), then on to 2 (ore), and below 0 to -1 for
+        // soil (V9): one attribute for four
+        rock.push((rocky + ore - soil) / solid)
       }
     }
   }

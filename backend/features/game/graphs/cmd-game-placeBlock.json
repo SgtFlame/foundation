@@ -81,7 +81,7 @@
         "y": 150
       },
       "config": {
-        "expr": "!found ? \"there is no ship \" + target : index \u003c 0 || index \u003e= ship.blocks || int(index) != index ? \"the ship's blocks are 0 to \" + string(ship.blocks - 1) : index in ship.placed ? \"block \" + string(int(index)) + \" is already placed\" : \"\"",
+        "expr": "let n = found && ship.design == \"cabin\" ? max(ship.blocks, 76) : (ship?.blocks ?? 0); !found ? \"there is no ship \" + target : index < 0 || index >= n || int(index) != index ? \"the ship's blocks are 0 to \" + string(n - 1) : index in ship.placed ? \"block \" + string(int(index)) + \" is already placed\" : \"\"",
         "type": "string"
       }
     },

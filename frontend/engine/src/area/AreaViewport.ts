@@ -12,6 +12,17 @@ import { HearthNight, WATCHER_HP } from '../defence/HearthNight.ts'
 import { NightHud } from '../defence/NightHud.ts'
 import { whistle } from '../defence/Whistle.ts'
 import { DialoguePanel } from './DialoguePanel.ts'
+import { FirstHourPanel } from '../objectives/FirstHour.ts'
+import { JournalScene, journalEntries, link, nextNoMoon } from '../story/Journal.ts'
+import { edgePoint, SensesLayer, senseCues, spread, type Source } from '../story/Senses.ts'
+import { dragMarks, drawCard, herbSpots, howl, nextStep, showCard, showHerbal, SIGNATURE_TEXT, storySteps } from '../story/FirstHourStory.ts'
+import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../story/DayCard.ts'
+import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
+import { companionStep, VETERAN } from '../story/Companion.ts'
+import { HEART, nextWaking, ringSpot, STARLORE_LINE, starlorePool, stonePoints, STONES_MEMORY, stonesWake } from '../story/Stones.ts'
+import { clarity, ditchSpot, ReadingScene, wenlanAnswer, type Told } from '../story/Reading.ts'
+import { canSleep, CLOCK_START, clockText, FIRST_NIGHT, isDay, nightOf, showAlmanac, sleep, stepClock, type Clock } from '../story/Clock.ts'
+import { BODY_START, BodyHud, breathe, BreathPrompt, humPool, rounded as roundBody, showCooking, stepBody, type Body } from '../story/Hum.ts'
 import { ashPile, buildModel, CharacterModel, interiorShell, material } from './Models.ts'
 import { fit, pieceOf, turned, type AreaDef, type Dialogue, type Npc, type PieceSet, type Placement } from './PieceSet.ts'
 
@@ -62,11 +73,32 @@ export interface AreaViewportOptions {
   // Play (S3): the character walked through a linked door; the host
   // fetches the area it leads to and gives it back with travel()
   onTravel?: (area: string) => void
+  // S14: the story's foretold night has come: the host starts the night of hearth defence at the farmhouse
+  onStoryNight?: () => void
   // A person was selected in the editor (null: none)
   onNpcSelect?: (id: string | null) => void
   // S4: the weapon in hand in play (WEAPONS: sword, pitchfork) and the character's skills
   weapon?: string
   skills?: Skills
+  // S6: a step of the first hour reached (step empty: only the place, saved
+  // now and then); the host sends it as game.reachStory to the story's area.
+  // S7: item and spot, a herb gathered
+  onStory?: (s: { step: string; area: string; x: number; z: number; item?: string; spot?: string; use?: string; told?: Told; body?: Body; clock?: Clock }) => void
+}
+
+// S6: a player's place in a story as the server keeps it (game.story)
+export interface StoryPlace {
+  done: Record<string, boolean>
+  last?: string
+  area?: string
+  at?: [number, number]
+  // S7: herbs gathered, and the spots they came from
+  items?: Record<string, number>
+  picked?: Record<string, boolean>
+  // S8: the Hum, Chill and Hunger when last saved
+  body?: Body
+  // S9: the story's day and hour when last saved
+  clock?: Clock
 }
 
 // The thimble's skills at the first fight (375 › the first hour): a little
@@ -95,6 +127,8 @@ export interface AreaStats {
   combat: { hp: number; stance: Stance; weapon: string; foes: number; alive: number; over: 'won' | 'fallen' | null; target: string | null } | null
   // A night of hearth defence (S5)
   hearth: { house: string; time: number; left: number; watcherHp: number; barrel: boolean; inside: number; outcome: 'held' | 'taken' | null; signals: number[] } | null
+  // The first hour (S6): the story's area, the steps done and the next, and the card drawn
+  story: { area: string; done: string[]; next: string | null; card: string | null; items: Record<string, number> } | null
 }
 
 const GOOD = 0x4caf50
@@ -108,6 +142,11 @@ const EDGE_COLORS: Record<string, number> = { road: 0xff9800, grass: 0x8bc34a }
 // not, with its edges marked), selection, others' cursors, and day or
 // night lighting. It knows nothing of React or the live connection: the
 // host sends its intents as commands and gives it the area back.
+// S15: the village remembers the foretold night
+const KNOT_CHILL = 0.75 // the Chill a Hum leaves, carrying the knot of the last sheaf
+const KNOT_LINE = 'While you carry it, spending the Hum chills you a quarter less.'
+const VILLAGE_LINE = "Hawk's Rest knows you now. Someone has left a loaf and a cup of milk on the cottage step, and the woman at the well nods as you pass: \"You're the one who held Harrow's house.\""
+
 export class AreaViewport {
   readonly orbit = new OrbitCamera()
   readonly scene = new THREE.Scene()
@@ -178,6 +217,43 @@ export class AreaViewport {
   private skills: Skills
   private approachTick = 0
   private loopTime = 0
+  // S6: the first hour being played: its area, the steps done, the marks the
+  // raid left, where to stand after resuming in another area, the door last
+  // taken, the last place saved and the card drawn
+  private story: { area: string; done: Record<string, boolean>; card: string | null; items: Record<string, number>; picked: Record<string, boolean>; body: Body; clock: Clock } | null = null
+  private almanacEl: HTMLDivElement | null = null
+  private storyDay: boolean | null = null // the light the clock last set
+  private slept = false
+  // S8: the Hum, Chill and Hunger, stillness and the hearth's cooking
+  private bodyHud!: BodyHud
+  private breath!: BreathPrompt
+  private cooking: HTMLDivElement | null = null
+  // S10: the reading for Wenlan while it is shown
+  reading: ReadingScene | null = null
+  private wasNearHearth = false
+  private bodySaved: Body | null = null
+  private readonly herbs = new THREE.Group()
+  private herbal: HTMLDivElement | null = null
+  private journal: JournalScene | null = null // S13: the notes
+  private senses: SensesLayer | null = null // S12: the smells and sounds at the screen's edge
+  private focus = false // S12: F held
+  private readonly storyPanel: FirstHourPanel
+  private readonly marks = new THREE.Group()
+  private readonly stones = new THREE.Group() // S18: the Nine Sisters
+  private stonesAwake: boolean | null = null
+  private ringHeart: { x: number; z: number } | null = null
+  private ringVisited = false
+  private signature: Point | null = null
+  private barnDoor: Point | null = null
+  private resumeAt: { area: string; at: Point } | null = null
+  private via = ''
+  private talkingWith = ''
+  private welcomed = false // S15: Hawk's Rest's welcome said this session
+  // S17: the first companion, walking with the character once joined
+  private companion: { model: CharacterModel; at: { x: number; z: number }; cooldown: number } | null = null
+  private ateHot = false // S16: something hot eaten since the last sleep (a warm night heals a dream wound)
+  private saved = { x: 0, z: 0, t: 0 }
+  private readonly caption: HTMLDivElement
 
   private constructor(container: HTMLElement, renderer: Renderer, opts: AreaViewportOptions) {
     this.container = container
@@ -220,15 +296,27 @@ export class AreaViewport {
       'position:absolute;bottom:10px;left:50%;transform:translateX(-50%);padding:4px 10px;border-radius:4px;z-index:2;' +
       'font:13px system-ui,sans-serif;color:#eee;background:rgba(0,0,0,0.55);pointer-events:none;white-space:nowrap'
     container.appendChild(this.hint)
-    this.talk = new DialoguePanel(container, () => this.updateHint())
+    this.talk = new DialoguePanel(container, () => this.talkEnded())
     this.hud = new CombatHud(container, (s) => this.setStance(s))
     this.nightHud = new NightHud(container)
     this.weapon = opts.weapon ?? 'sword'
     this.skills = opts.skills ?? STARTING_SKILLS
-    this.scene.add(this.ash)
+    this.scene.add(this.ash, this.marks, this.herbs, this.stones)
+    this.storyPanel = new FirstHourPanel(container, 96)
+    this.storyPanel.title = 'Your story'
+    this.bodyHud = new BodyHud(container, 116)
+    this.breath = new BreathPrompt(container)
+    this.caption = document.createElement('div')
+    this.caption.dataset.storyCaption = ''
+    this.caption.style.cssText =
+      'position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:min(560px,calc(100% - 32px));z-index:3;display:none;pointer-events:none;' +
+      'padding:8px 12px;border-radius:6px;background:rgba(16,14,12,0.85);border:1px solid #6b5a43;font:italic 14px Georgia,serif;color:#eadfc8;line-height:1.4;text-align:center'
+    container.appendChild(this.caption)
 
     canvas.addEventListener('pointerdown', this.onPointerDown)
     canvas.addEventListener('keydown', this.onKey)
+    canvas.addEventListener('keyup', this.onKeyUp)
+    canvas.addEventListener('blur', this.onKeyUp)
     this.layout(true)
     this.syncPieces()
     this.syncNpcs()
@@ -347,8 +435,13 @@ export class AreaViewport {
   // Talks to a person now, as walking up to them does in play
   talkTo(id: string): boolean {
     const n = this.area.npcs?.[id]
-    const d = n?.dialogue ? this.dialogues[n.dialogue] : undefined
+    // S15: after the foretold night Wenlan has his thanks to give
+    const after = n?.dialogue === 'farmer' && this.story?.done.defended ? this.dialogues['farmer-thanks'] : undefined
+    const d = after ?? (n?.dialogue ? this.dialogues[n.dialogue] : undefined)
     if (!n || !d) return false
+    if (d.id === 'farmer' && this.story?.done.sleep && !this.story.done.reading) return this.openReading('Wenlan Harrow')
+    this.talkingWith = d.id
+    this.caption.style.display = 'none'
     this.talk.start(d, n.name)
     this.updateHint()
     return true
@@ -375,14 +468,27 @@ export class AreaViewport {
     this.syncPieces()
     this.syncNpcs()
     this.buildWalk()
-    const at = this.doorTo(from) ?? this.spawnPoint()
+    const resume = this.resumeAt?.area === area.id ? this.resumeAt.at : null
+    this.resumeAt = null
+    const at = resume ?? this.doorTo(from) ?? this.spawnPoint()
     this.path = []
     this.arrival = null
     this.character?.group.position.set(at.x, 0, at.z)
+    if (this.companion) this.companion.at = { x: at.x - 1, z: at.z - 1 }
     this.orbit.target.set(at.x, 0, at.z)
     this.orbit.distance = this.set.interior ? 16 : 32
     this.grid.visible = false
     this.startCombat()
+    this.drawMarks()
+    const bySign = this.via === 'signpost'
+    if (bySign) this.reach('road')
+    this.via = ''
+    // S15: word of the night has gone up the road to Hawk's Rest ahead of you
+    const st = this.story
+    if (st?.done.defended && bySign && !this.welcomed) {
+      this.welcomed = true
+      this.say(VILLAGE_LINE)
+    }
   }
 
   setLighting(l: Lighting): void {
@@ -423,7 +529,13 @@ export class AreaViewport {
       this.selectNpc(null)
       this.startCombat()
       this.grid.visible = false
+      if (this.story) {
+        this.saved = { x: at.x, z: at.z, t: this.loopTime }
+        this.reach('arrive')
+        this.drawMarks()
+      }
     } else {
+      if (this.story) this.savePlace(true)
       if (this.character) this.scene.remove(this.character.group)
       this.character = null
       this.walk = null
@@ -434,6 +546,21 @@ export class AreaViewport {
       this.endCombat()
       this.hearth = null
       this.nightHud.show(false)
+      this.story = null
+      this.resumeAt = null
+      this.marks.clear()
+      this.herbs.clear()
+      this.stones.clear()
+      this.stonesAwake = null
+      this.herbal?.remove()
+      this.herbal = null
+      this.senses?.dispose()
+      this.senses = null
+      this.journal?.el.remove()
+      this.journal = null
+      this.focus = false
+      this.storyPanel.show([], false)
+      this.caption.style.display = 'none'
       if (this.home) {
         // back to the area being edited
         const { area, set } = this.home
@@ -576,6 +703,9 @@ export class AreaViewport {
             signals: [...this.hearthSignals],
           }
         : null,
+      story: this.story
+        ? { area: this.story.area, done: Object.keys(this.story.done).filter((k) => this.story!.done[k]), next: nextStep(this.story.done), card: this.story.card, items: { ...this.story.items } }
+        : null,
     }
   }
 
@@ -583,6 +713,9 @@ export class AreaViewport {
     this.loop.stop()
     this.renderer.canvas.removeEventListener('pointerdown', this.onPointerDown)
     this.renderer.canvas.removeEventListener('keydown', this.onKey)
+    this.renderer.canvas.removeEventListener('keyup', this.onKeyUp)
+    this.renderer.canvas.removeEventListener('blur', this.onKeyUp)
+    this.senses?.dispose()
     this.input.dispose()
     this.overlay?.dispose()
     for (const r of this.remotes.values()) r.label.remove()
@@ -590,6 +723,8 @@ export class AreaViewport {
     this.talk.dispose()
     this.hud.dispose()
     this.nightHud.dispose()
+    this.storyPanel.dispose()
+    this.caption.remove()
     this.hint.remove()
     this.moonHud?.remove()
     this.renderer.dispose()
@@ -763,7 +898,8 @@ export class AreaViewport {
 
   // Adds, moves and removes the people to match the area (S3)
   private syncNpcs(force = false): void {
-    const want = this.area.npcs ?? {}
+    const hide = this.foesHidden()
+    const want = Object.fromEntries(Object.entries(this.area.npcs ?? {}).filter(([, n]) => !(hide && isHostile(n.kind))))
     if (force) {
       for (const have of this.npcs.values()) {
         this.scene.remove(have.model.group)
@@ -806,16 +942,18 @@ export class AreaViewport {
   // Starts the fight with the area's foes, if it has any (play, travel, a new weapon)
   private startCombat(): void {
     this.endCombat()
+    if (this.foesHidden()) return
     const foes = Object.values(this.area.npcs ?? {}).filter((n) => isHostile(n.kind))
     if (!foes.length || !this.playing) return
     const walk = this.walk
     this.combat = new Combat(
       foes.map((n) => ({ id: n.id, kind: n.kind!, x: n.x, z: n.z })),
       {
-        skills: this.skills,
+        skills: remembered(this.skills, this.story?.done ?? {}),
         weapon: WEAPONS[this.weapon] ?? WEAPONS.sword,
         seed: hash(this.area.id + this.area.version),
         walkable: walk ? (x, z) => walk.walkable(...walk.cellOf({ x, z })) : undefined,
+        cadenceAllowed: () => this.cadenceAllowed(),
       },
     )
     this.hud.show(true)
@@ -849,8 +987,9 @@ export class AreaViewport {
   private updateHud(): void {
     const c = this.combat
     if (!c) return
-    const skill = c.weapon.kind === 'polearm' ? `polearm ${this.skills.polearm}` : `blade ${this.skills.blade}`
-    this.hud.update(c.hp, HERO_HP, c.stance, c.weapon.title, `${skill}, reading ${this.skills.reading}`)
+    const k = remembered(this.skills, this.story?.done ?? {})
+    const skill = c.weapon.kind === 'polearm' ? `polearm ${k.polearm}` : `blade ${k.blade}`
+    this.hud.update(c.hp, HERO_HP, c.stance, c.weapon.title, `${skill}, reading ${k.reading}`)
   }
 
   // One step of the fight: the character closes on its target or circles it
@@ -925,7 +1064,13 @@ export class AreaViewport {
           have.label.remove()
           this.npcs.delete(e.foe)
         }
-        if (this.combat?.over === 'won') this.hud.say('Quiet again. Nothing left but ash and rags.')
+        if (this.combat?.over === 'won') {
+          this.hud.say('Quiet again. Nothing left but ash and rags.')
+          if (this.story && this.area.id === this.story.area) {
+            this.reach('fight')
+            this.say("Whatever took the Brannocks is gone west. The road north leads on to Hawk's Rest.")
+          }
+        }
         break
       }
       case 'claw':
@@ -934,6 +1079,11 @@ export class AreaViewport {
         else this.hud.say(`Nails rake you, burning (-${e.damage}).`)
         break
       case 'cadence':
+        if (this.story?.done.stillness) {
+          this.story.body = spendWith(this.story.body, this.dayEffect())
+          this.hud.say('Strike, Pivot, Guard: the Hum answers the old cadence. Your next strike is aimed; your hands go cold.')
+          break
+        }
         this.hud.say('Strike, Pivot, Guard: the old cadence. Your next strike is aimed.')
         break
       case 'fallen':
@@ -1050,7 +1200,10 @@ export class AreaViewport {
           return
         }
         if (!this.walkNear(door.at)) this.flash('No way there')
-        else this.arrival = { kind: 'travel', area: door.link }
+        else {
+          this.arrival = { kind: 'travel', area: door.link }
+          this.via = this.area.pieces[door.id]?.piece ?? ''
+        }
         return
       }
       if (!this.walkTo(hit.x, hit.z)) this.flash('No way there')
@@ -1085,9 +1238,30 @@ export class AreaViewport {
     this.select(this.placementAt(cell.x, cell.z))
   }
 
+  // S12: F held is focus, which sharpens the senses
+  private onKeyUp = (e: Event) => {
+    if (!this.focus || (e instanceof KeyboardEvent && e.key !== 'f' && e.key !== 'F')) return
+    this.focus = false
+    this.updateHint()
+  }
+
   private onKey = (e: KeyboardEvent) => {
     if (this.playing) {
       if (e.key === 'Escape') this.path = []
+      if (this.story && (e.key === 'j' || e.key === 'J')) {
+        this.storyPanel.shown = !this.storyPanel.shown
+        this.showStory()
+      }
+      if (this.story && (e.key === 'r' || e.key === 'R')) this.rest()
+      if (this.story && (e.key === 'k' || e.key === 'K')) this.openHerbal()
+      if (this.story && (e.key === 'b' || e.key === 'B')) this.startStillness()
+      if (this.story && (e.key === 'c' || e.key === 'C')) this.openCooking()
+      if (this.story && (e.key === 'm' || e.key === 'M')) this.openAlmanac()
+      if (this.story && (e.key === 'n' || e.key === 'N')) this.openJournal()
+      if (this.story && (e.key === 'f' || e.key === 'F') && !this.focus) {
+        this.focus = true
+        this.updateHint()
+      }
       if (this.combat && !this.talk.open) {
         const s = ({ '1': 'strike', '2': 'pivot', '3': 'guard' } as Record<string, Stance>)[e.key]
         if (s) this.setStance(s)
@@ -1242,7 +1416,7 @@ export class AreaViewport {
   private stepCharacter(dt: number): void {
     const ch = this.character
     if (!ch) return
-    const speed = 4
+    const speed = 4 * this.dayEffect().speed
     let budget = speed * dt
     const pos = ch.group.position
     while (budget > 0 && this.path.length) {
@@ -1345,11 +1519,17 @@ export class AreaViewport {
           break
         case 'taken':
           this.nightHud.say(`The whistle stops. ${h.watcher ? `${h.watcher.name} is gone, and` : 'Nobody kept the watch, and'} the family with them, dragged under the stone.`)
-          this.flash('The house was lost. Press Stop to try the night again.')
+          if (this.story?.done.watch && !this.story.done.defended) this.say('The house was lost. Wenlan will not forgive it, but the dark comes round again: by a hearth, press R to wait for the next night with no moon.')
+          else this.flash('The house was lost. Press Stop to try the night again.')
           break
         case 'dawn':
           this.nightHud.say('Dawn greys the shutters. The house held.')
           this.flash('The house held until dawn')
+          // S14: the foretold night, survived
+          if (this.story?.done.watch && !this.story.done.defended) {
+            this.reach('defended')
+            this.say('Dawn. The hearthstone lies still, and the Harrows are alive, every one. Wenlan grips your hand: "My father said the eyeless ones were a tale. You came back for us. Come and find me in the kitchen when you\'ve slept."')
+          }
           break
       }
     }
@@ -1358,6 +1538,721 @@ export class AreaViewport {
       this.nightTick = 0.25
       this.updateNightHud()
     }
+  }
+
+  // --- The first hour (S6) ---
+
+  // Plays the first hour from this area (the farmstead) at night, resuming
+  // from the place the server keeps: the steps done, and the area and point
+  // the player last stood at (the host travels there through onTravel)
+  playStory(place: StoryPlace | null): void {
+    if (this.playing) this.play(false)
+    this.story = { area: this.area.id, done: { ...(place?.done ?? {}) }, card: null, items: { ...(place?.items ?? {}) }, picked: { ...(place?.picked ?? {}) }, body: { ...(place?.body ?? BODY_START) }, clock: { ...(place?.clock ?? (place?.done.rest ? { day: 1, hour: 7 } : CLOCK_START)) } }
+    // S9: the light and the moons follow the story's clock
+    this.storyDay = isDay(this.story.clock)
+    this.setLighting(this.storyDay ? 'day' : 'night')
+    this.setNight(nightOf(this.story.clock))
+    const at = place?.at ? { x: place.at[0], z: place.at[1] } : null
+    this.play(true)
+    this.syncNpcs(true) // the Hollowed hide until the trail is followed
+    if (at && place?.area && place.area !== this.area.id) {
+      this.resumeAt = { area: place.area, at }
+      this.opts.onTravel?.(place.area)
+    } else if (at && this.walk?.walkable(...this.walk.cellOf(at))) {
+      this.character?.group.position.set(at.x, 0, at.z)
+      this.orbit.target.set(at.x, 0, at.z)
+      this.saved = { ...at, t: this.loopTime }
+    }
+    const next = nextStep(this.story.done)
+    this.say(next === 'arrive' || next === 'farmer' ? 'The night of the first snow. The light from the capital is gone; the farmhouse is warm.' : next ? (storySteps(this.story.done).find((s) => s.id === next)?.how ?? '') : 'The first hour is over.')
+    this.showStory()
+    this.updateHint()
+  }
+
+  // Marks a step reached, once, and tells the host where
+  private reach(step: string): void {
+    const st = this.story
+    if (!st || st.done[step]) return
+    st.done[step] = true
+    const p = this.player()
+    this.opts.onStory?.({ step, area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), ...this.stateToSave() })
+    if (p) this.saved = { x: p.x, z: p.z, t: this.loopTime }
+    this.showStory()
+    this.updateHint()
+  }
+
+  // Saves where the player stands every 15 s after moving 3 m, and on stopping
+  private savePlace(now = false): void {
+    const p = this.player()
+    if (!this.story || !p) return
+    const moved = Math.hypot(p.x - this.saved.x, p.z - this.saved.z)
+    const b = roundBody(this.story.body)
+    const sb = this.bodySaved
+    const bodyMoved = !sb || sb.hum !== b.hum || Math.abs(sb.chill - b.chill) + Math.abs(sb.hunger - b.hunger) >= 5
+    if (!now && ((moved < 3 && !bodyMoved) || this.loopTime - this.saved.t < 15)) return
+    if (now && moved < 0.5 && !bodyMoved) return
+    this.saved = { x: p.x, z: p.z, t: this.loopTime }
+    this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), ...this.stateToSave() })
+  }
+
+  // --- The Hum, Chill and Hunger (S8) ---
+
+  // The body and the clock, sent with every save
+  private stateToSave(): { body?: Body; clock?: Clock } {
+    const st = this.story
+    if (!st) return {}
+    return { body: this.bodyToSave(), clock: { day: st.clock.day, hour: Math.round(st.clock.hour * 10) / 10 } }
+  }
+
+  private bodyToSave(): Body | undefined {
+    if (!this.story) return undefined
+    this.bodySaved = roundBody(this.story.body)
+    return this.bodySaved
+  }
+
+  private humPool(): number {
+    return humPool(this.night) + (this.story ? this.dayEffect().hum + starlorePool(this.night, !!this.story.items.starlore) : 0)
+  }
+
+  // S11: the day's card and its light buff or warning (none before the first morning)
+  private dayEffect(): CardEffect {
+    const st = this.story
+    const e = (st && dayCard(hash(st.area), st.clock.day)?.effect) || NO_EFFECT
+    // S15: the knot of the last sheaf keeps the cold out of the hands
+    return st?.items.knot ? { ...e, chill: e.chill * KNOT_CHILL } : e
+  }
+
+  // Each frame of play: the body changes, a breath is drawn, the HUD follows
+  private stepBodyFrame(dt: number): void {
+    const st = this.story
+    if (!st) return
+    st.body = aching(stepBody(st.body, dt), !!st.items.wound) // S16: a dream wound keeps a little Chill
+    // S9: the clock runs; dawn and dusk change the light, a new night the moons
+    st.clock = stepClock(st.clock, dt)
+    const day = isDay(st.clock)
+    if (day !== this.storyDay) {
+      this.setLighting(day ? 'day' : 'night')
+      if (this.storyDay !== null && !this.slept) this.say(day ? 'Dawn.' : 'Dusk. The light goes out of the fields; night is when the Hollowed walk.')
+      this.storyDay = day
+      this.slept = false
+    }
+    if (nightOf(st.clock) !== this.night) this.setNight(nightOf(st.clock))
+    if (this.breath.active) {
+      const moving = this.path.length > 0 || !!this.combat || !this.nearHearth()
+      if (moving) {
+        this.breath.stop()
+        this.say('The stillness breaks.')
+      } else if (this.breath.step(dt)) {
+        st.body = breathe(st.body, this.humPool())
+        if (!st.done.stillness) {
+          this.reach('stillness')
+          this.say('The bottom of a still pool. Something hums under your breastbone and stays: the Hum. Each breath adds to it, as far as the sky allows.')
+        }
+        if (st.body.hum >= this.humPool()) {
+          this.breath.stop()
+          this.say(`The Hum is full: ${st.body.hum} tonight, by the moons. Spend it in a fight with the old cadence: 1 Strike, 2 Pivot, 3 Guard, then 1.`)
+        }
+      }
+    }
+    const near = this.nearHearth()
+    if (near !== this.wasNearHearth) {
+      this.wasNearHearth = near
+      this.updateHint()
+    }
+    const today = dayCard(hash(st.area), st.clock.day)
+    this.bodyHud.show(st.done.herbal ? st.body : null, this.humPool(), clockText(st.clock) + (today && st.done.morning ? ` · ${today.card.title}: ${today.effect.line}` : ''))
+  }
+
+  // B by a hearth: stillness, breath by breath
+  private startStillness(): void {
+    const st = this.story
+    if (!st || !st.done.herbal) return
+    if (this.breath.active) {
+      this.breath.stop()
+      return
+    }
+    if (this.combat) return this.flash('Not in a fight')
+    if (!this.nearHearth()) return this.flash('Stillness needs a quiet place: stand by a hearth')
+    if (st.body.hum >= this.humPool()) return this.flash('The Hum is already full')
+    this.path = []
+    if (!st.done.stillness) this.say('From the heavy book on the shelf: breathe in for four, out for six, and sink to the bottom of a still pool.')
+    this.breath.start()
+  }
+
+  // C by a hearth: cook a hot dish from the herbal's herbs
+  private openCooking(): void {
+    const st = this.story
+    if (!st || !st.done.herbal) return
+    if (this.cooking?.isConnected) {
+      this.cooking.remove()
+      this.cooking = null
+      return
+    }
+    if (!this.nearHearth()) return this.flash('Stand by a hearth to cook')
+    this.cooking = showCooking(this.container, st.items, (d) => {
+      this.cooking = null
+      if ((st.items[d.herb] ?? 0) < 1) return
+      st.items[d.herb]--
+      st.body = cookWith(st.body, d, this.dayEffect())
+      const p = this.player()
+      st.done.cook = true
+      this.ateHot = true
+      this.opts.onStory?.({ step: 'cook', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: d.herb, ...this.stateToSave() })
+      this.showStory()
+      this.say(`${d.title}. ${d.line}`)
+    })
+  }
+
+  // A fight's cadence spends a Hum, once stillness has been learned
+  private cadenceAllowed(): boolean {
+    const st = this.story
+    if (!st || !st.done.stillness) return !st // outside the story, as before
+    return st.body.hum >= 1
+  }
+
+  private showStory(): void {
+    this.storyPanel.show(this.story ? storySteps(this.story.done) : [], !!this.story)
+  }
+
+  // A line of the story at the top of the view for a while
+  private say(text: string): void {
+    if (!text) return
+    this.caption.textContent = text
+    this.caption.style.display = 'block'
+    const shown = text
+    setTimeout(() => {
+      if (this.caption.textContent === shown) this.caption.style.display = 'none'
+    }, 9000)
+  }
+
+  // The Hollowed wait unseen in the story's area until the drag marks are
+  // followed, and are gone once the fight is won
+  private foesHidden(): boolean {
+    const st = this.story
+    if (!st || this.area.id !== st.area) return false
+    return !st.done.trail || !!st.done.fight
+  }
+
+  // The talk ended: with the farmer, the first howl follows
+  private talkEnded(): void {
+    const was = this.talkingWith
+    this.talkingWith = ''
+    this.updateHint()
+    // S17: the veteran walks with you from now on
+    if (this.story && was === VETERAN.id && !this.story.done.companion) {
+      this.reach('companion')
+      this.say(`${VETERAN.name}, ${VETERAN.title}, picks up his pike and falls in a step behind you. In a fight he takes the flank. On the road he nods at the rise by the signpost: "Nine stones up there. The old folk say they wake when the little moon is full."`)
+      return
+    }
+    // S15: the knot of the last sheaf, Wenlan's thanks
+    if (this.story && was === 'farmer-thanks' && !this.story.done.thanked) {
+      this.story.items.knot = 1
+      this.reach('thanked')
+      this.say(`You turn the straw knot over in your fingers. It is warm, as if it had been by the fire all night. ${KNOT_LINE}`)
+      return
+    }
+    if (!this.story || was !== 'farmer' || this.story.done.farmer) return
+    this.reach('farmer')
+    setTimeout(() => {
+      if (!this.story || this.story.done.howl) return
+      howl()
+      this.reach('howl')
+      this.say('A howl, long and low, out by the well. Then a dog barking, cut off. Next door, the Brannocks\' hearth has gone dark.')
+      this.drawMarks()
+    }, 2500)
+  }
+
+  // The raid signature by the well and the drag marks to the barn's door,
+  // in the story's area once the howl is heard
+  private drawMarks(): void {
+    this.marks.clear()
+    this.drawHerbs()
+    this.drawStones()
+    const st = this.story
+    if (!st || this.area.id !== st.area || !st.done.howl) return
+    const c = this.set.cell
+    const yard = Object.values(this.area.pieces).find((p) => p.piece === 'yard')
+    const barn = Object.values(this.area.pieces).find((p) => p.piece === 'barn')
+    this.signature = yard ? { x: (yard.x + 1.5) * c - 5, z: (yard.z + 1.5) * c } : null
+    this.barnDoor = barn ? (this.doors().find((d) => d.id === barn.id)?.at ?? null) : null
+    if (!this.signature) return
+    const scorch = new THREE.Mesh(new THREE.RingGeometry(0.9, 2.2, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicNodeMaterial({ color: 0x1b1612, transparent: true, opacity: 0.85 }))
+    scorch.position.set(this.signature.x, 0.05, this.signature.z)
+    this.marks.add(scorch)
+    const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.3), new THREE.MeshStandardNodeMaterial({ color: 0xffb347, emissive: 0x6a3a10 }))
+    lantern.position.set(this.signature.x + 1.2, 0.2, this.signature.z + 0.6)
+    lantern.rotation.z = 1.2
+    this.marks.add(lantern)
+    if (!this.barnDoor) return
+    const furrow = new THREE.MeshBasicNodeMaterial({ color: 0x241c15, transparent: true, opacity: 0.8 })
+    for (const m of dragMarks(this.signature, this.barnDoor, hash(st.area))) {
+      for (const off of [-0.45, 0, 0.45]) {
+        const g = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 1.1).rotateX(-Math.PI / 2), furrow)
+        g.position.set(m.x + Math.cos(m.heading) * off, 0.04, m.z - Math.sin(m.heading) * off)
+        g.rotation.y = m.heading
+        this.marks.add(g)
+      }
+    }
+  }
+
+  // S7: the herbs by the trees, in the story's area, from the first morning until gathered
+  private drawHerbs(): void {
+    this.herbs.clear()
+    const st = this.story
+    if (!st || this.area.id !== st.area || !st.done.morning) return
+    for (const h of herbSpots(this.area.pieces, this.set.cell)) {
+      if (st.picked[h.spot]) continue
+      const g = new THREE.Group()
+      const mat = new THREE.MeshStandardNodeMaterial({ color: h.herb.color, roughness: 0.9 })
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2
+        const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 4), mat)
+        leaf.position.set(Math.cos(a) * 0.25, 0.15 + (i % 2) * 0.12, Math.sin(a) * 0.25)
+        g.add(leaf)
+      }
+      g.position.set(h.x, 0, h.z)
+      g.userData.spot = h.spot
+      this.herbs.add(g)
+      if (this.dayEffect().reveal) this.herbs.add(this.glowAt(h.x, h.z))
+    }
+    // S10: the willow bough in the culvert and the water backed up into the wheat, until cleared
+    const ditch = st.done.reading && !st.done.ditch ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
+    if (ditch) {
+      const c = this.set.cell
+      const flood = new THREE.Mesh(new THREE.PlaneGeometry(ditch.field.w - 1, ditch.field.d - 1.6).rotateX(-Math.PI / 2), new THREE.MeshStandardNodeMaterial({ color: 0x4f86ad, transparent: true, opacity: 0.75, roughness: 0.1 }))
+      flood.position.set(ditch.field.x, 0.62, ditch.field.z)
+      this.herbs.add(flood)
+      const bough = new THREE.Group()
+      const bark = new THREE.MeshStandardNodeMaterial({ color: 0x5a4632, roughness: 1 })
+      const leaves = new THREE.MeshStandardNodeMaterial({ color: 0x8aa35a, roughness: 0.9 })
+      const limb = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 3, 6).rotateZ(Math.PI / 2), bark)
+      limb.position.y = 0.2
+      bough.add(limb)
+      for (let i = 0; i < 7; i++) {
+        const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.28, 6, 4), leaves)
+        leaf.position.set(-1.2 + i * 0.4, 0.35 + (i % 2) * 0.15, (i % 3) * 0.15 - 0.15)
+        bough.add(leaf)
+      }
+      bough.position.set(ditch.x, 0, ditch.z)
+      bough.rotation.y = 0.5
+      bough.userData.ditch = true
+      this.herbs.add(bough)
+      if (this.dayEffect().reveal) this.herbs.add(this.glowAt(ditch.x, ditch.z))
+    }
+  }
+
+  // S10: Wenlan's reading, once the first day is over: three cards, then what to tell him
+  private openReading(who: string): boolean {
+    const st = this.story
+    if (!st || this.reading?.el.isConnected) return true
+    this.caption.style.display = 'none'
+    this.reading = new ReadingScene(this.container, who, clarity(nightOf(st.clock), !!st.done.stillness), (told) => {
+      this.reading = null
+      st.done.reading = true
+      const p = this.player()
+      this.opts.onStory?.({ step: 'reading', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), told, ...this.stateToSave() })
+      this.showStory()
+      this.updateHint()
+      this.say(wenlanAnswer(told))
+    })
+    return true
+  }
+
+  // S11: the Lantern's glow over something hidden: a soft column of light
+  private glowAt(x: number, z: number): THREE.Mesh {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.6, 6, 12, 1, true), new THREE.MeshBasicNodeMaterial({ color: 0xffd98a, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide }))
+    m.position.set(x, 3, z)
+    m.userData.glow = true
+    return m
+  }
+
+  // The field piece's size in cells, east and south (the bough's corner)
+  private fieldSize(): [number, number] {
+    const s = this.set.pieces.find((p) => p.id === 'field')?.size
+    return s ? [s[0], s[1]] : [1, 2]
+  }
+
+  // K: the herbal, once something is gathered; reading it after foraging is a step
+  private openHerbal(): void {
+    const st = this.story
+    if (!st) return
+    if (this.herbal?.isConnected) {
+      this.herbal.remove()
+      this.herbal = null
+      return
+    }
+    this.herbal = showHerbal(this.container, st.items)
+    if (st.done.forage) this.reach('herbal')
+  }
+
+  // Each frame of the first hour: the signature found, the trail followed,
+  // and the place saved now and then
+  private stepStory(): void {
+    const st = this.story!
+    const p = this.player()
+    if (!p) return
+    // S7: the first morning, once play has reached where the player rested
+    if (st.done.rest && !st.done.morning && !this.resumeAt) {
+      const card = drawCard(hash(st.area) + 1)
+      st.card = card.id
+      this.reach('morning')
+      showCard(this.container, card)
+      this.say(`Morning. Frost on the sill, and the day's card: ${card.title}. Out by the farmstead's trees, the herbs are up.`)
+      this.drawMarks()
+    }
+    if (this.area.id === st.area && st.done.morning && !st.done.forage) {
+      const spots = herbSpots(this.area.pieces, this.set.cell)
+      for (const h of spots) {
+        if (st.picked[h.spot] || Math.hypot(p.x - h.x, p.z - h.z) > 2) continue
+        st.picked[h.spot] = true
+        st.items[h.herb.id] = (st.items[h.herb.id] ?? 0) + 1
+        this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: h.herb.id, spot: h.spot })
+        this.say(`${h.herb.title}. You gather a handful.`)
+        this.drawHerbs()
+        if (spots.every((x) => st.picked[x.spot])) {
+          this.reach('forage')
+          this.say('All three. Press K to write them in the herbal.')
+        }
+      }
+    }
+    // S10: the willow bough the cards showed, hauled out by walking up to it
+    if (this.area.id === st.area && st.done.reading && !st.done.ditch) {
+      const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
+      if (d && Math.hypot(p.x - d.x, p.z - d.z) < 2.2) {
+        st.items.silver = (st.items.silver ?? 0) + 1
+        this.reach('ditch')
+        this.drawHerbs()
+        this.say('You haul the willow bough out of the culvert. The water goes with a gulp and a gurgle, and the wheat stands up out of it. Wenlan presses a silver into your hand: "The cards were right."')
+      }
+    }
+    if (this.area.id === st.area && st.done.howl) {
+      if (!st.done.signature && this.signature && Math.hypot(p.x - this.signature.x, p.z - this.signature.z) < 4) {
+        this.reach('signature')
+        this.say(SIGNATURE_TEXT)
+      } else if (st.done.signature && !st.done.trail && this.barnDoor && Math.hypot(p.x - this.barnDoor.x, p.z - this.barnDoor.z) < 10) {
+        this.reach('trail')
+        this.syncNpcs(true)
+        this.startCombat()
+        this.say('The furrows end at the barn. Two of them, hunched in the snow, turn toward you. Ember eyes.')
+      }
+    }
+    this.stepStones(p)
+    this.stepSenses(p)
+    this.savePlace()
+  }
+
+  // S18: the Nine Sisters, on the open ground nearest the signpost, once
+  // the veteran has told of them
+  private drawStones(): void {
+    this.stones.clear()
+    this.stonesAwake = null
+    this.ringHeart = null
+    const st = this.story
+    if (!st || this.area.id !== st.area || !st.done.companion) return
+    const sign = Object.values(this.area.pieces).find((p) => p.piece === 'signpost')
+    const pieces = Object.values(this.area.pieces)
+    const sizeOf = (p: { piece: string; rot: number }) => {
+      const piece = pieceOf(this.set, p.piece)
+      return piece ? turned(piece, p.rot) : { w: 1, d: 1 }
+    }
+    const heart = ringSpot(pieces, sizeOf, this.area.width, this.area.depth, this.set.cell, sign ?? { x: 0, z: 0 })
+    if (!heart) return
+    this.ringHeart = heart
+    const stone = new THREE.MeshStandardNodeMaterial({ color: 0x7d8278, roughness: 1 })
+    const lichen = new THREE.MeshStandardNodeMaterial({ color: 0x8f9a5c, roughness: 1 })
+    const pine = new THREE.MeshStandardNodeMaterial({ color: 0x2f4a32, roughness: 0.9 })
+    for (const [i, s] of stonePoints(heart).entries()) {
+      const g = new THREE.Group()
+      const h = 2.2 + ((i * 5) % 3) * 0.35
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, h, 0.55), stone)
+      body.position.y = h / 2
+      const patch = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.5, 0.57), lichen)
+      patch.position.y = h * 0.35
+      const crown = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.1, 6), pine)
+      crown.position.y = h + 0.5
+      g.add(body, patch, crown)
+      g.position.set(s.x, 0, s.z)
+      g.rotation.set(s.tilt, Math.atan2(s.x - heart.x, s.z - heart.z), 0)
+      g.userData.stone = true
+      this.stones.add(g)
+    }
+    const glow = new THREE.Mesh(new THREE.RingGeometry(3.6, 4.8, 36).rotateX(-Math.PI / 2), new THREE.MeshBasicNodeMaterial({ color: 0x9fc4ff, transparent: true, opacity: 0.35, depthWrite: false }))
+    glow.position.set(heart.x, 0.06, heart.z)
+    glow.visible = false
+    glow.userData.wake = true
+    this.stones.add(glow)
+  }
+
+  // S18: the stones wake at the lesser full moon; at the ring's heart then, the ground remembers
+  private stepStones(p: { x: number; z: number }): void {
+    const st = this.story!
+    const heart = this.ringHeart
+    if (!heart) return
+    const awake = stonesWake(this.night, isDay(st.clock))
+    if (awake !== this.stonesAwake) {
+      this.stonesAwake = awake
+      for (const c of this.stones.children) if (c.userData.wake) c.visible = awake && !st.done.stones
+      if (awake && !st.done.stones) this.say('The lesser moon is full. Up by the signpost, something hums, low, like a held note.')
+    }
+    const inside = Math.hypot(p.x - heart.x, p.z - heart.z) < HEART
+    if (!inside) {
+      this.ringVisited = false
+      return
+    }
+    if (st.done.stones || this.ringVisited || this.combat) return
+    this.ringVisited = true
+    if (!awake) {
+      const n = nextWaking(this.night)
+      this.say(`Nine lichened stones, pines on their crowns. The ground under them feels like it is listening. ${n === this.night ? 'They wake after dark tonight.' : `The lesser moon is full in ${n - this.night} night${n - this.night === 1 ? '' : 's'}.`}`)
+      return
+    }
+    this.path = []
+    showDream(this.container, STONES_MEMORY, () => {
+      st.items.starlore = 1
+      this.reach('stones')
+      for (const c of this.stones.children) if (c.userData.wake) c.visible = false
+      this.say(STARLORE_LINE)
+    })
+  }
+
+  // S12: what there is to smell and hear in the story's area now
+  senseSources(): Source[] {
+    const st = this.story
+    if (!st || this.area.id !== st.area) return []
+    const out: Source[] = []
+    if (st.done.howl && !st.done.signature && this.signature) {
+      out.push({ id: 'signature', ...this.signature, sense: 'smell', text: 'Old pennies, and scorched snow', from: 'out by the well', range: 30 })
+    }
+    if (st.done.signature && !st.done.fight && this.barnDoor) {
+      out.push({ id: 'hollowed', x: this.barnDoor.x, z: this.barnDoor.z, sense: 'smell', text: 'Burnt sugar and old iron', from: 'from the barn', range: 30 })
+      if (this.storyDay === false) out.push({ id: 'owls', x: this.barnDoor.x, z: this.barnDoor.z + 6, sense: 'sound', text: 'The owls have gone silent', from: 'toward the barn', range: 20 })
+    }
+    if (st.done.morning && !st.done.forage) {
+      for (const h of herbSpots(this.area.pieces, this.set.cell)) {
+        if (!st.picked[h.spot]) out.push({ id: `herb-${h.spot}`, x: h.x, z: h.z, sense: 'smell', text: `${h.herb.title}, green on the air`, from: 'by the trees', range: 18 })
+      }
+    }
+    if (this.ringHeart && this.stonesAwake && !st.done.stones) {
+      out.push({ id: 'stones', ...this.ringHeart, sense: 'sound', text: 'A low hum, like a held note', from: 'from the stones by the signpost', range: 45 })
+    }
+    if (st.done.reading && !st.done.ditch) {
+      const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
+      if (d) out.push({ id: 'ditch', x: d.x, z: d.z, sense: 'sound', text: 'Water, choked and gurgling', from: 'at the low corner of the east field', range: 35 })
+    }
+    return out
+  }
+
+  // S12: the senses' cues, each at the screen's edge toward its source
+  private stepSenses(p: { x: number; z: number }): void {
+    if (!this.senses) this.senses = new SensesLayer(this.container)
+    const cues = senseCues(p.x, p.z, this.senseSources(), this.focus)
+    const w = this.container.clientWidth
+    const h = this.container.clientHeight
+    const cam = this.orbit.camera
+    const me = new THREE.Vector3(p.x, 0, p.z).project(cam)
+    const at = spread(
+      cues.map((c) => {
+        const q = new THREE.Vector3(p.x + Math.cos(c.angle) * 10, 0, p.z + Math.sin(c.angle) * 10).project(cam)
+        return edgePoint(q.x - me.x, me.y - q.y, w, h)
+      }),
+      h,
+    )
+    this.senses.show(cues.map((c, i) => ({ ...c, at: at[i] })))
+  }
+
+  // The hearth of an interior the character stands by
+  private nearHearth(): boolean {
+    const p = this.player()
+    if (!p || !this.set.interior) return false
+    const c = this.set.cell
+    return Object.values(this.area.pieces).some((pl) => pl.piece === 'hearth' && Math.hypot((pl.x + 1) * c - p.x, (pl.z + 0.5) * c - p.z) < 3.5)
+  }
+
+  // R by Hawk's Rest's hearth: rest, and draw the first card
+  private rest(): void {
+    const st = this.story
+    if (st?.done.foretold && !st.done.defended) return this.waitForDark()
+    if (st?.done.rest) return this.sleepHere()
+    if (!st || !st.done.road || st.done.rest) return
+    if (!this.nearHearth()) {
+      this.flash('Stand by the hearth to rest')
+      return
+    }
+    const card = drawCard(hash(st.area))
+    st.card = card.id
+    this.reach('rest')
+    showCard(this.container, card)
+    this.say('Stillness. The cottage settles around you, and your hand finds the old deck on the shelf. The first hour is over; sleep until morning.')
+    setTimeout(() => {
+      if (this.story === st) st.clock = sleep(st.clock)
+    }, 4000)
+  }
+
+  // S14: R by a hearth once the notes foretold the night: the days pass
+  // until it, and the night of hearth defence at the farmhouse begins
+  private waitForDark(): void {
+    const st = this.story!
+    if (!this.nearHearth()) return this.flash('Stand by a hearth to wait for the dark night')
+    if (this.hearth && !this.hearth.outcome) return this.flash('The night has come: keep the watch at the farmhouse')
+    const n = nextNoMoon(nightOf(st.clock) - 1)
+    st.clock = { day: n - FIRST_NIGHT, hour: 20 }
+    this.slept = true
+    const fade = document.createElement('div')
+    fade.style.cssText = 'position:absolute;inset:0;background:#000;opacity:1;transition:opacity 2s;z-index:3;pointer-events:none'
+    this.container.appendChild(fade)
+    setTimeout(() => (fade.style.opacity = '0'), 600)
+    setTimeout(() => fade.remove(), 2800)
+    this.drawMarks()
+    if (st.done.watch) this.savePlace(true)
+    else this.reach('watch')
+    this.say(`The days pass. You help Wenlan bar the byre and set a hooded lamp by the hearthstone. Day ${st.clock.day + 1}: no moon tonight. Keep the watch at the farmhouse.`)
+    this.opts.onStoryNight?.()
+  }
+
+  // S9: R by a hearth once night is falling: sleep until seven
+  private sleepHere(): void {
+    const st = this.story!
+    if (!this.nearHearth()) return this.flash('Stand by a hearth to sleep')
+    if (!canSleep(st.clock)) return this.flash('Too early to sleep: night falls at 19:00')
+    st.clock = sleep(st.clock)
+    this.slept = true
+    const card = drawCard(hash(st.area) + st.clock.day)
+    st.card = card.id
+    if (st.done.almanac) this.reach('sleep')
+    else this.savePlace(true)
+    const fade = document.createElement('div')
+    fade.style.cssText = 'position:absolute;inset:0;background:#000;opacity:1;transition:opacity 2s;z-index:3;pointer-events:none'
+    this.container.appendChild(fade)
+    setTimeout(() => (fade.style.opacity = '0'), 600)
+    setTimeout(() => fade.remove(), 2800)
+    const e = dayCard(hash(st.area), st.clock.day)?.effect
+    const morning = `Day ${st.clock.day + 1}; the day's card: ${card.title}${e?.line ? `: ${e.line}` : ''}.`
+    const warm = this.ateHot
+    this.ateHot = false
+    // S16: a blessed place's dream, or a warm night that heals its wound
+    if (dreams(st.done, this.blessed())) {
+      showDream(this.container, FORD_DREAM, () => {
+        st.items.wound = 1
+        this.reach('dream')
+        this.restartCombat()
+        showCard(this.container, card)
+        this.drawMarks()
+        this.say(`You remember the long spear: your polearm skill rises. Your side aches where the dream's claw went in; until a warm night, some of the Chill stays. ${morning}`)
+        this.knock()
+      })
+      return
+    }
+    if (st.done.dream && !st.done.companion && this.blessed()) this.knock()
+    showCard(this.container, card)
+    this.drawMarks() // S11: the new day's card may light what is hidden
+    if (st.items.wound && warm) {
+      st.items.wound = 0
+      const p = this.player()
+      this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: 'wound', ...this.stateToSave() })
+      this.say(`A warm, dreamless night. The ache in your side is gone. ${morning}`)
+      return
+    }
+    this.say(`You sleep by the hearth${st.items.wound ? '. Your side still aches: eat something hot before you sleep' : ''}. ${morning}`)
+  }
+
+  // S16: a blessed place: the empty cottage up the road (an interior of
+  // another area than the story's, with nobody in it), which approved of its guest
+  private blessed(): boolean {
+    const st = this.story
+    return !!st && !!this.set.interior && this.area.id !== st.area && !Object.keys(this.area.npcs ?? {}).length
+  }
+
+  // S17: a knock at the cottage door in the morning: the first companion
+  private knock(): void {
+    const d = this.dialogues[VETERAN.id]
+    if (!d) return
+    setTimeout(() => {
+      if (!this.playing || !this.story || this.story.done.companion) return
+      this.talkingWith = d.id
+      this.caption.style.display = 'none'
+      this.talk.start(d, VETERAN.name)
+      this.updateHint()
+    }, 3500)
+  }
+
+  // S17: the companion follows a step behind, and in a fight takes the
+  // foe's flank and strikes with the pike on their own time
+  private stepCompanion(dt: number): void {
+    const ch = this.character
+    const want = this.playing && !!ch && !!this.story?.done.companion
+    if (!want) {
+      if (this.companion) this.scene.remove(this.companion.model.group)
+      this.companion = null
+      return
+    }
+    if (!this.companion) {
+      const model = new CharacterModel(VETERAN.color)
+      const p = ch!.group.position
+      this.companion = { model, at: { x: p.x - 1, z: p.z - 1 }, cooldown: 1 }
+      this.scene.add(model.group)
+    }
+    const cp = this.companion
+    const pos = ch!.group.position
+    const c = this.combat
+    const foes = c ? [...c.foes.values()].map((f) => ({ id: f.id, x: f.x, z: f.z, alive: f.alive })) : []
+    const r = companionStep(VETERAN, cp, { x: pos.x, z: pos.z, facing: ch!.group.rotation.y }, foes, c?.target ?? null, dt)
+    const moved = Math.hypot(r.at.x - cp.at.x, r.at.z - cp.at.z)
+    cp.at = r.at
+    cp.cooldown = r.cooldown
+    cp.model.group.position.set(r.at.x, 0, r.at.z)
+    cp.model.group.rotation.y = r.facing
+    cp.model.walk(this.loopTime * 12, moved > 0.002 ? 1 : 0)
+    if (r.strike && c && c.over !== 'fallen') {
+      const e = c.allyStrike(r.strike, VETERAN.polearm, VETERAN.aim)
+      if (!e) return
+      const name = this.area.npcs?.[r.strike]?.name ?? 'it'
+      if (e.kind === 'kill') {
+        this.showEvent(e)
+        this.hud.say(`${VETERAN.name}'s pike takes ${name} through the ${e.vital ?? 'heart'} from the flank.`)
+      } else if (e.kind === 'futile') {
+        this.floatText(r.strike, 'pike', '#b9ad94')
+        this.hud.say(`${VETERAN.name} drives the pike into ${name}'s side. It shrugs it off.`)
+      } else if (e.kind === 'miss') this.floatText(r.strike, 'parried', '#8a8a8a')
+    }
+  }
+
+  // The fight again with the character's skills as they are now
+  private restartCombat(): void {
+    if (this.combat) this.startCombat()
+  }
+
+  // S13: N, the notes, once Wenlan's ditch is clear: link two that belong together
+  openJournal(): void {
+    const st = this.story
+    if (!st) return
+    if (this.journal?.el.isConnected) {
+      this.journal.el.remove()
+      this.journal = null
+      return
+    }
+    if (!st.done.ditch) {
+      this.say('Nothing to write down yet.')
+      return
+    }
+    const night = nightOf(st.clock)
+    const concluded = st.done.foretold ? [link('ash', 'almanac', night)!] : []
+    this.journal = new JournalScene(this.container, journalEntries(st.done), concluded, night, (c) => {
+      this.say(c.text)
+      if (c.step) this.reach(c.step)
+    })
+  }
+
+  // S9: M, the moon almanac
+  private openAlmanac(): void {
+    const st = this.story
+    if (!st || !st.done.rest) return
+    if (this.almanacEl?.isConnected) {
+      this.almanacEl.remove()
+      this.almanacEl = null
+      return
+    }
+    this.almanacEl = showAlmanac(this.container, st.clock)
+    if (st.done.cook) this.reach('almanac')
   }
 
   private flash(text: string): void {
@@ -1370,6 +2265,9 @@ export class AreaViewport {
     this.loopTime += dt
     if (this.playing && this.combat) this.stepCombat(Math.min(dt, 0.1))
     if (this.playing && this.hearth) this.stepHearth(dt)
+    if (this.playing && this.story) this.stepStory()
+    if (this.playing && this.story) this.stepBodyFrame(dt)
+    this.stepCompanion(dt)
     this.orbit.step(dt, this.input)
     if (this.playing && this.walk) {
       // The context cursor: a hand where the ground may be walked to
@@ -1508,6 +2406,8 @@ export class AreaViewport {
   private updateHint(): void {
     this.hint.textContent = this.talk.open
       ? 'Pick an answer · 1 to 9 · Esc to end the talk'
+      : this.playing && this.story && !this.combat
+      ? `The story · click to walk, talk or go through a door · J hides the steps${this.nearHearth() && this.story.done.road && !this.story.done.rest ? ' · R to rest by the hearth' : ''}${this.story.done.morning ? ' · K: the herbal' : ''}${this.story.done.herbal && this.nearHearth() ? ' · B: stillness · C: cook' : ''}${this.story.done.rest ? ' · M: the almanac' : ''}${this.story.done.rest && this.nearHearth() && canSleep(this.story.clock) ? ' · R: sleep' : ''}${this.story.done.ditch ? ' · N: notes' : ''}${this.focus ? ' · focusing: your senses sharpen' : this.story.done.howl ? ' · hold F to focus your senses' : ''}`
       : this.playing && this.combat
       ? 'Fighting · click a Hollowed to attack it · 1 Strike · 2 Pivot · 3 Guard · click the ground to back away'
       : this.playing

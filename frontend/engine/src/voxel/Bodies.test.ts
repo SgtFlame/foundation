@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { asteroidsOf, MOON_GRAVITY, WorldGenerator } from './Bodies.ts'
 import { sampleChunk } from './ChunkSampler.ts'
-import { CHUNK_SIZE, DEFAULT_MOON } from './Types.ts'
+import { CHUNK_SIZE, DEFAULT_MOON, MATERIAL_ORE } from './Types.ts'
 
 const params = { ...DEFAULT_MOON, seed: 7, asteroids: 3 }
 
@@ -35,7 +35,8 @@ test('the world is solid inside each body and empty between them', () => {
 test('gravity is the moon\'s at its surface and points down', () => {
   const w = new WorldGenerator({ ...params, asteroids: 0 })
   const g = w.gravity(0, 100, 0, { x: 0, y: 0, z: 0 })
-  assert.ok(Math.abs(g.y + MOON_GRAVITY) < 1e-9 && Math.abs(g.x) < 1e-9)
+  // the planet 1.6 km away adds a pull of under a millionth of a m/s² (V9)
+  assert.ok(Math.abs(g.y + MOON_GRAVITY) < 1e-6 && Math.abs(g.x) < 1e-5)
 })
 
 test('a chunk across an asteroid samples the same densities as the point function', () => {
@@ -67,4 +68,46 @@ test('standing on an asteroid, its own pull wins over the moon\'s', () => {
       assert.ok(toward > 0.2, `pull toward the asteroid on side ${side}: ${toward}`)
     }
   }
+})
+
+test('ore lies in the asteroids and not in the moon (V8)', () => {
+  const w = new WorldGenerator(params)
+  const count = (cx: number, cy: number, cz: number, r: number) => {
+    let ore = 0
+    let solid = 0
+    for (let i = 0; i < 4000; i++) {
+      const x = cx + (Math.random() * 2 - 1) * r
+      const y = cy + (Math.random() * 2 - 1) * r
+      const z = cz + (Math.random() * 2 - 1) * r
+      const d = w.density(x, y, z)
+      if (d >= 0) continue
+      solid++
+      if (w.material(x, y, z, d) === MATERIAL_ORE) ore++
+    }
+    return { ore, solid }
+  }
+  const a = asteroidsOf(params)[0]
+  const rock = count(a.x, a.y, a.z, a.radius * 0.8)
+  assert.ok(rock.solid > 100 && rock.ore / rock.solid > 0.2, `asteroid ore ${rock.ore} of ${rock.solid}`)
+  const moon = count(0, params.radius - 10, 0, 8)
+  assert.ok(moon.solid > 100 && moon.ore === 0, `moon ore ${moon.ore} of ${moon.solid}`)
+})
+
+test('the planet with air lies a short flight away, its ground soil and its pull its own (V9)', async () => {
+  const { PLANET } = await import('./Bodies.ts')
+  const { MATERIAL_SOIL } = await import('./Types.ts')
+  const w = new WorldGenerator(params)
+  const planet = w.bodies.find((b) => b.kind === 'planet')!
+  assert.equal(planet.x, PLANET.x)
+  // the ground just under the surface at its north pole is soil
+  const top = PLANET.radius + planet.gen.maxOutward
+  let y = top
+  while (w.density(PLANET.x, y, 0) > 0) y -= 0.25
+  assert.equal(w.material(PLANET.x, y - 0.3, 0, w.density(PLANET.x, y - 0.3, 0)), MATERIAL_SOIL)
+  // standing on it, the planet pulls far harder than the moon
+  const g = w.gravity(PLANET.x, y + 1, 0, { x: 0, y: 0, z: 0 })
+  assert.ok(g.y < -1.5 && Math.abs(g.x) < 0.05, JSON.stringify(g))
+  // and halfway there nothing much pulls
+  const mid = w.gravity(PLANET.x / 2, 0, 0, { x: 0, y: 0, z: 0 })
+  assert.ok(Math.hypot(mid.x, mid.y, mid.z) < 0.01)
 })

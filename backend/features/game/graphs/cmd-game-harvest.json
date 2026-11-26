@@ -1,0 +1,267 @@
+{
+  "id": "cmd-game-harvest",
+  "name": "game.harvest",
+  "description": "Decides a ripe crop harvested as food.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.harvest",
+    "title": "Harvest a crop",
+    "description": "Harvests a ripe crop on the planet with air into the sender's pack as one ration of food; the target is the world's id. Refused for a crop that is not there or not ripe yet (90 s after planting).",
+    "args": {
+      "type": "object",
+      "properties": {
+        "crop": {
+          "type": "string",
+          "description": "The crop's id, from game.crops"
+        }
+      },
+      "required": [
+        "crop"
+      ]
+    },
+    "area": "game",
+    "targetType": "terrain",
+    "projection": "game.crops",
+    "action": "game.play",
+    "events": [
+      "harvested"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "crop",
+            "type": "string",
+            "description": "The crop's id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cropsKey",
+      "type": "data.expression",
+      "title": "Crops key",
+      "position": {
+        "x": 250,
+        "y": 0
+      },
+      "config": {
+        "expr": "\"terrain.\" + target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "crops",
+      "type": "live.readProjection",
+      "title": "Read the crops",
+      "position": {
+        "x": 500,
+        "y": 0
+      },
+      "config": {
+        "projector": "game.crops"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why it is refused",
+      "position": {
+        "x": 800,
+        "y": 150
+      },
+      "config": {
+        "expr": "let c = (state?.crops ?? {})[crop]; c == nil ? \"there is no crop \" + crop : now().UnixMilli() - c.at \u003c 90000 ? \"the crop is not ripe yet: \" + string(int((90000 - (now().UnixMilli() - c.at)) / 1000) + 1) + \" s to go\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Allowed?",
+      "position": {
+        "x": 1050,
+        "y": 150
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "position": {
+        "x": 1300,
+        "y": 0
+      }
+    },
+    {
+      "id": "harvested",
+      "type": "data.expression",
+      "title": "Harvested",
+      "position": {
+        "x": 1300,
+        "y": 350
+      },
+      "config": {
+        "expr": "{crop: crop, pack: {food: 1}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "position": {
+        "x": 1600,
+        "y": -100
+      },
+      "config": {
+        "event": "harvested"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "position": {
+        "x": 1600,
+        "y": 150
+      },
+      "config": {
+        "path": "args.crop",
+        "fix": "harvest a crop from game.crops once it is ripe"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "cropsKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "cropsKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "crops",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "crops",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "crop"
+      },
+      "to": {
+        "node": "check",
+        "pin": "crop"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "crop"
+      },
+      "to": {
+        "node": "harvested",
+        "pin": "crop"
+      }
+    },
+    {
+      "from": {
+        "node": "harvested",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    }
+  ]
+}

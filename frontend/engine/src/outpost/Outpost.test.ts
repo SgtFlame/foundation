@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import type { ShipState } from '../ship/Ship.ts'
 import { atOutpost, handInProblem, thrustFor } from './Outpost.ts'
@@ -18,6 +19,17 @@ test('what keeps a contract from being handed in', () => {
   assert.match(handInProblem('beacon-iron', ship({ cargo: { dust: 0, rock: 2, iron: 0.5 } }), null, 32), /iron/)
   assert.equal(handInProblem('beacon-iron', ship({ cargo: { dust: 0, rock: 0, iron: 1 } }), null, 32), '')
   assert.equal(handInProblem('beacon-iron', ship({}), { done: { 'beacon-iron': true }, xp: {}, levels: {} }, 32), 'done')
+})
+
+test('a job of the job board is never done, needs its Trade level, and the hold to carry it (V11)', () => {
+  const contracts = JSON.parse(readFileSync(new URL('../../../../backend/features/game/contracts/contracts.json', import.meta.url), 'utf8')).contracts
+  const pad = contracts.find((c: { id: string }) => c.id === 'pad-rock')
+  const bulk = contracts.find((c: { id: string }) => c.id === 'bulk-ore')
+  const p = { done: { 'pad-rock': true }, xp: { trade: 40 }, levels: { trade: 1 }, jobs: { 'pad-rock': 1 } }
+  assert.equal(handInProblem('pad-rock', ship({ cargo: { dust: 0, rock: 3, iron: 0 } }), p, 32, pad), '')
+  assert.match(handInProblem('pad-rock', ship({ cargo: { dust: 0, rock: 1, iron: 0 } }), p, 32, pad), /rock/)
+  assert.match(handInProblem('bulk-ore', ship({ cargo: { dust: 0, rock: 0, iron: 0, ore: 40 } }), p, 58, bulk), /Trade level 2/)
+  assert.equal(handInProblem('bulk-ore', ship({ cargo: { dust: 0, rock: 0, iron: 0, ore: 40 } }), { ...p, levels: { trade: 2 } }, 58, bulk), '')
 })
 
 test('each piloting level past the first adds a tenth to thrust', () => {

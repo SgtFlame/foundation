@@ -70,5 +70,29 @@ export const kitchen: {
     { id: 'door', piece: 'door', x: 2, z: 4, rot: 2 },
     { piece: 'window', x: 4, z: 4, rot: 2 },
   ],
-  npcs: [{ name: 'The farmer', kind: 'farmer', x: 8.8, z: 3, facing: 3.9, dialogue: 'farmer' }],
+  npcs: [{ name: 'Wenlan Harrow', kind: 'farmer', x: 8.8, z: 3, facing: 3.9, dialogue: 'farmer' }],
+}
+
+// S6: the signpost where the north road leaves the farmstead, beside the
+// road's last cell; its door takes the road west to Hawk's Rest
+export const SIGNPOST: Omit<Placement, 'id'> = { piece: 'signpost', x: 4, z: 0, rot: 0 }
+
+// Hawk's Rest† (375 › the first hour, step 4), laid out from the kitchen
+// set: a one-room cottage with a cold hearth between herb shelves, a box
+// bed, a table and bench, the moon stones' window, and its door on the
+// south wall. Empty: nobody lives here now. 5 × 4 cells of 2 m.
+export const hawksRest: { name: string; width: number; depth: number; pieces: (Omit<Placement, 'id'> & { id?: string })[] } = {
+  name: "Hawk's Rest",
+  width: 5,
+  depth: 4,
+  pieces: [
+    { piece: 'shelf', x: 0, z: 0, rot: 0 },
+    { piece: 'hearth', x: 1, z: 0, rot: 0 },
+    { piece: 'shelf', x: 3, z: 0, rot: 0 },
+    { piece: 'window', x: 4, z: 0, rot: 0 },
+    { piece: 'bed', x: 4, z: 1, rot: 0 },
+    { piece: 'table', x: 1, z: 2, rot: 0 },
+    { piece: 'bench', x: 1, z: 1, rot: 0 },
+    { id: 'door', piece: 'door', x: 2, z: 3, rot: 2 },
+  ],
 }

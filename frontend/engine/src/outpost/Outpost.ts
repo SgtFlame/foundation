@@ -9,14 +9,33 @@ import type { ShipState, Vec3 } from '../ship/Ship.ts'
 
 export interface ContractList {
   giver: { name: string; title: string; line: string }
-  contracts: { id: string; title: string; description: string; skill: string; xp: number }[]
+  contracts: {
+    id: string
+    title: string
+    description: string
+    skill: string
+    xp: number
+    // V8: what the ship must bring, the design the job needs, the design it unlocks
+    needs?: { complete?: boolean; iron?: number; ore?: number; rock?: number }
+    design?: string
+    unlocks?: string
+    // V11: a job of the job board, done again and again, and the Trade level it needs
+    job?: boolean
+    level?: number
+  }[]
 }
 
 export interface Progress {
   done: Record<string, boolean>
   xp: Record<string, number>
   levels: Record<string, number>
+  unlocked?: Record<string, boolean> // V8: designs contracts opened
   at?: [number, number, number] // V8: where the player last stood; missing until they land
+  needs?: { air: number; fed: number; health: number } // V10: their body's needs when last saved
+  jobs?: Record<string, number> // V11: how many times they did each job
+  home?: string // V13: the cabin whose bed they last slept in
+  tools?: Record<string, boolean> // V14: the tools they crafted (drill)
+  manuals?: Record<string, boolean> // V18: manuals salvaged from wrecks (powerDrill)
 }
 
 export const OUTPOST_REACH = 40
@@ -36,12 +55,20 @@ export function atOutpost(s: ShipState, radius: number, amplitude: number): bool
   return Math.hypot(s.x - b.x, s.y - b.y, s.z - b.z) <= OUTPOST_REACH
 }
 
+// What the V6 contracts need, for a list from before V8's needs
+const NEEDS: Record<string, ContractList['contracts'][number]['needs']> = { 'first-flight': { complete: true }, 'beacon-iron': { iron: 1 } }
+
 // Why a ship cannot hand in a contract, or '' (the blueprint decides)
-export function handInProblem(id: string, s: ShipState | null, p: Progress | null, blocks: number): string {
-  if (p?.done[id]) return 'done'
+export function handInProblem(id: string, s: ShipState | null, p: Progress | null, blocks: number, c?: ContractList['contracts'][number]): string {
+  if (p?.done[id] && !c?.job) return 'done'
+  if (c?.level && (p?.levels.trade ?? 1) < c.level) return `needs Trade level ${c.level}`
   if (!s) return `park a ship within ${OUTPOST_REACH} m of the beacon`
-  if (id === 'first-flight' && s.placed.length < blocks) return `${blocks - s.placed.length} blocks still to place`
-  if (id === 'beacon-iron' && (s.cargo?.iron ?? 0) < 1) return 'needs 1 m³ of iron in the hold'
+  const needs = c?.needs ?? NEEDS[id] ?? {}
+  if (c?.design && s.design !== c.design) return `needs a ${c.design}`
+  if (needs.complete && s.placed.length < blocks) return `${blocks - s.placed.length} blocks still to place`
+  if ((s.cargo?.rock ?? 0) < (needs.rock ?? 0)) return `needs ${needs.rock} m³ of rock in the hold`
+  if ((s.cargo?.iron ?? 0) < (needs.iron ?? 0)) return `needs ${needs.iron} m³ of iron in the hold`
+  if ((s.cargo?.ore ?? 0) < (needs.ore ?? 0)) return `needs ${needs.ore} m³ of ore in the hold`
   return ''
 }
 
@@ -100,7 +127,7 @@ export class ContractPanel {
     this.el = document.createElement('div')
     this.el.dataset.contracts = ''
     this.el.style.cssText =
-      'position:absolute;right:12px;top:12px;z-index:4;display:none;width:340px;padding:10px 12px;border-radius:6px;' +
+      'position:absolute;right:12px;top:12px;z-index:4;display:none;width:340px;padding:10px 12px;border-radius:6px;max-height:calc(100% - 24px);overflow-y:auto;box-sizing:border-box;' +
       'background:rgba(14,16,22,0.92);border:1px solid #48536a;font:12px system-ui,sans-serif;color:#e4e9f2'
     container.appendChild(this.el)
   }
@@ -115,7 +142,17 @@ export class ContractPanel {
     line.style.cssText = 'opacity:0.85;font-style:italic;margin-bottom:8px'
     line.textContent = `“${list.giver.line}”`
     this.el.append(h, line)
+    let board = false
     for (const c of list.contracts) {
+      if (c.job && !board) {
+        // V11: the job board below the quartermaster's own contracts
+        board = true
+        const jb = document.createElement('div')
+        jb.dataset.jobBoard = ''
+        jb.style.cssText = 'border-top:2px solid #5b6b8a;margin-top:6px;padding-top:6px;font:600 13px system-ui,sans-serif'
+        jb.textContent = 'Job board: take these again and again; only jobs teach Trade'
+        this.el.append(jb)
+      }
       const row = rows.find((r) => r.id === c.id)
       const box = document.createElement('div')
       box.style.cssText = 'border-top:1px solid #333b4a;padding:6px 0'
@@ -136,7 +173,8 @@ export class ContractPanel {
       t.append(name, btn)
       const d = document.createElement('div')
       d.style.cssText = 'opacity:0.8;margin-top:2px'
-      d.textContent = `${c.description} Pays ${c.xp} ${c.skill} xp.${row?.problem && !done ? ` (${row.problem})` : ''}`
+      const times = c.job ? (progress?.jobs?.[c.id] ?? 0) : 0
+      d.textContent = `${c.description} Pays ${c.xp} ${c.skill} xp.${times ? ` Done ${times}×.` : ''}${row?.problem && !done ? ` (${row.problem})` : ''}`
       box.append(t, d)
       this.el.append(box)
     }
@@ -144,7 +182,7 @@ export class ContractPanel {
     skills.dataset.skills = ''
     skills.style.cssText = 'border-top:1px solid #333b4a;padding-top:6px;opacity:0.9'
     const lv = (k: string) => progress?.levels[k] ?? 1
-    skills.textContent = `Your skills: piloting ${lv('piloting')} · prospecting ${lv('prospecting')} · Esc frees the mouse to click · T closes`
+    skills.textContent = `Your skills: piloting ${lv('piloting')} · prospecting ${lv('prospecting')} · mining ${lv('mining')} · trade ${lv('trade')}${progress?.unlocked?.freighter ? ' (the freighter is yours to build)' : ''} · Esc frees the mouse to click · T closes`
     this.el.append(skills)
     this.el.style.display = 'block'
   }

@@ -179,6 +179,237 @@ The landing and the saved place.
 - **The drop pod** (`landing/DropPod.ts`): the first walk in a world with no `at` brings the player down in a pod that falls 160 m over 9 s onto the ground near the outpost, braking with its retro rocket at the end, watched from beside the landing point; the player steps out of the hatch and the place is saved. Later walks start where they last stood.
 - **Saving**: while walking, the place is saved every 15 s when the player has moved 3 m and stands on the ground, and when the tab closes. Stats add `landing`.
 
+## Built in V8, third part (forge 360)
+
+A reason to leave the moon (the user, 2026-11-26: the moon has what a first ship needs, not what bigger ships need).
+
+- **Ore** (`MATERIAL_ORE`, voxel material 2): `MoonParams.ore` (0 to 1) puts veins of ore in a body's rock; the moon has none and the asteroids `0.6`. Surface nets pass `(rocky + ore) / solid` per vertex, so the terrain material blends dust, rock and a blue-grey speckled ore. A dig's `took`, the pack (`game.pack`'s `ore`) and a ship's hold (`cargo.ore`) carry ore; fills never spend it; `game.loadShip` loads ore first.
+- **Contracts with needs and unlocks** (`contracts/contracts.json`): each contract may give `needs` (`complete`, `iron`, `ore`), `design` (the ship it must be handed in from) and `unlocks` (a design). `game.handIn` reads them from one table, takes the iron and ore from the hold and records the unlock, which `game.players` folds into `unlocked` on `game.player`. Two new contracts: *Cobalt for the shipyard* (2 ore, Mining, unlocks the hauler) and *Ore haul* (12 ore, from a hauler, Mining).
+- **The hauler** (`designs/hauler.json`): 58 blocks with six holds (36 m³) and a refinery; `game.startShip` refuses it until the sender has it unlocked, and the ship graphs know its holds, refinery and crew seat.
+- **Names** (placeholders, the user, 2026-11-26): the farmer is Wenlan Harrow and the quartermaster Ines Varga.
+- The first-hour guide has twelve steps: mine ore on an asteroid, hand in the cobalt, build a hauler.
+
+## Built in S6 (forge 375)
+
+The story game's sixth tracer bullet: the first hour end to end, with saves (the user, 2026-11-26: as written in the play design's first hour).
+
+- **Saves**: `game.reachStory {step, area, x, z}` (`cmd-game-reachStory`) on the target `story.<areaId>`, where the story is known by its starting area (the farmstead). It is refused for a step not in the first hour (`StorySteps`: arrive, farmer, howl, signature, trail, fight, road, rest), a missing area, or a point outside it; an empty step saves only the place. `game.stories` folds it per player, keyed `<areaId>.<userId>`, and the `game.story {story}` query gives `{done, last, area, at}`. `game.storyLog` (keyed by target) is the command's own state.
+- **`story/FirstHourStory.ts`**: the steps with their how-to (the ids are the server's; a test checks them), the raid signature's text, the drag marks (`dragMarks`), a howl made with Web Audio, and a lesser deck of five placeholder cards (`drawCard`, `showCard`).
+- **The signpost** (farmland piece `signpost`, a door) stands where the north road leaves the farmstead (`Samples.SIGNPOST`) and leads to **Hawk's Rest** (`Samples.hawksRest`), an empty one-room cottage of the kitchen set.
+- **In the viewport**: `playStory(place)` plays the first hour from the area shown, resuming from the saved place: the steps done, and the area and point last stood at (in another area, through `onTravel`). Talking to the farmer brings the first howl; the raid signature (a scorched ring and a dropped lantern by the well) and three furrows to the barn's door appear; standing by the signature reads it, reaching the barn shows the two Hollowed (hidden until then and gone after the fight) and starts the fight; going through the signpost reaches the road, and R by Hawk's Rest's hearth rests and draws the first card. Each step is sent through `onStory`, and the place every 15 s after moving 3 m and on Stop. The steps panel is `FirstHourPanel` below the moons; a caption tells the story at the bottom. Stats add `story`.
+
+## Built in V9 (forge 360)
+
+A thin first step off the moon to a planet with air (the user's progression, 2026-11-26: plant food, fish and hunt, build a cabin).
+
+- **The planet** (`Bodies.PLANET`, `planetOf`): a body of kind `planet` in every world, 1600 m along x from the moon, 140 m in radius with gentle hills and no craters. Its ground is **soil** (`MATERIAL_SOIL`, 3; `MoonParams.soil`), which the mesher passes as a negative attribute, so the terrain material blends a grassy green; dug soil goes into the pack as dust. Its pull is its own (2.27 m/s² at the surface), and the moon's gravity test allows its far, tiny pull.
+- **The sky**: from afar the planet is a sphere just under its lowest ground with a thin glow of air; going down into its air (60 m) turns the background blue and hides the stars (`stats().air`).
+- **Crops**: `game.plant {x, y, z}` (`cmd-game-plant`) plants barley on the planet's surface, refused off it or within 1.5 m of another crop; `game.harvest {crop}` (`cmd-game-harvest`) takes a ripe one (90 s, `RipeSeconds`) as a ration of food, which `game.packs` folds (`Pack.Food`). `game.crops` keeps each world's crops, keyed `terrain.<worldId>`, and the `game.crops {world}` query lists them. `editTerrain`, `standAt` and `startShip` allow points near the planet.
+- **In the viewport**: walking, P plants where the player looks on the planet's soil and H harvests the ripe crop beside them; crops grow from small and green to full and gold. The pack line shows food, and the first-hour guide adds *Grow food on the green planet* (thirteen steps). Stats add `crops`.
+
+## Built in S7 (forge 375)
+
+The story game's seventh tracer bullet: the first day after the first hour (the user, 2026-11-26: "both, a thin slice each").
+
+- **Steps**: `StorySteps` gains `morning`, `forage` and `herbal`; `game.reachStory` takes `item` and `spot` (a herb gathered: `StoryItems` thyme, nettle, yarrow), refused for an unknown item, and `game.story` gives `items` (counts) and `picked` (the spots gathered, each counted once).
+- **`story/FirstHourStory.ts`**: `HERBS` (title, colour, the herbal's line), `herbSpots(pieces, cell)` (one herb by each of the area's first three tree or copse pieces, in a fixed order, keyed by the piece's id) and `showHerbal` (the herbal page).
+- **In the viewport**: once `rest` is done, play continuing (after any resume) reaches `morning`: day light, the day's card drawn and shown. In the story's starting area the herbs grow by the trees; walking within 2 m of one gathers it (sent through `onStory` with `item` and `spot`); all three reach `forage`, and K opens the herbal, which reaches `herbal`, the story's last step for now. Stats' `story` adds `items`.
+
+## Built in V10 (forge 360)
+
+The voxel game's tenth tracer bullet: the body's needs, a thin 362e (the user, 2026-11-26: full survival).
+
+- **`survival/Needs.ts`**: `Needs {air, fed, health}` (0 to 100), `stepNeeds(needs, {breathable}, dt)` with the rates in `NEEDS` (a suit holds 240 s of air and refills at 25 a second; full to hungry in 30 minutes; no air costs 6 health a second, starving 0.25; health comes back at 0.5 a second while fed above 20), `eat` (a ration gives 35), `warning` and the `NeedsHud` (three bars at the bottom right).
+- **In the viewport**: the needs run while the player walks, flies a ship or rides as crew. Air fills in the planet's air, aboard a ship and within 14 m of the outpost's quartermaster; E eats a ration from the pack (`ShipIntent` `eat`). At no health the player blacks out and wakes by the outpost with full air and 60 health. The needs go with each saved place (`stand` carries `needs`) and come back from `game.player`. Stats add `needs`, `breathable` and `blackouts`.
+- **Server**: `game.eat {}` (`cmd-game-eat`, target the world) refuses an empty pack and emits `ate {pack: {food: -1}}`, which `game.packs` folds; `game.standAt` takes `needs {air, fed, health}` (each rounded and clamped), which `game.players` keeps as `needs` (a stand without them keeps the last).
+
+## Built in S8 (forge 375)
+
+The story game's eighth tracer bullet: the Hum, Chill and Hunger (the design's rules 2 and 3), using the herbs of S7.
+
+- **`story/Hum.ts`**: `Body {hum, chill, hunger}`; `humPool(night)`, a thimble line's small pool set by the moons (1 in the greater moon's dark, up to 4 when it is full, one more at the lesser's full); `breathe` (stillness, one Hum a breath up to the pool), `spendHum` (the cadence: 40 Chill and 15 Hunger), `stepBody` (hunger grows over about 25 minutes, faster while chilled; the chill fades over 15), `DISHES` and `cook` (thyme in hot milk clears the Chill, nettle soup eases Hunger), the `BodyHud` (Hum pips, Chill and Hunger bars), the `BreathPrompt` (a ring swelling four seconds and falling six) and `showCooking`.
+- **Combat**: `CombatOptions.cadenceAllowed` gates the Strike, Pivot, Guard cadence; in the story, once stillness is learned, each cadence needs and spends a Hum.
+- **In the viewport**: after the herbal, B by a hearth starts stillness (moving, a fight or leaving the hearth breaks it; the first breath reaches `stillness`), and C opens the hearth's cooking (cooking reaches `cook` and spends the herb). The body is sent with every step and saved place (`onStory` `body`, `use`).
+- **Server**: `game.reachStory` takes `use` (a herb spent, refused unless held: the graph reads `game.stories`) and `body {hum, chill, hunger}` (clamped); `StorySteps` gains `stillness` and `cook`; `game.story` gives `body` and counts a spent herb off `items`.
+
+## Built in V11 (forge 360)
+
+The voxel game's eleventh tracer bullet: the job board (the user, 2026-11-26: the job board asks for larger and larger ships, and some skills rise only from jobs).
+
+- **Jobs** are contracts with `job: true` in `contracts/contracts.json`, done again and again: *Rock for the landing pads* (3 m³ of rock), *An ore run* (8 m³ of ore, more than a prospector holds), *Bulk ore for the smelter* (30 m³, Trade 2) and *Ore for the new station* (50 m³, Trade 3, only a freighter holds it). Each pays **Trade**, a skill no other work teaches; `level` is the Trade level a job needs.
+- **`game.handIn`** (`cmd-game-handIn`) knows the jobs: it refuses a job above the sender's Trade level and checks rock in the hold; it emits `job: true` and `rock`, and once the Trade experience reaches 200 (level 3) it unlocks the **freighter**. `game.players` counts each job in `jobs` instead of marking it done; the ship's hold gives up the rock.
+- **The freighter** (`designs/freighter.json`, 82 blocks, eleven holds): `game.startShip` refuses it until unlocked.
+- **Engine**: `handInProblem` never calls a job done and checks its Trade level and rock; the quartermaster's panel shows a *Job board* section with how many times each was done, the skills line Trade, and scrolls when long.
+
+## Built in S9 (forge 375)
+
+The story game's ninth tracer bullet: the moon clock and the day and night loop (the design's rule 1; the play design's 20 to 30 minute days).
+
+- **`story/Clock.ts`**: `Clock {day, hour}` from the night of the first snow (calendar night 11, 21:00); a game hour is a real minute (`SECONDS_PER_HOUR`), dawn at 6 and dusk at 19; `nightOf` (the small hours belong to the night before), `sleep` (wake at 7), `canSleep` (from 18:00), `clockText`, `skyNote` (moondark, the lesser's full and dark, waxing and waning, and the rare Doubling and Double Dark, both moons within half a night), `almanac(from, n)` with each night's Hum pool, and `showAlmanac`.
+- **In the viewport**: the story's clock runs while playing; the light follows dawn and dusk, and the calendar night (and so the moons and the Hum pool) follows the clock. M opens the almanac (once cooking is done it reaches `almanac`); R by a hearth from 18:00 sleeps until seven, draws the day's card and, after the almanac, reaches `sleep`. The clock shows above the Hum and goes with every save (`onStory` `clock`).
+- **Server**: `game.reachStory` takes `clock {day, hour}` (the hour kept within a day), `StorySteps` gains `almanac` and `sleep`, and `game.story` gives `clock`.
+
+## Built in V12 (forge 360)
+
+The voxel game's twelfth tracer bullet: fishing and hunting on the planet with air (the user's progression: plant food, fish, hunt).
+
+- **The sea**: a sphere of water at `SEA_RADIUS` (the planet's radius less 2.5 m) fills its hollows (`wildlife/Wildlife.ts`, `seaMesh`).
+- **Fishing**: N while looking at the water within 14 m casts a float (`Fishing`, a small state machine: a bite comes after 3 to 8 s and lasts 1.6 s); N again strikes. A strike in the bite catches a fish (one ration), too early comes up empty, too late the fish gets away.
+- **The herd**: twelve grazers in three groups from the world's seed (`herdOf`, ids `g00` to `g23`), each walking a slow circle round its home (`grazerDir`); they show where the ground is above the sea, and run along their circle when the player comes within 9 m. V within 2.6 m hunts one (three rations).
+- **`game.forage`** (`cmd-game-forage`, area `game`, target the world's terrain) takes `{kind: fish|hunt, animal, x, y, z}`: refused away from the planet (120 to 160 m from its centre), for an unknown grazer, or one taken less than 300 s ago; it emits `foraged` with `pack: {food}`, which `game.packs` adds to the sender's pack. The `game.wildlife` projector (keyed `terrain.<world>`, folding **every** terrain event so the command's expected sequence holds) keeps `{taken, fish, hunted}`; the live `game.wildlife {world}` query sends it to every player, so a grazer one person hunts is gone for everyone until it comes back.
+- The first hour's *Grow food* step counts only once the hauler is built, so a fish never finishes the guide.
+
+## Built in S10 (forge 375)
+
+The story game's tenth tracer bullet: a three-card reading for Wenlan Harrow (the design's rule 7 and the play design's card readings; the quest is the design's *a farmer's winter wheat is drowning and a card reading shows the blocked ditch*).
+
+- **`story/Reading.ts`**: `WENLAN_READING`, three placeholder cards of the lesser deck (past *The Plough*, present *The Willow*, future *The Ash*), each with a faint and a clear vision; `clarity(night, stillness)` from the lesser moon's light (at least a half once stillness is learned), `vision`, `wenlanAnswer`, `ditchSpot` (the low south-east corner of the field piece furthest east) and `ReadingScene`, the cards laid face down and turned left to right by a click, then the choice of what to tell: *all of it* (the ditch and the warning of the last card) or *only the ditch*.
+- **In the viewport**: once the first day is over (`sleep`), clicking Wenlan opens the reading instead of his talk; the choice reaches `reading` with `told`. On the farmstead a willow bough lies across the culvert at the east field's low corner and water stands over the barley; walking up to the bough clears it and reaches `ditch`, and Wenlan pays a silver.
+- **Server**: `StorySteps` gains `reading` and `ditch`; `game.reachStory` takes `told` (`all` or `ditch`), kept as `told` in `game.story`, and the first `ditch` adds one `silver` to `items`.
+
+## Built in V13 (forge 360)
+
+The voxel game's thirteenth tracer bullet: a cabin on the planet with air (the user's progression: a cabin), and the engine's first **buildings**.
+
+- **Static designs**: a `ShipDesign` with `static: true` is a building: no cockpit (`ShipDesign.Check`), never flown, and its placed blocks are **solid to the walker** (`buildingDistance` in `ship/Ship.ts`, a box distance per placed block, taken as the lesser with the terrain's in the viewport's walker terrain), so walls stop the player and a roof holds them up; `door` blocks stay open. New block types `log`, `door` (an open frame) and `bed` (a slab half a block high with a pillow).
+- **The cabin** (`designs/cabin.json`, 74 blocks): walls three logs high with a doorway at the front, a roof with a lamp, and a bed (block 73). `game.startShip` builds it only on the planet (120 to 160 m from its centre).
+- **`game.sleep`** (`cmd-game-sleep`, target the cabin) refuses a ship that is not a cabin or a cabin without its bed; it emits `slept`, which `game.players` folds into `home` and full health. In play, F by the bed sleeps (*F: sleep in the bed*), and a blackout wakes the player by their home's bed instead of at the outpost.
+- Fixed on the way: a player who has only stood or slept somewhere has no `levels`, which broke the viewport's progress (it now fills the empty maps).
+- Known: a building is placed as a ship is (ahead of the player, its lowest blocks half sunk), so on a slope its downhill side floats a little, and a second building started where one stands goes on its roof.
+
+## Built in S11 (forge 375)
+
+The story game's eleventh tracer bullet: the day's card gives a light buff or a warning (the design's rule 7: "a daily one-card draw gives a tone for the day").
+
+- **`story/DayCard.ts`**: `dayCard(seed, day)` is the card of a story's day (the card the morning and sleeping show, `drawCard(seed + day)`, so nothing new is saved), with its `CardEffect`: *The Hearth* makes hot food do half again as much, *The Lantern* lights what is hidden nearby (a soft column of light over unpicked herbs and the willow bough), *The Hare* walks a quarter faster, *The Frost* is a warning (a spent Hum chills half again as much), *The Wren* adds one Hum to the sky's pool. `spendWith` and `cookWith` apply it.
+- **In the viewport**: the walking speed, the cadence's Hum, cooking and the Hum pool follow the day's card; the body HUD shows it beside the clock (*Day 4 · 09:01 · The Lantern: what is hidden nearby glows*), and sleeping names it.
+- `drawCard` now mixes its seed fully, so days in a row draw varied cards (before, neighbouring seeds often drew the same one).
+
+## Built in V14 (forge 360)
+
+The voxel game's fourteenth tracer bullet: the crafting ladder's first rung (the play design's *hand → field bench*) and its first moment, "crafting the first drill and tearing through rock that took minutes by hand".
+
+- **Digging on foot depends on tools** (`craft/Crafting.ts`, `digLimits`): bare hands dig a brush of at most 1.25 m, a bite every 0.35 s; with a **hand drill** up to 4 m, a bite every 0.12 s. The hint says *Left: dig by hand* or *Left: drill*. Flying the camera digs as before (up to 6 m).
+- **The field bench**: a new block type `bench` (a table on four legs with a vice), block 74 of the cabin (now 75 blocks). In play, U at a placed bench crafts (*U: craft a hand drill (2 m³ ore, 1 m³ rock)*), refused with the reason when the pack lacks the materials.
+- **`game.craft {item}`** (`cmd-game-craft`, target the cabin) refuses a ship that is not a cabin, a cabin whose bench is not placed, any item but `drill`, a drill the sender already has, or a pack without 2 m³ of ore and 1 m³ of rock; it emits `crafted {world, item, pack}`, which `game.packs` folds (the materials spent) and `game.players` folds into `tools: {drill: true}`. The recipe is in the engine's `RECIPES` and the graph alike. `TestCraftDrill` covers it.
+
+## Built in S12 (forge 375)
+
+The story game's twelfth tracer bullet: the senses layer (the design's rule 6), smells and sounds shown as soft cues at the screen's edge, pointing toward their source without a minimap marker.
+
+- **`story/Senses.ts`**: a `Source` (`sense` smell or sound, `text`, `from`, `range` in metres); `senseCues(x, z, sources, focus)` gives at most three cues within reach but not at hand (3 m), strongest first, each with its direction; `edgePoint` puts a cue on a box inset from the screen's edges along the direction from the screen's centre to its source's projection, and `spread` moves overlapping cues apart. `SensesLayer` draws them (`data-sense`), faded by strength.
+- **Focus**: holding F carries every sense 1.75 times as far, and the clearest cue names where it comes from (*Burnt sugar and old iron, from the barn*). The hint says *hold F to focus your senses* once the howl is heard.
+- **The first hour's sources** (`AreaViewport.senseSources()`): after the howl, *old pennies, and scorched snow* from the raid signature by the well; after the signature, *burnt sugar and old iron* from the barn and, at night, *the owls have gone silent*; on the first morning each unpicked herb (*Wild thyme, green on the air*); after the reading, *water, choked and gurgling* from the culvert.
+- Engine only: senses are not saved, and the server is unchanged.
+
+## Built in V15 (forge 360)
+
+The voxel game's fifteenth tracer bullet: scavenging (the play design's "wrecks hold salvageable blocks; tearing down a block yields part of its materials, so salvage and mining feed the same chain").
+
+- **Two wrecks** (`wreck/Wreck.ts`): derelict skiffs `k0` and `k1` lie half buried on the moon, 30° to 45° from its top on opposite sides (a walk of about 50 to 80 m from the outpost), placed from the world's seed (`wreckSites`) so every player sees them in the same place; drawn from the skiff's design in rust colours, each block a little askew. They are scenery to the walker (not solid yet).
+- **Salvage**: by a wreck, Z tears off the nearest block still there (`nearestSalvage`, within 2.6 m; *Z: salvage scrap from the wreck*), and its scrap goes into the pack as 0.25 m³ of **ore**, so a wreck feeds the refinery and the drill's recipe as an asteroid does.
+- **`game.salvage {wreck, index, x, y, z}`** (`cmd-game-salvage`, target the world) refuses a point off the moon, an unknown wreck or block (0 to 26), a block already salvaged or a full pack; it emits `salvaged`, which `game.packs` folds (the ore) and the new `game.wrecks` projection folds per world (`{salvaged: {<wreck>.<index>: true}, count}`; it folds every event on the terrain target, so the command's expected sequence is the target's). The `game.wrecks` query keeps the World tab current: a block salvaged is gone for everyone. `TestSalvage` covers it.
+
+## Built in S13 (forge 375)
+
+The story game's thirteenth tracer bullet: the clue journal (the play design's investigation: "a clue journal collects people, places and evidence; some entries can be linked to draw a conclusion, which opens the next step").
+
+- **`story/Journal.ts`**: `journalEntries(done)` gives the notes the story has reached (Wenlan Harrow, Hawk's Rest, the raid by the well, ember eyes in the barn, the moon almanac, the Ash card); `link(a, b, night)` gives what two notes conclude, or null; `nextNoMoon(night)` is the next night with the greater moon dark and the lesser all but dark. `JournalScene` is the notes' page in the herbal's style (`data-note`, `data-conclusion`).
+- **N** opens the notes once Wenlan's ditch is clear (before, *Nothing to write down yet*). Clicking two notes links them: the Ash card with the moon almanac concludes the night the eyeless ones come back (*Day …, the next night with no moon*, both moons new), the story's new last step **`foretold`**; the raid with the ember eyes concludes the Hollowed took the Brannocks (a note only); other pairs *do not fit together*.
+- `game.reachStory` takes the step `foretold`; the Area tab's *Play the story again* now follows it.
+- Known: only the conclusion that is a step is saved, and its night is worked out again from the story's clock when the notes open.
+
+## Built in S14 (forge 375)
+
+The story game's fourteenth tracer bullet: the night the notes foretold, played as S5's hearth defence at Wenlan's farmhouse, so the reading, the investigation and the defence join into one thread.
+
+- New last steps **`watch`** (the foretold night begun) and **`defended`** (the house held until dawn); `game.reachStory` takes both.
+- After `foretold`, R by a hearth waits for the dark night: the clock jumps to 20:00 of the next night with both moons new (`nextNoMoon`, stricter since S14 so the moon HUD agrees), Wenlan bars the byre, and the viewport asks its host to start the night (`AreaViewportOptions.onStoryNight`; the Area tab starts `startHearthNight` at the farmhouse, as its *A night of hearth defence* button does).
+- At dawn the house held reaches `defended` and Wenlan's thanks; a house lost says so, and R by a hearth waits for the next dark night to try again.
+- The Area tab's *Play the story again* now follows `defended`.
+
+## Built in V16 (forge 360)
+
+The voxel game's sixteenth tracer bullet: the first threat on a schedule (the play design's base defence: "a swarm surge when the Silent Fleet's drones wake on a cycle, shown in the HUD ahead").
+
+- **The schedule** (`surge/Surge.ts`): a surge every 12 minutes of real time (`SURGE_PERIOD`; index = Unix ms / 720 000), lasting 75 s, the same for every player. On the moon a pill at the top of the view counts down (*Next swarm surge in 8:41*, amber in the last minute) and, during one, counts the drones left.
+- **Drones**: eight a surge (`dronesOf(index)`), each waking at its own time, appearing 30 m up and 30 m off on its side of the sky and diving at the player at 6 to 9 m/s. One that reaches you takes 8 health (`DRONE_HIT`) and is spent. They are glowing red octahedrons, each player's own (they chase whoever sees them).
+- **Q shoots** a bolt along the look (`shotHits`: within 1.1 m of the line, 45 m range): the drone falls and gives 0.1 m³ of ore scrap, so surviving a surge pays in salvage.
+- **`game.downDrone {surge, drone}`** (`cmd-game-downDrone`, target the world) refuses a surge that is neither the current nor the last one, a drone outside 0 to 7, one the sender already downed or a full pack; it emits `downed`, which `game.packs` folds and the new `game.surges` projection keeps per world (`{downed: {<surge>.<drone>.<userId>: true}, count}`, a query too). `TestDownDrone` covers it.
+- Known: drones are not shared between players and pass through walls; there are no turrets or shelters yet.
+
+## Built in V17 (forge 360)
+
+The voxel game's seventeenth tracer bullet: the base defence's second step, a turret that holds the line while you work.
+
+- **The recipe**: the cabin's field bench now knows two recipes (`craft/Crafting.ts` `RECIPES`, `nextRecipe`): the hand drill, then the **sentry turret** (2 m³ of ore and 1.5 m³ of rock, so it fits one pack). U at the bench makes the next one not made yet. `game.craft {item: "turret"}` decides it (`cmd-game-craft`), and `game.player` then gives `tools.turret`.
+- **Setting it down**: on the moon, Y sets your one turret down 3 m ahead of you, or moves it there. `game.placeTurret {x, y, z}` (`cmd-game-placeTurret`, target the world, projection `game.surges`) refuses a player without a turret or a point off the moon (more than 130 m from its centre) and emits `turretPlaced`; `game.surges` keeps the turrets by user id (`turrets: {<userId>: {x, y, z}}`), so every player sees every turret.
+- **Firing**: during a surge each turret turns its head to the nearest drone within 28 m (`turretPick`, `TURRET_RANGE`) and shoots every 2.2 s (`TURRET_RELOAD`), a yellow tracer. A drone a turret downs counts as yours (`game.downDrone`), so its scrap goes to your pack.
+- `TestTurret` covers crafting, the refusals and moving the turret.
+- Known: drones are still each player's own, so a turret fires in each player's view at that player's drones; turrets cannot be damaged and need no power or ammunition.
+
+## Built in S15 (forge 375)
+
+The story game's fifteenth tracer bullet: the village remembers the night you held Wenlan's house.
+
+- New last step **`thanked`**, which `game.reachStory` takes. After `defended`, clicking Wenlan opens a new dialogue, `farmer-thanks` (`dialogues/farmer-thanks.json`, placeholder lines): the night behind the barred door, the Brannocks, and a gift.
+- **The knot of the last sheaf**: when that talk ends, Wenlan has given you a knot of straw cut from the last sheaf over his hearth. `game.stories` gives `items.knot` once when `thanked` is first reached (as `ditch` pays the silver). While you carry it, each Hum spent leaves a quarter less Chill (`KNOT_CHILL` 0.75, applied over the day's card in `dayEffect`).
+- **Word travels**: arriving at Hawk's Rest by the signpost after `defended`, the village greets you (a loaf and a cup of milk on the step, a nod at the well), once a session.
+- The dawn line now sends you to find Wenlan in the kitchen.
+
+## Built in V18 (forge 360)
+
+The voxel game's eighteenth tracer bullet: a manual found while scavenging teaches a recipe outright (the play design's *perks and manuals*), and the mining ladder's next rung, the powered drill.
+
+- **The manual**: block 13 of each moon wreck (`ManualBlock`, the engine's `MANUAL_BLOCK`), a cockpit plate, glows faintly green through its seams. Salvaging it with Z gives its scrap and a fabricator's manual: `cmd-game-salvage` adds `manual: "powerDrill"` to the `salvaged` event, and `game.players` folds it into `manuals` (`game.player` gives `manuals: {powerDrill: true}`). Each wreck holds one, so two players can each find one.
+- **The powered drill**: the bench's third recipe (`RECIPES` `powerDrill`, with `manual` and `builtOn: 'drill'`; `nextRecipe(tools, manuals)` offers it only once the manual is found and the hand drill made), 2.5 m³ of ore and 1 m³ of rock. `game.craft {item: "powerDrill"}` refuses a sender without the manual or a hand drill. With it, digging on foot takes up to a 6 m brush every 0.07 s (`digLimits`).
+- Before the manual, the bench says *a wreck may hold a manual for more*.
+- `TestPowerDrill` covers it.
+
+## Built in S16 (forge 375)
+
+The story game's sixteenth tracer bullet: Remembering (the play design's reference rule 8: "sleeping in blessed places unlocks a skill or a memory scene outright. Dreams replay past-life fights; wounds taken there ache until a warm, dreamless night").
+
+- **A blessed place**: the empty cottage at Hawk's Rest (an interior of another area than the story's, with nobody in it; `AreaViewport.blessed()`). After `thanked`, sleeping by its hearth (R after 19:00) brings **the dream of the ford** (`story/Remember.ts` `FORD_DREAM`, shown a line at a time on a dark panel, `showDream`): an older self holding a frozen ford with a long spear, raked in the side. Placeholder text, invented for the slice.
+- **What it gives**: the new last step **`dream`** (`game.reachStory` takes it). The character's polearm skill rises by one for the story's fights (`remembered(skills, done)`, applied when a fight starts).
+- **The dream wound**: `game.stories` gives `items.wound` when `dream` is first reached. While it aches the Chill never fades below 30 (`aching`, `WOUND_CHILL`). A night's sleep after eating something hot (cooking at a hearth since waking) is a warm, dreamless night: it heals the wound (`use: "wound"`).
+- The Area tab's *Play the story again* now follows the last of `STORY_STEPS`, so a new step never cuts the story short.
+
+## Built in V19 (forge 360)
+
+Working the ground by holding (the user, 2026-11-26: "use a tool to harvest resources over time by holding down the action button", as in Space Engineers and 7 Days to Die). Engine only; the server's commands are unchanged.
+
+- **Mining** (`craft/Mining.ts`): on foot, holding the dig button on a spot works it. Each material takes work per m³ by its hardness (`HARDNESS`: dust 1, rock 3, ore 5), and the tool in hand brings work each second (`toolPower`: bare hands 1, hand drill 6, powered drill 16). When the bite under the brush has had its work (`workFor` over `VoxelWorld.contentsOf`), it comes away as one `game.editTerrain`, and the next bite starts. A bigger brush is a longer hold; turning to another spot starts over (`Hold`, `spotKey`). A ring around the crosshair fills in the colour of what is mostly there (ore blue, rock tan, dust pale), with *drill · rock · 1.4 s* under it, and chips fly from the tool.
+- **Hold actions**: holding Z cuts a wreck's plate free (3 s by hand, under a second with the powered drill), and holding H cuts a ripe crop (1.5 s), with the same ring.
+- Filling (right button) and digging from the flying camera act at once, as before.
+
+## Built in S17 (forge 375)
+
+The story game's seventeenth tracer bullet: the first companion (the play design's party, one companion at the start by the user's rule; companions are kinds of people the reference describes, never the book's cast).
+
+- **Corran Vey, a veteran of the Drum** (`story/Companion.ts` `VETERAN`, `dialogues/veteran.json`; placeholder name and lines). The morning after the dream, a knock at the cottage door at Hawk's Rest opens his talk; when it ends he joins, the new last step **`companion`** (`game.reachStory` takes it).
+- **Following**: out of a fight he keeps a step behind the character (`companionStep`), and comes along through doors.
+- **Fighting**: in a fight he goes for the character's target, or the nearest foe, from its flank (beside it, square to the character), and strikes with a pike every 2.6 s with polearm 3. `Combat.allyStrike` decides it as the character's own strikes are decided (hit chance, then a vital chance with the pike's aim and the flank), so he can behead or pierce a Hollowed's heart; his strikes show as *pike* over the foe and a line in the fight panel.
+- The fight panel now shows the skills the story has given (`remembered`).
+
+## Built in V20 (forge 360)
+
+The forge: ore becomes iron over time, the second rung of the crafting ladder after the bench.
+
+- The cabin gains a forge (block 75, `forge`; 76 blocks now). A cabin started before keeps working: `game.placeBlock` lets a cabin place up to the design's 76, and the fold raises `blocks`.
+- `game.smelt` (`cmd-game-smelt`, target the cabin): puts up to 2 m³ of the pack's ore in the forge (event `smelting {world, ore, at, pack}`), refused while it holds ore. The cabin keeps it as `forge {ore, at}` on `game.ships` and `game.worldShips`.
+- `game.takeIngots` (`cmd-game-takeIngots`): once 45 s a m³ have passed (`SmeltMs`), takes 0.8 m³ of iron a m³ of ore (`IronYield`) into the pack (event `ingots {world, iron, pack}`); refused while smelting or without room. The pack gains `iron`, which counts against its 4 m³ in `game.editTerrain`, `game.salvage` and `game.downDrone`.
+- Engine: `craft/Forge.ts` (`forgeAction`, `smeltLeft`, `ironFrom`), the forge's mesh (a stone furnace with a glowing mouth and a chimney), `ShipLayer.forgeNear`, and U at the forge in `VoxelViewport` (`forgeAt`, `forgeHint`: "The forge is smelting: n s left"). `TestForge` covers it.
+
+## Built in S18 (forge 375)
+
+The Nine Sisters†, the design's ring of nine lichened standing stones where "the ground remembers", a ritual site the moons wake (the play design: the moons set "when the Nine Sisters wake").
+
+- **The ring** (`story/Stones.ts`): nine stones crowned with pines on the free 3 × 3 cells nearest the signpost (`ringSpot`, `stonePoints`), shown in the story's area once the veteran has joined. When he joins he tells of them: they wake when the little moon is full.
+- **Waking**: on a night the lesser moon is more than 90 % lit (`stonesWake`, `nextWaking`), a pale ring glows on the ground, the caption says something hums by the signpost, and the senses layer hears it.
+- **Remembering**: at the ring's heart on such a night, the ground gives up a memory (`STONES_MEMORY`, shown like a dream): the queen of the First Flight, silver charms in her braids, naming the winter stars for a child and telling her the Wanderer is a world, not a star. It is the new last step **`stones`** (`game.reachStory` takes it), and `game.story`'s `items.starlore` is 1. On other nights the ring says how many nights until the lesser moon is full.
+- **Star lore**: on nights the lesser moon is more than half lit, the Hum pool holds one more (`starlorePool`).
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
