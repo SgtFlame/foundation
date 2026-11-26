@@ -328,6 +328,16 @@ The story game's fourteenth tracer bullet: the night the notes foretold, played 
 - At dawn the house held reaches `defended` and Wenlan's thanks; a house lost says so, and R by a hearth waits for the next dark night to try again.
 - The Area tab's *Play the story again* now follows `defended`.
 
+## Built in V16 (forge 360)
+
+The voxel game's sixteenth tracer bullet: the first threat on a schedule (the play design's base defence: "a swarm surge when the Silent Fleet's drones wake on a cycle, shown in the HUD ahead").
+
+- **The schedule** (`surge/Surge.ts`): a surge every 12 minutes of real time (`SURGE_PERIOD`; index = Unix ms / 720 000), lasting 75 s, the same for every player. On the moon a pill at the top of the view counts down (*Next swarm surge in 8:41*, amber in the last minute) and, during one, counts the drones left.
+- **Drones**: eight a surge (`dronesOf(index)`), each waking at its own time, appearing 30 m up and 30 m off on its side of the sky and diving at the player at 6 to 9 m/s. One that reaches you takes 8 health (`DRONE_HIT`) and is spent. They are glowing red octahedrons, each player's own (they chase whoever sees them).
+- **Q shoots** a bolt along the look (`shotHits`: within 1.1 m of the line, 45 m range): the drone falls and gives 0.1 m³ of ore scrap, so surviving a surge pays in salvage.
+- **`game.downDrone {surge, drone}`** (`cmd-game-downDrone`, target the world) refuses a surge that is neither the current nor the last one, a drone outside 0 to 7, one the sender already downed or a full pack; it emits `downed`, which `game.packs` folds and the new `game.surges` projection keeps per world (`{downed: {<surge>.<drone>.<userId>: true}, count}`, a query too). `TestDownDrone` covers it.
+- Known: drones are not shared between players and pass through walls; there are no turrets or shelters yet.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

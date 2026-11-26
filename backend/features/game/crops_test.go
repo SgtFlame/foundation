@@ -1,8 +1,10 @@
 package game_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/game"
 )
@@ -112,4 +114,29 @@ func TestSalvage(t *testing.T) {
 		t.Fatalf("salvaged twice: %q", r.Common.Message)
 	}
 	st.ok("game.salvage", world, with(map[string]any{"wreck": "k1", "index": 3}))
+}
+
+// V16: a drone of the current surge shot down pays scrap, once per player
+func TestDownDrone(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Surge moon"}).Target
+	cur := time.Now().UnixMilli() / game.SurgePeriodMs
+	if r := st.refused("game.downDrone", world, map[string]any{"surge": cur - 5, "drone": 1}); !strings.Contains(r.Common.Message, "over") {
+		t.Fatalf("an old surge: %q", r.Common.Message)
+	}
+	if r := st.refused("game.downDrone", world, map[string]any{"surge": cur, "drone": 8}); !strings.Contains(r.Common.Message, "0 to 7") {
+		t.Fatalf("an unknown drone: %q", r.Common.Message)
+	}
+	res := st.ok("game.downDrone", world, map[string]any{"surge": cur, "drone": 1})
+	var s game.Surges
+	if !st.read(game.SurgesProjector, game.TerrainType+"."+world, res.Seq, &s) || s.Count != 1 || !s.Downed[fmt.Sprintf("%d.1.1", cur)] {
+		t.Fatalf("surges %+v", s)
+	}
+	var pack game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Ore != game.DroneScrap {
+		t.Fatalf("pack %+v", pack)
+	}
+	if r := st.refused("game.downDrone", world, map[string]any{"surge": cur, "drone": 1}); !strings.Contains(r.Common.Message, "already") {
+		t.Fatalf("downed twice: %q", r.Common.Message)
+	}
 }

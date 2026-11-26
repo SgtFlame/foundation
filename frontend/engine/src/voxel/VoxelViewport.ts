@@ -16,6 +16,7 @@ import { VoxelWorld } from './VoxelWorld.ts'
 import { PLANET } from './Bodies.ts'
 import { available, Fishing, FLEE_RANGE, floatModel, grazerDir, grazerModel, herdOf, HUNT_REACH, SEA_RADIUS, seaMesh, type Grazer } from '../wildlife/Wildlife.ts'
 import { eat, FRESH, hungry, NeedsHud, rounded, stepNeeds, type Needs } from '../survival/Needs.ts'
+import { countdown, DRONE_HIT, DRONE_SCRAP, dronesOf, shotHits, surgeAt, type Drone } from '../surge/Surge.ts'
 import { nearestSalvage, SALVAGE_ORE, salvageKey, wreckSites, type Vec3 as WVec3 } from '../wreck/Wreck.ts'
 import { digLimits, missing, RECIPES, spend, type DigLimits } from '../craft/Crafting.ts'
 
@@ -66,6 +67,7 @@ export type ShipIntent =
   | { kind: 'crew'; id: string; aboard: boolean } // V7: board or leave as crew
   | { kind: 'stand'; x: number; y: number; z: number; needs?: Needs } // V8: save where the player stands (V10: and their needs)
   | { kind: 'eat' } // V10: one ration from the pack
+  | { kind: 'downDrone'; surge: number; drone: number } // V16: a swarm surge's drone shot down
   | { kind: 'salvage'; wreck: string; index: number; x: number; y: number; z: number } // V15: a wreck's block torn off for scrap
   | { kind: 'forage'; what: 'fish' | 'hunt'; animal?: string; x: number; y: number; z: number } // V12: a fish caught, a grazer hunted
   | { kind: 'sleep'; id: string } // V13: a night in a cabin's bed
@@ -225,6 +227,13 @@ export class VoxelViewport {
   private wrecks: { id: string; meshes: THREE.Mesh[]; centres: WVec3[] }[] = []
   private salvaged: Record<string, boolean> = {}
   private nearWreck: { wreck: string; index: number } | null = null
+  // V16: swarm surges
+  surgeOffset = 0 // ms added to the clock (tests)
+  private readonly surgeGroup = new THREE.Group()
+  private surgeHud: HTMLDivElement | null = null
+  private surgeIndex = -1
+  private swarm: { d: Drone; mesh: THREE.Mesh; at: THREE.Vector3 | null; gone: boolean }[] = []
+  private surgeTick = 0
   private herd: { g: Grazer; model: THREE.Group; shown: boolean; run: number; at: THREE.Vector3 }[] = []
   private taken: Record<string, number> = {}
   private readonly fishing = new Fishing(7)
@@ -332,7 +341,7 @@ export class VoxelViewport {
     this.scene.add(globe, glow, this.cropsGroup)
     // V12: the sea in the planet's hollows, its herd and a fishing float
     this.float.visible = false
-    this.scene.add(seaMesh(), this.wildGroup, this.float, this.wreckGroup)
+    this.scene.add(seaMesh(), this.wildGroup, this.float, this.wreckGroup, this.surgeGroup)
   }
 
   // V9: the sky turns blue and the stars fade as the camera goes down into the planet's air
@@ -582,7 +591,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.benchHint()}${this.nearWreck ? 'Z: salvage scrap from the wreck · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.benchHint()}${this.nearWreck ? 'Z: salvage scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -747,6 +756,7 @@ export class VoxelViewport {
     else this.fly.step(dt, input)
     this.stepShipsOnFoot()
     this.stepWrecks()
+    this.stepSurge(dt)
     const wheel = input.takeWheel()
     if (wheel !== 0) {
       this.brushRadius = Math.max(MIN_BRUSH, Math.min(this.maxBrush(), this.brushRadius * (wheel < 0 ? 1.15 : 1 / 1.15)))
@@ -898,6 +908,120 @@ export class VoxelViewport {
     this.drawPack()
     this.opts.onShipIntent?.({ kind: 'salvage', wreck, index, x: round2(p.x), y: round2(p.y), z: round2(p.z) })
     this.flashHint(`You wrench a plate off the wreck: ${SALVAGE_ORE} m³ of scrap for the refinery, counted as ore`)
+  }
+
+  // --- Swarm surges (V16) ---
+
+  // Each frame: the countdown on the moon, and while a surge is on its
+  // drones coming down at the player in the open; Q shoots
+  private stepSurge(dt: number): void {
+    const w = this.walker
+    const onMoon = this.mode === 'walk' && !!w && Math.hypot(w.pos.x, w.pos.y, w.pos.z) < this.world.generator.params.radius + 60
+    const st = surgeAt(Date.now() + this.surgeOffset)
+    this.surgeTick -= dt
+    if (this.surgeTick <= 0) {
+      this.surgeTick = 0.5
+      this.drawSurgeHud(onMoon, st.active, st.startsIn)
+    }
+    if (!st.active || !onMoon || !w) {
+      if (this.swarm.length && !st.active) this.endSurge()
+      return
+    }
+    if (st.index !== this.surgeIndex) this.beginSurge(st.index)
+    const me = new THREE.Vector3(w.pos.x, w.pos.y, w.pos.z)
+    const up = me.clone().normalize()
+    const eye = this.fly.camera.position
+    let changed = false
+    for (const x of this.swarm) {
+      if (x.gone) continue
+      if (!x.at) {
+        if (st.into < x.d.wakes) continue
+        // it wakes: high in the sky on its side, 30 m off
+        const side = new THREE.Vector3(Math.cos(x.d.azimuth), 0, Math.sin(x.d.azimuth)).projectOnPlane(up).normalize()
+        x.at = me.clone().addScaledVector(up, 30).addScaledVector(side, 30)
+        x.mesh.visible = true
+        changed = true
+        this.flashHint('A drone wakes in the black and drops toward you. Q: shoot it down')
+      }
+      const to = eye.clone().sub(x.at)
+      const d = to.length()
+      if (d < 1.4) {
+        x.gone = true
+        x.mesh.visible = false
+        changed = true
+        this.needs = { ...this.needs, health: Math.max(0, this.needs.health - DRONE_HIT) }
+        this.flashHint(`A drone slams into you: health -${DRONE_HIT}`)
+        continue
+      }
+      x.at.addScaledVector(to, Math.min(1, (x.d.speed * dt) / d))
+      x.mesh.position.copy(x.at)
+      x.mesh.rotation.y += dt * 3
+    }
+    if (changed) this.updateHint()
+    if (this.input.locked && this.input.pressed('KeyQ')) this.shoot()
+  }
+
+  private beginSurge(index: number): void {
+    this.endSurge()
+    this.surgeIndex = index
+    const geo = new THREE.OctahedronGeometry(0.55)
+    const mat = new THREE.MeshStandardNodeMaterial({ color: 0x8a1c1c, emissive: 0xff3b2f, roughness: 0.4 })
+    this.swarm = dronesOf(index).map((d) => {
+      const mesh = new THREE.Mesh(geo, mat)
+      mesh.visible = false
+      this.surgeGroup.add(mesh)
+      return { d, mesh, at: null, gone: false }
+    })
+  }
+
+  private endSurge(): void {
+    for (const x of this.swarm) this.surgeGroup.remove(x.mesh)
+    this.swarm = []
+    this.updateHint()
+  }
+
+  // Q: a bolt along the look; the nearest drone close to its line falls
+  shoot(): boolean {
+    const w = this.walker
+    if (!w) return false
+    const eye = this.fly.camera.position
+    const look = w.look()
+    let best: { x: { d: Drone; mesh: THREE.Mesh; at: THREE.Vector3 | null; gone: boolean }; along: number } | null = null
+    for (const x of this.swarm) {
+      if (!x.at || x.gone) continue
+      const along = shotHits(eye, look, x.at)
+      if (along !== null && (!best || along < best.along)) best = { x, along }
+    }
+    const end = new THREE.Vector3(eye.x, eye.y, eye.z).addScaledVector(new THREE.Vector3(look.x, look.y, look.z), best?.along ?? 30)
+    const bolt = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(eye.x, eye.y - 0.3, eye.z), end]), new THREE.LineBasicNodeMaterial({ color: 0x9fe8ff }))
+    this.surgeGroup.add(bolt)
+    setTimeout(() => this.surgeGroup.remove(bolt), 120)
+    if (!best) return false
+    best.x.gone = true
+    best.x.mesh.visible = false
+    const c = this.carried
+    if (c && c.dust + c.rock + (c.ore ?? 0) + DRONE_SCRAP <= c.capacity) this.carried = { ...c, ore: Math.round(((c.ore ?? 0) + DRONE_SCRAP) * 1000) / 1000 }
+    this.drawPack()
+    this.opts.onShipIntent?.({ kind: 'downDrone', surge: this.surgeIndex, drone: best.x.d.id })
+    this.flashHint(`Down it goes in a spray of sparks: ${DRONE_SCRAP} m³ of scrap`)
+    return true
+  }
+
+  private drawSurgeHud(onMoon: boolean, active: boolean, startsIn: number): void {
+    if (!this.surgeHud) {
+      this.surgeHud = document.createElement('div')
+      this.surgeHud.dataset.surge = ''
+      this.surgeHud.style.cssText =
+        'position:absolute;top:10px;left:50%;transform:translateX(-50%);padding:3px 12px;border-radius:12px;z-index:2;font:12px system-ui,sans-serif;pointer-events:none'
+      this.container.appendChild(this.surgeHud)
+    }
+    const el = this.surgeHud
+    el.style.display = onMoon ? 'block' : 'none'
+    if (!onMoon) return
+    const left = this.swarm.filter((x) => !x.gone).length
+    el.textContent = active ? `SWARM SURGE · ${left} drone${left === 1 ? '' : 's'} left` : `Next swarm surge in ${countdown(startsIn)}`
+    el.style.background = active ? 'rgba(160,24,20,0.85)' : 'rgba(0,0,0,0.55)'
+    el.style.color = active ? '#fff' : startsIn < 60_000 ? '#ffb74d' : '#ddd'
   }
 
   // On foot: aim at outline blocks, and F sits in a cockpit within reach
@@ -1664,6 +1788,7 @@ export class VoxelViewport {
   dispose(): void {
     if (this.mode === 'walk' && !this.shipLayer.pilotOf && !this.riding) this.saveStand()
     this.loop.stop()
+    this.surgeHud?.remove()
     this.renderer.canvas.removeEventListener('click', this.onCanvasClick)
     document.removeEventListener('pointerlockchange', this.onLockChange)
     this.input.dispose()
