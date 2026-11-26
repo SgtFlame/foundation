@@ -8,6 +8,7 @@ import { Renderer } from '../render/Renderer.ts'
 import { mulberry32 } from './Noise.ts'
 import { CARGO_PER_HOLD, IDLE_HELM, lookQuat, type Helm, type Quat, type ShipDesign, type ShipState } from '../ship/Ship.ts'
 import { type GhostHit, ShipLayer } from '../ship/ShipLayer.ts'
+import { atOutpost, ContractPanel, handInProblem, OutpostModel, thrustFor, type ContractList, type Progress } from '../outpost/Outpost.ts'
 import type { EditKind, MoonParams, VoxelEdit } from './Types.ts'
 import { VoxelWorld } from './VoxelWorld.ts'
 
@@ -41,6 +42,7 @@ export type ShipIntent =
   | { kind: 'load'; id: string } // V4: empty the pack into its hold
   | { kind: 'refine'; id: string } // V4: one run of its refinery
   | { kind: 'damage'; id: string; blocks: number[] } // V5: blocks a crash broke
+  | { kind: 'handIn'; id: string; contract: string } // V6: a contract at the outpost
 
 export interface CameraState {
   x: number
@@ -101,6 +103,9 @@ export interface ViewportStats {
   ships: number
   crashes: number
   piloting: string | null
+  // V6: the outpost's panel is open, and the player's skill levels
+  outpost: boolean
+  levels: Record<string, number>
 }
 
 const MIN_BRUSH = 0.75
@@ -139,6 +144,13 @@ export class VoxelViewport {
   readonly shipLayer = new ShipLayer()
   private ghostHit: GhostHit | null = null
   private flyTick = 0
+  // The outpost (V6)
+  private readonly outpost = new OutpostModel()
+  private readonly contracts: ContractPanel
+  private contractList: ContractList | null = null
+  private progress: Progress | null = null
+  private outpostPlaced = false
+  private nearGiver = false
 
   private readonly container: HTMLElement
   private readonly renderer: Renderer
@@ -154,6 +166,8 @@ export class VoxelViewport {
     this.world = new VoxelWorld({ params: opts.params, viewDistance: opts.viewDistance })
     this.scene.add(this.world.group)
     this.scene.add(this.shipLayer.group)
+    this.scene.add(this.outpost.group)
+    this.contracts = new ContractPanel(container)
     this.scene.background = new THREE.Color(0x05060a)
     this.addLightsAndSky()
     renderer.track(this.fly.camera)
@@ -241,7 +255,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearShipHint()}Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearShipHint()}Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -471,6 +485,81 @@ export class VoxelViewport {
     }
     if (near && input.locked && input.pressed('KeyL')) this.opts.onShipIntent?.({ kind: 'load', id: near.id })
     if (near && input.locked && input.pressed('KeyR')) this.opts.onShipIntent?.({ kind: 'refine', id: near.id })
+    this.stepOutpost()
+  }
+
+  // --- The outpost (V6) ---
+
+  // Stands the beacon on the ground at the north pole once the terrain is there
+  private placeOutpost(): void {
+    if (this.outpostPlaced) return
+    const g = this.world.generator.params
+    const t = this.terrain()
+    const at = surfaceBelow(t, { x: 0, y: g.radius + g.amplitude + 10, z: 0 }, 60)
+    if (!at) return
+    this.outpost.place(at, { x: 0, y: 1, z: 0 })
+    this.outpostPlaced = true
+  }
+
+  // T beside the quartermaster opens or closes the contracts
+  private stepOutpost(): void {
+    const w = this.walker
+    let near = false
+    if (w && this.outpostPlaced) {
+      const g = this.outpost.giver()
+      const e = w.eye()
+      near = Math.hypot(e.x - g.x, e.y - g.y, e.z - g.z) < 4
+    }
+    if (near !== this.nearGiver) {
+      this.nearGiver = near
+      if (!near) this.contracts.hide()
+      this.updateHint()
+    }
+    if (near && this.input.locked && this.input.pressed('KeyT')) {
+      if (this.contracts.open) this.contracts.hide()
+      else this.openContracts()
+    }
+  }
+
+  // The panel, its rows worked out from the ship parked nearest the beacon
+  openContracts(): boolean {
+    const list = this.contractList
+    if (!list) return false
+    const g = this.world.generator.params
+    const parked = this.shipLayer.ships().filter((s) => atOutpost(s, g.radius, g.amplitude))
+    const rows = list.contracts.map((c) => {
+      // the first ship that qualifies, else the first parked, decides the row
+      const blocks = (s: ShipState) => this.shipLayer.design(s.design)?.blocks.length ?? 0
+      const ok = parked.find((s) => !handInProblem(c.id, s, this.progress, blocks(s)))
+      const s = ok ?? parked[0] ?? null
+      return { id: c.id, ship: s?.id ?? '', problem: handInProblem(c.id, s, this.progress, s ? blocks(s) : 0) }
+    })
+    this.contracts.show(list, rows, this.progress, (id) => {
+      const r = rows.find((x) => x.id === id)
+      if (r?.ship) this.opts.onShipIntent?.({ kind: 'handIn', id: r.ship, contract: id })
+    })
+    return true
+  }
+
+  // The contracts offered and the player's progress, from the server
+  setOutpost(list: ContractList | null): void {
+    this.contractList = list
+    if (this.contracts.open) this.openContracts()
+  }
+
+  setProgress(p: Progress | null): void {
+    const before = this.progress
+    this.progress = p
+    if (before && p) {
+      for (const [skill, lv] of Object.entries(p.levels)) {
+        if (lv > (before.levels[skill] ?? 1)) {
+          this.hint.textContent = `Your ${skill} is now level ${lv}${skill === 'piloting' ? ': your thrusters answer you harder' : ''}.`
+          setTimeout(() => this.updateHint(), 3000)
+        }
+      }
+    }
+    if (this.shipLayer.body) this.shipLayer.body.thrustScale = thrustFor(p?.levels)
+    if (this.contracts.open) this.openContracts()
   }
 
   // Sits in a ship's cockpit and flies it from here on
@@ -479,6 +568,8 @@ export class VoxelViewport {
     if (!st || (st.pilot && st.pilot !== (this.opts.userId ?? ''))) return false
     const body = this.shipLayer.sit(id, this.terrain())
     if (!body) return false
+    body.thrustScale = thrustFor(this.progress?.levels)
+    this.contracts.hide()
     this.ghostHit = null
     this.shipLayer.aim(null)
     this.brushHit = null
@@ -661,6 +752,8 @@ export class VoxelViewport {
     if (this.mode === 'fly' && !this.shipLayer.pilotOf) this.fly.apply(alpha)
     const now = performance.now()
     this.shipLayer.frame(Math.min(0.1, (now - this.lastFrame) / 1000))
+    this.placeOutpost()
+    this.outpost.blink(now / 1000)
     this.lastFrame = now
     this.world.update(this.fly.camera.position)
     if (this.brushHit) {
@@ -829,6 +922,8 @@ export class VoxelViewport {
       ships: this.shipLayer.ships().length,
       crashes: this.crashes,
       piloting: this.shipLayer.pilotOf,
+      outpost: this.contracts.open,
+      levels: { ...(this.progress?.levels ?? {}) },
     }
   }
 
@@ -839,6 +934,7 @@ export class VoxelViewport {
     this.input.dispose()
     this.world.dispose()
     this.shipLayer.dispose()
+    this.contracts.dispose()
     this.setRemoteCameras([])
     this.overlay?.dispose()
     this.crosshair.remove()

@@ -978,3 +978,11 @@ Crashes and repair ([Game.md](Game.md) › *Built in V5*). Later game work must:
 - keep crash rules in `ShipBody` (`SAFE_IMPACT`, `WRECK_IMPACT`) so the server can run them later;
 - read a `damaged` event's `blocks` as indices, apart from the `started` event's block count of the same name;
 - repair by placing from the outline, so any later cost of a block applies to repairs too.
+
+## Game V6 (forge 360)
+
+The outpost, contracts and skills ([Game.md](Game.md) › *Built in V6*). Later game work must:
+
+- add contracts to `contracts.json` and their needs to `cmd-game-handIn` and `handInProblem` together, so the panel and the blueprint agree;
+- change a player's progress only through events folded by `game.players`, never a second target on a command;
+- read skill effects from `game.player`'s levels (`thrustFor` is the first), so the 350 skill system can take them over.

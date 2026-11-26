@@ -211,6 +211,8 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		if gone[0] {
 			s.Pilot = ""
 		}
+	case EventHandedIn:
+		s.Cargo.Iron = round3(s.Cargo.Iron + d.Iron)
 	case EventShipRefined:
 		s.Cargo.Rock = round3(s.Cargo.Rock + d.Rock)
 		s.Cargo.Iron = round3(s.Cargo.Iron + d.Iron)

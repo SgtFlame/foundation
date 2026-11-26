@@ -152,3 +152,36 @@ func TestShipDamage(t *testing.T) {
 		t.Fatalf("cockpit broken %+v", s)
 	}
 }
+
+// V6: contracts handed in with a ship at the outpost pay a skill once
+func TestOutpost(t *testing.T) {
+	if c := game.ContractsOf(); len(c.Contracts) != 2 || c.Giver.Name == "" {
+		t.Fatalf("contracts %+v", c)
+	}
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Outpost moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	// one ship far from the pole, one by the beacon (radius 100, hills 6)
+	st.ok("game.startShip", "far", map[string]any{"world": world, "design": "skiff", "x": 104, "y": 0, "z": 0, "q": q})
+	st.ok("game.startShip", "o1", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 104, "z": 5, "q": q})
+	if r := st.refused("game.handIn", "far", map[string]any{"contract": "first-flight"}); !strings.Contains(r.Common.Message, "within 40 m") {
+		t.Fatalf("far: %q", r.Common.Message)
+	}
+	if r := st.refused("game.handIn", "o1", map[string]any{"contract": "first-flight"}); !strings.Contains(r.Common.Message, "blocks to place") {
+		t.Fatalf("unfinished: %q", r.Common.Message)
+	}
+	for i := 0; i < 27; i++ {
+		st.ok("game.placeBlock", "o1", map[string]any{"index": i})
+	}
+	res := st.ok("game.handIn", "o1", map[string]any{"contract": "first-flight"})
+	var p game.Player
+	if !st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p) || !p.Done["first-flight"] || p.XP["piloting"] != 100 || p.Levels["piloting"] != 2 {
+		t.Fatalf("player %+v", p)
+	}
+	if r := st.refused("game.handIn", "o1", map[string]any{"contract": "first-flight"}); !strings.Contains(r.Common.Message, "already") {
+		t.Fatalf("twice: %q", r.Common.Message)
+	}
+	if r := st.refused("game.handIn", "o1", map[string]any{"contract": "beacon-iron"}); !strings.Contains(r.Common.Message, "iron") {
+		t.Fatalf("no iron: %q", r.Common.Message)
+	}
+}

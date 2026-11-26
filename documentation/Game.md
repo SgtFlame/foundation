@@ -146,6 +146,16 @@ The voxel game's fifth tracer bullet: crash a ship, lose blocks, repair it.
 - **Repair** is placing them again from the outline with `game.placeBlock`.
 - **In the viewport**: pieces of each broken block fly off and fade (`ShipLayer.debris`), and the hint says how many broke. A smashed cockpit throws the pilot clear beside the ship. Stats add `crashes`.
 
+## Built in V6 (forge 360)
+
+The voxel game's sixth tracer bullet: an outpost, a quartermaster, contracts and skills (a thin 372 and the 350 candidates for quests and skills).
+
+- **The outpost** (`outpost/Outpost.ts`): a beacon mast with a blinking lamp, a landing pad and the quartermaster stand on the ground at each moon's north pole. The server reckons the beacon at `(0, radius + amplitude, 0)`; a ship within 40 m of it counts as parked there.
+- **Contracts** (`backend/features/game/contracts/contracts.json`, the `game.contracts` query): the quartermaster's name, title and line, and each contract's id, title, description, skill and experience. V6 has two: `first-flight` (bring a ship with every block placed; piloting 100 xp) and `beacon-iron` (hand over 1 m³ of iron from a ship's hold; prospecting 100 xp).
+- **`game.handIn {contract}`** (`cmd-game-handIn`) targets the ship being handed in. It is refused when the ship is not parked at the beacon, the contract is unknown or already done by the sender, or its need is not met. Its `handedIn` event is folded twice: `game.ships` takes the iron out of the hold, and `game.players` (keyed `<worldId>.<userId>`) marks the contract done and adds the experience, so one event changes both.
+- **Skills** (`game.player {world}`): `{done, xp, levels}`, a level per 100 xp from level 1. Each piloting level past the first makes thrusters answer a tenth harder (`thrustFor`, `ShipBody.thrustScale`).
+- **In the viewport**: T beside the quartermaster opens the contracts panel (`data-contracts`), which says what each contract still needs from the ships parked at the beacon; Esc frees the mouse to click *Hand in* (`data-hand-in=<id>`). A level gained shows in the hint. Stats add `outpost` and `levels`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

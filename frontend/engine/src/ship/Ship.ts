@@ -233,10 +233,13 @@ export class ShipBody {
 
   // The most acceleration (m/s²) its thrusters give along a local axis, each way
   reach(): { x: [number, number]; y: [number, number]; z: [number, number] } {
-    const m = this.mass
+    const m = this.mass / this.thrustScale
     const t = this.thrust
     return { x: [-t.left / m, t.right / m], y: [-t.down / m, t.up / m], z: [-t.forward / m, t.back / m] }
   }
+
+  // How much harder the thrusters answer this pilot (V6: piloting levels)
+  thrustScale = 1
 
   // The panels' charge over a time it was left parked
   recharge(seconds: number): void {
