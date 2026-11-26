@@ -24,7 +24,8 @@ test('a later step done counts the earlier ones, and the next is the first left'
   assert.ok(s.slice(0, 6).every((x) => x.done))
   assert.equal(nextStep({ fight: true }), 'road')
   assert.equal(nextStep({ rest: true }), 'morning')
-  assert.equal(nextStep({ herbal: true }), null)
+  assert.equal(nextStep({ herbal: true }), 'stillness')
+  assert.equal(nextStep({ cook: true }), null)
 })
 
 test('three herbs grow by the farmstead trees, one per tree, the same each time (S7)', () => {

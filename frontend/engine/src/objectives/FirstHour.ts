@@ -61,6 +61,9 @@ export class FirstHourPanel {
   shown = true
 
   // top: how far down the view it sits (the story game's moons take the corner)
+  // the heading's words before the count (the story game: 'Your story')
+  title = 'Your first hour'
+
   constructor(container: HTMLElement, top = 12) {
     this.el = document.createElement('div')
     this.el.dataset.firstHour = ''
@@ -82,7 +85,7 @@ export class FirstHourPanel {
     const h = document.createElement('div')
     const count = steps.filter((s) => s.done).length
     h.style.cssText = 'font:600 13px system-ui,sans-serif;margin-bottom:4px'
-    h.textContent = count === steps.length ? 'Your first hour: all done' : `Your first hour: ${count} of ${steps.length}`
+    h.textContent = count === steps.length ? `${this.title}: all done` : `${this.title}: ${count} of ${steps.length}`
     this.el.append(h)
     const current = steps.find((s) => !s.done)
     for (const s of steps) {

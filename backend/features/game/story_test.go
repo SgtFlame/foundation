@@ -35,4 +35,12 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Items["thyme"] != 1 || p.Items["nettle"] != 1 || !p.Done["forage"] {
 		t.Fatalf("items %+v", p)
 	}
+	// S8: cooking spends a herb held, never one not held; the body is saved, clamped
+	st.refused("game.reachStory", farm, map[string]any{"use": "yarrow", "area": farm, "x": 3, "z": 3})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "cook", "use": "thyme", "area": farm, "x": 3, "z": 3, "body": map[string]any{"hum": 2.4, "chill": 140, "hunger": 12}})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Items["thyme"] != 0 || p.Body == nil || *p.Body != (game.StoryBody{Hum: 2, Chill: 100, Hunger: 12}) || !p.Done["cook"] {
+		t.Fatalf("cooked %+v %+v", p, p.Body)
+	}
+	st.refused("game.reachStory", farm, map[string]any{"use": "thyme", "area": farm, "x": 3, "z": 3})
 }

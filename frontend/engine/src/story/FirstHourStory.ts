@@ -28,6 +28,9 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'morning', title: 'The first morning', how: 'Morning comes to Hawk\'s Rest. The day\'s card is drawn.' },
   { id: 'forage', title: 'Forage for the herbal', how: 'Take the road back to the farmstead and gather the three herbs growing by the trees: thyme, nettle and yarrow. Walk up to each.' },
   { id: 'herbal', title: 'Write them in the herbal', how: 'Press K to open the herbal and read what each herb is for.' },
+  // S8: the Hum, Chill and Hunger
+  { id: 'stillness', title: 'Stillness', how: "Stand by a hearth (Hawk's Rest's, or the farmhouse's) and press B. Breathe in for four, out for six: each breath adds to the Hum." },
+  { id: 'cook', title: 'Something hot', how: 'By a hearth, press C and cook thyme in hot milk or nettle soup from your herbs. Spending the Hum leaves your hands cold and you hungry; hot food clears it.' },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

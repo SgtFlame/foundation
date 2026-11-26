@@ -7,13 +7,13 @@
   "spec": {
     "command": "game.reachStory",
     "title": "Save my place in the story",
-    "description": "Saves the sender's place in a story: the target is the story's starting area (the farmstead of the first hour), step the step just reached (empty to save only where they are), area the area they are in and x, z where they stand in it. game.story gives it back, so Play the first hour resumes there. item and spot record a herb gathered (S7). Refused for an unknown step or item, or an area that does not exist.",
+    "description": "Saves the sender's place in a story: the target is the story's starting area (the farmstead of the first hour), step the step just reached (empty to save only where they are), area the area they are in and x, z where they stand in it. game.story gives it back, so Play the first hour resumes there. item and spot record a herb gathered (S7); use spends one cooking and body saves the Hum, Chill and Hunger (S8). Refused for an unknown step or item, or an area that does not exist.",
     "args": {
       "type": "object",
       "properties": {
         "step": {
           "type": "string",
-          "description": "The step just reached: arrive, farmer, howl, signature, trail, fight, road, rest, morning, forage or herbal; empty to save only the place"
+          "description": "The step just reached: arrive, farmer, howl, signature, trail, fight, road, rest, morning, forage, herbal, stillness or cook; empty to save only the place"
         },
         "item": {
           "type": "string",
@@ -22,6 +22,28 @@
         "spot": {
           "type": "string",
           "description": "S7: where the item was gathered, so each spot gives it once"
+        },
+        "use": {
+          "type": "string",
+          "description": "S8: a herb spent, cooking at a hearth (thyme, nettle or yarrow); empty for none. Refused unless the player holds one"
+        },
+        "body": {
+          "type": "object",
+          "description": "S8: the character's Hum, Chill and Hunger as they are now: {hum (0 to the sky's pool), chill (0 to 100), hunger (0 to 100)}; left out, the saved body stays",
+          "properties": {
+            "hum": {
+              "type": "number",
+              "description": "Hum left in the pool"
+            },
+            "chill": {
+              "type": "number",
+              "description": "The post-power chill, 0 to 100"
+            },
+            "hunger": {
+              "type": "number",
+              "description": "Hunger, 0 to 100"
+            }
+          }
         },
         "area": {
           "type": "string",
@@ -74,6 +96,16 @@
             "id": "spot",
             "type": "string",
             "description": "Where it was gathered"
+          },
+          {
+            "id": "use",
+            "type": "string",
+            "description": "A herb spent, or empty"
+          },
+          {
+            "id": "body",
+            "type": "json",
+            "description": "The character's Hum, Chill and Hunger, or nothing"
           },
           {
             "id": "area",
@@ -144,6 +176,39 @@
       }
     },
     {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 500
+      }
+    },
+    {
+      "id": "placeKey",
+      "type": "data.expression",
+      "title": "Player's place key",
+      "position": {
+        "x": 250,
+        "y": 500
+      },
+      "config": {
+        "expr": "target + \".\" + user",
+        "type": "string"
+      }
+    },
+    {
+      "id": "place",
+      "type": "live.readProjection",
+      "title": "Read the player's place",
+      "position": {
+        "x": 500,
+        "y": 500
+      },
+      "config": {
+        "projector": "game.stories"
+      }
+    },
+    {
       "id": "check",
       "type": "data.expression",
       "title": "Why it is refused",
@@ -152,7 +217,7 @@
         "y": 150
       },
       "config": {
-        "expr": "!started || start?.deleted == true ? \"there is no area \" + target + \" to start a story in\" : (step ?? \"\") not in [\"\", \"arrive\", \"farmer\", \"howl\", \"signature\", \"trail\", \"fight\", \"road\", \"rest\", \"morning\", \"forage\", \"herbal\"] ? \"there is no step \" + step + \" in the story\" : (item ?? \"\") not in [\"\", \"thyme\", \"nettle\", \"yarrow\"] ? \"there is no herb \" + item + \" to gather\" : !found || here?.deleted == true ? \"there is no area \" + area : x \u003c 0 || z \u003c 0 || x \u003e here.width * 10 + 1 || z \u003e here.depth * 10 + 1 ? \"the point is outside \" + here.name : \"\"",
+        "expr": "!started || start?.deleted == true ? \"there is no area \" + target + \" to start a story in\" : (step ?? \"\") not in [\"\", \"arrive\", \"farmer\", \"howl\", \"signature\", \"trail\", \"fight\", \"road\", \"rest\", \"morning\", \"forage\", \"herbal\", \"stillness\", \"cook\"] ? \"there is no step \" + step + \" in the story\" : (item ?? \"\") not in [\"\", \"thyme\", \"nettle\", \"yarrow\"] ? \"there is no herb \" + item + \" to gather\" : (use ?? \"\") != \"\" \u0026\u0026 ((place?.items ?? {})[use] ?? 0) \u003c 1 ? \"you have no \" + use + \" to use\" : !found || here?.deleted == true ? \"there is no area \" + area : x \u003c 0 || z \u003c 0 || x \u003e here.width * 10 + 1 || z \u003e here.depth * 10 + 1 ? \"the point is outside \" + here.name : \"\"",
         "type": "string"
       }
     },
@@ -186,7 +251,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{step: step ?? \"\", item: item ?? \"\", spot: spot ?? \"\", area: area, x: round(x * 100) / 100, z: round(z * 100) / 100}",
+        "expr": "{step: step ?? \"\", item: item ?? \"\", spot: spot ?? \"\", use: use ?? \"\", area: area, x: round(x * 100) / 100, z: round(z * 100) / 100, body: body == nil ? nil : {hum: max(0, min(10, round(body.hum ?? 0))), chill: max(0, min(100, round(body.chill ?? 0))), hunger: max(0, min(100, round(body.hunger ?? 0)))}}",
         "type": "json"
       }
     },
@@ -338,6 +403,56 @@
     {
       "from": {
         "node": "event",
+        "pin": "use"
+      },
+      "to": {
+        "node": "check",
+        "pin": "use"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "placeKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "placeKey",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "placeKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "place",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "place",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "place"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
         "pin": "area"
       },
       "to": {
@@ -443,6 +558,26 @@
       "to": {
         "node": "reached",
         "pin": "spot"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "use"
+      },
+      "to": {
+        "node": "reached",
+        "pin": "use"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "body"
+      },
+      "to": {
+        "node": "reached",
+        "pin": "body"
       }
     },
     {

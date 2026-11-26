@@ -14,6 +14,7 @@ import { whistle } from '../defence/Whistle.ts'
 import { DialoguePanel } from './DialoguePanel.ts'
 import { FirstHourPanel } from '../objectives/FirstHour.ts'
 import { dragMarks, drawCard, herbSpots, howl, nextStep, showCard, showHerbal, SIGNATURE_TEXT, storySteps } from '../story/FirstHourStory.ts'
+import { BODY_START, BodyHud, breathe, BreathPrompt, cook, humPool, rounded as roundBody, showCooking, spendHum, stepBody, type Body } from '../story/Hum.ts'
 import { ashPile, buildModel, CharacterModel, interiorShell, material } from './Models.ts'
 import { fit, pieceOf, turned, type AreaDef, type Dialogue, type Npc, type PieceSet, type Placement } from './PieceSet.ts'
 
@@ -72,7 +73,7 @@ export interface AreaViewportOptions {
   // S6: a step of the first hour reached (step empty: only the place, saved
   // now and then); the host sends it as game.reachStory to the story's area.
   // S7: item and spot, a herb gathered
-  onStory?: (s: { step: string; area: string; x: number; z: number; item?: string; spot?: string }) => void
+  onStory?: (s: { step: string; area: string; x: number; z: number; item?: string; spot?: string; use?: string; body?: Body }) => void
 }
 
 // S6: a player's place in a story as the server keeps it (game.story)
@@ -84,6 +85,8 @@ export interface StoryPlace {
   // S7: herbs gathered, and the spots they came from
   items?: Record<string, number>
   picked?: Record<string, boolean>
+  // S8: the Hum, Chill and Hunger when last saved
+  body?: Body
 }
 
 // The thimble's skills at the first fight (375 › the first hour): a little
@@ -200,7 +203,13 @@ export class AreaViewport {
   // S6: the first hour being played: its area, the steps done, the marks the
   // raid left, where to stand after resuming in another area, the door last
   // taken, the last place saved and the card drawn
-  private story: { area: string; done: Record<string, boolean>; card: string | null; items: Record<string, number>; picked: Record<string, boolean> } | null = null
+  private story: { area: string; done: Record<string, boolean>; card: string | null; items: Record<string, number>; picked: Record<string, boolean>; body: Body } | null = null
+  // S8: the Hum, Chill and Hunger, stillness and the hearth's cooking
+  private bodyHud!: BodyHud
+  private breath!: BreathPrompt
+  private cooking: HTMLDivElement | null = null
+  private wasNearHearth = false
+  private bodySaved: Body | null = null
   private readonly herbs = new THREE.Group()
   private herbal: HTMLDivElement | null = null
   private readonly storyPanel: FirstHourPanel
@@ -261,6 +270,9 @@ export class AreaViewport {
     this.skills = opts.skills ?? STARTING_SKILLS
     this.scene.add(this.ash, this.marks, this.herbs)
     this.storyPanel = new FirstHourPanel(container, 96)
+    this.storyPanel.title = 'Your story'
+    this.bodyHud = new BodyHud(container, 116)
+    this.breath = new BreathPrompt(container)
     this.caption = document.createElement('div')
     this.caption.dataset.storyCaption = ''
     this.caption.style.cssText =
@@ -885,6 +897,7 @@ export class AreaViewport {
         weapon: WEAPONS[this.weapon] ?? WEAPONS.sword,
         seed: hash(this.area.id + this.area.version),
         walkable: walk ? (x, z) => walk.walkable(...walk.cellOf({ x, z })) : undefined,
+        cadenceAllowed: () => this.cadenceAllowed(),
       },
     )
     this.hud.show(true)
@@ -1009,6 +1022,11 @@ export class AreaViewport {
         else this.hud.say(`Nails rake you, burning (-${e.damage}).`)
         break
       case 'cadence':
+        if (this.story?.done.stillness) {
+          this.story.body = spendHum(this.story.body)
+          this.hud.say('Strike, Pivot, Guard: the Hum answers the old cadence. Your next strike is aimed; your hands go cold.')
+          break
+        }
         this.hud.say('Strike, Pivot, Guard: the old cadence. Your next strike is aimed.')
         break
       case 'fallen':
@@ -1172,6 +1190,8 @@ export class AreaViewport {
       }
       if (this.story && (e.key === 'r' || e.key === 'R')) this.rest()
       if (this.story && (e.key === 'k' || e.key === 'K')) this.openHerbal()
+      if (this.story && (e.key === 'b' || e.key === 'B')) this.startStillness()
+      if (this.story && (e.key === 'c' || e.key === 'C')) this.openCooking()
       if (this.combat && !this.talk.open) {
         const s = ({ '1': 'strike', '2': 'pivot', '3': 'guard' } as Record<string, Stance>)[e.key]
         if (s) this.setStance(s)
@@ -1451,7 +1471,7 @@ export class AreaViewport {
   // the player last stood at (the host travels there through onTravel)
   playStory(place: StoryPlace | null): void {
     if (this.playing) this.play(false)
-    this.story = { area: this.area.id, done: { ...(place?.done ?? {}) }, card: null, items: { ...(place?.items ?? {}) }, picked: { ...(place?.picked ?? {}) } }
+    this.story = { area: this.area.id, done: { ...(place?.done ?? {}) }, card: null, items: { ...(place?.items ?? {}) }, picked: { ...(place?.picked ?? {}) }, body: { ...(place?.body ?? BODY_START) } }
     if (this.story.done.rest) this.setLighting('day') // the first day
     const at = place?.at ? { x: place.at[0], z: place.at[1] } : null
     this.play(true)
@@ -1476,7 +1496,7 @@ export class AreaViewport {
     if (!st || st.done[step]) return
     st.done[step] = true
     const p = this.player()
-    this.opts.onStory?.({ step, area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0) })
+    this.opts.onStory?.({ step, area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), body: this.bodyToSave() })
     if (p) this.saved = { x: p.x, z: p.z, t: this.loopTime }
     this.showStory()
     this.updateHint()
@@ -1487,10 +1507,101 @@ export class AreaViewport {
     const p = this.player()
     if (!this.story || !p) return
     const moved = Math.hypot(p.x - this.saved.x, p.z - this.saved.z)
-    if (!now && (moved < 3 || this.loopTime - this.saved.t < 15)) return
-    if (now && moved < 0.5) return
+    const b = roundBody(this.story.body)
+    const sb = this.bodySaved
+    const bodyMoved = !sb || sb.hum !== b.hum || Math.abs(sb.chill - b.chill) + Math.abs(sb.hunger - b.hunger) >= 5
+    if (!now && ((moved < 3 && !bodyMoved) || this.loopTime - this.saved.t < 15)) return
+    if (now && moved < 0.5 && !bodyMoved) return
     this.saved = { x: p.x, z: p.z, t: this.loopTime }
-    this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z) })
+    this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), body: this.bodyToSave() })
+  }
+
+  // --- The Hum, Chill and Hunger (S8) ---
+
+  private bodyToSave(): Body | undefined {
+    if (!this.story) return undefined
+    this.bodySaved = roundBody(this.story.body)
+    return this.bodySaved
+  }
+
+  private humPool(): number {
+    return humPool(this.night)
+  }
+
+  // Each frame of play: the body changes, a breath is drawn, the HUD follows
+  private stepBodyFrame(dt: number): void {
+    const st = this.story
+    if (!st) return
+    st.body = stepBody(st.body, dt)
+    if (this.breath.active) {
+      const moving = this.path.length > 0 || !!this.combat || !this.nearHearth()
+      if (moving) {
+        this.breath.stop()
+        this.say('The stillness breaks.')
+      } else if (this.breath.step(dt)) {
+        st.body = breathe(st.body, this.humPool())
+        if (!st.done.stillness) {
+          this.reach('stillness')
+          this.say('The bottom of a still pool. Something hums under your breastbone and stays: the Hum. Each breath adds to it, as far as the sky allows.')
+        }
+        if (st.body.hum >= this.humPool()) {
+          this.breath.stop()
+          this.say(`The Hum is full: ${st.body.hum} tonight, by the moons. Spend it in a fight with the old cadence: 1 Strike, 2 Pivot, 3 Guard, then 1.`)
+        }
+      }
+    }
+    const near = this.nearHearth()
+    if (near !== this.wasNearHearth) {
+      this.wasNearHearth = near
+      this.updateHint()
+    }
+    this.bodyHud.show(st.done.herbal ? st.body : null, this.humPool())
+  }
+
+  // B by a hearth: stillness, breath by breath
+  private startStillness(): void {
+    const st = this.story
+    if (!st || !st.done.herbal) return
+    if (this.breath.active) {
+      this.breath.stop()
+      return
+    }
+    if (this.combat) return this.flash('Not in a fight')
+    if (!this.nearHearth()) return this.flash('Stillness needs a quiet place: stand by a hearth')
+    if (st.body.hum >= this.humPool()) return this.flash('The Hum is already full')
+    this.path = []
+    if (!st.done.stillness) this.say('From the heavy book on the shelf: breathe in for four, out for six, and sink to the bottom of a still pool.')
+    this.breath.start()
+  }
+
+  // C by a hearth: cook a hot dish from the herbal's herbs
+  private openCooking(): void {
+    const st = this.story
+    if (!st || !st.done.herbal) return
+    if (this.cooking?.isConnected) {
+      this.cooking.remove()
+      this.cooking = null
+      return
+    }
+    if (!this.nearHearth()) return this.flash('Stand by a hearth to cook')
+    this.cooking = showCooking(this.container, st.items, (d) => {
+      this.cooking = null
+      if ((st.items[d.herb] ?? 0) < 1) return
+      st.items[d.herb]--
+      st.body = cook(st.body, d)
+      const p = this.player()
+      st.done.cook = true
+      this.opts.onStory?.({ step: 'cook', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: d.herb, body: this.bodyToSave() })
+      this.showStory()
+      this.say(`${d.title}. ${d.line}`)
+    })
+  }
+
+  // A fight's cadence spends a Hum, once stillness has been learned
+  private cadenceAllowed(): boolean {
+    const st = this.story
+    if (!st || !st.done.stillness) return !st // outside the story, as before
+    return st.body.hum >= 1
   }
 
   private showStory(): void {
@@ -1679,6 +1790,7 @@ export class AreaViewport {
     if (this.playing && this.combat) this.stepCombat(Math.min(dt, 0.1))
     if (this.playing && this.hearth) this.stepHearth(dt)
     if (this.playing && this.story) this.stepStory()
+    if (this.playing && this.story) this.stepBodyFrame(dt)
     this.orbit.step(dt, this.input)
     if (this.playing && this.walk) {
       // The context cursor: a hand where the ground may be walked to
@@ -1818,7 +1930,7 @@ export class AreaViewport {
     this.hint.textContent = this.talk.open
       ? 'Pick an answer · 1 to 9 · Esc to end the talk'
       : this.playing && this.story && !this.combat
-      ? `The first hour · click the ground to walk · click a person to talk · click a door to go through · J hides the steps${this.nearHearth() && this.story.done.road && !this.story.done.rest ? ' · R to rest by the hearth' : ''}${this.story.done.morning ? ' · K: the herbal' : ''}`
+      ? `The story · click to walk, talk or go through a door · J hides the steps${this.nearHearth() && this.story.done.road && !this.story.done.rest ? ' · R to rest by the hearth' : ''}${this.story.done.morning ? ' · K: the herbal' : ''}${this.story.done.herbal && this.nearHearth() ? ' · B: stillness · C: cook' : ''}`
       : this.playing && this.combat
       ? 'Fighting · click a Hollowed to attack it · 1 Strike · 2 Pivot · 3 Guard · click the ground to back away'
       : this.playing

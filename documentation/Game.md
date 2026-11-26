@@ -223,6 +223,15 @@ The voxel game's tenth tracer bullet: the body's needs, a thin 362e (the user, 2
 - **In the viewport**: the needs run while the player walks, flies a ship or rides as crew. Air fills in the planet's air, aboard a ship and within 14 m of the outpost's quartermaster; E eats a ration from the pack (`ShipIntent` `eat`). At no health the player blacks out and wakes by the outpost with full air and 60 health. The needs go with each saved place (`stand` carries `needs`) and come back from `game.player`. Stats add `needs`, `breathable` and `blackouts`.
 - **Server**: `game.eat {}` (`cmd-game-eat`, target the world) refuses an empty pack and emits `ate {pack: {food: -1}}`, which `game.packs` folds; `game.standAt` takes `needs {air, fed, health}` (each rounded and clamped), which `game.players` keeps as `needs` (a stand without them keeps the last).
 
+## Built in S8 (forge 375)
+
+The story game's eighth tracer bullet: the Hum, Chill and Hunger (the design's rules 2 and 3), using the herbs of S7.
+
+- **`story/Hum.ts`**: `Body {hum, chill, hunger}`; `humPool(night)`, a thimble line's small pool set by the moons (1 in the greater moon's dark, up to 4 when it is full, one more at the lesser's full); `breathe` (stillness, one Hum a breath up to the pool), `spendHum` (the cadence: 40 Chill and 15 Hunger), `stepBody` (hunger grows over about 25 minutes, faster while chilled; the chill fades over 15), `DISHES` and `cook` (thyme in hot milk clears the Chill, nettle soup eases Hunger), the `BodyHud` (Hum pips, Chill and Hunger bars), the `BreathPrompt` (a ring swelling four seconds and falling six) and `showCooking`.
+- **Combat**: `CombatOptions.cadenceAllowed` gates the Strike, Pivot, Guard cadence; in the story, once stillness is learned, each cadence needs and spends a Hum.
+- **In the viewport**: after the herbal, B by a hearth starts stillness (moving, a fight or leaving the hearth breaks it; the first breath reaches `stillness`), and C opens the hearth's cooking (cooking reaches `cook` and spends the herb). The body is sent with every step and saved place (`onStory` `body`, `use`).
+- **Server**: `game.reachStory` takes `use` (a herb spent, refused unless held: the graph reads `game.stories`) and `body {hum, chill, hunger}` (clamped); `StorySteps` gains `stillness` and `cook`; `game.story` gives `body` and counts a spent herb off `items`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

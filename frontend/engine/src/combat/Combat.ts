@@ -86,6 +86,8 @@ export interface CombatOptions {
   hp?: number
   // Where a foe may stand (the walk grid), so they go round furniture rather than through it
   walkable?: (x: number, z: number) => boolean
+  // S8: whether the cadence may come now (the story spends a Hum on it); left out, always
+  cadenceAllowed?: () => boolean
 }
 
 export const HERO_HP = 100
@@ -147,7 +149,7 @@ export class Combat {
     const next = ORDER[(ORDER.indexOf(last) + 1) % 3]
     if (this.stanceTime >= 0.25 && s === next) this.chain.push(s)
     else this.chain = [s]
-    if (s === 'strike' && this.chain.length >= 4 && this.skill >= 2) {
+    if (s === 'strike' && this.chain.length >= 4 && this.skill >= 2 && (this.opts.cadenceAllowed?.() ?? true)) {
       this.cadence = true
       this.chain = ['strike']
       this.pending.push({ kind: 'cadence' })
