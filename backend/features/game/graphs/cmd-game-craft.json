@@ -1,0 +1,402 @@
+{
+  "id": "cmd-game-craft",
+  "name": "game.craft",
+  "description": "Decides a tool crafted at a cabin's field bench from the sender's pack.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.craft",
+    "title": "Craft at a bench",
+    "description": "Crafts a tool at the field bench of a cabin (V14); the target is the cabin's id. The one recipe so far is drill (a hand drill: 2 m³ of ore and 1 m³ of rock from the sender's pack), which digs wider and faster than bare hands; game.player then gives tools: {drill: true}. Refused for a ship that is not a cabin, a cabin whose bench is not placed, an unknown item, a tool the sender already has, or a pack without the materials.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "description": "What to craft: drill"
+        }
+      },
+      "required": [
+        "item"
+      ]
+    },
+    "area": "game",
+    "targetType": "gameShip",
+    "projection": "game.ships",
+    "action": "game.play",
+    "events": [
+      "crafted"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "item",
+            "type": "string",
+            "description": "What to craft"
+          }
+        ]
+      }
+    },
+    {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 300
+      }
+    },
+    {
+      "id": "shipKey",
+      "type": "data.expression",
+      "title": "Ship key",
+      "position": {
+        "x": 250,
+        "y": 150
+      },
+      "config": {
+        "expr": "\"gameShip.\" + target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ship",
+      "type": "live.readProjection",
+      "title": "Read the cabin",
+      "position": {
+        "x": 500,
+        "y": 150
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "packKey",
+      "type": "data.expression",
+      "title": "Pack key",
+      "position": {
+        "x": 750,
+        "y": 400
+      },
+      "config": {
+        "expr": "(ship?.world ?? \"\") + \".\" + user",
+        "type": "string"
+      }
+    },
+    {
+      "id": "pack",
+      "type": "live.readProjection",
+      "title": "Read the sender's pack",
+      "position": {
+        "x": 1000,
+        "y": 400
+      },
+      "config": {
+        "projector": "game.packs"
+      }
+    },
+    {
+      "id": "player",
+      "type": "live.readProjection",
+      "title": "Read the sender's progress",
+      "position": {
+        "x": 1000,
+        "y": 600
+      },
+      "config": {
+        "projector": "game.players"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why it is refused",
+      "position": {
+        "x": 1300,
+        "y": 150
+      },
+      "config": {
+        "expr": "!found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a field bench\" : !(74 in ship.placed) ? \"the cabin's field bench is not placed yet\" : item != \"drill\" ? \"the bench knows one recipe: drill\" : (player?.tools?.drill ?? false) ? \"you already have a drill\" : (pack?.ore ?? 0) \u003c 2 || (pack?.rock ?? 0) \u003c 1 ? \"a drill takes 2 m³ of ore and 1 m³ of rock from your pack\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Allowed?",
+      "position": {
+        "x": 1550,
+        "y": 150
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "position": {
+        "x": 1800,
+        "y": 0
+      }
+    },
+    {
+      "id": "crafted",
+      "type": "data.expression",
+      "title": "Crafted",
+      "position": {
+        "x": 1800,
+        "y": 350
+      },
+      "config": {
+        "expr": "{world: ship.world, item: item, pack: {ore: -2, rock: -1}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "position": {
+        "x": 2100,
+        "y": -100
+      },
+      "config": {
+        "event": "crafted"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "position": {
+        "x": 2100,
+        "y": 150
+      },
+      "config": {
+        "path": "args",
+        "fix": "place the bench (block 74) with game.placeBlock, and bring 2 m³ of ore from the asteroids and 1 m³ of rock"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "shipKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "shipKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ship",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "packKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pack",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "packKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "player",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "check",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "item"
+      },
+      "to": {
+        "node": "check",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "pack",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "pack"
+      }
+    },
+    {
+      "from": {
+        "node": "player",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "player"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "crafted",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "item"
+      },
+      "to": {
+        "node": "crafted",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "crafted",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    }
+  ]
+}

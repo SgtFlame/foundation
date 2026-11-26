@@ -16,6 +16,7 @@ import { VoxelWorld } from './VoxelWorld.ts'
 import { PLANET } from './Bodies.ts'
 import { available, Fishing, FLEE_RANGE, floatModel, grazerDir, grazerModel, herdOf, HUNT_REACH, SEA_RADIUS, seaMesh, type Grazer } from '../wildlife/Wildlife.ts'
 import { eat, FRESH, hungry, NeedsHud, rounded, stepNeeds, type Needs } from '../survival/Needs.ts'
+import { digLimits, missing, RECIPES, spend, type DigLimits } from '../craft/Crafting.ts'
 
 // What the player asks for; the host sends it to the server, which decides
 export interface EditIntent {
@@ -66,6 +67,7 @@ export type ShipIntent =
   | { kind: 'eat' } // V10: one ration from the pack
   | { kind: 'forage'; what: 'fish' | 'hunt'; animal?: string; x: number; y: number; z: number } // V12: a fish caught, a grazer hunted
   | { kind: 'sleep'; id: string } // V13: a night in a cabin's bed
+  | { kind: 'craft'; id: string; item: string } // V14: a tool made at a cabin's bench
   | { kind: 'plant'; x: number; y: number; z: number } // V9: barley in the planet's soil
   | { kind: 'harvest'; crop: string } // V9: a ripe crop, as food
 
@@ -574,7 +576,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.benchHint()}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -607,6 +609,7 @@ export class VoxelViewport {
       const at = surfaceBelow(t, { x: p.x, y: p.y, z: p.z }) ?? surfaceBelow(t, { x: 0, y: R * 1.5, z: 0 }) ?? { x: 0, y: R + 2, z: 0 }
       this.walker = new Walker(t, at)
       this.placed = false
+      this.brushRadius = Math.min(this.brushRadius, digLimits(this.progress?.tools).maxBrush)
       // Face the way the camera faced, along the ground
       const f = this.fly.forward()
       const u = this.walker.up
@@ -739,7 +742,7 @@ export class VoxelViewport {
     this.stepShipsOnFoot()
     const wheel = input.takeWheel()
     if (wheel !== 0) {
-      this.brushRadius = Math.max(MIN_BRUSH, Math.min(MAX_BRUSH, this.brushRadius * (wheel < 0 ? 1.15 : 1 / 1.15)))
+      this.brushRadius = Math.max(MIN_BRUSH, Math.min(this.maxBrush(), this.brushRadius * (wheel < 0 ? 1.15 : 1 / 1.15)))
       this.updateHint()
     }
     // Aim the brush along the view
@@ -763,7 +766,7 @@ export class VoxelViewport {
       if ((digging || filling) && this.brushHit) {
         this.repeat -= dt
         if (input.clicked(0) || input.clicked(2) || this.repeat <= 0) {
-          this.repeat = 0.18
+          this.repeat = this.mode === 'walk' ? this.dig().repeat : 0.18
           this.sendEdit(filling && !digging ? 'fill' : 'dig', this.brushHit)
         }
       } else {
@@ -779,6 +782,7 @@ export class VoxelViewport {
 
   private nearSeat: string | null = null
   private nearBed: string | null = null
+  private nearBench: string | null = null
 
   // What a ship within reach offers: its hold and its refinery (V4)
   private nearShip: ShipState | null = null
@@ -834,6 +838,13 @@ export class VoxelViewport {
       this.updateHint()
     }
     if (bed && input.locked && input.pressed('KeyF')) this.sleepIn(bed)
+    // V14: U at a cabin's field bench crafts
+    const bench = this.walker && !seat ? this.shipLayer.benchNear(this.walker.pos) : null
+    if (bench !== this.nearBench) {
+      this.nearBench = bench
+      this.updateHint()
+    }
+    if (bench && input.locked && input.pressed('KeyU')) this.craftAt(bench)
     const near = this.walker ? this.shipLayer.shipNear(this.walker.eye()) : null
     if (near?.id !== this.nearShip?.id || near?.seq !== this.nearShip?.seq) {
       this.nearShip = near
@@ -920,6 +931,38 @@ export class VoxelViewport {
     if (before !== this.breathable) this.updateHint()
     this.needsHud.show(this.needs, { breathable: this.breathable })
     if (this.needs.health <= 0) this.blackOut()
+  }
+
+  // V14: how digging goes on foot (bare hands, or the drill once crafted);
+  // flying the camera digs as before
+  private dig(): DigLimits {
+    return digLimits(this.progress?.tools)
+  }
+
+  private maxBrush(): number {
+    return this.mode === 'walk' ? Math.min(MAX_BRUSH, this.dig().maxBrush) : MAX_BRUSH
+  }
+
+  private benchHint(): string {
+    if (!this.nearBench) return ''
+    const r = RECIPES[0]
+    return this.progress?.tools?.[r.id] ? 'The bench: your drill is made · ' : `U: craft a ${r.title} (${Object.entries(r.needs).map(([k, n]) => `${n} m³ ${k}`).join(', ')}) · `
+  }
+
+  // V14: U at the bench makes the drill when the pack holds what it takes
+  craftAt(id: string): void {
+    const r = RECIPES[0]
+    const why = missing(r, this.carried, this.progress?.tools)
+    if (why) {
+      this.flashHint(why[0].toUpperCase() + why.slice(1))
+      return
+    }
+    if (this.carried) this.carried = { ...this.carried, ...spend(r, this.carried) }
+    this.drawPack()
+    if (this.progress) this.progress = { ...this.progress, tools: { ...this.progress.tools, [r.id]: true } }
+    this.opts.onShipIntent?.({ kind: 'craft', id, item: r.id })
+    this.brushRadius = Math.max(this.brushRadius, 2)
+    this.flashHint(`You file and fit the parts at the bench: a ${r.title}. It ${r.line}; the wheel opens its bite to ${this.dig().maxBrush} m`)
   }
 
   // V13: a night in a cabin's bed: full health, and the cabin is home
@@ -1144,6 +1187,7 @@ export class VoxelViewport {
       }
     }
     if (this.shipLayer.body) this.shipLayer.body.thrustScale = thrustFor(p?.levels)
+    this.brushRadius = Math.min(this.brushRadius, this.maxBrush())
     if (this.mode === 'walk') this.arrive()
     if (this.contracts.open) this.openContracts()
   }

@@ -19,6 +19,7 @@ const COLORS: Record<DesignBlock['type'], number> = {
   log: 0xa8743f,
   door: 0x4a3020,
   bed: 0xa8463a,
+  bench: 0x8a6a44,
 }
 
 interface Shown {
@@ -181,6 +182,25 @@ export class ShipLayer {
       g.add(mesh, pillow)
       return g
     }
+    // V14: a field bench is a table top on four legs, a vice at one end
+    if (b.type === 'bench') {
+      const g = new THREE.Group()
+      mesh.scale.set(0.95, 0.12, 0.6)
+      mesh.position.y = 0.28
+      g.add(mesh)
+      for (const sx of [-0.4, 0.4])
+        for (const sz of [-0.22, 0.22]) {
+          const leg = new THREE.Mesh(this.box, this.material('door'))
+          leg.scale.set(0.08, 0.7, 0.08)
+          leg.position.set(sx, -0.07, sz)
+          g.add(leg)
+        }
+      const vice = new THREE.Mesh(this.box, this.material('armor'))
+      vice.scale.set(0.18, 0.16, 0.2)
+      vice.position.set(0.3, 0.42, 0)
+      g.add(vice)
+      return g
+    }
     if (b.type !== 'thruster' || !b.push) return mesh
     // The nozzle opens away from where the thruster pushes
     const g = new THREE.Group()
@@ -284,8 +304,17 @@ export class ShipLayer {
 
   // V13: a placed bed within reach of a point: the building's id
   bedNear(p: Vec3, reach = 2.2): string | null {
+    return this.blockNear('bed', p, reach)
+  }
+
+  // V14: a placed field bench within reach of a point: the building's id
+  benchNear(p: Vec3, reach = 2.2): string | null {
+    return this.blockNear('bench', p, reach)
+  }
+
+  private blockNear(type: string, p: Vec3, reach: number): string | null {
     for (const s of this.shown.values()) {
-      const i = s.design.blocks.findIndex((b) => b.type === 'bed')
+      const i = s.design.blocks.findIndex((b) => b.type === type)
       if (i < 0 || !s.placed.has(i)) continue
       const c = blockWorld({ x: s.at.x, y: s.at.y, z: s.at.z, q: [s.q.x, s.q.y, s.q.z, s.q.w] }, s.design.blocks[i], s.design.blockSize)
       if (Math.hypot(c.x - p.x, c.y - p.y, c.z - p.z) < reach) return s.state.id

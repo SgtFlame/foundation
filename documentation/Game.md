@@ -285,6 +285,14 @@ The story game's eleventh tracer bullet: the day's card gives a light buff or a 
 - **In the viewport**: the walking speed, the cadence's Hum, cooking and the Hum pool follow the day's card; the body HUD shows it beside the clock (*Day 4 · 09:01 · The Lantern: what is hidden nearby glows*), and sleeping names it.
 - `drawCard` now mixes its seed fully, so days in a row draw varied cards (before, neighbouring seeds often drew the same one).
 
+## Built in V14 (forge 360)
+
+The voxel game's fourteenth tracer bullet: the crafting ladder's first rung (the play design's *hand → field bench*) and its first moment, "crafting the first drill and tearing through rock that took minutes by hand".
+
+- **Digging on foot depends on tools** (`craft/Crafting.ts`, `digLimits`): bare hands dig a brush of at most 1.25 m, a bite every 0.35 s; with a **hand drill** up to 4 m, a bite every 0.12 s. The hint says *Left: dig by hand* or *Left: drill*. Flying the camera digs as before (up to 6 m).
+- **The field bench**: a new block type `bench` (a table on four legs with a vice), block 74 of the cabin (now 75 blocks). In play, U at a placed bench crafts (*U: craft a hand drill (2 m³ ore, 1 m³ rock)*), refused with the reason when the pack lacks the materials.
+- **`game.craft {item}`** (`cmd-game-craft`, target the cabin) refuses a ship that is not a cabin, a cabin whose bench is not placed, any item but `drill`, a drill the sender already has, or a pack without 2 m³ of ore and 1 m³ of rock; it emits `crafted {world, item, pack}`, which `game.packs` folds (the materials spent) and `game.players` folds into `tools: {drill: true}`. The recipe is in the engine's `RECIPES` and the graph alike. `TestCraftDrill` covers it.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

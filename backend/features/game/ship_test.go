@@ -327,7 +327,7 @@ func TestJobBoard(t *testing.T) {
 // V13: a cabin is a building on the planet; sleeping in its bed heals and makes it home
 func TestCabin(t *testing.T) {
 	d, ok := game.DesignOf("cabin")
-	if !ok || !d.Static || d.Check() != "" || d.Blocks[73].Type != "bed" || len(d.Blocks) != 74 {
+	if !ok || !d.Static || d.Check() != "" || d.Blocks[73].Type != "bed" || d.Blocks[74].Type != "bench" || len(d.Blocks) != 75 {
 		t.Fatalf("cabin %+v", d)
 	}
 	st := newStack(t)
@@ -348,5 +348,36 @@ func TestCabin(t *testing.T) {
 	var p game.Player
 	if !st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p) || p.Home != "c1" || p.Needs == nil || p.Needs.Health != 100 || p.Needs.Fed != 50 {
 		t.Fatalf("player %+v %+v", p, p.Needs)
+	}
+}
+
+// V14: a hand drill crafted at the cabin's bench from ore and rock
+func TestCraftDrill(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Drill moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	st.ok("game.startShip", "c1", map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": 0, "q": q})
+	if r := st.refused("game.craft", "c1", map[string]any{"item": "drill"}); !strings.Contains(r.Common.Message, "bench") {
+		t.Fatalf("craft before the bench: %q", r.Common.Message)
+	}
+	st.ok("game.placeBlock", "c1", map[string]any{"index": 74})
+	if r := st.refused("game.craft", "c1", map[string]any{"item": "drill"}); !strings.Contains(r.Common.Message, "ore") {
+		t.Fatalf("craft with an empty pack: %q", r.Common.Message)
+	}
+	if r := st.refused("game.craft", "c1", map[string]any{"item": "rocket"}); !strings.Contains(r.Common.Message, "one recipe") {
+		t.Fatalf("unknown recipe: %q", r.Common.Message)
+	}
+	st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 200, "z": 0, "radius": 1.5, "took": map[string]any{"dust": 0, "rock": 1.2, "ore": 2.5}})
+	res := st.ok("game.craft", "c1", map[string]any{"item": "drill"})
+	var p game.Player
+	if !st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p) || !p.Tools["drill"] {
+		t.Fatalf("player %+v", p)
+	}
+	var pack game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Ore != 0.5 || pack.Rock != 0.2 {
+		t.Fatalf("pack %+v", pack)
+	}
+	if r := st.refused("game.craft", "c1", map[string]any{"item": "drill"}); !strings.Contains(r.Common.Message, "already") {
+		t.Fatalf("a second drill: %q", r.Common.Message)
 	}
 }

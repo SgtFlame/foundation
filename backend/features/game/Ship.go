@@ -35,6 +35,7 @@ const (
 	EventShipDamaged    = "damaged" // {world, blocks} (V5: the indices a crash broke)
 	EventShipCrewed     = "crewed"  // {world, user, aboard} (V7: who boards or leaves the crew seat)
 	EventSlept          = "slept"   // {world} (V13: the sender slept in this cabin's bed: their home)
+	EventCrafted        = "crafted" // {world, item, pack} (V14: the sender crafted a tool at this cabin's bench from their pack)
 )
 
 // ShipDesign is a premade ship: its blocks in its own grid, x right, y up
@@ -51,7 +52,7 @@ type ShipDesign struct {
 
 // DesignBlock is one block of a design: armor, cockpit, gyro, light,
 // battery, cargo, refinery, solar, a building's log, door (an opening) or
-// bed (V13), or thruster (push: the way it pushes the ship: up, down, forward, back,
+// bed (V13), bench (V14), or thruster (push: the way it pushes the ship: up, down, forward, back,
 // left, right).
 type DesignBlock struct {
 	Type string `json:"type"`
@@ -135,7 +136,7 @@ func (d ShipDesign) Check() string {
 		switch b.Type {
 		case "cockpit":
 			cockpits++
-		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar", "log", "door", "bed":
+		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar", "log", "door", "bed", "bench":
 		case "thruster":
 			switch b.Push {
 			case "up", "down", "forward", "back", "left", "right":

@@ -34,6 +34,7 @@ export interface Progress {
   needs?: { air: number; fed: number; health: number } // V10: their body's needs when last saved
   jobs?: Record<string, number> // V11: how many times they did each job
   home?: string // V13: the cabin whose bed they last slept in
+  tools?: Record<string, boolean> // V14: the tools they crafted (drill)
 }
 
 export const OUTPOST_REACH = 40

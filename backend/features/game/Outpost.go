@@ -49,6 +49,8 @@ type Player struct {
 	Jobs map[string]int `json:"jobs,omitempty"`
 	// V13: the cabin whose bed they last slept in, where they wake after a blackout
 	Home string `json:"home,omitempty"`
+	// V14: the tools they crafted (drill: a hand drill, which digs wider and faster)
+	Tools map[string]bool `json:"tools,omitempty"`
 }
 
 // Needs are a player's body's needs (V10): air in the suit, how well fed, health.
@@ -123,6 +125,20 @@ func foldPlayer(f live.Fold) (json.RawMessage, error) {
 		}
 		return json.Marshal(p)
 	}
+	if f.Event.Type == EventCrafted {
+		// V14: a tool made at a bench is theirs from then on
+		var c struct {
+			Item string `json:"item"`
+		}
+		if err := json.Unmarshal(f.Event.Data, &c); err != nil {
+			return nil, err
+		}
+		if p.Tools == nil {
+			p.Tools = map[string]bool{}
+		}
+		p.Tools[c.Item] = true
+		return json.Marshal(p)
+	}
 	if f.Event.Type == EventStood {
 		p.At = &[3]float64{d.X, d.Y, d.Z}
 		if d.Needs != nil {
@@ -161,7 +177,7 @@ func foldPlayer(f live.Fold) (json.RawMessage, error) {
 func contributeOutpost(reg *extensions.Registry) {
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: PlayersProjector, Source: source}, Title: "Players' progress",
-		Description: "Each player's progress in each world, keyed <worldId>.<userId>: {done: {<contract>: true}, xp: {<skill>: n}, levels: {<skill>: n}, at: [x, y, z], needs: {air, fed, health}, home (V13: the cabin they last slept in)}, folded from the contracts they hand in and where they last stood",
+		Description: "Each player's progress in each world, keyed <worldId>.<userId>: {done: {<contract>: true}, xp: {<skill>: n}, levels: {<skill>: n}, at: [x, y, z], needs: {air, fed, health}, home (V13: the cabin they last slept in), tools: {drill: true} (V14: the tools they crafted)}, folded from the contracts they hand in and where they last stood",
 		Area:        Area, Types: []string{ShipType, TerrainType},
 		KeyOf: func(e live.Event) string {
 			if e.UserID == 0 {
@@ -170,7 +186,7 @@ func contributeOutpost(reg *extensions.Registry) {
 			if e.Type == EventStood && e.Target.Type == TerrainType {
 				return PackKey(e.Target.ID, e.UserID)
 			}
-			if e.Type != EventHandedIn && e.Type != EventSlept {
+			if e.Type != EventHandedIn && e.Type != EventSlept && e.Type != EventCrafted {
 				return ""
 			}
 			var d struct {
@@ -185,7 +201,7 @@ func contributeOutpost(reg *extensions.Registry) {
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.player", Source: source}, Title: "My progress",
-		Description: fmt.Sprintf("The caller's progress in a world: {done: {<contract>: true}, xp: {<skill>: n}, levels: {<skill>: n} (a level each %d xp, from 1), unlocked: {<design>: true} (designs contracts opened), at: [x, y, z] (where they last stood; missing until they have landed), needs: {air, fed, health} (V10: their body when last saved, each 0 to 100), home (V13: the cabin whose bed they last slept in, where they wake after a blackout)}, then each change as they hand in contracts and move", XPPerLevel),
+		Description: fmt.Sprintf("The caller's progress in a world: {done: {<contract>: true}, xp: {<skill>: n}, levels: {<skill>: n} (a level each %d xp, from 1), unlocked: {<design>: true} (designs contracts opened), at: [x, y, z] (where they last stood; missing until they have landed), needs: {air, fed, health} (V10: their body when last saved, each 0 to 100), home (V13: the cabin whose bed they last slept in, where they wake after a blackout), tools: {<tool>: true} (V14: the tools they crafted at a bench: drill)}, then each change as they hand in contracts and move", XPPerLevel),
 		Params:      json.RawMessage(`{"type":"object","properties":{"world":{"type":"string","description":"The world's id"}},"required":["world"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"world":"w123"}`)},
 		Action:      "game.read",

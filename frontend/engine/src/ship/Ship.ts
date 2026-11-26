@@ -11,7 +11,7 @@ export type Vec3 = { x: number; y: number; z: number }
 export type Quat = [number, number, number, number] // x, y, z, w
 
 export interface DesignBlock {
-  type: 'armor' | 'cockpit' | 'gyro' | 'light' | 'thruster' | 'battery' | 'cargo' | 'refinery' | 'solar' | 'log' | 'door' | 'bed' // V13: a building's
+  type: 'armor' | 'cockpit' | 'gyro' | 'light' | 'thruster' | 'battery' | 'cargo' | 'refinery' | 'solar' | 'log' | 'door' | 'bed' | 'bench' // V13: a building's (V14: the bench)
   at: [number, number, number]
   push?: 'up' | 'down' | 'forward' | 'back' | 'left' | 'right'
 }
@@ -45,7 +45,7 @@ export interface ShipState {
   updatedAt?: string
 }
 
-export const BLOCK_MASS: Record<DesignBlock['type'], number> = { armor: 120, cockpit: 200, gyro: 150, light: 20, thruster: 80, battery: 150, cargo: 100, refinery: 300, solar: 30, log: 200, door: 60, bed: 80 }
+export const BLOCK_MASS: Record<DesignBlock['type'], number> = { armor: 120, cockpit: 200, gyro: 150, light: 20, thruster: 80, battery: 150, cargo: 100, refinery: 300, solar: 30, log: 200, door: 60, bed: 80, bench: 90 }
 
 // Power (V4, a thin 367): a design with a battery or solar panels runs on
 // power. Thrusters draw by how hard they push, the gyroscope while turning;
@@ -158,7 +158,7 @@ export function buildingDistance(design: ShipDesign, placed: Iterable<number>, p
   for (const i of placed) {
     const b = design.blocks[i]
     if (!b || b.type === 'door') continue
-    const h = b.type === 'bed' ? 0.25 : 0.5
+    const h = b.type === 'bed' ? 0.25 : b.type === 'bench' ? 0.4 : 0.5
     const cy = b.at[1] * size
     const dx = Math.abs(local.x - b.at[0] * size) - 0.5 * size
     const dy = Math.abs(local.y - cy) - h * size

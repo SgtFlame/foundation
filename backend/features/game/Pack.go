@@ -39,7 +39,7 @@ func PackKey(world string, user uint64) string { return world + "." + strconv.Fo
 func contributePacks(reg *extensions.Registry) {
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: PacksProjector, Source: source}, Title: "Players' packs",
-		Description: "What each player carries in each world, keyed <worldId>.<userId>: {dust, rock, capacity} in m³, folded from the pack changes terrain edits carry and what loading a ship's hold took",
+		Description: "What each player carries in each world, keyed <worldId>.<userId>: {dust, rock, capacity} in m³, folded from the pack changes terrain edits carry, what loading a ship's hold took and what crafting at a bench spent (V14)",
 		Area:        Area, Types: []string{TerrainType, ShipType},
 		KeyOf: func(e live.Event) string {
 			if e.UserID == 0 || !hasPack(e.Data) {
@@ -48,7 +48,7 @@ func contributePacks(reg *extensions.Registry) {
 			switch {
 			case (e.Type == EventEdited || e.Type == EventHarvested || e.Type == EventAte || e.Type == EventForaged) && e.Target.Type == TerrainType:
 				return PackKey(e.Target.ID, e.UserID)
-			case e.Type == EventShipLoaded && e.Target.Type == ShipType:
+			case (e.Type == EventShipLoaded || e.Type == EventCrafted) && e.Target.Type == ShipType:
 				// V4: loading a ship's hold empties the loader's pack
 				var d struct {
 					World string `json:"world"`
