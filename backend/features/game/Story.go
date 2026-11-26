@@ -31,7 +31,7 @@ const (
 
 // StorySteps are the first hour's steps in order (375 › the first hour).
 // S7 adds the first day: the morning's card, foraging and the herbal.
-var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook"}
+var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep"}
 
 // StoryItems are what a player may gather in a story (S7: herbs for the herbal).
 var StoryItems = []string{"thyme", "nettle", "yarrow"}
@@ -47,6 +47,14 @@ type StoryPlace struct {
 	Picked map[string]bool `json:"picked,omitempty"`
 	// S8: the character's Hum, Chill and Hunger when last saved
 	Body *StoryBody `json:"body,omitempty"`
+	// S9: the story's clock when last saved
+	Clock *StoryClock `json:"clock,omitempty"`
+}
+
+// StoryClock is the story's day (since the night of the first snow) and hour (S9).
+type StoryClock struct {
+	Day  int     `json:"day"`
+	Hour float64 `json:"hour"`
 }
 
 // StoryBody is the story character's Hum (the pool the sky sets), the
@@ -65,14 +73,15 @@ func foldStory(f live.Fold) (json.RawMessage, error) {
 		}
 	}
 	var d struct {
-		Step string     `json:"step"`
-		Item string     `json:"item"`
-		Spot string     `json:"spot"`
-		Use  string     `json:"use"`
-		Body *StoryBody `json:"body"`
-		Area string     `json:"area"`
-		X    float64    `json:"x"`
-		Z    float64    `json:"z"`
+		Step  string      `json:"step"`
+		Item  string      `json:"item"`
+		Spot  string      `json:"spot"`
+		Use   string      `json:"use"`
+		Body  *StoryBody  `json:"body"`
+		Clock *StoryClock `json:"clock"`
+		Area  string      `json:"area"`
+		X     float64     `json:"x"`
+		Z     float64     `json:"z"`
 	}
 	if err := json.Unmarshal(f.Event.Data, &d); err != nil {
 		return nil, err
@@ -100,6 +109,9 @@ func foldStory(f live.Fold) (json.RawMessage, error) {
 	if d.Body != nil {
 		p.Body = d.Body
 	}
+	if d.Clock != nil {
+		p.Clock = d.Clock
+	}
 	p.Area = d.Area
 	p.At = &[2]float64{d.X, d.Z}
 	return json.Marshal(p)
@@ -125,7 +137,7 @@ func contributeStories(reg *extensions.Registry) {
 	})
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: StoriesProjector, Source: source}, Title: "Players' places in stories",
-		Description: "Each player's place in each story, keyed <areaId>.<userId>: {done: {<step>: true}, last, area, at: [x, z], items: {<item>: n}, picked: {<spot>: true}, body: {hum, chill, hunger}}, folded from the steps they reach and the places they save",
+		Description: "Each player's place in each story, keyed <areaId>.<userId>: {done: {<step>: true}, last, area, at: [x, z], items: {<item>: n}, picked: {<spot>: true}, body: {hum, chill, hunger}, clock: {day, hour}}, folded from the steps they reach and the places they save",
 		Area:        Area, Types: []string{StoryType},
 		KeyOf: func(e live.Event) string {
 			if e.UserID == 0 || e.Type != EventReached {
@@ -137,7 +149,7 @@ func contributeStories(reg *extensions.Registry) {
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.story", Source: source}, Title: "My place in a story",
-		Description: fmt.Sprintf("The caller's place in a story known by its starting area: {done: {<step>: true}, last (the last step reached), area (the area they were last in), at: [x, z] (where they stood in it), items: {<herb>: n} and picked: {<spot>: true} (what they gathered, S7, less what they cooked), body: {hum, chill, hunger} (S8)}, then each change as they play. The first hour's steps are %v.", StorySteps),
+		Description: fmt.Sprintf("The caller's place in a story known by its starting area: {done: {<step>: true}, last (the last step reached), area (the area they were last in), at: [x, z] (where they stood in it), items: {<herb>: n} and picked: {<spot>: true} (what they gathered, S7, less what they cooked), body: {hum, chill, hunger} (S8), clock: {day, hour} (S9)}, then each change as they play. The first hour's steps are %v.", StorySteps),
 		Params:      json.RawMessage(`{"type":"object","properties":{"story":{"type":"string","description":"The story's starting area's id (the farmstead)"}},"required":["story"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"story":"a123"}`)},
 		Action:      "game.read",

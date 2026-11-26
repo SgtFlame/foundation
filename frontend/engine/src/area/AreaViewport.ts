@@ -14,6 +14,7 @@ import { whistle } from '../defence/Whistle.ts'
 import { DialoguePanel } from './DialoguePanel.ts'
 import { FirstHourPanel } from '../objectives/FirstHour.ts'
 import { dragMarks, drawCard, herbSpots, howl, nextStep, showCard, showHerbal, SIGNATURE_TEXT, storySteps } from '../story/FirstHourStory.ts'
+import { canSleep, CLOCK_START, clockText, isDay, nightOf, showAlmanac, sleep, stepClock, type Clock } from '../story/Clock.ts'
 import { BODY_START, BodyHud, breathe, BreathPrompt, cook, humPool, rounded as roundBody, showCooking, spendHum, stepBody, type Body } from '../story/Hum.ts'
 import { ashPile, buildModel, CharacterModel, interiorShell, material } from './Models.ts'
 import { fit, pieceOf, turned, type AreaDef, type Dialogue, type Npc, type PieceSet, type Placement } from './PieceSet.ts'
@@ -73,7 +74,7 @@ export interface AreaViewportOptions {
   // S6: a step of the first hour reached (step empty: only the place, saved
   // now and then); the host sends it as game.reachStory to the story's area.
   // S7: item and spot, a herb gathered
-  onStory?: (s: { step: string; area: string; x: number; z: number; item?: string; spot?: string; use?: string; body?: Body }) => void
+  onStory?: (s: { step: string; area: string; x: number; z: number; item?: string; spot?: string; use?: string; body?: Body; clock?: Clock }) => void
 }
 
 // S6: a player's place in a story as the server keeps it (game.story)
@@ -87,6 +88,8 @@ export interface StoryPlace {
   picked?: Record<string, boolean>
   // S8: the Hum, Chill and Hunger when last saved
   body?: Body
+  // S9: the story's day and hour when last saved
+  clock?: Clock
 }
 
 // The thimble's skills at the first fight (375 › the first hour): a little
@@ -203,7 +206,10 @@ export class AreaViewport {
   // S6: the first hour being played: its area, the steps done, the marks the
   // raid left, where to stand after resuming in another area, the door last
   // taken, the last place saved and the card drawn
-  private story: { area: string; done: Record<string, boolean>; card: string | null; items: Record<string, number>; picked: Record<string, boolean>; body: Body } | null = null
+  private story: { area: string; done: Record<string, boolean>; card: string | null; items: Record<string, number>; picked: Record<string, boolean>; body: Body; clock: Clock } | null = null
+  private almanacEl: HTMLDivElement | null = null
+  private storyDay: boolean | null = null // the light the clock last set
+  private slept = false
   // S8: the Hum, Chill and Hunger, stillness and the hearth's cooking
   private bodyHud!: BodyHud
   private breath!: BreathPrompt
@@ -1192,6 +1198,7 @@ export class AreaViewport {
       if (this.story && (e.key === 'k' || e.key === 'K')) this.openHerbal()
       if (this.story && (e.key === 'b' || e.key === 'B')) this.startStillness()
       if (this.story && (e.key === 'c' || e.key === 'C')) this.openCooking()
+      if (this.story && (e.key === 'm' || e.key === 'M')) this.openAlmanac()
       if (this.combat && !this.talk.open) {
         const s = ({ '1': 'strike', '2': 'pivot', '3': 'guard' } as Record<string, Stance>)[e.key]
         if (s) this.setStance(s)
@@ -1471,8 +1478,11 @@ export class AreaViewport {
   // the player last stood at (the host travels there through onTravel)
   playStory(place: StoryPlace | null): void {
     if (this.playing) this.play(false)
-    this.story = { area: this.area.id, done: { ...(place?.done ?? {}) }, card: null, items: { ...(place?.items ?? {}) }, picked: { ...(place?.picked ?? {}) }, body: { ...(place?.body ?? BODY_START) } }
-    if (this.story.done.rest) this.setLighting('day') // the first day
+    this.story = { area: this.area.id, done: { ...(place?.done ?? {}) }, card: null, items: { ...(place?.items ?? {}) }, picked: { ...(place?.picked ?? {}) }, body: { ...(place?.body ?? BODY_START) }, clock: { ...(place?.clock ?? (place?.done.rest ? { day: 1, hour: 7 } : CLOCK_START)) } }
+    // S9: the light and the moons follow the story's clock
+    this.storyDay = isDay(this.story.clock)
+    this.setLighting(this.storyDay ? 'day' : 'night')
+    this.setNight(nightOf(this.story.clock))
     const at = place?.at ? { x: place.at[0], z: place.at[1] } : null
     this.play(true)
     this.syncNpcs(true) // the Hollowed hide until the trail is followed
@@ -1496,7 +1506,7 @@ export class AreaViewport {
     if (!st || st.done[step]) return
     st.done[step] = true
     const p = this.player()
-    this.opts.onStory?.({ step, area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), body: this.bodyToSave() })
+    this.opts.onStory?.({ step, area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), ...this.stateToSave() })
     if (p) this.saved = { x: p.x, z: p.z, t: this.loopTime }
     this.showStory()
     this.updateHint()
@@ -1513,10 +1523,17 @@ export class AreaViewport {
     if (!now && ((moved < 3 && !bodyMoved) || this.loopTime - this.saved.t < 15)) return
     if (now && moved < 0.5 && !bodyMoved) return
     this.saved = { x: p.x, z: p.z, t: this.loopTime }
-    this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), body: this.bodyToSave() })
+    this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), ...this.stateToSave() })
   }
 
   // --- The Hum, Chill and Hunger (S8) ---
+
+  // The body and the clock, sent with every save
+  private stateToSave(): { body?: Body; clock?: Clock } {
+    const st = this.story
+    if (!st) return {}
+    return { body: this.bodyToSave(), clock: { day: st.clock.day, hour: Math.round(st.clock.hour * 10) / 10 } }
+  }
 
   private bodyToSave(): Body | undefined {
     if (!this.story) return undefined
@@ -1533,6 +1550,16 @@ export class AreaViewport {
     const st = this.story
     if (!st) return
     st.body = stepBody(st.body, dt)
+    // S9: the clock runs; dawn and dusk change the light, a new night the moons
+    st.clock = stepClock(st.clock, dt)
+    const day = isDay(st.clock)
+    if (day !== this.storyDay) {
+      this.setLighting(day ? 'day' : 'night')
+      if (this.storyDay !== null && !this.slept) this.say(day ? 'Dawn.' : 'Dusk. The light goes out of the fields; night is when the Hollowed walk.')
+      this.storyDay = day
+      this.slept = false
+    }
+    if (nightOf(st.clock) !== this.night) this.setNight(nightOf(st.clock))
     if (this.breath.active) {
       const moving = this.path.length > 0 || !!this.combat || !this.nearHearth()
       if (moving) {
@@ -1555,7 +1582,7 @@ export class AreaViewport {
       this.wasNearHearth = near
       this.updateHint()
     }
-    this.bodyHud.show(st.done.herbal ? st.body : null, this.humPool())
+    this.bodyHud.show(st.done.herbal ? st.body : null, this.humPool(), clockText(st.clock))
   }
 
   // B by a hearth: stillness, breath by breath
@@ -1591,7 +1618,7 @@ export class AreaViewport {
       st.body = cook(st.body, d)
       const p = this.player()
       st.done.cook = true
-      this.opts.onStory?.({ step: 'cook', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: d.herb, body: this.bodyToSave() })
+      this.opts.onStory?.({ step: 'cook', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: d.herb, ...this.stateToSave() })
       this.showStory()
       this.say(`${d.title}. ${d.line}`)
     })
@@ -1764,6 +1791,7 @@ export class AreaViewport {
   // R by Hawk's Rest's hearth: rest, and draw the first card
   private rest(): void {
     const st = this.story
+    if (st?.done.rest) return this.sleepHere()
     if (!st || !st.done.road || st.done.rest) return
     if (!this.nearHearth()) {
       this.flash('Stand by the hearth to rest')
@@ -1775,8 +1803,41 @@ export class AreaViewport {
     showCard(this.container, card)
     this.say('Stillness. The cottage settles around you, and your hand finds the old deck on the shelf. The first hour is over; sleep until morning.')
     setTimeout(() => {
-      if (this.story === st) this.setLighting('day')
+      if (this.story === st) st.clock = sleep(st.clock)
     }, 4000)
+  }
+
+  // S9: R by a hearth once night is falling: sleep until seven
+  private sleepHere(): void {
+    const st = this.story!
+    if (!this.nearHearth()) return this.flash('Stand by a hearth to sleep')
+    if (!canSleep(st.clock)) return this.flash('Too early to sleep: night falls at 19:00')
+    st.clock = sleep(st.clock)
+    this.slept = true
+    const card = drawCard(hash(st.area) + st.clock.day)
+    st.card = card.id
+    if (st.done.almanac) this.reach('sleep')
+    else this.savePlace(true)
+    const fade = document.createElement('div')
+    fade.style.cssText = 'position:absolute;inset:0;background:#000;opacity:1;transition:opacity 2s;z-index:3;pointer-events:none'
+    this.container.appendChild(fade)
+    setTimeout(() => (fade.style.opacity = '0'), 600)
+    setTimeout(() => fade.remove(), 2800)
+    showCard(this.container, card)
+    this.say(`You sleep by the hearth. Day ${st.clock.day + 1}; the day's card: ${card.title}.`)
+  }
+
+  // S9: M, the moon almanac
+  private openAlmanac(): void {
+    const st = this.story
+    if (!st || !st.done.rest) return
+    if (this.almanacEl?.isConnected) {
+      this.almanacEl.remove()
+      this.almanacEl = null
+      return
+    }
+    this.almanacEl = showAlmanac(this.container, st.clock)
+    if (st.done.cook) this.reach('almanac')
   }
 
   private flash(text: string): void {
@@ -1930,7 +1991,7 @@ export class AreaViewport {
     this.hint.textContent = this.talk.open
       ? 'Pick an answer · 1 to 9 · Esc to end the talk'
       : this.playing && this.story && !this.combat
-      ? `The story · click to walk, talk or go through a door · J hides the steps${this.nearHearth() && this.story.done.road && !this.story.done.rest ? ' · R to rest by the hearth' : ''}${this.story.done.morning ? ' · K: the herbal' : ''}${this.story.done.herbal && this.nearHearth() ? ' · B: stillness · C: cook' : ''}`
+      ? `The story · click to walk, talk or go through a door · J hides the steps${this.nearHearth() && this.story.done.road && !this.story.done.rest ? ' · R to rest by the hearth' : ''}${this.story.done.morning ? ' · K: the herbal' : ''}${this.story.done.herbal && this.nearHearth() ? ' · B: stillness · C: cook' : ''}${this.story.done.rest ? ' · M: the almanac' : ''}${this.story.done.rest && this.nearHearth() && canSleep(this.story.clock) ? ' · R: sleep' : ''}`
       : this.playing && this.combat
       ? 'Fighting · click a Hollowed to attack it · 1 Strike · 2 Pivot · 3 Guard · click the ground to back away'
       : this.playing

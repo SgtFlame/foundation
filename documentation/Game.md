@@ -241,6 +241,14 @@ The voxel game's eleventh tracer bullet: the job board (the user, 2026-11-26: th
 - **The freighter** (`designs/freighter.json`, 82 blocks, eleven holds): `game.startShip` refuses it until unlocked.
 - **Engine**: `handInProblem` never calls a job done and checks its Trade level and rock; the quartermaster's panel shows a *Job board* section with how many times each was done, the skills line Trade, and scrolls when long.
 
+## Built in S9 (forge 375)
+
+The story game's ninth tracer bullet: the moon clock and the day and night loop (the design's rule 1; the play design's 20 to 30 minute days).
+
+- **`story/Clock.ts`**: `Clock {day, hour}` from the night of the first snow (calendar night 11, 21:00); a game hour is a real minute (`SECONDS_PER_HOUR`), dawn at 6 and dusk at 19; `nightOf` (the small hours belong to the night before), `sleep` (wake at 7), `canSleep` (from 18:00), `clockText`, `skyNote` (moondark, the lesser's full and dark, waxing and waning, and the rare Doubling and Double Dark, both moons within half a night), `almanac(from, n)` with each night's Hum pool, and `showAlmanac`.
+- **In the viewport**: the story's clock runs while playing; the light follows dawn and dusk, and the calendar night (and so the moons and the Hum pool) follows the clock. M opens the almanac (once cooking is done it reaches `almanac`); R by a hearth from 18:00 sleeps until seven, draws the day's card and, after the almanac, reaches `sleep`. The clock shows above the Hum and goes with every save (`onStory` `clock`).
+- **Server**: `game.reachStory` takes `clock {day, hour}` (the hour kept within a day), `StorySteps` gains `almanac` and `sleep`, and `game.story` gives `clock`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

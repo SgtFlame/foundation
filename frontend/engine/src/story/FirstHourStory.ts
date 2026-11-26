@@ -31,6 +31,9 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   // S8: the Hum, Chill and Hunger
   { id: 'stillness', title: 'Stillness', how: "Stand by a hearth (Hawk's Rest's, or the farmhouse's) and press B. Breathe in for four, out for six: each breath adds to the Hum." },
   { id: 'cook', title: 'Something hot', how: 'By a hearth, press C and cook thyme in hot milk or nettle soup from your herbs. Spending the Hum leaves your hands cold and you hungry; hot food clears it.' },
+  // S9: the moon clock
+  { id: 'almanac', title: 'The moon almanac', how: 'Press M to read the moon almanac: the coming nights, which are dark, and how much Hum each allows.' },
+  { id: 'sleep', title: "A day's end", how: 'The day passes (a game hour each minute). When night falls at 19:00, stand by a hearth and press R to sleep until morning.' },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

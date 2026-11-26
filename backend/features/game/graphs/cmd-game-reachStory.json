@@ -7,13 +7,13 @@
   "spec": {
     "command": "game.reachStory",
     "title": "Save my place in the story",
-    "description": "Saves the sender's place in a story: the target is the story's starting area (the farmstead of the first hour), step the step just reached (empty to save only where they are), area the area they are in and x, z where they stand in it. game.story gives it back, so Play the first hour resumes there. item and spot record a herb gathered (S7); use spends one cooking and body saves the Hum, Chill and Hunger (S8). Refused for an unknown step or item, or an area that does not exist.",
+    "description": "Saves the sender's place in a story: the target is the story's starting area (the farmstead of the first hour), step the step just reached (empty to save only where they are), area the area they are in and x, z where they stand in it. game.story gives it back, so Play the first hour resumes there. item and spot record a herb gathered (S7); use spends one cooking and body saves the Hum, Chill and Hunger (S8); clock saves the story's day and hour (S9). Refused for an unknown step or item, or an area that does not exist.",
     "args": {
       "type": "object",
       "properties": {
         "step": {
           "type": "string",
-          "description": "The step just reached: arrive, farmer, howl, signature, trail, fight, road, rest, morning, forage, herbal, stillness or cook; empty to save only the place"
+          "description": "The step just reached: arrive, farmer, howl, signature, trail, fight, road, rest, morning, forage, herbal, stillness, cook, almanac or sleep; empty to save only the place"
         },
         "item": {
           "type": "string",
@@ -42,6 +42,20 @@
             "hunger": {
               "type": "number",
               "description": "Hunger, 0 to 100"
+            }
+          }
+        },
+        "clock": {
+          "type": "object",
+          "description": "S9: the story's clock as it is now: {day (days since the night of the first snow), hour (0 to 24)}; left out, the saved clock stays",
+          "properties": {
+            "day": {
+              "type": "number",
+              "description": "Days since the night of the first snow"
+            },
+            "hour": {
+              "type": "number",
+              "description": "The hour of the day, 0 to 24"
             }
           }
         },
@@ -106,6 +120,11 @@
             "id": "body",
             "type": "json",
             "description": "The character's Hum, Chill and Hunger, or nothing"
+          },
+          {
+            "id": "clock",
+            "type": "json",
+            "description": "The story's day and hour, or nothing"
           },
           {
             "id": "area",
@@ -217,7 +236,7 @@
         "y": 150
       },
       "config": {
-        "expr": "!started || start?.deleted == true ? \"there is no area \" + target + \" to start a story in\" : (step ?? \"\") not in [\"\", \"arrive\", \"farmer\", \"howl\", \"signature\", \"trail\", \"fight\", \"road\", \"rest\", \"morning\", \"forage\", \"herbal\", \"stillness\", \"cook\"] ? \"there is no step \" + step + \" in the story\" : (item ?? \"\") not in [\"\", \"thyme\", \"nettle\", \"yarrow\"] ? \"there is no herb \" + item + \" to gather\" : (use ?? \"\") != \"\" \u0026\u0026 ((place?.items ?? {})[use] ?? 0) \u003c 1 ? \"you have no \" + use + \" to use\" : !found || here?.deleted == true ? \"there is no area \" + area : x \u003c 0 || z \u003c 0 || x \u003e here.width * 10 + 1 || z \u003e here.depth * 10 + 1 ? \"the point is outside \" + here.name : \"\"",
+        "expr": "!started || start?.deleted == true ? \"there is no area \" + target + \" to start a story in\" : (step ?? \"\") not in [\"\", \"arrive\", \"farmer\", \"howl\", \"signature\", \"trail\", \"fight\", \"road\", \"rest\", \"morning\", \"forage\", \"herbal\", \"stillness\", \"cook\", \"almanac\", \"sleep\"] ? \"there is no step \" + step + \" in the story\" : (item ?? \"\") not in [\"\", \"thyme\", \"nettle\", \"yarrow\"] ? \"there is no herb \" + item + \" to gather\" : (use ?? \"\") != \"\" \u0026\u0026 ((place?.items ?? {})[use] ?? 0) \u003c 1 ? \"you have no \" + use + \" to use\" : !found || here?.deleted == true ? \"there is no area \" + area : x \u003c 0 || z \u003c 0 || x \u003e here.width * 10 + 1 || z \u003e here.depth * 10 + 1 ? \"the point is outside \" + here.name : \"\"",
         "type": "string"
       }
     },
@@ -251,7 +270,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{step: step ?? \"\", item: item ?? \"\", spot: spot ?? \"\", use: use ?? \"\", area: area, x: round(x * 100) / 100, z: round(z * 100) / 100, body: body == nil ? nil : {hum: max(0, min(10, round(body.hum ?? 0))), chill: max(0, min(100, round(body.chill ?? 0))), hunger: max(0, min(100, round(body.hunger ?? 0)))}}",
+        "expr": "{step: step ?? \"\", item: item ?? \"\", spot: spot ?? \"\", use: use ?? \"\", area: area, x: round(x * 100) / 100, z: round(z * 100) / 100, body: body == nil ? nil : {hum: max(0, min(10, round(body.hum ?? 0))), chill: max(0, min(100, round(body.chill ?? 0))), hunger: max(0, min(100, round(body.hunger ?? 0)))}, clock: clock == nil ? nil : {day: max(0, int(clock.day ?? 0)), hour: max(0, min(23.9, round((clock.hour ?? 0) * 10) / 10))}}",
         "type": "json"
       }
     },
@@ -578,6 +597,16 @@
       "to": {
         "node": "reached",
         "pin": "body"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "clock"
+      },
+      "to": {
+        "node": "reached",
+        "pin": "clock"
       }
     },
     {

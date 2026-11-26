@@ -89,11 +89,17 @@ export class BodyHud {
   private chill: HTMLDivElement
   private hunger: HTMLDivElement
   private line: HTMLDivElement
+  private clock: HTMLDivElement
+  private rows: HTMLDivElement[] = []
 
   constructor(container: HTMLElement, bottom = 56) {
     const el = document.createElement('div')
     el.dataset.body = ''
     el.style.cssText = `position:absolute;left:12px;bottom:${bottom}px;width:150px;padding:6px 8px;border-radius:6px;background:rgba(10,12,20,.6);font:11px system-ui,sans-serif;color:#e8eef4;pointer-events:none;display:none;z-index:2`
+    this.clock = document.createElement('div')
+    this.clock.dataset.clock = ''
+    this.clock.style.cssText = 'font-weight:600;margin-bottom:3px'
+    el.appendChild(this.clock)
     this.pips = document.createElement('div')
     this.pips.dataset.hum = ''
     this.pips.style.cssText = 'font-size:13px;letter-spacing:2px;color:#f4d27a'
@@ -110,6 +116,7 @@ export class BodyHud {
       track.appendChild(fill)
       row.append(name, track)
       el.appendChild(row)
+      this.rows.push(row)
       return fill
     }
     el.appendChild(this.pips)
@@ -122,8 +129,12 @@ export class BodyHud {
     this.el = el
   }
 
-  show(b: Body | null, pool: number): void {
-    this.el.style.display = b ? 'block' : 'none'
+  // the body once the Hum is known; the clock (S9) whenever it is given
+  show(b: Body | null, pool: number, clock?: string): void {
+    this.el.style.display = b || clock ? 'block' : 'none'
+    this.clock.textContent = clock ?? ''
+    this.clock.style.display = clock ? 'block' : 'none'
+    for (const r of [this.pips, this.line, ...this.rows]) r.style.display = b ? '' : 'none'
     if (!b) return
     this.pips.textContent = 'Hum ' + '◆'.repeat(Math.min(b.hum, pool)) + '◇'.repeat(Math.max(0, pool - b.hum))
     this.chill.style.width = `${b.chill}%`
