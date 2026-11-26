@@ -205,3 +205,35 @@ func (pr Projector) Apply(f Fold) (value json.RawMessage, skip bool, err error) 
 	}
 	return v, false, err
 }
+
+type branchKey struct{}
+
+// WithBranch is ctx reading definitions on branch b (forge 19b): a draft
+// run of a branch carries it, so the graphs, prefabs and manifest it reads
+// in their drafts are the branch's.
+func WithBranch(ctx context.Context, b Branch) context.Context {
+	if b.IsMain() {
+		return ctx
+	}
+	return context.WithValue(ctx, branchKey{}, b)
+}
+
+// BranchOf is the branch ctx reads definitions on: main when none.
+func BranchOf(ctx context.Context) Branch {
+	b, _ := ctx.Value(branchKey{}).(Branch)
+	return b
+}
+
+// StoreFor is store as ctx's branch has the parts (OnBranch), or store
+// itself on main or when store cannot say its registry.
+func StoreFor(ctx context.Context, store Store) Store {
+	b := BranchOf(ctx)
+	if b.IsMain() {
+		return store
+	}
+	r, ok := store.(interface{ Registry() *extensions.Registry })
+	if !ok || r.Registry() == nil {
+		return store
+	}
+	return OnBranch(store, r.Registry(), b)
+}

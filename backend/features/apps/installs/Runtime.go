@@ -29,8 +29,8 @@ type Resolver[T any] func(args features.ServiceArgs, typ string) (T, bool)
 func CommandFor(deps func() Deps, inner Resolver[live.Command]) Resolver[live.Command] {
 	return func(args features.ServiceArgs, typ string) (live.Command, bool) {
 		d := deps()
-		if app, name, ok := apps.DraftUnscoped(typ); ok {
-			return draftCommand(args, d, typ, app, name)
+		if branch, app, name, ok := apps.DraftBranchUnscoped(typ); ok {
+			return draftCommand(args, d, typ, live.Branch{App: app, Name: branch}, name)
 		}
 		if app, name, ok := apps.Unscoped(typ); ok {
 			if in, ok := Running(args.Context(), d.Projections, args.Principal.TenantID, app); ok {
@@ -55,8 +55,8 @@ func CommandFor(deps func() Deps, inner Resolver[live.Command]) Resolver[live.Co
 func QueryFor(deps func() Deps, inner Resolver[live.Query]) Resolver[live.Query] {
 	return func(args features.ServiceArgs, typ string) (live.Query, bool) {
 		d := deps()
-		if app, name, ok := apps.DraftUnscoped(typ); ok {
-			return draftQuery(args, d, typ, app, name)
+		if branch, app, name, ok := apps.DraftBranchUnscoped(typ); ok {
+			return draftQuery(args, d, typ, live.Branch{App: app, Name: branch}, name)
 		}
 		if app, name, ok := apps.Unscoped(typ); ok {
 			if in, ok := Running(args.Context(), d.Projections, args.Principal.TenantID, app); ok {

@@ -21,6 +21,8 @@ type TestArgs struct {
 	Graph  string           `json:"graph"`
 	Event  string           `json:"event,omitempty"` // the event node type; the graph's first event when empty
 	Inputs cognition.Values `json:"inputs,omitempty"`
+	// Branch runs the draft an app's branch has, "<app>:<name>" (forge 19b)
+	Branch string `json:"branch,omitempty"`
 }
 
 // TestResult is what a test run did.
@@ -41,6 +43,9 @@ func Test(args features.ServiceArgs, deps Deps, a TestArgs) (TestResult, *featur
 	res := Resource(args.Principal, a.Graph)
 	if err := authz.Check(args.Context(), args.Principal, "cognition.execute", res).Err("cognition.execute", res); err != nil {
 		return TestResult{}, args.Fail(authz.Status, err)
+	}
+	if b, ok := live.ParseBranch(a.Branch); ok {
+		args.Ctx = live.WithBranch(args.Context(), b)
 	}
 	g, ok := draftOrBuiltIn(args, deps, a.Graph)
 	if !ok {
@@ -87,7 +92,7 @@ func failedNode(deps Deps, runID uint64, rec *cognition.Run) string {
 
 // draftOrBuiltIn is a graph's draft, else its built-in version.
 func draftOrBuiltIn(args features.ServiceArgs, deps Deps, id string) (cognition.Graph, bool) {
-	v, ok, err := deps.Projections.Get(args.Context(), args.Principal.TenantID, DraftProjector, TargetType+"."+id)
+	v, ok, err := live.StoreFor(args.Context(), deps.Projections).Get(args.Context(), args.Principal.TenantID, DraftProjector, TargetType+"."+id)
 	if err == nil && ok && v.Value != nil {
 		var d Draft
 		if json.Unmarshal(v.Value, &d) == nil {

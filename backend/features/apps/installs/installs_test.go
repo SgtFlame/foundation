@@ -14,6 +14,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/apps"
+	"github.com/SgtFlame/foundation/backend/features/apps/branches"
 	"github.com/SgtFlame/foundation/backend/features/apps/installs"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
@@ -67,6 +68,7 @@ func setup(t *testing.T) *fixture {
 		prefabDeps prefabs.Deps
 		appDeps    manifests.Deps
 		installDep installs.Deps
+		branchDeps branches.Deps
 	)
 	livenodes.Contribute(reg, func() livenodes.Deps { return nodeDeps })
 	drafts.Contribute(reg, func() drafts.Deps { return draftDeps })
@@ -76,6 +78,7 @@ func setup(t *testing.T) *fixture {
 	prefabs.Contribute(reg, func() prefabs.Deps { return prefabDeps })
 	manifests.Contribute(reg, func() manifests.Deps { return appDeps })
 	installs.Contribute(reg, func() installs.Deps { return installDep })
+	branches.Contribute(reg, func() branches.Deps { return branchDeps })
 	gdb, err := db.Open(db.WithPath(filepath.Join(t.TempDir(), "test.db")))
 	if err != nil {
 		t.Fatal(err)
@@ -96,6 +99,7 @@ func setup(t *testing.T) *fixture {
 	prefabDeps = prefabs.Deps{Projections: p, DB: gdb}
 	appDeps = manifests.Deps{Projections: p, DB: gdb}
 	installDep = installs.Deps{Projections: p, DB: gdb, Nodes: nodeDeps}
+	branchDeps = branches.Deps{Projections: p}
 	// As serve.go wires them
 	f.bus.Resolve = installs.CommandFor(func() installs.Deps { return installDep }, livenodes.CommandFor(func() livenodes.Deps { return nodeDeps }))
 	f.subs.Resolve = installs.QueryFor(func() installs.Deps { return installDep }, livenodes.QueryFor(func() livenodes.Deps { return nodeDeps }))
@@ -107,8 +111,23 @@ func args() features.ServiceArgs {
 }
 
 func (f *fixture) do(typ, target string, a any) bus.Result {
+	return f.doOn("", typ, target, a)
+}
+
+// doOn sends a command on an app's branch ("<app>:<name>"; "" for main).
+func (f *fixture) doOn(branch, typ, target string, a any) bus.Result {
 	raw, _ := json.Marshal(a)
-	return f.bus.Execute(bus.Request{ServiceArgs: args(), ID: fmt.Sprintf("c%d", f.n.Add(1)), Type: typ, Target: target, Args: raw})
+	b, _ := live.ParseBranch(branch)
+	return f.bus.Execute(bus.Request{ServiceArgs: args(), ID: fmt.Sprintf("c%d", f.n.Add(1)), Type: typ, Target: target, Args: raw, App: b.App, Branch: b.Name})
+}
+
+func (f *fixture) okOn(branch, typ, target string, a any) bus.Result {
+	f.t.Helper()
+	res := f.doOn(branch, typ, target, a)
+	if res.Common.Code >= 300 {
+		f.t.Fatalf("%s on %s: %s %+v", typ, branch, res.Common.Message, res.Problems)
+	}
+	return res
 }
 
 func (f *fixture) ok(typ, target string, a any) bus.Result {

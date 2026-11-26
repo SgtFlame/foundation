@@ -250,7 +250,8 @@ func (s Source) Published(args features.ServiceArgs, id string) (cognition.Graph
 
 // Draft reads a graph's draft from the cognition.graph projection.
 func (s Source) Draft(args features.ServiceArgs, id string) (cognition.Graph, bool, error) {
-	v, ok, err := s.Store.Get(args.Context(), args.Principal.TenantID, DraftProjector, TargetType+"."+id)
+	// A branch's draft run reads the branch's drafts (forge 19b)
+	v, ok, err := live.StoreFor(args.Context(), s.Store).Get(args.Context(), args.Principal.TenantID, DraftProjector, TargetType+"."+id)
 	if err != nil || !ok || v.Value == nil {
 		return cognition.Graph{}, false, err
 	}

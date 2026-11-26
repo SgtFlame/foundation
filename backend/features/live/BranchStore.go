@@ -170,4 +170,3 @@ func keyMatches(pattern, key string) bool {
 	}
 	return len(ps) == len(ks)
 }
-

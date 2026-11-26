@@ -247,20 +247,24 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "forge.preview", Source: "apps"}, Title: "Preview a page", Effect: tools.EffectRead,
 		Description: "Renders a page of an app's draft at a route (with its params, e.g. /task/42) as the app's draft run shows it: every prefab in its draft, its queries read once on the app's records. as names one of the manifest's roles: the page is read with that role's actions and row rules in place of yours, as a user holding only that role would see it (your own user id stays principal.user). When none of the app's entity types is published yet, the page prefab is rendered with its preview data instead. Gives the tree summarized (types, keys, texts and data, events, bindings; no styling) and the problems each at its key path. No screenshot.",
-		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string"},"route":{"type":"string","description":"A route of the app, its params filled in, e.g. /mine or /task/42"},"as":{"type":"string","description":"The id of one of the manifest's roles, e.g. member"}},"required":["appId","route"]}`),
+		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string"},"route":{"type":"string","description":"A route of the app, its params filled in, e.g. /mine or /task/42"},"as":{"type":"string","description":"The id of one of the manifest's roles, e.g. member"},"branch":{"type":"string","description":"The app's branch whose draft run to preview (app.branches); main when left out"}},"required":["appId","route"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
-			a, err := tools.Decode[struct{ AppID, Route, As string }](call)
+			a, err := tools.Decode[struct{ AppID, Route, As, Branch string }](call)
 			if err != nil {
 				return tools.Result{}, err
 			}
 			if err := settle(call); err != nil {
 				return tools.Result{}, err
 			}
-			out, err := preview(call, reg, deps(), a.AppID, a.Route, a.As)
+			b := live.Branch{App: a.AppID, Name: branchName(a.Branch)}
+			out, err := preview(call, reg, deps(), b, a.Route, a.As)
 			if err != nil {
 				return tools.Result{}, err
 			}
 			summary := fmt.Sprintf("Previewed %s %s", a.AppID, a.Route)
+			if !b.IsMain() {
+				summary += " on " + b.Name
+			}
 			if a.As != "" {
 				summary += " as " + a.As
 			}
@@ -321,8 +325,8 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 // preview renders a page of an app's draft for forge.preview (forge 06e
 // question 3): the draft run at route, as a manifest role when as is
 // given, its tree summarized.
-func preview(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route, as string) (map[string]any, error) {
-	pv, err := PreviewPage(call, reg, d, app, route, as)
+func preview(call tools.Call, reg *extensions.Registry, d ForgeDeps, b live.Branch, route, as string) (map[string]any, error) {
+	pv, err := PreviewPage(call, reg, d, b, route, as)
 	if err != nil {
 		return nil, err
 	}
@@ -332,6 +336,9 @@ func preview(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route,
 	}
 	if as != "" {
 		out["as"] = as
+	}
+	if !b.IsMain() {
+		out["branch"] = b.Name
 	}
 	return out, nil
 }
@@ -348,14 +355,17 @@ type Previewed struct {
 
 // PreviewPage renders a page of an app's draft at route, as a manifest
 // role when as is given: forge.preview's page with its whole tree, styling
-// included, for tests that assert on it (forge 06h).
-func PreviewPage(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route, as string) (Previewed, error) {
+// included, for tests that assert on it (forge 06h). On a branch it is
+// the branch's draft run, <appId>/draft@<branch> (forge 19b).
+func PreviewPage(call tools.Call, reg *extensions.Registry, d ForgeDeps, b live.Branch, route, as string) (Previewed, error) {
+	app := b.App
 	res := apps.Resource(call.Principal, app)
 	if err := authz.Check(call.Context(), call.Principal, "app.write", res).Err("app.write", res); err != nil {
 		return Previewed{}, err
 	}
 	tenant := call.Principal.TenantID
-	dr, ok := manifests.GetDraft(call.Context(), d.Store, tenant, app)
+	call.Ctx = live.WithBranch(call.Context(), b)
+	dr, ok := manifests.GetDraft(call.Context(), live.StoreFor(call.Context(), d.Store), tenant, app)
 	if !ok {
 		return Previewed{}, fmt.Errorf("there is no app %q; list them with app.list", app)
 	}
@@ -393,7 +403,11 @@ func PreviewPage(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, ro
 	} else {
 		var page ui.Page
 		for _, src := range ui.AppSources.All(reg) {
-			if p, mine, err := src.Page(args, app+"/draft"); err == nil && mine {
+			name := app + "/draft"
+			if !b.IsMain() {
+				name += "@" + b.Name
+			}
+			if p, mine, err := src.Page(args, name); err == nil && mine {
 				page, ok = p, true
 				break
 			}

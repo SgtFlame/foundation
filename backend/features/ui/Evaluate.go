@@ -544,6 +544,9 @@ func (e *evaluator) definition(r *Render, id string, version int, draft bool) (*
 	}
 	name, params := definitionQuery+id, map[string]any{"id": id, "published": true}
 	switch {
+	case draft && !s.page.Branch.IsMain():
+		// A branch's draft run renders the branch's drafts (forge 19b)
+		name, params = definitionQuery+id+"~draft~"+s.page.Branch.Key(), map[string]any{"id": id, "branch": s.page.Branch.String()}
 	case draft:
 		name, params = definitionQuery+id+"~draft", map[string]any{"id": id}
 	case version > 0:
@@ -853,7 +856,7 @@ func (s *Session) runLogic(run lifecycle) []Action {
 	}
 	args := s.args
 	args.Ctx = s.ctx
-	h := &Handle{ServiceArgs: args, Params: s.params, s: s, request: newID(), inst: inst, gone: run.gone}
+	h := &Handle{ServiceArgs: s.onBranch(args), Params: s.params, s: s, request: newID(), inst: inst, gone: run.gone}
 	for _, name := range slices.Sorted(maps.Keys(inst.prefab.Graphs)) {
 		found, err := runner.RunLogic(h, inst.prefab.Graphs[name], run.event)
 		if err != nil {
@@ -876,7 +879,7 @@ func (s *Session) instanceEvent(args features.ServiceArgs, request, kp, name str
 		s.sendTree(true)
 		return
 	}
-	h := &Handle{ServiceArgs: args, Payload: payload, Params: s.params, s: s, request: request, inst: inst}
+	h := &Handle{ServiceArgs: s.onBranch(args), Payload: payload, Params: s.params, s: s, request: request, inst: inst}
 	if err := s.runInstanceHandler(h, name); err != nil {
 		s.handlerFailed(args, name, err)
 	}

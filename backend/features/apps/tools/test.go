@@ -37,6 +37,11 @@ type TestArgs struct {
 	// Stub is which External nodes are stubbed: all (the default),
 	// connectors (every one but model calls) or none.
 	Stub string `json:"stub,omitempty"`
+	// Branch runs the graph as the branch of its app has it, in that
+	// branch's draft run (forge 19b); AppID names the app when the graph
+	// is new on the branch.
+	Branch string `json:"branch,omitempty"`
+	AppID  string `json:"appId,omitempty"`
 	// sandbox widens the kinds run to function and agent graphs
 	// (sandbox.run).
 	sandbox bool
@@ -113,7 +118,7 @@ func testGraph(args features.ServiceArgs, d ForgeDeps, id string) (cognition.Gra
 	if err := d.Store.Settle(args.Context(), args.Principal.TenantID, drafts.DraftProjector); err != nil {
 		return cognition.Graph{}, false
 	}
-	v, ok, err := d.Store.Get(args.Context(), args.Principal.TenantID, drafts.DraftProjector, drafts.TargetType+"."+id)
+	v, ok, err := live.StoreFor(args.Context(), d.Store).Get(args.Context(), args.Principal.TenantID, drafts.DraftProjector, drafts.TargetType+"."+id)
 	if err == nil && ok && v.Value != nil {
 		var dr drafts.Draft
 		if json.Unmarshal(v.Value, &dr) == nil {
@@ -132,6 +137,11 @@ func Test(args features.ServiceArgs, reg *extensions.Registry, d ForgeDeps, a Te
 	if err := authz.Check(args.Context(), args.Principal, "cognition.execute", res).Err("cognition.execute", res); err != nil {
 		return TestResult{}, err
 	}
+	b, err := testBranch(args, d, a)
+	if err != nil {
+		return TestResult{}, err
+	}
+	args.Ctx = live.WithBranch(args.Context(), b)
 	g, ok := testGraph(args, d, a.Graph)
 	if !ok {
 		return TestResult{}, fmt.Errorf("there is no graph %q; list them with bp.list", a.Graph)
@@ -184,11 +194,11 @@ func Test(args features.ServiceArgs, reg *extensions.Registry, d ForgeDeps, a Te
 
 	// An app's graph runs as its draft run: its commands are the draft's
 	app, owned := strings.CutPrefix(g.Owner, "app:")
-	dr, hasDraft := manifests.GetDraft(args.Context(), d.Store, args.Principal.TenantID, app)
+	dr, hasDraft := manifests.GetDraft(args.Context(), live.StoreFor(args.Context(), d.Store), args.Principal.TenantID, app)
 	if owned && hasDraft {
 		dry.Names = map[string]string{}
 		for _, c := range dr.Manifest.Commands {
-			dry.Names[c.Type] = apps.DraftScoped(app, c.Type)
+			dry.Names[c.Type] = apps.DraftBranchScoped(branchName(b.Name), app, c.Type)
 		}
 	}
 	if a.As != "" {
@@ -378,6 +388,28 @@ func (out *TestResult) fail(g cognition.Graph, cat cognition.Catalog, run engine
 	out.Failed = f
 }
 
+// testBranch is the branch a.Branch names of the graph's app (main when
+// none): the app is a.AppID, else the owner of the graph's main draft.
+func testBranch(args features.ServiceArgs, d ForgeDeps, a TestArgs) (live.Branch, error) {
+	name := branchName(a.Branch)
+	if name == "" {
+		return live.Branch{}, nil
+	}
+	app := a.AppID
+	if app == "" {
+		if g, ok := testGraph(args, d, a.Graph); ok {
+			app, _ = strings.CutPrefix(g.Owner, "app:")
+		}
+	}
+	if app == "" || !live.ValidToken(app) {
+		return live.Branch{}, fmt.Errorf("say which app's branch %s is with appId", name)
+	}
+	if !live.ValidBranchName(name) {
+		return live.Branch{}, fmt.Errorf("%q is not a branch name", name)
+	}
+	return live.Branch{App: app, Name: name}, nil
+}
+
 // ContributeTest registers forge.test (forge 06f).
 func ContributeTest(reg *extensions.Registry, deps func() ForgeDeps) {
 	tools.Tools.Register(reg, tools.Tool{
@@ -388,7 +420,9 @@ func ContributeTest(reg *extensions.Registry, deps func() ForgeDeps) {
   "graph":{"type":"string","description":"The graph's id, e.g. cmd-tasks-task-reassign"},
   "inputs":{"type":"object","description":"What starts it, by kind (see the description); records seeds the sandbox: [{entity, id?, values}]"},
   "event":{"type":"string","description":"A prefab.logic graph's event node type; the graph's first event when left out"},
-  "as":{"type":"string","description":"The id of a role of the app that owns the graph, e.g. member"}},"required":["graph"]}`),
+  "as":{"type":"string","description":"The id of a role of the app that owns the graph, e.g. member"},
+  "branch":{"type":"string","description":"The branch of the graph's app to test it on (app.branches): the graph and the commands it sends as that branch has them; main when left out"},
+  "appId":{"type":"string","description":"The app whose branch it is, for a graph that is new on the branch"}},"required":["graph"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
 			a, err := tools.Decode[TestArgs](call)
 			if err != nil {
@@ -402,6 +436,9 @@ func ContributeTest(reg *extensions.Registry, deps func() ForgeDeps) {
 			var content map[string]any
 			_ = json.Unmarshal(raw, &content)
 			summary := fmt.Sprintf("Tested %s: %d events", a.Graph, len(out.Events))
+			if b := branchName(a.Branch); b != "" {
+				summary = fmt.Sprintf("Tested %s on %s: %d events", a.Graph, b, len(out.Events))
+			}
 			if len(out.Problems) > 0 {
 				summary += fmt.Sprintf(", %d problems", len(out.Problems))
 			}

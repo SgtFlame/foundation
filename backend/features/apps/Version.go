@@ -94,6 +94,37 @@ func DraftUnscoped(typ string) (app, name string, ok bool) {
 	return Unscoped(rest)
 }
 
+// DraftBranchPrefix starts the live name of a command or query of a
+// branch's draft run (forge 19b): draft@<branch>.<appId>.<name>.
+const DraftBranchPrefix = "draft@"
+
+// DraftBranchScoped is a draft run's name on a branch for one of the
+// app's own commands or queries; on main it is DraftScoped's.
+func DraftBranchScoped(branch, app, name string) string {
+	if branch == "" || branch == "main" {
+		return DraftScoped(app, name)
+	}
+	return DraftBranchPrefix + branch + "." + Scoped(app, name)
+}
+
+// DraftBranchUnscoped splits a draft run's name, on main or a branch,
+// into the branch ("" for main), the app and the name inside it.
+func DraftBranchUnscoped(typ string) (branch, app, name string, ok bool) {
+	if app, name, ok := DraftUnscoped(typ); ok {
+		return "", app, name, true
+	}
+	rest, ok := strings.CutPrefix(typ, DraftBranchPrefix)
+	if !ok {
+		return "", "", "", false
+	}
+	branch, rest, ok = strings.Cut(rest, ".")
+	if !ok || branch == "" {
+		return "", "", "", false
+	}
+	app, name, ok = Unscoped(rest)
+	return branch, app, name, ok
+}
+
 // Install is an app installed in a tenant (forge 05b question 2: once per
 // tenant, upgraded in place): the version it runs, whole, so every reader
 // sees one version or the next, never a mix.

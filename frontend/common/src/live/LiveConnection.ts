@@ -37,6 +37,9 @@ export interface Ack {
 export interface CommandOptions {
   request?: string
   app?: string
+  // branch: the branch of app the command changes, the part's draft there
+  // (forge 19a); main when left out
+  branch?: string
   // secret: the args' secrets (a connection's, forge 07c) are not recorded
   // in DevTools' Live tab; the server seals them before anything stores them
   secret?: boolean
@@ -201,7 +204,7 @@ export class LiveConnection {
   command(command: string, target: string, args?: unknown, options?: CommandOptions): Promise<Ack> {
     const id = newId('c')
     const request = options?.request ?? this.gestureRequest
-    const frame: Frame = { type: 'command', id, command, target, args, request, app: options?.app, trace: newTraceId() }
+    const frame: Frame = { type: 'command', id, command, target, args, request, app: options?.app, branch: options?.branch || undefined, trace: newTraceId() }
     if (options?.secret) secretFrames.add(frame)
     const p = new Promise<Ack>((resolve, reject) => {
       this.commands.set(id, { frame, resolve, reject })
