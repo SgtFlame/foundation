@@ -17,6 +17,7 @@ import { JournalScene, journalEntries, link, nextNoMoon } from '../story/Journal
 import { edgePoint, SensesLayer, senseCues, spread, type Source } from '../story/Senses.ts'
 import { dragMarks, drawCard, herbSpots, howl, nextStep, showCard, showHerbal, SIGNATURE_TEXT, storySteps } from '../story/FirstHourStory.ts'
 import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../story/DayCard.ts'
+import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { clarity, ditchSpot, ReadingScene, wenlanAnswer, type Told } from '../story/Reading.ts'
 import { canSleep, CLOCK_START, clockText, FIRST_NIGHT, isDay, nightOf, showAlmanac, sleep, stepClock, type Clock } from '../story/Clock.ts'
 import { BODY_START, BodyHud, breathe, BreathPrompt, humPool, rounded as roundBody, showCooking, stepBody, type Body } from '../story/Hum.ts'
@@ -242,6 +243,7 @@ export class AreaViewport {
   private via = ''
   private talkingWith = ''
   private welcomed = false // S15: Hawk's Rest's welcome said this session
+  private ateHot = false // S16: something hot eaten since the last sleep (a warm night heals a dream wound)
   private saved = { x: 0, z: 0, t: 0 }
   private readonly caption: HTMLDivElement
 
@@ -936,7 +938,7 @@ export class AreaViewport {
     this.combat = new Combat(
       foes.map((n) => ({ id: n.id, kind: n.kind!, x: n.x, z: n.z })),
       {
-        skills: this.skills,
+        skills: remembered(this.skills, this.story?.done ?? {}),
         weapon: WEAPONS[this.weapon] ?? WEAPONS.sword,
         seed: hash(this.area.id + this.area.version),
         walkable: walk ? (x, z) => walk.walkable(...walk.cellOf({ x, z })) : undefined,
@@ -1612,7 +1614,7 @@ export class AreaViewport {
   private stepBodyFrame(dt: number): void {
     const st = this.story
     if (!st) return
-    st.body = stepBody(st.body, dt)
+    st.body = aching(stepBody(st.body, dt), !!st.items.wound) // S16: a dream wound keeps a little Chill
     // S9: the clock runs; dawn and dusk change the light, a new night the moons
     st.clock = stepClock(st.clock, dt)
     const day = isDay(st.clock)
@@ -1682,6 +1684,7 @@ export class AreaViewport {
       st.body = cookWith(st.body, d, this.dayEffect())
       const p = this.player()
       st.done.cook = true
+      this.ateHot = true
       this.opts.onStory?.({ step: 'cook', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: d.herb, ...this.stateToSave() })
       this.showStory()
       this.say(`${d.title}. ${d.line}`)
@@ -2025,10 +2028,44 @@ export class AreaViewport {
     this.container.appendChild(fade)
     setTimeout(() => (fade.style.opacity = '0'), 600)
     setTimeout(() => fade.remove(), 2800)
+    const e = dayCard(hash(st.area), st.clock.day)?.effect
+    const morning = `Day ${st.clock.day + 1}; the day's card: ${card.title}${e?.line ? `: ${e.line}` : ''}.`
+    const warm = this.ateHot
+    this.ateHot = false
+    // S16: a blessed place's dream, or a warm night that heals its wound
+    if (dreams(st.done, this.blessed())) {
+      showDream(this.container, FORD_DREAM, () => {
+        st.items.wound = 1
+        this.reach('dream')
+        this.restartCombat()
+        showCard(this.container, card)
+        this.drawMarks()
+        this.say(`You remember the long spear: your polearm skill rises. Your side aches where the dream's claw went in; until a warm night, some of the Chill stays. ${morning}`)
+      })
+      return
+    }
     showCard(this.container, card)
     this.drawMarks() // S11: the new day's card may light what is hidden
-    const e = dayCard(hash(st.area), st.clock.day)?.effect
-    this.say(`You sleep by the hearth. Day ${st.clock.day + 1}; the day's card: ${card.title}${e?.line ? `: ${e.line}` : ''}.`)
+    if (st.items.wound && warm) {
+      st.items.wound = 0
+      const p = this.player()
+      this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: 'wound', ...this.stateToSave() })
+      this.say(`A warm, dreamless night. The ache in your side is gone. ${morning}`)
+      return
+    }
+    this.say(`You sleep by the hearth${st.items.wound ? '. Your side still aches: eat something hot before you sleep' : ''}. ${morning}`)
+  }
+
+  // S16: a blessed place: the empty cottage up the road (an interior of
+  // another area than the story's, with nobody in it), which approved of its guest
+  private blessed(): boolean {
+    const st = this.story
+    return !!st && !!this.set.interior && this.area.id !== st.area && !Object.keys(this.area.npcs ?? {}).length
+  }
+
+  // The fight again with the character's skills as they are now
+  private restartCombat(): void {
+    if (this.combat) this.startCombat()
   }
 
   // S13: N, the notes, once Wenlan's ditch is clear: link two that belong together

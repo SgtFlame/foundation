@@ -31,7 +31,7 @@ const (
 
 // StorySteps are the first hour's steps in order (375 › the first hour).
 // S7 adds the first day: the morning's card, foraging and the herbal.
-var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch", "foretold", "watch", "defended", "thanked"}
+var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch", "foretold", "watch", "defended", "thanked", "dream"}
 
 // S10: the step that pays for Wenlan's reading, and the coin it pays
 const (
@@ -41,6 +41,10 @@ const (
 	// last sheaf he gives, which wards off the Chill
 	StepThanked = "thanked"
 	Knot        = "knot"
+	// S16: the dream at the ford, and the wound it leaves until a warm
+	// night (spent with use: wound)
+	StepDream = "dream"
+	Wound     = "wound"
 )
 
 // StoryItems are what a player may gather in a story (S7: herbs for the herbal).
@@ -115,6 +119,12 @@ func foldStory(f live.Fold) (json.RawMessage, error) {
 		}
 		p.Items[Knot] = 1
 	}
+	if d.Step == StepDream && !p.Done[StepDream] {
+		if p.Items == nil {
+			p.Items = map[string]int{}
+		}
+		p.Items[Wound] = 1
+	}
 	if d.Told != "" {
 		p.Told = d.Told
 	}
@@ -178,7 +188,7 @@ func contributeStories(reg *extensions.Registry) {
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.story", Source: source}, Title: "My place in a story",
-		Description: fmt.Sprintf("The caller's place in a story known by its starting area: {done: {<step>: true}, last (the last step reached), area (the area they were last in), at: [x, z] (where they stood in it), items: {<herb>: n} and picked: {<spot>: true} (what they gathered, S7, less what they cooked), body: {hum, chill, hunger} (S8), clock: {day, hour} (S9), told (S10: what the player told Wenlan after his reading; the ditch pays items.silver; thanked gives items.knot, S15)}, then each change as they play. The first hour's steps are %v.", StorySteps),
+		Description: fmt.Sprintf("The caller's place in a story known by its starting area: {done: {<step>: true}, last (the last step reached), area (the area they were last in), at: [x, z] (where they stood in it), items: {<herb>: n} and picked: {<spot>: true} (what they gathered, S7, less what they cooked), body: {hum, chill, hunger} (S8), clock: {day, hour} (S9), told (S10: what the player told Wenlan after his reading; the ditch pays items.silver; thanked gives items.knot, S15; dream gives items.wound, healed with use: wound, S16)}, then each change as they play. The first hour's steps are %v.", StorySteps),
 		Params:      json.RawMessage(`{"type":"object","properties":{"story":{"type":"string","description":"The story's starting area's id (the farmstead)"}},"required":["story"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"story":"a123"}`)},
 		Action:      "game.read",

@@ -1,6 +1,7 @@
 package game_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/SgtFlame/foundation/backend/features/game"
@@ -77,5 +78,19 @@ func TestStorySaves(t *testing.T) {
 	p = game.StoryPlace{}
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "thanked" || p.Items["knot"] != 1 {
 		t.Fatalf("thanked %+v", p)
+	}
+	// S16: the dream leaves a wound, which a warm night spends
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "dream", "area": farm, "x": 3, "z": 3})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Items["wound"] != 1 {
+		t.Fatalf("dream %+v", p)
+	}
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "", "use": "wound", "area": farm, "x": 3, "z": 3})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Items["wound"] != 0 || !p.Done["dream"] {
+		t.Fatalf("healed %+v", p)
+	}
+	if r := st.refused("game.reachStory", farm, map[string]any{"step": "", "use": "wound", "area": farm, "x": 3, "z": 3}); !strings.Contains(r.Common.Message, "no wound") {
+		t.Fatalf("healed twice: %q", r.Common.Message)
 	}
 }

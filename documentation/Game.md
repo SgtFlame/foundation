@@ -366,6 +366,15 @@ The voxel game's eighteenth tracer bullet: a manual found while scavenging teach
 - Before the manual, the bench says *a wreck may hold a manual for more*.
 - `TestPowerDrill` covers it.
 
+## Built in S16 (forge 375)
+
+The story game's sixteenth tracer bullet: Remembering (the play design's reference rule 8: "sleeping in blessed places unlocks a skill or a memory scene outright. Dreams replay past-life fights; wounds taken there ache until a warm, dreamless night").
+
+- **A blessed place**: the empty cottage at Hawk's Rest (an interior of another area than the story's, with nobody in it; `AreaViewport.blessed()`). After `thanked`, sleeping by its hearth (R after 19:00) brings **the dream of the ford** (`story/Remember.ts` `FORD_DREAM`, shown a line at a time on a dark panel, `showDream`): an older self holding a frozen ford with a long spear, raked in the side. Placeholder text, invented for the slice.
+- **What it gives**: the new last step **`dream`** (`game.reachStory` takes it). The character's polearm skill rises by one for the story's fights (`remembered(skills, done)`, applied when a fight starts).
+- **The dream wound**: `game.stories` gives `items.wound` when `dream` is first reached. While it aches the Chill never fades below 30 (`aching`, `WOUND_CHILL`). A night's sleep after eating something hot (cooking at a hearth since waking) is a warm, dreamless night: it heals the wound (`use: "wound"`).
+- The Area tab's *Play the story again* now follows the last of `STORY_STEPS`, so a new step never cuts the story short.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
