@@ -43,6 +43,15 @@ type Player struct {
 	Unlocked map[string]bool `json:"unlocked,omitempty"`
 	// V8: where they last stood, and so whether they have landed yet
 	At *[3]float64 `json:"at,omitempty"`
+	// V10: their body's needs when last saved, each 0 to 100
+	Needs *Needs `json:"needs,omitempty"`
+}
+
+// Needs are a player's body's needs (V10): air in the suit, how well fed, health.
+type Needs struct {
+	Air    float64 `json:"air"`
+	Fed    float64 `json:"fed"`
+	Health float64 `json:"health"`
 }
 
 // Contracts are the outpost's quartermaster and contracts.
@@ -92,12 +101,16 @@ func foldPlayer(f live.Fold) (json.RawMessage, error) {
 		X        float64 `json:"x"`
 		Y        float64 `json:"y"`
 		Z        float64 `json:"z"`
+		Needs    *Needs  `json:"needs"`
 	}
 	if err := json.Unmarshal(f.Event.Data, &d); err != nil {
 		return nil, err
 	}
 	if f.Event.Type == EventStood {
 		p.At = &[3]float64{d.X, d.Y, d.Z}
+		if d.Needs != nil {
+			p.Needs = d.Needs
+		}
 		return json.Marshal(p)
 	}
 	if p.Done == nil {
@@ -124,7 +137,7 @@ func foldPlayer(f live.Fold) (json.RawMessage, error) {
 func contributeOutpost(reg *extensions.Registry) {
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: PlayersProjector, Source: source}, Title: "Players' progress",
-		Description: "Each player's progress in each world, keyed <worldId>.<userId>: {done: {<contract>: true}, xp: {<skill>: n}, levels: {<skill>: n}, at: [x, y, z]}, folded from the contracts they hand in and where they last stood",
+		Description: "Each player's progress in each world, keyed <worldId>.<userId>: {done: {<contract>: true}, xp: {<skill>: n}, levels: {<skill>: n}, at: [x, y, z], needs: {air, fed, health}}, folded from the contracts they hand in and where they last stood",
 		Area:        Area, Types: []string{ShipType, TerrainType},
 		KeyOf: func(e live.Event) string {
 			if e.UserID == 0 {
@@ -148,7 +161,7 @@ func contributeOutpost(reg *extensions.Registry) {
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.player", Source: source}, Title: "My progress",
-		Description: fmt.Sprintf("The caller's progress in a world: {done: {<contract>: true}, xp: {<skill>: n}, levels: {<skill>: n} (a level each %d xp, from 1), unlocked: {<design>: true} (designs contracts opened), at: [x, y, z] (where they last stood; missing until they have landed)}, then each change as they hand in contracts and move", XPPerLevel),
+		Description: fmt.Sprintf("The caller's progress in a world: {done: {<contract>: true}, xp: {<skill>: n}, levels: {<skill>: n} (a level each %d xp, from 1), unlocked: {<design>: true} (designs contracts opened), at: [x, y, z] (where they last stood; missing until they have landed), needs: {air, fed, health} (V10: their body when last saved, each 0 to 100)}, then each change as they hand in contracts and move", XPPerLevel),
 		Params:      json.RawMessage(`{"type":"object","properties":{"world":{"type":"string","description":"The world's id"}},"required":["world"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"world":"w123"}`)},
 		Action:      "game.read",

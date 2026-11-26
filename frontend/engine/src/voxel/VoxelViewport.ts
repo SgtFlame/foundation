@@ -14,6 +14,7 @@ import { atOutpost, ContractPanel, handInProblem, OutpostModel, thrustFor, type 
 import type { EditKind, MoonParams, VoxelEdit } from './Types.ts'
 import { VoxelWorld } from './VoxelWorld.ts'
 import { PLANET } from './Bodies.ts'
+import { eat, FRESH, hungry, NeedsHud, rounded, stepNeeds, type Needs } from '../survival/Needs.ts'
 
 // What the player asks for; the host sends it to the server, which decides
 export interface EditIntent {
@@ -60,7 +61,8 @@ export type ShipIntent =
   | { kind: 'damage'; id: string; blocks: number[] } // V5: blocks a crash broke
   | { kind: 'handIn'; id: string; contract: string } // V6: a contract at the outpost
   | { kind: 'crew'; id: string; aboard: boolean } // V7: board or leave as crew
-  | { kind: 'stand'; x: number; y: number; z: number } // V8: save where the player stands
+  | { kind: 'stand'; x: number; y: number; z: number; needs?: Needs } // V8: save where the player stands (V10: and their needs)
+  | { kind: 'eat' } // V10: one ration from the pack
   | { kind: 'plant'; x: number; y: number; z: number } // V9: barley in the planet's soil
   | { kind: 'harvest'; crop: string } // V9: a ripe crop, as food
 
@@ -134,6 +136,10 @@ export interface ViewportStats {
   // V9: the crops shown, and how deep in the planet's air the camera is (0 out of it, 1 on the ground)
   crops: number
   air: number
+  // V10: the body's needs while playing, and how often the player blacked out
+  needs: Needs | null
+  breathable: boolean
+  blackouts: number
 }
 
 const MIN_BRUSH = 0.75
@@ -197,6 +203,12 @@ export class VoxelViewport {
   // V7: the ship this player rides as crew, as the server says
   private riding: string | null = null
   private nearGiver = false
+  // V10: the body's needs, shown while on foot or aboard
+  private needs: Needs = { ...FRESH }
+  private savedNeeds: Needs | null = null
+  private readonly needsHud: NeedsHud
+  private breathable = true
+  private blackouts = 0
 
   private readonly container: HTMLElement
   private readonly renderer: Renderer
@@ -216,6 +228,7 @@ export class VoxelViewport {
     this.scene.add(this.pod.group)
     this.contracts = new ContractPanel(container)
     this.journal = new FirstHourPanel(container)
+    this.needsHud = new NeedsHud(container)
     this.scene.background = new THREE.Color(0x05060a)
     this.addLightsAndSky()
     renderer.track(this.fly.camera)
@@ -406,7 +419,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearShipHint()}${this.farmHint()}Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -540,6 +553,7 @@ export class VoxelViewport {
 
   private step(dt: number): void {
     const input = this.input
+    this.stepNeeds(dt)
     if (this.shipLayer.pilotOf && this.shipLayer.body) {
       this.stepPilot(dt)
       input.endStep()
@@ -562,6 +576,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk' && this.walker) this.stepWalker(dt)
     if (this.mode === 'walk' && this.walker) this.stepFarming()
+    if (this.mode === 'walk' && this.walker && input.locked && input.pressed('KeyE')) this.eatRation()
     else this.fly.step(dt, input)
     this.stepShipsOnFoot()
     const wheel = input.takeWheel()
@@ -673,6 +688,8 @@ export class VoxelViewport {
     const w = this.walker
     if (!w || this.placed || !this.progress) return
     this.placed = true
+    if (this.progress.needs) this.needs = { ...this.progress.needs }
+    this.savedNeeds = this.progress.needs ? { ...this.progress.needs } : null
     const at = this.progress.at
     if (at) {
       w.pos = { x: at[0], y: at[1] + 0.3, z: at[2] }
@@ -714,16 +731,89 @@ export class VoxelViewport {
     }
   }
 
+  // --- The body's needs (V10) ---
+
+  // Air fills in a planet's air, a ship's cockpit or crew seat, and the outpost's dome
+  private canBreathe(): boolean {
+    if (this.shipLayer.pilotOf || this.riding || this.airDepth > 0.3) return true
+    if (!this.outpostPlaced || !this.walker) return false
+    const g = this.outpost.giver()
+    const p = this.walker.pos
+    return Math.hypot(p.x - g.x, p.y - g.y, p.z - g.z) < 14
+  }
+
+  private stepNeeds(dt: number): void {
+    const playing = !!this.walker && this.placed && !this.pod.falling && (this.mode === 'walk' || !!this.shipLayer.pilotOf || !!this.riding)
+    if (!playing) {
+      this.needsHud.show(null, { breathable: true })
+      return
+    }
+    const before = this.breathable
+    this.breathable = this.canBreathe()
+    this.needs = stepNeeds(this.needs, { breathable: this.breathable }, dt)
+    if (before !== this.breathable) this.updateHint()
+    this.needsHud.show(this.needs, { breathable: this.breathable })
+    if (this.needs.health <= 0) this.blackOut()
+  }
+
+  // E: one ration from the pack, when there is one and it would help
+  private eatRation(): void {
+    if ((this.carried?.food ?? 0) < 1) {
+      this.flashHint('No food in your pack: harvest barley on the planet')
+      return
+    }
+    if (!hungry(this.needs)) {
+      this.flashHint('You are not hungry')
+      return
+    }
+    this.needs = eat(this.needs)
+    if (this.carried) this.carried = { ...this.carried, food: (this.carried.food ?? 0) - 1 }
+    this.drawPack()
+    this.opts.onShipIntent?.({ kind: 'eat' })
+    this.flashHint('You eat a ration of barley bread')
+  }
+
+  private flashHint(text: string): void {
+    this.hint.textContent = text
+    setTimeout(() => this.updateHint(), 2500)
+  }
+
+  // Health gone: wake at the outpost, its medics having brought you round
+  private blackOut(): void {
+    this.blackouts++
+    if (this.shipLayer.pilotOf) this.leaveSeat()
+    if (this.riding) this.opts.onShipIntent?.({ kind: 'crew', id: this.riding, aboard: false })
+    const w = this.walker
+    this.needs = { air: 100, fed: Math.max(this.needs.fed, 40), health: 60 }
+    if (w && this.outpostPlaced) {
+      const g = this.outpost.giver()
+      w.pos = { x: g.x + 3, y: g.y + 0.5, z: g.z + 3 }
+      w.vel = { x: 0, y: 0, z: 0 }
+    }
+    this.saveStand(true)
+    const fade = document.createElement('div')
+    fade.dataset.blackout = ''
+    fade.style.cssText = 'position:absolute;inset:0;background:#000;opacity:1;transition:opacity 2.5s;z-index:3;display:flex;align-items:center;justify-content:center;font:16px Georgia,serif;color:#ddd'
+    fade.textContent = 'You black out. The outpost\'s medic brings you round.'
+    this.container.appendChild(fade)
+    setTimeout(() => (fade.style.opacity = '0'), 1200)
+    setTimeout(() => fade.remove(), 4000)
+  }
+
   // Saves where the player stands now and then, when they have moved
   private saveStand(force = false): void {
     const w = this.walker
     if (!w || this.pod.falling) return
     const s = this.savedAt
-    if (!force && s && Math.hypot(w.pos.x - s.x, w.pos.y - s.y, w.pos.z - s.z) < 3) return
+    const n = rounded(this.needs)
+    const sn = this.savedNeeds
+    const needsMoved = !sn || Math.abs(sn.air - n.air) + Math.abs(sn.fed - n.fed) + Math.abs(sn.health - n.health) >= 5
+    if (!force && !needsMoved && s && Math.hypot(w.pos.x - s.x, w.pos.y - s.y, w.pos.z - s.z) < 3) return
     if (!force && !w.grounded) return
     const r = (v: number) => Math.round(v * 100) / 100
     this.savedAt = { ...w.pos }
-    this.opts.onShipIntent?.({ kind: 'stand', x: r(w.pos.x), y: r(w.pos.y), z: r(w.pos.z) })
+    this.savedNeeds = n
+    this.opts.onShipIntent?.({ kind: 'stand', x: r(w.pos.x), y: r(w.pos.y), z: r(w.pos.z), needs: n })
   }
 
   // --- The first hour (V8) ---
@@ -1252,6 +1342,9 @@ export class VoxelViewport {
       landing: this.pod.falling,
       crops: this.crops.size,
       air: Math.round(this.airDepth * 100) / 100,
+      needs: this.placed && this.walker ? rounded(this.needs) : null,
+      breathable: this.breathable,
+      blackouts: this.blackouts,
     }
   }
 

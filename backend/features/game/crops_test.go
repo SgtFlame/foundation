@@ -31,3 +31,23 @@ func TestCrops(t *testing.T) {
 	// standing and starting a ship by the planet are allowed
 	st.ok("game.standAt", world, map[string]any{"x": 1600, "y": 142, "z": 0})
 }
+
+// V10: a ration is eaten from the pack, and the body's needs are saved with where the player stands
+func TestNeeds(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Hungry moon"}).Target
+	if r := st.refused("game.eat", world, map[string]any{}); !strings.Contains(r.Common.Message, "no food") {
+		t.Fatalf("empty pack: %q", r.Common.Message)
+	}
+	res := st.ok("game.standAt", world, map[string]any{"x": 0, "y": 101, "z": 0, "needs": map[string]any{"air": 41.6, "fed": 130, "health": -3}})
+	var p game.Player
+	if !st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p) || p.Needs == nil || *p.Needs != (game.Needs{Air: 42, Fed: 100, Health: 0}) {
+		t.Fatalf("needs %+v", p.Needs)
+	}
+	// a stand without needs keeps them
+	res = st.ok("game.standAt", world, map[string]any{"x": 0, "y": 102, "z": 0})
+	p = game.Player{}
+	if !st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p) || p.Needs == nil || p.Needs.Air != 42 {
+		t.Fatalf("kept %+v", p.Needs)
+	}
+}

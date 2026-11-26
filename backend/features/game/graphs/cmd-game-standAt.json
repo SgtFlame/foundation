@@ -7,7 +7,7 @@
   "spec": {
     "command": "game.standAt",
     "title": "Save where I stand",
-    "description": "Saves where the sender stands in a world, so they come back there next time; the target is the world's id. The first one is their landing: until then game.player has no at, and the World tab brings them down in a drop pod. Refused when the world does not exist or the point is far from its bodies.",
+    "description": "Saves where the sender stands in a world, so they come back there next time; the target is the world's id. The first one is their landing: until then game.player has no at, and the World tab brings them down in a drop pod. needs (V10) saves their body's air, food and health with it. Refused when the world does not exist or the point is far from its bodies.",
     "args": {
       "type": "object",
       "properties": {
@@ -22,6 +22,24 @@
         "z": {
           "type": "number",
           "description": "The point's z in metres"
+        },
+        "needs": {
+          "type": "object",
+          "description": "V10: the body's needs as they are now, each 0 to 100: {air, fed, health}; left out, the saved needs stay",
+          "properties": {
+            "air": {
+              "type": "number",
+              "description": "Air left in the suit, 0 to 100"
+            },
+            "fed": {
+              "type": "number",
+              "description": "How well fed, 0 to 100"
+            },
+            "health": {
+              "type": "number",
+              "description": "Health, 0 to 100"
+            }
+          }
         }
       },
       "required": [
@@ -62,6 +80,11 @@
             "id": "z",
             "type": "number",
             "description": "The point's z in metres"
+          },
+          {
+            "id": "needs",
+            "type": "json",
+            "description": "The body's needs, or nothing"
           }
         ]
       }
@@ -134,7 +157,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{x: round(x * 100) / 100, y: round(y * 100) / 100, z: round(z * 100) / 100}",
+        "expr": "needs == nil ? {x: round(x * 100) / 100, y: round(y * 100) / 100, z: round(z * 100) / 100} : {x: round(x * 100) / 100, y: round(y * 100) / 100, z: round(z * 100) / 100, needs: {air: max(0, min(100, round(needs.air ?? 0))), fed: max(0, min(100, round(needs.fed ?? 0))), health: max(0, min(100, round(needs.health ?? 0)))}}",
         "type": "json"
       }
     },
@@ -331,6 +354,16 @@
       "to": {
         "node": "stood",
         "pin": "z"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "needs"
+      },
+      "to": {
+        "node": "stood",
+        "pin": "needs"
       }
     },
     {

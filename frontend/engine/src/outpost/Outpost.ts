@@ -28,6 +28,7 @@ export interface Progress {
   levels: Record<string, number>
   unlocked?: Record<string, boolean> // V8: designs contracts opened
   at?: [number, number, number] // V8: where the player last stood; missing until they land
+  needs?: { air: number; fed: number; health: number } // V10: their body's needs when last saved
 }
 
 export const OUTPOST_REACH = 40

@@ -22,6 +22,8 @@ const (
 	EventPlanted = "planted"
 	// EventHarvested is a ripe crop harvested: {crop, pack: {food}}.
 	EventHarvested = "harvested"
+	// EventAte is a ration eaten from the pack (V10, game.eat): {pack: {food: -1}}.
+	EventAte = "ate"
 	// RipeSeconds is how long a crop takes to ripen.
 	RipeSeconds = 90
 	// PlanetX, PlanetRadius: where the planet with air is in every world
