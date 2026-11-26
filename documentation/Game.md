@@ -47,8 +47,30 @@ The web game engine (Forge plans 300 to 347) and the games built on it (350 to 3
 
 `/workbench?open=<workbench link>` opens any subject that a `workbench.subjectOpener` handles (`openDeepLink` in `ui/editorKinds.ts`), for example `?open=workbench:gameWorld/w123`.
 
+## Built in S1 and S2 (forge 375)
+
+The story game's first two tracer bullets: areas laid out from pieces, then walked at night.
+
+### Piece sets and areas, `features/game`
+
+- **Piece sets** are JSON files embedded from `features/game/piecesets/` (`farmland.json` first). A set has a cell size (10 m), edge types (`grass`, `road`) and pieces. Each piece has a footprint in whole cells, a model name and the edge type of each cell along each side (`n`, `e`, `s`, `w`). `PieceSet.go` turns a piece clockwise (`Turned`) and checks a placement (`Fit`): inside the area, not over another piece, and every edge meeting a neighbour's edge of a type it may meet. A misfit names the cell, for example "the Farmhouse would cover the Road end at cell 7, 6". The browser's `area/PieceSet.ts` is a port with the same messages, tested against the same JSON.
+- **Areas** are definitions on the `def` area, target type `gameArea`, projection `game.areas`. The ops are `game.createArea {name, pieceSet, width, depth}`, `game.setArea` (refused when shrinking past a piece), `game.placePiece {id?, piece, x, z, rot}`, `game.movePiece`, `game.removePiece`, `game.deleteArea` and `game.restoreArea`, each with its inverse. A misfit is refused with `piece_misfit`. An area has at most 64 cells a side.
+- **Queries**: `game.areas {deleted?}`, `game.area {id}` and `game.pieceSets`.
+- **Tool**: `game.describeArea {area}` returns the area, an ASCII map with one character per cell, its legend and a digest of each piece. A model reads the layout from it without a picture.
+- `apps/ops` knows the `gameArea` scope and its items (a piece by id, the area's fields), and `TestEveryOpUndoes` covers each area op.
+
+### The area viewport, `frontend/engine/src/area`
+
+- `Models.ts` builds each piece's placeholder model from code (grass, roads, fences, trees, a copse, fields, the farmhouse, the barn, the yard). A model names its night lights (`userData.lights`) and what a walker cannot cross (`userData.blockers`, rectangles in the model's own metres).
+- `AreaViewport` shows an area with an orbit camera (`camera/OrbitCamera.ts`: right-drag turns, middle-drag or W A S D pans, Q and E turn, the wheel zooms). With a piece in hand it shows a ghost model, a green or red footprint and the edge marks. Clicking places a piece, or selects one; R turns it, Alt and the arrows move it, Delete removes it. It sends each change to its host as an intent and draws what the server sends back. Others' cursors and selections show in their colours.
+- **Night** lights the area with two moons as directional lights with shadows, the models' point lights, and fog. The moons' brightness follows their phases from the calendar night (`sky/Moons.ts`: the greater moon over 30 nights, the lesser over 13), and a corner of the view draws both discs with their phase names, since the top-down camera never sees the sky.
+- **Play** (`play(true)`) builds a walk grid from the placed pieces' blockers, turned and moved with each piece, and stands a placeholder character (`CharacterModel`) on the yard. A click on the ground walks it there along an A* path, straightened by line of sight, at 4 m/s with a walk animation; the camera follows. The cursor shows whether the ground under it can be reached. A piece laid while playing rebuilds the grid. `walkTo(x, z)` and `player()` serve tests and tools.
+- `nav/WalkGrid.ts` is the walk grid: 1 m cells, blocked rectangles grown by the walker's radius, 8-way A* without cutting corners. It stands in for the Recast navigation mesh until areas have height levels, and it is deterministic, so the server can run the same grid when it takes movement over (S4).
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
 - Edits are kept per 16 m cell and V1 reads them all. Streaming (360d) reads only the cells in view.
 - Undo covers world definitions only; digging is play and is not an op.
+- S2 walks on a 1 m grid rather than a Recast navigation mesh, and moves the character in the browser. Recast comes with height levels; the server takes movement over in S4.
+- The moons are drawn in a corner of the view rather than in the sky, since the camera looks down. Bloom is left out until it is needed.
