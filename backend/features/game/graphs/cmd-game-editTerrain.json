@@ -195,7 +195,7 @@
         "y": 550
       },
       "config": {
-        "expr": "let V = 4.18879 * radius ** 3; let have = packed ? pack : {dust: 0, rock: 0, ore: 0}; let ho = have?.ore ?? 0; let playing = took != nil || needs != nil; let td = kind == \"dig\" \u0026\u0026 took != nil ? min(max(took?.dust ?? 0, 0), V) : 0; let tr = kind == \"dig\" \u0026\u0026 took != nil ? min(max(took?.rock ?? 0, 0), V - td) : 0; let tore = kind == \"dig\" \u0026\u0026 took != nil ? min(max(took?.ore ?? 0, 0), V - td - tr) : 0; let n = kind == \"fill\" \u0026\u0026 needs != nil ? min(max(needs, 0), V) : 0; let sd = min(have.dust, n); let sr = max(n - sd, 0); {room: 4 - have.dust - have.rock - ho, take: td + tr + tore, have: have.dust + have.rock, need: n, delta: {dust: td - sd, rock: tr - sr, ore: tore}, material: sr \u003e sd ? 1 : 0}",
+        "expr": "let V = 4.18879 * radius ** 3; let have = packed ? pack : {dust: 0, rock: 0, ore: 0}; let ho = have?.ore ?? 0; let playing = took != nil || needs != nil; let td = kind == \"dig\" \u0026\u0026 took != nil ? min(max(took?.dust ?? 0, 0), V) : 0; let tr = kind == \"dig\" \u0026\u0026 took != nil ? min(max(took?.rock ?? 0, 0), V - td) : 0; let tore = kind == \"dig\" \u0026\u0026 took != nil ? min(max(took?.ore ?? 0, 0), V - td - tr) : 0; let n = kind == \"fill\" \u0026\u0026 needs != nil ? min(max(needs, 0), V) : 0; let sd = min(have.dust, n); let sr = max(n - sd, 0); {room: 4 - have.dust - have.rock - ho - (have?.iron ?? 0), take: td + tr + tore, have: have.dust + have.rock, need: n, delta: {dust: td - sd, rock: tr - sr, ore: tore}, material: sr \u003e sd ? 1 : 0}",
         "type": "json"
       }
     },

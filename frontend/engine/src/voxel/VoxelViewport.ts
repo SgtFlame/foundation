@@ -1,3 +1,4 @@
+import { forgeAction, SMELT_MS, type ForgeState } from '../craft/Forge.ts'
 import * as THREE from 'three/webgpu'
 import { surfaceBelow, Walker, type WalkerTerrain } from '../character/Walker.ts'
 import { FlyCamera } from '../camera/FlyCamera.ts'
@@ -40,6 +41,7 @@ export interface Carried {
   rock: number
   ore?: number // V8: from the asteroids
   food?: number // V9: rations harvested on the planet
+  iron?: number // V20: smelted at a cabin's forge
   capacity: number
 }
 
@@ -74,6 +76,8 @@ export type ShipIntent =
   | { kind: 'forage'; what: 'fish' | 'hunt'; animal?: string; x: number; y: number; z: number } // V12: a fish caught, a grazer hunted
   | { kind: 'sleep'; id: string } // V13: a night in a cabin's bed
   | { kind: 'craft'; id: string; item: string } // V14: a tool made at a cabin's bench
+  | { kind: 'smelt'; id: string } // V20: ore from the pack put in a cabin's forge
+  | { kind: 'takeIngots'; id: string } // V20: the forge's iron taken into the pack
   | { kind: 'plant'; x: number; y: number; z: number } // V9: barley in the planet's soil
   | { kind: 'harvest'; crop: string } // V9: a ripe crop, as food
 
@@ -622,7 +626,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.forgeHint()}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -707,8 +711,9 @@ export class VoxelViewport {
     if (ship) lines.push(ship)
     if (c) {
       const ore = c.ore ?? 0
-      const total = c.dust + c.rock + ore
-      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}${(c.food ?? 0) > 0 ? ` · food ${c.food}` : ''}`)
+      const iron = c.iron ?? 0
+      const total = c.dust + c.rock + ore + iron
+      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}${iron > 0 ? ` · iron ${iron.toFixed(2)}` : ''}${(c.food ?? 0) > 0 ? ` · food ${c.food}` : ''}`)
     }
     if (w && !this.riding && !this.pod.falling) {
       const g = Math.hypot(w.gravity.x, w.gravity.y, w.gravity.z)
@@ -940,6 +945,8 @@ export class VoxelViewport {
   private nearSeat: string | null = null
   private nearBed: string | null = null
   private nearBench: string | null = null
+  private nearForge: string | null = null
+  private forgeShown = ''
 
   // What a ship within reach offers: its hold and its refinery (V4)
   private nearShip: ShipState | null = null
@@ -1285,7 +1292,16 @@ export class VoxelViewport {
     }
     if (bed && input.locked && input.pressed('KeyF')) this.sleepIn(bed)
     // V14: U at a cabin's field bench crafts
-    const bench = this.walker && !seat ? this.shipLayer.benchNear(this.walker.pos) : null
+    // V20: U at a cabin's forge smelts ore, then takes the iron; nearer than the bench, it wins U
+    const forge = this.walker && !seat ? this.shipLayer.forgeNear(this.walker.pos, 1.7) : null
+    const line = forge ? this.forgeHint() : ''
+    if (forge !== this.nearForge || line !== this.forgeShown) {
+      this.nearForge = forge
+      this.forgeShown = line
+      this.updateHint()
+    }
+    if (forge && input.locked && input.pressed('KeyU')) this.forgeAt(forge)
+    const bench = this.walker && !seat && !forge ? this.shipLayer.benchNear(this.walker.pos) : null
     if (bench !== this.nearBench) {
       this.nearBench = bench
       this.updateHint()
@@ -1393,6 +1409,36 @@ export class VoxelViewport {
     if (!this.nearBench) return ''
     const r = nextRecipe(this.progress?.tools, this.progress?.manuals)
     return !r ? (this.progress?.manuals?.powerDrill ? 'The bench: everything it knows is made · ' : 'The bench: drill and turret made; a wreck may hold a manual for more · ') : `U: craft a ${r.title} (${Object.entries(r.needs).map(([k, n]) => `${n} m³ ${k}`).join(', ')}) · `
+  }
+
+  private forgeOf(id: string): ForgeState | null {
+    return this.shipLayer.ships().find((s) => s.id === id)?.forge ?? null
+  }
+
+  private forgeHint(): string {
+    if (!this.nearForge) return ''
+    const a = forgeAction(this.forgeOf(this.nearForge), this.carried, Date.now())
+    if (a.kind === 'smelt') return `U: put ${a.ore.toFixed(2)} m³ of ore in the forge · `
+    if (a.kind === 'wait') return `The forge is smelting: ${a.seconds} s left · `
+    if (a.kind === 'take') return `U: take ${a.iron.toFixed(2)} m³ of iron from the forge · `
+    return `The forge: ${a.why} · `
+  }
+
+  // V20: U at the forge puts ore in, or takes the iron once it is smelted
+  forgeAt(id: string): void {
+    const a = forgeAction(this.forgeOf(id), this.carried, Date.now())
+    if (a.kind === 'smelt') {
+      if (this.carried) this.carried = { ...this.carried, ore: (this.carried.ore ?? 0) - a.ore }
+      this.opts.onShipIntent?.({ kind: 'smelt', id })
+      this.flashHint(`You shovel ${a.ore.toFixed(2)} m³ of ore into the forge and work the bellows. It will take ${Math.round((a.ore * SMELT_MS) / 1000)} s`)
+    } else if (a.kind === 'take') {
+      if (this.carried) this.carried = { ...this.carried, iron: (this.carried.iron ?? 0) + a.iron }
+      this.opts.onShipIntent?.({ kind: 'takeIngots', id })
+      this.flashHint(`You rake ${a.iron.toFixed(2)} m³ of iron ingots out of the forge, still warm`)
+    } else if (a.kind === 'wait') this.flashHint(`The ore is still glowing: ${a.seconds} s left`)
+    else this.flashHint(a.why[0].toUpperCase() + a.why.slice(1))
+    this.drawPack()
+    this.updateHint()
   }
 
   // V14: U at the bench makes the drill when the pack holds what it takes

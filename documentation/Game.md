@@ -392,6 +392,15 @@ The story game's seventeenth tracer bullet: the first companion (the play design
 - **Fighting**: in a fight he goes for the character's target, or the nearest foe, from its flank (beside it, square to the character), and strikes with a pike every 2.6 s with polearm 3. `Combat.allyStrike` decides it as the character's own strikes are decided (hit chance, then a vital chance with the pike's aim and the flank), so he can behead or pierce a Hollowed's heart; his strikes show as *pike* over the foe and a line in the fight panel.
 - The fight panel now shows the skills the story has given (`remembered`).
 
+## Built in V20 (forge 360)
+
+The forge: ore becomes iron over time, the second rung of the crafting ladder after the bench.
+
+- The cabin gains a forge (block 75, `forge`; 76 blocks now). A cabin started before keeps working: `game.placeBlock` lets a cabin place up to the design's 76, and the fold raises `blocks`.
+- `game.smelt` (`cmd-game-smelt`, target the cabin): puts up to 2 m³ of the pack's ore in the forge (event `smelting {world, ore, at, pack}`), refused while it holds ore. The cabin keeps it as `forge {ore, at}` on `game.ships` and `game.worldShips`.
+- `game.takeIngots` (`cmd-game-takeIngots`): once 45 s a m³ have passed (`SmeltMs`), takes 0.8 m³ of iron a m³ of ore (`IronYield`) into the pack (event `ingots {world, iron, pack}`); refused while smelting or without room. The pack gains `iron`, which counts against its 4 m³ in `game.editTerrain`, `game.salvage` and `game.downDrone`.
+- Engine: `craft/Forge.ts` (`forgeAction`, `smeltLeft`, `ironFrom`), the forge's mesh (a stone furnace with a glowing mouth and a chimney), `ShipLayer.forgeNear`, and U at the forge in `VoxelViewport` (`forgeAt`, `forgeHint`: "The forge is smelting: n s left"). `TestForge` covers it.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

@@ -123,7 +123,7 @@
         "y": 150
       },
       "config": {
-        "expr": "let cur = int(now().UnixMilli() / 720000); let k = string(int(surge)) + \".\" + string(int(drone)) + \".\" + user; let held = (pack?.dust ?? 0) + (pack?.rock ?? 0) + (pack?.ore ?? 0); surge != cur \u0026\u0026 surge != cur - 1 ? \"that surge is over\" : drone \u003c 0 || drone \u003e 7 || drone != int(drone) ? \"a surge's drones are 0 to 7\" : (state?.downed ?? {})[k] ?? false ? \"you already shot that drone down\" : held + 0.1 \u003e 4 ? \"your pack is full: load it into a ship's hold\" : \"\"",
+        "expr": "let cur = int(now().UnixMilli() / 720000); let k = string(int(surge)) + \".\" + string(int(drone)) + \".\" + user; let held = (pack?.dust ?? 0) + (pack?.rock ?? 0) + (pack?.ore ?? 0) + (pack?.iron ?? 0); surge != cur \u0026\u0026 surge != cur - 1 ? \"that surge is over\" : drone \u003c 0 || drone \u003e 7 || drone != int(drone) ? \"a surge's drones are 0 to 7\" : (state?.downed ?? {})[k] ?? false ? \"you already shot that drone down\" : held + 0.1 \u003e 4 ? \"your pack is full: load it into a ship's hold\" : \"\"",
         "type": "string"
       }
     },

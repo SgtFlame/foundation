@@ -2,6 +2,7 @@ package game_test
 
 import (
 	"strings"
+	"time"
 	"testing"
 
 	"github.com/SgtFlame/foundation/backend/features/game"
@@ -328,7 +329,7 @@ func TestJobBoard(t *testing.T) {
 // V13: a cabin is a building on the planet; sleeping in its bed heals and makes it home
 func TestCabin(t *testing.T) {
 	d, ok := game.DesignOf("cabin")
-	if !ok || !d.Static || d.Check() != "" || d.Blocks[73].Type != "bed" || d.Blocks[74].Type != "bench" || len(d.Blocks) != 75 {
+	if !ok || !d.Static || d.Check() != "" || d.Blocks[73].Type != "bed" || d.Blocks[74].Type != "bench" || len(d.Blocks) != 76 {
 		t.Fatalf("cabin %+v", d)
 	}
 	st := newStack(t)
@@ -450,5 +451,46 @@ func TestPowerDrill(t *testing.T) {
 	res = st.ok("game.craft", "c1", map[string]any{"item": "powerDrill"})
 	if !st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p) || !p.Tools["powerDrill"] || !p.Tools["drill"] {
 		t.Fatalf("player %+v", p)
+	}
+}
+
+// V20: the cabin's forge smelts ore into iron over time
+func TestForge(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Forge moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	st.ok("game.startShip", "c1", map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": 0, "q": q})
+	if r := st.refused("game.smelt", "c1", map[string]any{}); !strings.Contains(r.Common.Message, "forge") {
+		t.Fatalf("smelt before the forge: %q", r.Common.Message)
+	}
+	st.ok("game.placeBlock", "c1", map[string]any{"index": 75})
+	if r := st.refused("game.smelt", "c1", map[string]any{}); !strings.Contains(r.Common.Message, "ore") {
+		t.Fatalf("smelt with an empty pack: %q", r.Common.Message)
+	}
+	dug := st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 200, "z": 0, "radius": 1.5, "took": map[string]any{"dust": 0, "rock": 0, "ore": 0.02}})
+	var pack game.Pack
+	st.read(game.PacksProjector, game.PackKey(world, 1), dug.Seq, &pack)
+	res := st.ok("game.smelt", "c1", map[string]any{})
+	var s game.Ship
+	if !st.read(game.ShipsProjector, game.ShipType+".c1", res.Seq, &s) || s.Forge == nil || s.Forge.Ore != 0.02 {
+		t.Fatalf("ship %+v", s)
+	}
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Ore != 0 {
+		t.Fatalf("pack %+v", pack)
+	}
+	if r := st.refused("game.takeIngots", "c1", map[string]any{}); !strings.Contains(r.Common.Message, "still smelting") {
+		t.Fatalf("take while smelting: %q", r.Common.Message)
+	}
+	if r := st.refused("game.smelt", "c1", map[string]any{}); r.Common.Message == "" {
+		t.Fatalf("smelt twice")
+	}
+	time.Sleep(time.Second)
+	res = st.ok("game.takeIngots", "c1", map[string]any{})
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Iron != 0.016 {
+		t.Fatalf("pack %+v", pack)
+	}
+	var after game.Ship
+	if !st.read(game.ShipsProjector, game.ShipType+".c1", res.Seq, &after) || after.Forge != nil {
+		t.Fatalf("ship %+v", after)
 	}
 }

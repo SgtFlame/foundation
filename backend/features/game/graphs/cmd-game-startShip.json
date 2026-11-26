@@ -225,7 +225,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{world: world, design: design, x: x, y: y, z: z, q: q, blocks: {skiff: 27, prospector: 32, hauler: 58, freighter: 82, cabin: 75}[design]}",
+        "expr": "{world: world, design: design, x: x, y: y, z: z, q: q, blocks: {skiff: 27, prospector: 32, hauler: 58, freighter: 82, cabin: 76}[design]}",
         "type": "json"
       }
     },

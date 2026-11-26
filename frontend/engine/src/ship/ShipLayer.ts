@@ -20,6 +20,7 @@ const COLORS: Record<DesignBlock['type'], number> = {
   door: 0x4a3020,
   bed: 0xa8463a,
   bench: 0x8a6a44,
+  forge: 0x5a5a60,
 }
 
 interface Shown {
@@ -201,6 +202,21 @@ export class ShipLayer {
       g.add(vice)
       return g
     }
+    // V20: a forge is a squat stone furnace with a glowing mouth
+    if (b.type === 'forge') {
+      const g = new THREE.Group()
+      mesh.scale.set(0.9, 0.8, 0.9)
+      mesh.position.y = -0.1
+      g.add(mesh)
+      const mouth = new THREE.Mesh(this.box, new THREE.MeshBasicMaterial({ color: 0xff7a2a }))
+      mouth.scale.set(0.4, 0.25, 0.05)
+      mouth.position.set(0, -0.2, -0.46)
+      const chimney = new THREE.Mesh(this.box, this.material('forge'))
+      chimney.scale.set(0.25, 0.6, 0.25)
+      chimney.position.set(0.2, 0.55, 0.2)
+      g.add(mouth, chimney)
+      return g
+    }
     if (b.type !== 'thruster' || !b.push) return mesh
     // The nozzle opens away from where the thruster pushes
     const g = new THREE.Group()
@@ -310,6 +326,11 @@ export class ShipLayer {
   // V14: a placed field bench within reach of a point: the building's id
   benchNear(p: Vec3, reach = 2.2): string | null {
     return this.blockNear('bench', p, reach)
+  }
+
+  // V20: a placed forge within reach of a point: the building's id
+  forgeNear(p: Vec3, reach = 2.2): string | null {
+    return this.blockNear('forge', p, reach)
   }
 
   private blockNear(type: string, p: Vec3, reach: number): string | null {

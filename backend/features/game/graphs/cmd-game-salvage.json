@@ -153,7 +153,7 @@
         "y": 150
       },
       "config": {
-        "expr": "let r = (x ** 2 + y ** 2 + z ** 2) ** 0.5; let k = wreck + \".\" + string(int(index)); let held = (pack?.dust ?? 0) + (pack?.rock ?? 0) + (pack?.ore ?? 0); r \u003e 130 ? \"the wrecks lie on the moon\" : !(wreck in [\"k0\", \"k1\"]) ? \"there is no wreck \" + wreck : index \u003c 0 || index \u003e 26 || index != int(index) ? \"a wreck's blocks are 0 to 26\" : (state?.salvaged ?? {})[k] ?? false ? \"that block was salvaged already\" : held + 0.25 \u003e 4 ? \"your pack is full: load it into a ship's hold\" : \"\"",
+        "expr": "let r = (x ** 2 + y ** 2 + z ** 2) ** 0.5; let k = wreck + \".\" + string(int(index)); let held = (pack?.dust ?? 0) + (pack?.rock ?? 0) + (pack?.ore ?? 0) + (pack?.iron ?? 0); r \u003e 130 ? \"the wrecks lie on the moon\" : !(wreck in [\"k0\", \"k1\"]) ? \"there is no wreck \" + wreck : index \u003c 0 || index \u003e 26 || index != int(index) ? \"a wreck's blocks are 0 to 26\" : (state?.salvaged ?? {})[k] ?? false ? \"that block was salvaged already\" : held + 0.25 \u003e 4 ? \"your pack is full: load it into a ship's hold\" : \"\"",
         "type": "string"
       }
     },

@@ -11,7 +11,7 @@ export type Vec3 = { x: number; y: number; z: number }
 export type Quat = [number, number, number, number] // x, y, z, w
 
 export interface DesignBlock {
-  type: 'armor' | 'cockpit' | 'gyro' | 'light' | 'thruster' | 'battery' | 'cargo' | 'refinery' | 'solar' | 'log' | 'door' | 'bed' | 'bench' // V13: a building's (V14: the bench)
+  type: 'armor' | 'cockpit' | 'gyro' | 'light' | 'thruster' | 'battery' | 'cargo' | 'refinery' | 'solar' | 'log' | 'door' | 'bed' | 'bench' | 'forge' // V13: a building's (V14: the bench, V20: the forge)
   at: [number, number, number]
   push?: 'up' | 'down' | 'forward' | 'back' | 'left' | 'right'
 }
@@ -41,11 +41,12 @@ export interface ShipState {
   crew?: string[] // V7: the users riding as its crew
   cargo?: { dust: number; rock: number; iron: number; ore?: number } // V4: its hold, m³ (V8: ore)
   charge?: number // V4: its battery, 0 to 1
+  forge?: { ore: number; at: number } // V20: the ore smelting in a cabin's forge
   seq: number
   updatedAt?: string
 }
 
-export const BLOCK_MASS: Record<DesignBlock['type'], number> = { armor: 120, cockpit: 200, gyro: 150, light: 20, thruster: 80, battery: 150, cargo: 100, refinery: 300, solar: 30, log: 200, door: 60, bed: 80, bench: 90 }
+export const BLOCK_MASS: Record<DesignBlock['type'], number> = { armor: 120, cockpit: 200, gyro: 150, light: 20, thruster: 80, battery: 150, cargo: 100, refinery: 300, solar: 30, log: 200, door: 60, bed: 80, bench: 90, forge: 400 }
 
 // Power (V4, a thin 367): a design with a battery or solar panels runs on
 // power. Thrusters draw by how hard they push, the gyroscope while turning;

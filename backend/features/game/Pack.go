@@ -30,6 +30,7 @@ type Pack struct {
 	Rock     float64 `json:"rock"`
 	Ore      float64 `json:"ore"`  // V8: from the asteroids
 	Food     float64 `json:"food"` // V9: harvested on the planet with air
+	Iron     float64 `json:"iron"` // V20: smelted at a cabin's forge
 	Capacity float64 `json:"capacity"`
 }
 
@@ -48,7 +49,7 @@ func contributePacks(reg *extensions.Registry) {
 			switch {
 			case (e.Type == EventEdited || e.Type == EventHarvested || e.Type == EventAte || e.Type == EventForaged || e.Type == EventSalvaged || e.Type == EventDowned) && e.Target.Type == TerrainType:
 				return PackKey(e.Target.ID, e.UserID)
-			case (e.Type == EventShipLoaded || e.Type == EventCrafted) && e.Target.Type == ShipType:
+			case (e.Type == EventShipLoaded || e.Type == EventCrafted || e.Type == EventSmelting || e.Type == EventIngots) && e.Target.Type == ShipType:
 				// V4: loading a ship's hold empties the loader's pack
 				var d struct {
 					World string `json:"world"`
@@ -73,6 +74,7 @@ func contributePacks(reg *extensions.Registry) {
 					Rock float64 `json:"rock"`
 					Ore  float64 `json:"ore"`
 					Food float64 `json:"food"`
+					Iron float64 `json:"iron"`
 				} `json:"pack"`
 			}
 			if err := json.Unmarshal(f.Event.Data, &d); err != nil {
@@ -86,13 +88,14 @@ func contributePacks(reg *extensions.Registry) {
 			p.Rock = round(p.Rock + d.Pack.Rock)
 			p.Ore = round(p.Ore + d.Pack.Ore)
 			p.Food = round(p.Food + d.Pack.Food)
+			p.Iron = round(p.Iron + d.Pack.Iron)
 			p.Capacity = PackCapacity
 			return json.Marshal(p)
 		},
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.pack", Source: source}, Title: "My pack",
-		Description: fmt.Sprintf("What the caller carries in a world: {dust, rock, ore, capacity} in m³ and food in rations (an empty pack holds %g m³), then each change as they dig and fill", PackCapacity),
+		Description: fmt.Sprintf("What the caller carries in a world: {dust, rock, ore, iron (V20: smelted at a forge), capacity} in m³ and food in rations (an empty pack holds %g m³), then each change as they dig and fill", PackCapacity),
 		Params:      json.RawMessage(`{"type":"object","properties":{"world":{"type":"string","description":"The world's id"}},"required":["world"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"world":"w123"}`)},
 		Action:      "game.read",
@@ -105,7 +108,7 @@ func contributePacks(reg *extensions.Registry) {
 				return "", fmt.Errorf("game.pack needs a world's id")
 			}
 			return PackKey(p.World, f.Args().Principal.UserID), nil
-		}, json.RawMessage(fmt.Sprintf(`{"dust":0,"rock":0,"ore":0,"food":0,"capacity":%g}`, PackCapacity))),
+		}, json.RawMessage(fmt.Sprintf(`{"dust":0,"rock":0,"ore":0,"food":0,"iron":0,"capacity":%g}`, PackCapacity))),
 	})
 }
 
