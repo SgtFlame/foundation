@@ -9,17 +9,22 @@ export interface Recipe {
   title: string
   needs: { ore?: number; rock?: number; dust?: number } // m³ from the pack
   line: string // what it does, for the HUD
+  manual?: string // V18: the manual that teaches it, salvaged from a wreck
+  builtOn?: string // V18: a tool it needs first
 }
 
 export const RECIPES: readonly Recipe[] = [
   { id: 'drill', title: 'hand drill', needs: { ore: 2, rock: 1 }, line: 'digs wider and faster than bare hands' },
   // V17: the base defence's turret, set down on the moon with Y
   { id: 'turret', title: 'sentry turret', needs: { ore: 2, rock: 1.5 }, line: 'shoots down the surge\'s drones near where you set it; Y on the moon sets it down' },
+  // V18: taught by the manual in a wreck's cockpit block
+  { id: 'powerDrill', title: 'powered drill', needs: { ore: 2.5, rock: 1 }, line: 'tears through rock in a 6 m bite, faster than any hand', manual: 'powerDrill', builtOn: 'drill' },
 ]
 
 // The recipe the bench offers next: the first not made yet, or null
-export function nextRecipe(tools: Readonly<Record<string, boolean>> | undefined): Recipe | null {
-  return RECIPES.find((r) => !tools?.[r.id]) ?? null
+// (one whose manual is not found yet is not offered)
+export function nextRecipe(tools: Readonly<Record<string, boolean>> | undefined, manuals?: Readonly<Record<string, boolean>>): Recipe | null {
+  return RECIPES.find((r) => !tools?.[r.id] && (!r.manual || manuals?.[r.manual]) && (!r.builtOn || tools?.[r.builtOn])) ?? null
 }
 
 export interface Carried {
@@ -52,5 +57,6 @@ export interface DigLimits {
 }
 
 export function digLimits(tools: Readonly<Record<string, boolean>> | undefined): DigLimits {
+  if (tools?.powerDrill) return { maxBrush: 6, repeat: 0.07, name: 'powered drill' }
   return tools?.drill ? { maxBrush: 4, repeat: 0.12, name: 'drill' } : { maxBrush: 1.25, repeat: 0.35, name: 'dig by hand' }
 }

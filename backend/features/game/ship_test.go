@@ -420,3 +420,35 @@ func TestTurret(t *testing.T) {
 		t.Fatalf("surges %+v", s)
 	}
 }
+
+// V18: a wreck's manual teaches the bench the powered drill
+func TestPowerDrill(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Manual moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	st.ok("game.startShip", "c1", map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": 0, "q": q})
+	st.ok("game.placeBlock", "c1", map[string]any{"index": 74})
+	dig := func(rock, ore float64) {
+		res := st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 200, "z": 0, "radius": 1.5, "took": map[string]any{"dust": 0, "rock": rock, "ore": ore}})
+		var pack game.Pack
+		st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack)
+	}
+	dig(1, 2)
+	if r := st.refused("game.craft", "c1", map[string]any{"item": "powerDrill"}); !strings.Contains(r.Common.Message, "manual") {
+		t.Fatalf("a powered drill without the manual: %q", r.Common.Message)
+	}
+	res := st.ok("game.salvage", world, map[string]any{"wreck": "k1", "index": game.ManualBlock, "x": 40, "y": 90, "z": 0})
+	var p game.Player
+	if !st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p) || !p.Manuals["powerDrill"] {
+		t.Fatalf("player after the manual %+v", p)
+	}
+	if r := st.refused("game.craft", "c1", map[string]any{"item": "powerDrill"}); !strings.Contains(r.Common.Message, "hand drill") {
+		t.Fatalf("a powered drill without a drill: %q", r.Common.Message)
+	}
+	st.ok("game.craft", "c1", map[string]any{"item": "drill"})
+	dig(1, 2.25)
+	res = st.ok("game.craft", "c1", map[string]any{"item": "powerDrill"})
+	if !st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p) || !p.Tools["powerDrill"] || !p.Tools["drill"] {
+		t.Fatalf("player %+v", p)
+	}
+}

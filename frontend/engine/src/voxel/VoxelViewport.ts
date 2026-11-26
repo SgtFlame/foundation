@@ -17,7 +17,7 @@ import { PLANET } from './Bodies.ts'
 import { available, Fishing, FLEE_RANGE, floatModel, grazerDir, grazerModel, herdOf, HUNT_REACH, SEA_RADIUS, seaMesh, type Grazer } from '../wildlife/Wildlife.ts'
 import { eat, FRESH, hungry, NeedsHud, rounded, stepNeeds, type Needs } from '../survival/Needs.ts'
 import { countdown, DRONE_HIT, DRONE_SCRAP, dronesOf, shotHits, surgeAt, TURRET_RANGE, TURRET_RELOAD, turretPick, type Drone } from '../surge/Surge.ts'
-import { nearestSalvage, SALVAGE_ORE, salvageKey, wreckSites, type Vec3 as WVec3 } from '../wreck/Wreck.ts'
+import { MANUAL_BLOCK, nearestSalvage, SALVAGE_ORE, salvageKey, wreckSites, type Vec3 as WVec3 } from '../wreck/Wreck.ts'
 import { digLimits, missing, nextRecipe, spend, type DigLimits } from '../craft/Crafting.ts'
 
 // What the player asks for; the host sends it to the server, which decides
@@ -856,6 +856,8 @@ export class VoxelViewport {
     const t = this.terrain()
     const rust = [0x6b4a3a, 0x5a4034, 0x7a5a44].map((color) => new THREE.MeshStandardNodeMaterial({ color, roughness: 1, metalness: 0.2 }))
     const box = new THREE.BoxGeometry(d.blockSize * 0.96, d.blockSize * 0.96, d.blockSize * 0.96)
+    // V18: the cockpit block holding the manual shows a faint light through its seams
+    const lit = new THREE.MeshStandardNodeMaterial({ color: 0x6b4a3a, emissive: 0x3a5a2a, roughness: 1, metalness: 0.2 })
     for (const site of wreckSites(g.seed)) {
       const top = { x: site.dir.x * (g.radius + g.amplitude + 15), y: site.dir.y * (g.radius + g.amplitude + 15), z: site.dir.z * (g.radius + g.amplitude + 15) }
       const ground = surfaceBelow(t, top, 80)
@@ -869,7 +871,7 @@ export class VoxelViewport {
         .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), site.tilt))
       group.position.set(ground.x, ground.y, ground.z).addScaledVector(up, 0.4)
       const meshes = d.blocks.map((b, i) => {
-        const m = new THREE.Mesh(box, rust[(i * 7) % 3])
+        const m = new THREE.Mesh(box, i === MANUAL_BLOCK ? lit : rust[(i * 7) % 3])
         const j = ((i * 37) % 11) / 11 - 0.5
         m.position.set(b.at[0] * d.blockSize + j * 0.12, b.at[1] * d.blockSize - Math.abs(j) * 0.2, b.at[2] * d.blockSize + j * 0.08)
         m.rotation.set(j * 0.3, j * 0.5, -j * 0.2)
@@ -912,6 +914,13 @@ export class VoxelViewport {
     if (c) this.carried = { ...c, ore: Math.round(((c.ore ?? 0) + SALVAGE_ORE) * 1000) / 1000 }
     this.drawPack()
     this.opts.onShipIntent?.({ kind: 'salvage', wreck, index, x: round2(p.x), y: round2(p.y), z: round2(p.z) })
+    if (index === MANUAL_BLOCK) {
+      // V18: the cockpit block's manual
+      if (this.progress) this.progress = { ...this.progress, manuals: { ...this.progress.manuals, powerDrill: true } }
+      this.flashHint('Behind the cockpit plate, a waterlogged binder: a fabricator\'s manual for a powered drill. A cabin\'s bench can build it now')
+      this.updateHint()
+      return
+    }
     this.flashHint(`You wrench a plate off the wreck: ${SALVAGE_ORE} m³ of scrap for the refinery, counted as ore`)
   }
 
@@ -1247,13 +1256,13 @@ export class VoxelViewport {
 
   private benchHint(): string {
     if (!this.nearBench) return ''
-    const r = nextRecipe(this.progress?.tools)
-    return !r ? 'The bench: your drill and turret are made · ' : `U: craft a ${r.title} (${Object.entries(r.needs).map(([k, n]) => `${n} m³ ${k}`).join(', ')}) · `
+    const r = nextRecipe(this.progress?.tools, this.progress?.manuals)
+    return !r ? (this.progress?.manuals?.powerDrill ? 'The bench: everything it knows is made · ' : 'The bench: drill and turret made; a wreck may hold a manual for more · ') : `U: craft a ${r.title} (${Object.entries(r.needs).map(([k, n]) => `${n} m³ ${k}`).join(', ')}) · `
   }
 
   // V14: U at the bench makes the drill when the pack holds what it takes
   craftAt(id: string): void {
-    const r = nextRecipe(this.progress?.tools)
+    const r = nextRecipe(this.progress?.tools, this.progress?.manuals)
     if (!r) {
       this.flashHint('The bench has nothing more to teach you yet')
       return
@@ -1267,7 +1276,10 @@ export class VoxelViewport {
     this.drawPack()
     if (this.progress) this.progress = { ...this.progress, tools: { ...this.progress.tools, [r.id]: true } }
     this.opts.onShipIntent?.({ kind: 'craft', id, item: r.id })
-    if (r.id === 'drill') {
+    if (r.id === 'powerDrill') {
+      this.brushRadius = Math.max(this.brushRadius, 3)
+      this.flashHint(`Following the manual's diagrams, you fit a motor to your drill: a ${r.title}. It ${r.line}`)
+    } else if (r.id === 'drill') {
       this.brushRadius = Math.max(this.brushRadius, 2)
       this.flashHint(`You file and fit the parts at the bench: a ${r.title}. It ${r.line}; the wheel opens its bite to ${this.dig().maxBrush} m`)
     } else this.flashHint(`You bolt the parts together at the bench: a ${r.title}. It ${r.line}`)

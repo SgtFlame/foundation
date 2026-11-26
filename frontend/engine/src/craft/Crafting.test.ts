@@ -26,3 +26,10 @@ test('the bench offers the drill, then the turret, then nothing', () => {
   assert.equal(missing(t, { ore: 2, rock: 1 }, { drill: true }).includes('1.5 m³ of rock'), true)
   assert.deepEqual(spend(t, { ore: 2.25, rock: 1.5, dust: 0 }), { ore: 0.25, rock: 0, dust: 0 })
 })
+
+test('a manual from a wreck teaches the powered drill, built on the hand drill', () => {
+  assert.equal(nextRecipe({ drill: true, turret: true }, {}), null)
+  assert.equal(nextRecipe({ drill: true, turret: true }, { powerDrill: true })?.id, 'powerDrill')
+  assert.equal(nextRecipe({ turret: true }, { powerDrill: true })?.id, 'drill')
+  assert.deepEqual(digLimits({ drill: true, powerDrill: true }), { maxBrush: 6, repeat: 0.07, name: 'powered drill' })
+})

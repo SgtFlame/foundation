@@ -7,7 +7,7 @@
   "spec": {
     "command": "game.salvage",
     "title": "Salvage a wreck",
-    "description": "Tears one block off a derelict skiff on the moon (V15); the target is the world's id. wreck is k0 or k1 and index the block (0 to 26, the skiff's); the scrap goes into the sender's pack as 0.25 m³ of ore, and the block is gone for everyone (game.wrecks). Refused away from the moon, for an unknown wreck or block, one already salvaged, or a full pack.",
+    "description": "Tears one block off a derelict skiff on the moon (V15); the target is the world's id. wreck is k0 or k1 and index the block (0 to 26, the skiff's); the scrap goes into the sender's pack as 0.25 m³ of ore, and the block is gone for everyone (game.wrecks). Refused away from the moon, for an unknown wreck or block, one already salvaged, or a full pack. Block 13 of each wreck holds a manual (V18): its salvager gets manual powerDrill (game.player's manuals), which teaches a cabin's bench the powered drill.",
     "args": {
       "type": "object",
       "properties": {
@@ -187,7 +187,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{wreck: wreck, index: int(index), pack: {ore: 0.25}}",
+        "expr": "{wreck: wreck, index: int(index), pack: {ore: 0.25}, manual: int(index) == 13 ? \"powerDrill\" : \"\"}",
         "type": "json"
       }
     },

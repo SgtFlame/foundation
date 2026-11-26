@@ -357,6 +357,15 @@ The story game's fifteenth tracer bullet: the village remembers the night you he
 - **Word travels**: arriving at Hawk's Rest by the signpost after `defended`, the village greets you (a loaf and a cup of milk on the step, a nod at the well), once a session.
 - The dawn line now sends you to find Wenlan in the kitchen.
 
+## Built in V18 (forge 360)
+
+The voxel game's eighteenth tracer bullet: a manual found while scavenging teaches a recipe outright (the play design's *perks and manuals*), and the mining ladder's next rung, the powered drill.
+
+- **The manual**: block 13 of each moon wreck (`ManualBlock`, the engine's `MANUAL_BLOCK`), a cockpit plate, glows faintly green through its seams. Salvaging it with Z gives its scrap and a fabricator's manual: `cmd-game-salvage` adds `manual: "powerDrill"` to the `salvaged` event, and `game.players` folds it into `manuals` (`game.player` gives `manuals: {powerDrill: true}`). Each wreck holds one, so two players can each find one.
+- **The powered drill**: the bench's third recipe (`RECIPES` `powerDrill`, with `manual` and `builtOn: 'drill'`; `nextRecipe(tools, manuals)` offers it only once the manual is found and the hand drill made), 2.5 m³ of ore and 1 m³ of rock. `game.craft {item: "powerDrill"}` refuses a sender without the manual or a hand drill. With it, digging on foot takes up to a 6 m brush every 0.07 s (`digLimits`).
+- Before the manual, the bench says *a wreck may hold a manual for more*.
+- `TestPowerDrill` covers it.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

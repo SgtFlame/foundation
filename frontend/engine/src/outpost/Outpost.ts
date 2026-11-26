@@ -35,6 +35,7 @@ export interface Progress {
   jobs?: Record<string, number> // V11: how many times they did each job
   home?: string // V13: the cabin whose bed they last slept in
   tools?: Record<string, boolean> // V14: the tools they crafted (drill)
+  manuals?: Record<string, boolean> // V18: manuals salvaged from wrecks (powerDrill)
 }
 
 export const OUTPOST_REACH = 40

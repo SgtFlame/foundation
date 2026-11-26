@@ -23,6 +23,9 @@ const (
 	EventSalvaged = "salvaged"
 	// SalvageOre is the scrap one block gives, in m³ of ore.
 	SalvageOre = 0.25
+	// ManualBlock is the block of each wreck that holds a manual (V18):
+	// salvaging it teaches the bench the powered drill.
+	ManualBlock = 13
 )
 
 // Wrecks is what a world's players salvaged.
@@ -69,7 +72,7 @@ func contributeWrecks(reg *extensions.Registry) {
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.wrecks", Source: source}, Title: "Wrecks",
-		Description: fmt.Sprintf("A world's wrecks salvaged: {salvaged: {<wreck>.<index>: true}, count}, then each change. Each block salvaged with game.salvage gave %g m³ of ore and is gone for everyone.", SalvageOre),
+		Description: fmt.Sprintf("A world's wrecks salvaged: {salvaged: {<wreck>.<index>: true}, count}, then each change. Each block salvaged with game.salvage gave %g m³ of ore and is gone for everyone; block %d of each wreck held a manual for the powered drill (V18).", SalvageOre, ManualBlock),
 		Params:      json.RawMessage(`{"type":"object","properties":{"world":{"type":"string","description":"The world's id"}},"required":["world"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"world":"w123"}`)},
 		Action:      "game.read",
