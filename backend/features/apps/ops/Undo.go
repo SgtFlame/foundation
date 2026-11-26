@@ -31,10 +31,21 @@ type Deps struct {
 type Scope struct {
 	Kind string `json:"kind"` // app, manifest, prefab, graph, entity, gameWorld or gameArea
 	ID   string `json:"id"`
+	// Branch is the app's branch the scope is on (forge 19a: prefab:x@b),
+	// "" for main: an editor on a branch undoes that branch's ops alone.
+	Branch string `json:"branch,omitempty"`
 }
 
 // ParseScope reads a scope as the browser names it.
 func ParseScope(s string) (Scope, error) {
+	whole := s
+	s, branch, _ := strings.Cut(s, "@")
+	if branch == live.Main {
+		branch = ""
+	}
+	if branch != "" && !live.ValidBranchName(branch) {
+		return Scope{}, log.Code("invalid_scope").Errorf("%q is not a scope: %q is not a branch", whole, branch)
+	}
 	kind, id, _ := strings.Cut(s, ":")
 	if kind == "app" {
 		if app, ok := strings.CutSuffix(id, "/manifest"); ok {
@@ -45,11 +56,14 @@ func ParseScope(s string) (Scope, error) {
 	if !slices.Contains([]string{"app", "manifest", "prefab", "graph", "entity", "gameWorld", "gameArea"}, kind) || !live.ValidToken(id) {
 		return Scope{}, log.Code("invalid_scope").Errorf("%q is not a scope: use app:<id>, app:<id>/manifest, prefab:<id>, graph:<id>, entity:<id>, gameWorld:<id> or gameArea:<id>", s)
 	}
-	return Scope{Kind: kind, ID: id}, nil
+	return Scope{Kind: kind, ID: id, Branch: branch}, nil
 }
 
 // Has reports whether an op is in the scope.
 func (s Scope) Has(e Entry) bool {
+	if e.Branch != s.Branch {
+		return false
+	}
 	switch s.Kind {
 	case "app":
 		return e.App == s.ID
@@ -209,6 +223,7 @@ type Plan struct {
 	Request   string     `json:"request"` // the request undone
 	Undoes    string     `json:"undoes,omitempty"`
 	App       string     `json:"app,omitempty"`
+	Branch    string     `json:"branch,omitempty"` // the app's branch its ops are on (forge 19a)
 	Summary   string     `json:"summary"`
 	Ops       []live.Op  `json:"ops"`     // the inverses sent, in order
 	Changes   []string   `json:"changes"` // each op taken back, in words, newest first
@@ -230,10 +245,17 @@ func PlanUndo(all []Request, request string, force bool, title Titles) (Plan, er
 		return Plan{}, log.Code("request_undone").Errorf("the request %q is undone already", request)
 	}
 	p := Plan{Request: r.ID, App: r.App, Summary: summarize(r, title), Ops: []live.Op{}, Changes: []string{}, Conflicts: []Conflict{}, Skipped: []Skipped{}}
+	if len(r.Ops) > 0 {
+		p.Branch = r.Ops[0].Branch
+	}
 	var later []Entry
 	for _, o := range all[i+1:] {
 		if !gone[o.ID] {
-			later = append(later, o.Ops...)
+			for _, e := range o.Ops {
+				if e.Branch == p.Branch { // another branch's drafts are other targets
+					later = append(later, e)
+				}
+			}
 		}
 	}
 	for j := len(r.Ops) - 1; j >= 0; j-- {
@@ -361,7 +383,7 @@ func Undo(args features.ServiceArgs, deps Deps, a UndoArgs, redo bool, actor str
 	if redo {
 		id = fmt.Sprintf("redo-%d", features.NewTSID())
 	}
-	t := deps.Bus.Transact(bus.Request{ServiceArgs: args, ID: id, RequestID: id, App: p.App, Actor: actor, Undoes: request}, slices.Clone(p.Ops), a.DryRun)
+	t := deps.Bus.Transact(bus.Request{ServiceArgs: args, ID: id, RequestID: id, App: p.App, Actor: actor, Undoes: request, Branch: p.Branch}, slices.Clone(p.Ops), a.DryRun)
 	if t.Common.Code >= 300 {
 		resp := t.Common
 		if len(t.Problems) > 0 {

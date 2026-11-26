@@ -264,7 +264,7 @@ func Apply(d *Draft, e live.Event) error {
 	}
 	d.Rev++
 	d.UpdatedBy, d.UpdatedAt = e.UserID, e.Time
-	p.ID = e.Target.ID
+	p.ID = live.PartID(e.Target.ID)
 	normalize(p)
 	return nil
 }

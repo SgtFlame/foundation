@@ -80,7 +80,7 @@ func (s *Subscriptions) Open(args OpenArgs) *features.ServiceResponse {
 	if err := tools.CheckArgs(q.Params, args.Params); err != nil {
 		return args.Fail(http.StatusBadRequest, log.Code("invalid_params").New(err.Error()))
 	}
-	f := &feed{args: args, store: s.store}
+	f := &feed{args: args, store: s.storeFor(args.Params)}
 	go func() {
 		if err := q.Run(f); err != nil && args.Context().Err() == nil {
 			args.Sink.Failed(*args.Fail(http.StatusInternalServerError, log.Wrapf(err, "query %s failed", args.Query)))
@@ -127,6 +127,20 @@ func (o *onceSink) Failed(resp features.ServiceResponse) {
 	case o.got <- once{fail: &resp}:
 	default:
 	}
+}
+
+// storeFor is the store a subscription reads (forge 19a): with a branch
+// parameter, "<app>:<name>", the app's parts as that branch has them;
+// else main's (whose listings never show a branch's drafts).
+func (s *Subscriptions) storeFor(params json.RawMessage) live.Store {
+	var p struct {
+		Branch string `json:"branch"`
+	}
+	_ = json.Unmarshal(params, &p)
+	if b, ok := live.ParseBranch(p.Branch); ok && !b.IsMain() {
+		return live.OnBranch(s.store, s.reg, b)
+	}
+	return s.store
 }
 
 type feed struct {

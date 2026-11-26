@@ -124,6 +124,17 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 
 	ctx := r.Context()
 	tenant := r.Principal.TenantID
+	var br *branching
+	for i, s := range steps {
+		x, problem := b.newBranching(ctx, tenant, r, s.cmd, s.tg)
+		if problem != nil {
+			problem.Path = strings0(fmt.Sprintf("ops.%d", i), problem.Path)
+			return TransactResult{Result: rejected(*problem)}
+		}
+		if br == nil {
+			br = x
+		}
+	}
 	stream, err := b.p.Stream(ctx, tenant, area)
 	if err != nil {
 		return TransactResult{Result: Result{Common: *r.Fail(http.StatusInternalServerError, err)}}
@@ -131,7 +142,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 	streamName := stream.CachedInfo().Config.Name
 	var keys []string
 	for _, s := range steps {
-		if k := b.lockKey(tenant, s.tg); !slices.Contains(keys, k) {
+		if k := b.lockKey(tenant, br.physical(s.tg)); !slices.Contains(keys, k) {
 			keys = append(keys, k)
 		}
 	}
@@ -153,7 +164,39 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 		over := overlay{}
 		read := map[string]uint64{} // the sequence each target was read at in the projections
 		// value is a projected value as the ops so far left it
+		// (forge 19a: t is a part's own id; on a branch its draft there,
+		// else its base's)
+		if br != nil {
+			br.copies, br.states = map[string]copied{}, map[string]json.RawMessage{}
+		}
 		value := func(projector string, t live.Target) (json.RawMessage, error) {
+			pt := br.physical(t)
+			if v, ok := over[overlayKey(projector, pt.Key())]; ok {
+				if live.IsRemoved(v) {
+					return nil, nil
+				}
+				if br != nil && br.branched(t) && projector == br.types[t.Type] {
+					br.states[t.Key()] = v
+				}
+				return v, nil
+			}
+			var v live.Projected
+			if br != nil {
+				value, seq, err := br.read(projector, t, waitFor(pt))
+				if err != nil {
+					return nil, err
+				}
+				v = live.Projected{Seq: seq, Value: value}
+			} else if v, err = b.p.WaitFor(ctx, tenant, projector, t.Key(), waitFor(t), catchUp); err != nil {
+				return nil, err
+			}
+			if seq, ok := read[pt.Key()]; !ok || v.Seq < seq {
+				read[pt.Key()] = v.Seq
+			}
+			return v.Value, nil
+		}
+		// raw is a projected value of a target already on the branch
+		raw := func(projector string, t live.Target) (json.RawMessage, error) {
 			if v, ok := over[overlayKey(projector, t.Key())]; ok {
 				return v, nil
 			}
@@ -169,6 +212,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 		type planned struct {
 			events  []live.NewEvent
 			op      *live.LoggedOp
+			opAt    int // the event the op rides on, after its branch's copies
 			jobs    []live.Job
 			command string
 		}
@@ -181,7 +225,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 			if err != nil {
 				return TransactResult{Result: Result{Common: *r.Fail(http.StatusInternalServerError, err)}}
 			}
-			d := live.Decision{ServiceArgs: r.ServiceArgs, Target: s.tg, State: state, Args: s.op.Args}
+			d := live.Decision{ServiceArgs: r.ServiceArgs, Target: s.tg, State: state, Args: s.op.Args, Branch: br.name()}
 			d.Read = func(projection string, t live.Target) (json.RawMessage, error) {
 				if t.Area != area {
 					return nil, log.Code("other_area").Errorf("%s changes targets in the %s area only, not %s", s.op.Command, area, t.Area)
@@ -200,6 +244,17 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 				res := TransactResult{Result: rejected(problems...), Ops: decided}
 				failed = &res
 				break
+			}
+			opAt := 0
+			if br != nil && len(events) > 0 {
+				var problem *live.Problem
+				if events, opAt, problem = br.events(s.tg, events); problem != nil {
+					problem.Path = strings0(fmt.Sprintf("ops.%d", i), problem.Path)
+					res := TransactResult{Result: rejected(*problem), Ops: decided}
+					failed = &res
+					break
+				}
+				br.copies = map[string]copied{} // folded into the overlay below
 			}
 			for j := range events {
 				if events[j].Target == nil {
@@ -224,7 +279,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 			var op *live.LoggedOp
 			if d.Op != nil && len(events) > 0 {
 				op = &live.LoggedOp{Command: s.op.Command, Target: s.tg.ID, Args: s.op.Args, App: cmp.Or(d.Op.App, r.App),
-					Inverse: d.Op.Inverse, Irreversible: d.Op.Irreversible, Decided: read[s.tg.Key()], Undoes: r.Undoes, Events: len(events)}
+					Inverse: d.Op.Inverse, Irreversible: d.Op.Irreversible, Decided: read[br.physical(s.tg).Key()], Undoes: r.Undoes, Events: len(events) - opAt, Branch: br.name()}
 				if op.Inverse == nil {
 					op.Inverse = []live.Op{}
 				}
@@ -240,11 +295,14 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 					if len(pr.Types) > 0 && !slices.Contains(pr.Types, e.Target.Type) {
 						continue
 					}
-					cur, err := value(pr.ID, e.Target)
+					cur, err := raw(pr.ID, e.Target)
 					if err != nil {
 						return TransactResult{Result: Result{Common: *r.Fail(http.StatusInternalServerError, err)}}
 					}
-					next, err := pr.Fold(live.Fold{Key: e.Target.Key(), State: cur, Event: e})
+					next, skip, err := pr.Apply(live.Fold{Key: e.Target.Key(), State: cur, Event: e})
+					if skip && err == nil {
+						continue
+					}
 					if err != nil {
 						res := TransactResult{Result: rejected(live.Problem{Path: fmt.Sprintf("ops.%d", i), Message: fmt.Sprintf("%s cannot be applied: %v", s.op.Command, err)})}
 						failed = &res
@@ -259,7 +317,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 			if failed != nil {
 				break
 			}
-			plan = append(plan, planned{events: events, op: op, jobs: d.Jobs(), command: s.op.Command})
+			plan = append(plan, planned{events: events, op: op, opAt: opAt, jobs: d.Jobs(), command: s.op.Command})
 			decided = append(decided, Decided{Op: s.op, Events: len(events)})
 			all = append(all, events...)
 		}
@@ -285,7 +343,7 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 				data, _ := json.Marshal(ne.Data)
 				e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: fmt.Sprintf("%s.%d", r.ID, i), Command: p.command, App: r.App, RequestID: r.RequestID,
 					UserID: r.Principal.UserID, AgentID: r.Principal.AgentID, OnBehalfOf: r.Principal.OnBehalfOf, Actor: ActorOf(r), TenantID: tenant, Time: now, Batch: &live.Batch{Index: len(msgs) + 1, Count: len(all)}}
-				if j == 0 {
+				if j == p.opAt {
 					e.Op, e.Jobs = p.op, p.jobs
 				}
 				raw, _ := json.Marshal(e)

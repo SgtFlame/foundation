@@ -298,13 +298,17 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "forge.app", Source: "apps"}, Title: "Read an app", Effect: tools.EffectRead,
 		Description: "Reads an application's draft: its manifest (pages with their titles and descriptions, nav, editor kinds, entity types, commands, queries, roles, settings, triggers), its rev, and a summary of each part (the prefabs, graphs and entity types it names or owns: name, description, kind, rev, published version, missing); its current problems, each at a path with a fix; who else has it open; the position (stream → sequence) it was read at, and after, the sequence of the app's last op, to pass to forge.apply and forge.changes. Read a part in full with forge.read.",
-		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string","description":"The app's id (app.list)"}},"required":["appId"]}`),
+		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string","description":"The app's id (app.list)"},"branch":{"type":"string","description":"The app's branch to read (app.branches), its parts as the branch has them; main when left out"}},"required":["appId"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
-			a, err := tools.Decode[struct{ AppID string }](call)
+			a, err := tools.Decode[struct{ AppID, Branch string }](call)
 			if err != nil {
 				return tools.Result{}, err
 			}
-			data, pos, err := once(call, "app.describe", map[string]any{"id": a.AppID})
+			params := map[string]any{"id": a.AppID}
+			if b := branchName(a.Branch); b != "" {
+				params["branch"] = a.AppID + ":" + b
+			}
+			data, pos, err := once(call, "app.describe", params)
 			if err != nil {
 				return tools.Result{}, err
 			}
@@ -313,7 +317,7 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 			_ = json.Unmarshal(raw, &v)
 			problems := []live.Problem{}
 			if store := deps().Store; store != nil {
-				env := manifests.Env(call.ServiceArgs.Context(), store, call.ServiceArgs.Principal.TenantID, reg)
+				env := manifests.Env(call.ServiceArgs.Context(), OnBranch(store, reg, a.AppID, a.Branch), call.ServiceArgs.Principal.TenantID, reg)
 				problems = append(problems, apps.CheckManifest(v.Manifest, env)...)
 			}
 			// Who else: the other users present in the app
@@ -336,13 +340,19 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 			if store := deps().Store; store != nil {
 				if entries, err := ops.Entries(call.ServiceArgs, store, a.AppID); err == nil {
 					var after uint64
-					if len(entries) > 0 {
-						after = entries[len(entries)-1].Seq
+					for _, e := range entries {
+						if e.Branch == branchName(a.Branch) {
+							after = e.Seq
+						}
 					}
 					content["after"] = after
 				}
 			}
 			summary := fmt.Sprintf("Read the app %s: %d parts, %d problems", v.Manifest.Name, len(v.Parts), len(problems))
+			if b := branchName(a.Branch); b != "" {
+				content["branch"] = b
+				summary += " on branch " + b
+			}
 			return tools.Result{Content: content, Summary: summary}, nil
 		},
 	})
@@ -350,9 +360,9 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "forge.read", Source: "apps"}, Title: "Read a part", Effect: tools.EffectRead,
 		Description: "Reads one part of an app in full, as its draft is now: prefab:<id> (its interface, variants, template with key paths, graphs and preview data), graph:<id> (its nodes with their config, edges, variables, each node's pins and its problems) or entity:<id> (its fields, title field, indexes and row rules); with its rev, the published version, and the position (stream → sequence) it was read at. forge.app lists an app's parts.",
-		Input:       json.RawMessage(`{"type":"object","properties":{"ref":{"type":"string","description":"prefab:<id>, graph:<id> or entity:<id>, e.g. graph:cmd-tasks-task-reassign"}},"required":["ref"]}`),
+		Input:       json.RawMessage(`{"type":"object","properties":{"ref":{"type":"string","description":"prefab:<id>, graph:<id> or entity:<id>, e.g. graph:cmd-tasks-task-reassign"},"appId":{"type":"string","description":"The app whose branch to read it on, with branch"},"branch":{"type":"string","description":"The app's branch: the part as the branch has it; main when left out"}},"required":["ref"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
-			a, err := tools.Decode[struct{ Ref string }](call)
+			a, err := tools.Decode[struct{ Ref, AppID, Branch string }](call)
 			if err != nil {
 				return tools.Result{}, err
 			}
@@ -361,7 +371,14 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 			if !ok || id == "" {
 				return tools.Result{}, fmt.Errorf("%q is not a part: use prefab:<id>, graph:<id> or entity:<id>, as forge.app's parts name them", a.Ref)
 			}
-			data, pos, err := once(call, query, map[string]any{"id": id})
+			params := map[string]any{"id": id}
+			if b := branchName(a.Branch); b != "" {
+				if !live.ValidToken(a.AppID) {
+					return tools.Result{}, fmt.Errorf("a branch is an app's: give appId with branch")
+				}
+				params["branch"] = a.AppID + ":" + b
+			}
+			data, pos, err := once(call, query, params)
 			if err != nil {
 				return tools.Result{}, err
 			}

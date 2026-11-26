@@ -27,7 +27,9 @@ type CommandFrame struct {
 	Request string `json:"request,omitempty"`
 	App     string `json:"app,omitempty"`
 	Actor   string `json:"actor,omitempty"`
-	Trace   string `json:"trace,omitempty"`
+	// Branch is the branch of App the command changes (forge 19a).
+	Branch string `json:"branch,omitempty"`
+	Trace  string `json:"trace,omitempty"`
 }
 
 // AckFrame ← a committed command.

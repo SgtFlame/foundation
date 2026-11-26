@@ -274,7 +274,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: DraftProjector, Source: "ui"}, Title: "Prefab drafts",
 		Description: "Each prefab's draft, as its prefab.* commands left it: {prefab, rev, published, publishedRev, updatedBy, updatedAt}",
-		Area:        live.AreaDefinitions, Types: []string{TargetType}, Fold: fold,
+		Area:        live.AreaDefinitions, Types: []string{TargetType}, Fold: fold, Branchable: true,
 	})
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: PublishedProjector, Source: "ui"}, Title: "Published prefabs",
@@ -293,6 +293,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			Descriptor: extensions.Descriptor{ID: s.id, Source: "ui"}, Title: s.title, Description: s.description,
 			Args: json.RawMessage(s.args), Examples: []json.RawMessage{json.RawMessage(s.example)}, Events: s.events,
 			Area: live.AreaDefinitions, TargetType: TargetType, Projection: DraftProjector, Action: action,
+			NoBranch: live.MainOnly(s.id),
 			Resource: func(p features.Principal, t live.Target) string { return ui.PrefabResource(p, t.ID) },
 			Decide: func(d live.Decision) ([]live.NewEvent, []live.Problem) {
 				c := &decision{Decision: d, deps: deps(), reg: reg}

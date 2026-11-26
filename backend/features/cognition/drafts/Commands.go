@@ -176,6 +176,7 @@ func place(g cognition.Graph) cognition.Position {
 const pinRef = `{"type":"object","properties":{"node":{"type":"string","description":"The node's id"},"pin":{"type":"string","description":"The pin's id"}},"required":["node","pin"]}`
 const position = `{"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"}},"required":["x","y"]}`
 const nodeSchema = `{"type":"object","properties":{"id":{"type":"string"},"type":{"type":"string"},"title":{"type":"string"},"position":` + position + `,"config":{"type":"object"}},"required":["id","type"]}`
+
 var edgeSchema = `{"type":"object","properties":{"from":` + described(pinRef, "The output it starts at") + `,"to":` + described(pinRef, "The input it ends at") + `},"required":["from","to"]}`
 
 // described is a schema given a description, for a model (forge 06d).
@@ -198,7 +199,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: DraftProjector, Source: "cognition"}, Title: "Cognition graph drafts",
 		Description: "Each Cognition graph's draft, as its bp.* commands left it: {graph, rev, published, publishedRev, updatedBy, updatedAt}",
-		Area:        live.AreaDefinitions, Types: []string{TargetType}, Fold: fold,
+		Area:        live.AreaDefinitions, Types: []string{TargetType}, Fold: fold, Branchable: true,
 	})
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: PublishedProjector, Source: "cognition"}, Title: "Published Cognition graphs",
@@ -221,6 +222,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			Descriptor: extensions.Descriptor{ID: s.id, Source: "cognition"}, Title: s.title, Description: s.description,
 			Args: json.RawMessage(s.args), Examples: []json.RawMessage{json.RawMessage(s.example)}, Events: s.events,
 			Area: live.AreaDefinitions, TargetType: TargetType, Projection: DraftProjector, Action: action,
+			NoBranch: live.MainOnly(s.id),
 			Resource: func(p features.Principal, t live.Target) string { return Resource(p, t.ID) },
 			Decide: func(d live.Decision) ([]live.NewEvent, []live.Problem) {
 				c, problems := load(d, deps(), s.create)

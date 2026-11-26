@@ -415,7 +415,7 @@ func Apply(d *Draft, e live.Event) error {
 	}
 	d.Rev++
 	d.UpdatedBy, d.UpdatedAt = e.UserID, e.Time
-	m.ID, m.Version = e.Target.ID, d.Published
+	m.ID, m.Version = live.PartID(e.Target.ID), d.Published
 	apps.Normalize(m)
 	if d.Versions == nil {
 		d.Versions = []VersionSummary{}

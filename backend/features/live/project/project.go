@@ -388,6 +388,9 @@ func (p *Projections) fold(pr live.Projector, kv jetstream.KeyValue, msg jetstre
 	var changes []*change
 	byKey := map[string]*change{}
 	for _, e := range events {
+		if e.Type == live.EventBranched && !pr.Branchable {
+			continue // a branch's copy is a branchable projection's alone (forge 19a)
+		}
 		key := e.Target.Key()
 		if pr.KeyOf != nil {
 			if key = pr.KeyOf(e); key == "" {
@@ -409,7 +412,10 @@ func (p *Projections) fold(pr live.Projector, kv jetstream.KeyValue, msg jetstre
 			byKey[key] = c
 			changes = append(changes, c)
 		}
-		value, err := pr.Fold(live.Fold{Key: key, State: c.new.Value, Event: e})
+		value, skip, err := pr.Apply(live.Fold{Key: key, State: c.new.Value, Event: e})
+		if skip {
+			continue
+		}
 		if err != nil {
 			log.With("subject", msg.Subject()).Error(ctx, err, "projector %s cannot fold event %d; skipped", pr.ID, e.Seq)
 			_ = msg.Term()
@@ -703,18 +709,37 @@ func (p *Projections) WaitFor(ctx context.Context, tenant uint64, projector, key
 
 // Watch sends the keys matching pattern as they are, nil once, then each
 // change, until ctx ends (live.Store).
+//
+// A branchable projection's drafts on branches (forge 19a) are left out
+// unless the pattern names one: a listing is main's. WatchDrafts sends
+// them too.
 func (p *Projections) Watch(ctx context.Context, tenant uint64, projector, pattern string) (<-chan *live.Entry, error) {
-	return p.watch(ctx, tenant, projector, pattern, false)
+	return p.watch(ctx, tenant, projector, pattern, false, p.hidesBranches(projector, pattern))
+}
+
+// WatchDrafts is Watch with every branch's drafts.
+func (p *Projections) WatchDrafts(ctx context.Context, tenant uint64, projector, pattern string) (<-chan *live.Entry, error) {
+	return p.watch(ctx, tenant, projector, pattern, false, false)
+}
+
+// hidesBranches reports whether a watch leaves branch drafts out.
+func (p *Projections) hidesBranches(projector, pattern string) bool {
+	pr, ok := p.Projector(projector)
+	if !ok || !pr.Branchable {
+		return false
+	}
+	_, id, _ := strings.Cut(pattern, ".")
+	return !live.IsBranchID(id)
 }
 
 // Updates sends each change to the keys matching pattern from now on, but
 // not the keys as they are, until ctx ends: for a query that reads its
 // snapshot another way, such as from an index.
 func (p *Projections) Updates(ctx context.Context, tenant uint64, projector, pattern string) (<-chan *live.Entry, error) {
-	return p.watch(ctx, tenant, projector, pattern, true)
+	return p.watch(ctx, tenant, projector, pattern, true, p.hidesBranches(projector, pattern))
 }
 
-func (p *Projections) watch(ctx context.Context, tenant uint64, projector, pattern string, updates bool) (<-chan *live.Entry, error) {
+func (p *Projections) watch(ctx context.Context, tenant uint64, projector, pattern string, updates, hideBranches bool) (<-chan *live.Entry, error) {
 	kv, err := p.Bucket(ctx, tenant, projector)
 	if err != nil {
 		return nil, err
@@ -744,6 +769,11 @@ func (p *Projections) watch(ctx context.Context, tenant uint64, projector, patte
 				if entry == nil {
 					initial = false
 				} else {
+					if hideBranches {
+						if _, id, _ := strings.Cut(entry.Key(), "."); live.IsBranchID(id) {
+							continue
+						}
+					}
 					v, err := decode(entry)
 					if err != nil {
 						continue

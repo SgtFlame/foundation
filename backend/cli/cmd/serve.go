@@ -31,6 +31,7 @@ import (
 	embedimpl "github.com/SgtFlame/foundation/backend/features/ai/services/embedservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/ai/settings"
 	"github.com/SgtFlame/foundation/backend/features/apps"
+	"github.com/SgtFlame/foundation/backend/features/apps/branches"
 	"github.com/SgtFlame/foundation/backend/features/apps/installs"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	"github.com/SgtFlame/foundation/backend/features/apps/ops"
@@ -415,6 +416,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var entityDeps entities.Deps
 		var prefabDeps prefabs.Deps
 		var appDeps manifests.Deps
+		var branchDeps branches.Deps
 		var installDeps installs.Deps
 		var opsDeps ops.Deps
 		var activityDeps activity.Deps
@@ -523,6 +525,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Apps: manifests edited by app.* commands, after the prefabs and
 		// records they name
 		manifests.Contribute(registry, func() manifests.Deps { return appDeps })
+		branches.Contribute(registry, func() branches.Deps { return branchDeps }) // app branches and commits (forge 19a, 19c)
 		installs.Contribute(registry, func() installs.Deps { return installDeps })
 		installs.ContributeTools(registry, func() installs.Deps { return installDeps }) // apps' manifest tools (forge 07j)
 		// Background jobs and the apps' triggers (forge 07a), after the
@@ -857,6 +860,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		entityService := entityimpl.CreateService(entityimpl.WithEntities(entityDeps))
 		prefabDeps = prefabs.Deps{Projections: projections, DB: gdb}
 		appDeps = manifests.Deps{Projections: projections, DB: gdb}
+		branchDeps = branches.Deps{Projections: projections}
 		installDeps = installs.Deps{Projections: projections, DB: gdb, Nodes: liveNodeDeps, Roles: policy, Config: configService}
 		opsDeps = ops.Deps{Bus: liveBus, Store: projections}
 		appService = appimpl.CreateService(appimpl.WithDeps(func() appimpl.Deps {

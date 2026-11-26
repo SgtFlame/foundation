@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/apps/branches"
 	"github.com/SgtFlame/foundation/backend/features/apps/installs"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	"github.com/SgtFlame/foundation/backend/features/apps/ops"
@@ -74,6 +75,7 @@ func everything(t *testing.T) *extensions.Registry {
 	recordsnodes.Contribute(reg, func() recordsdata.Deps { return recordsdata.Deps{} })
 	prefabs.Contribute(reg, func() prefabs.Deps { return prefabs.Deps{} })
 	manifests.Contribute(reg, func() manifests.Deps { return manifests.Deps{} })
+	branches.Contribute(reg, func() branches.Deps { return branches.Deps{} })
 	installs.Contribute(reg, func() installs.Deps { return installs.Deps{} })
 	ops.Contribute(reg)
 	activity.Contribute(reg, activity.NewRecorder(func() activity.Deps { return activity.Deps{} }))
