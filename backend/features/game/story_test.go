@@ -49,4 +49,13 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Clock == nil || *p.Clock != (game.StoryClock{Day: 2, Hour: 23.9}) || !p.Done["almanac"] {
 		t.Fatalf("clock %+v", p.Clock)
 	}
+	// S10: the reading's answer is kept; the ditch pays one silver, once
+	st.refused("game.reachStory", farm, map[string]any{"step": "reading", "told": "lies", "area": farm, "x": 3, "z": 3})
+	st.ok("game.reachStory", farm, map[string]any{"step": "reading", "told": "ditch", "area": farm, "x": 3, "z": 3})
+	st.ok("game.reachStory", farm, map[string]any{"step": "ditch", "area": farm, "x": 3, "z": 3})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "ditch", "area": farm, "x": 3, "z": 3})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Told != "ditch" || p.Items["silver"] != 1 || !p.Done["ditch"] {
+		t.Fatalf("reading %+v", p)
+	}
 }

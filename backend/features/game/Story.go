@@ -31,7 +31,13 @@ const (
 
 // StorySteps are the first hour's steps in order (375 › the first hour).
 // S7 adds the first day: the morning's card, foraging and the herbal.
-var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep"}
+var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch"}
+
+// S10: the step that pays for Wenlan's reading, and the coin it pays
+const (
+	StepDitch = "ditch"
+	Silver    = "silver"
+)
 
 // StoryItems are what a player may gather in a story (S7: herbs for the herbal).
 var StoryItems = []string{"thyme", "nettle", "yarrow"}
@@ -49,6 +55,8 @@ type StoryPlace struct {
 	Body *StoryBody `json:"body,omitempty"`
 	// S9: the story's clock when last saved
 	Clock *StoryClock `json:"clock,omitempty"`
+	// S10: what the player told Wenlan after his reading: all or ditch
+	Told string `json:"told,omitempty"`
 }
 
 // StoryClock is the story's day (since the night of the first snow) and hour (S9).
@@ -79,6 +87,7 @@ func foldStory(f live.Fold) (json.RawMessage, error) {
 		Use   string      `json:"use"`
 		Body  *StoryBody  `json:"body"`
 		Clock *StoryClock `json:"clock"`
+		Told  string      `json:"told"`
 		Area  string      `json:"area"`
 		X     float64     `json:"x"`
 		Z     float64     `json:"z"`
@@ -88,6 +97,16 @@ func foldStory(f live.Fold) (json.RawMessage, error) {
 	}
 	if p.Done == nil {
 		p.Done = map[string]bool{}
+	}
+	if d.Step == StepDitch && !p.Done[StepDitch] {
+		// S10: Wenlan pays a silver for the reading once the ditch runs
+		if p.Items == nil {
+			p.Items = map[string]int{}
+		}
+		p.Items[Silver]++
+	}
+	if d.Told != "" {
+		p.Told = d.Told
 	}
 	if d.Step != "" {
 		p.Done[d.Step] = true
@@ -137,7 +156,7 @@ func contributeStories(reg *extensions.Registry) {
 	})
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: StoriesProjector, Source: source}, Title: "Players' places in stories",
-		Description: "Each player's place in each story, keyed <areaId>.<userId>: {done: {<step>: true}, last, area, at: [x, z], items: {<item>: n}, picked: {<spot>: true}, body: {hum, chill, hunger}, clock: {day, hour}}, folded from the steps they reach and the places they save",
+		Description: "Each player's place in each story, keyed <areaId>.<userId>: {done: {<step>: true}, last, area, at: [x, z], items: {<item>: n}, picked: {<spot>: true}, body: {hum, chill, hunger}, clock: {day, hour}, told}, folded from the steps they reach and the places they save",
 		Area:        Area, Types: []string{StoryType},
 		KeyOf: func(e live.Event) string {
 			if e.UserID == 0 || e.Type != EventReached {
@@ -149,7 +168,7 @@ func contributeStories(reg *extensions.Registry) {
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.story", Source: source}, Title: "My place in a story",
-		Description: fmt.Sprintf("The caller's place in a story known by its starting area: {done: {<step>: true}, last (the last step reached), area (the area they were last in), at: [x, z] (where they stood in it), items: {<herb>: n} and picked: {<spot>: true} (what they gathered, S7, less what they cooked), body: {hum, chill, hunger} (S8), clock: {day, hour} (S9)}, then each change as they play. The first hour's steps are %v.", StorySteps),
+		Description: fmt.Sprintf("The caller's place in a story known by its starting area: {done: {<step>: true}, last (the last step reached), area (the area they were last in), at: [x, z] (where they stood in it), items: {<herb>: n} and picked: {<spot>: true} (what they gathered, S7, less what they cooked), body: {hum, chill, hunger} (S8), clock: {day, hour} (S9), told (S10: what the player told Wenlan after his reading; the ditch pays items.silver)}, then each change as they play. The first hour's steps are %v.", StorySteps),
 		Params:      json.RawMessage(`{"type":"object","properties":{"story":{"type":"string","description":"The story's starting area's id (the farmstead)"}},"required":["story"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"story":"a123"}`)},
 		Action:      "game.read",

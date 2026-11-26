@@ -34,6 +34,9 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   // S9: the moon clock
   { id: 'almanac', title: 'The moon almanac', how: 'Press M to read the moon almanac: the coming nights, which are dark, and how much Hum each allows.' },
   { id: 'sleep', title: "A day's end", how: 'The day passes (a game hour each minute). When night falls at 19:00, stand by a hearth and press R to sleep until morning.' },
+  // S10: a three-card reading for Wenlan
+  { id: 'reading', title: 'A reading for Wenlan', how: "Wenlan Harrow's winter wheat is drowning. Go into the farmhouse kitchen by day and click Wenlan to read three cards for him." },
+  { id: 'ditch', title: 'Clear the ditch', how: 'Find the willow bough the cards showed, at the low corner of the east field, and walk up to it to haul it out.' },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

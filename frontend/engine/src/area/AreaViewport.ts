@@ -14,6 +14,7 @@ import { whistle } from '../defence/Whistle.ts'
 import { DialoguePanel } from './DialoguePanel.ts'
 import { FirstHourPanel } from '../objectives/FirstHour.ts'
 import { dragMarks, drawCard, herbSpots, howl, nextStep, showCard, showHerbal, SIGNATURE_TEXT, storySteps } from '../story/FirstHourStory.ts'
+import { clarity, ditchSpot, ReadingScene, wenlanAnswer, type Told } from '../story/Reading.ts'
 import { canSleep, CLOCK_START, clockText, isDay, nightOf, showAlmanac, sleep, stepClock, type Clock } from '../story/Clock.ts'
 import { BODY_START, BodyHud, breathe, BreathPrompt, cook, humPool, rounded as roundBody, showCooking, spendHum, stepBody, type Body } from '../story/Hum.ts'
 import { ashPile, buildModel, CharacterModel, interiorShell, material } from './Models.ts'
@@ -74,7 +75,7 @@ export interface AreaViewportOptions {
   // S6: a step of the first hour reached (step empty: only the place, saved
   // now and then); the host sends it as game.reachStory to the story's area.
   // S7: item and spot, a herb gathered
-  onStory?: (s: { step: string; area: string; x: number; z: number; item?: string; spot?: string; use?: string; body?: Body; clock?: Clock }) => void
+  onStory?: (s: { step: string; area: string; x: number; z: number; item?: string; spot?: string; use?: string; told?: Told; body?: Body; clock?: Clock }) => void
 }
 
 // S6: a player's place in a story as the server keeps it (game.story)
@@ -214,6 +215,8 @@ export class AreaViewport {
   private bodyHud!: BodyHud
   private breath!: BreathPrompt
   private cooking: HTMLDivElement | null = null
+  // S10: the reading for Wenlan while it is shown
+  reading: ReadingScene | null = null
   private wasNearHearth = false
   private bodySaved: Body | null = null
   private readonly herbs = new THREE.Group()
@@ -408,6 +411,7 @@ export class AreaViewport {
     const n = this.area.npcs?.[id]
     const d = n?.dialogue ? this.dialogues[n.dialogue] : undefined
     if (!n || !d) return false
+    if (d.id === 'farmer' && this.story?.done.sleep && !this.story.done.reading) return this.openReading('Wenlan Harrow')
     this.talkingWith = d.id
     this.caption.style.display = 'none'
     this.talk.start(d, n.name)
@@ -1721,6 +1725,52 @@ export class AreaViewport {
       g.userData.spot = h.spot
       this.herbs.add(g)
     }
+    // S10: the willow bough in the culvert and the water backed up into the wheat, until cleared
+    const ditch = st.done.reading && !st.done.ditch ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
+    if (ditch) {
+      const c = this.set.cell
+      const flood = new THREE.Mesh(new THREE.PlaneGeometry(ditch.field.w - 1, ditch.field.d - 1.6).rotateX(-Math.PI / 2), new THREE.MeshStandardNodeMaterial({ color: 0x4f86ad, transparent: true, opacity: 0.75, roughness: 0.1 }))
+      flood.position.set(ditch.field.x, 0.62, ditch.field.z)
+      this.herbs.add(flood)
+      const bough = new THREE.Group()
+      const bark = new THREE.MeshStandardNodeMaterial({ color: 0x5a4632, roughness: 1 })
+      const leaves = new THREE.MeshStandardNodeMaterial({ color: 0x8aa35a, roughness: 0.9 })
+      const limb = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 3, 6).rotateZ(Math.PI / 2), bark)
+      limb.position.y = 0.2
+      bough.add(limb)
+      for (let i = 0; i < 7; i++) {
+        const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.28, 6, 4), leaves)
+        leaf.position.set(-1.2 + i * 0.4, 0.35 + (i % 2) * 0.15, (i % 3) * 0.15 - 0.15)
+        bough.add(leaf)
+      }
+      bough.position.set(ditch.x, 0, ditch.z)
+      bough.rotation.y = 0.5
+      bough.userData.ditch = true
+      this.herbs.add(bough)
+    }
+  }
+
+  // S10: Wenlan's reading, once the first day is over: three cards, then what to tell him
+  private openReading(who: string): boolean {
+    const st = this.story
+    if (!st || this.reading?.el.isConnected) return true
+    this.caption.style.display = 'none'
+    this.reading = new ReadingScene(this.container, who, clarity(nightOf(st.clock), !!st.done.stillness), (told) => {
+      this.reading = null
+      st.done.reading = true
+      const p = this.player()
+      this.opts.onStory?.({ step: 'reading', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), told, ...this.stateToSave() })
+      this.showStory()
+      this.updateHint()
+      this.say(wenlanAnswer(told))
+    })
+    return true
+  }
+
+  // The field piece's size in cells, east and south (the bough's corner)
+  private fieldSize(): [number, number] {
+    const s = this.set.pieces.find((p) => p.id === 'field')?.size
+    return s ? [s[0], s[1]] : [1, 2]
   }
 
   // K: the herbal, once something is gathered; reading it after foraging is a step
@@ -1764,6 +1814,16 @@ export class AreaViewport {
           this.reach('forage')
           this.say('All three. Press K to write them in the herbal.')
         }
+      }
+    }
+    // S10: the willow bough the cards showed, hauled out by walking up to it
+    if (this.area.id === st.area && st.done.reading && !st.done.ditch) {
+      const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
+      if (d && Math.hypot(p.x - d.x, p.z - d.z) < 2.2) {
+        st.items.silver = (st.items.silver ?? 0) + 1
+        this.reach('ditch')
+        this.drawHerbs()
+        this.say('You haul the willow bough out of the culvert. The water goes with a gulp and a gurgle, and the wheat stands up out of it. Wenlan presses a silver into your hand: "The cards were right."')
       }
     }
     if (this.area.id === st.area && st.done.howl) {

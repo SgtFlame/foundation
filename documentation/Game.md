@@ -259,6 +259,14 @@ The voxel game's twelfth tracer bullet: fishing and hunting on the planet with a
 - **`game.forage`** (`cmd-game-forage`, area `game`, target the world's terrain) takes `{kind: fish|hunt, animal, x, y, z}`: refused away from the planet (120 to 160 m from its centre), for an unknown grazer, or one taken less than 300 s ago; it emits `foraged` with `pack: {food}`, which `game.packs` adds to the sender's pack. The `game.wildlife` projector (keyed `terrain.<world>`, folding **every** terrain event so the command's expected sequence holds) keeps `{taken, fish, hunted}`; the live `game.wildlife {world}` query sends it to every player, so a grazer one person hunts is gone for everyone until it comes back.
 - The first hour's *Grow food* step counts only once the hauler is built, so a fish never finishes the guide.
 
+## Built in S10 (forge 375)
+
+The story game's tenth tracer bullet: a three-card reading for Wenlan Harrow (the design's rule 7 and the play design's card readings; the quest is the design's *a farmer's winter wheat is drowning and a card reading shows the blocked ditch*).
+
+- **`story/Reading.ts`**: `WENLAN_READING`, three placeholder cards of the lesser deck (past *The Plough*, present *The Willow*, future *The Ash*), each with a faint and a clear vision; `clarity(night, stillness)` from the lesser moon's light (at least a half once stillness is learned), `vision`, `wenlanAnswer`, `ditchSpot` (the low south-east corner of the field piece furthest east) and `ReadingScene`, the cards laid face down and turned left to right by a click, then the choice of what to tell: *all of it* (the ditch and the warning of the last card) or *only the ditch*.
+- **In the viewport**: once the first day is over (`sleep`), clicking Wenlan opens the reading instead of his talk; the choice reaches `reading` with `told`. On the farmstead a willow bough lies across the culvert at the east field's low corner and water stands over the barley; walking up to the bough clears it and reaches `ditch`, and Wenlan pays a silver.
+- **Server**: `StorySteps` gains `reading` and `ditch`; `game.reachStory` takes `told` (`all` or `ditch`), kept as `told` in `game.story`, and the first `ditch` adds one `silver` to `items`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
