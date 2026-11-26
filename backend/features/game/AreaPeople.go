@@ -24,7 +24,7 @@ type areaDecide = func(d live.Decision, a GameArea, exists bool) ([]live.NewEven
 func NewNpcID() string { return "n" + strconv.FormatUint(features.NewTSID(), 36) }
 
 const npcSchema = `"name":{"type":"string","description":"What the player sees them called, at most 80 characters, e.g. The farmer"},
-  "kind":{"type":"string","description":"Their look, e.g. farmer"},
+  "kind":{"type":"string","description":"Their look and part, e.g. farmer; hollowed is a foe Play fights, and watcher keeps a house's hearth-watch on a night of hearth defence"},
   "x":{"type":"number","minimum":0,"description":"Metres from the area's west edge"},
   "z":{"type":"number","minimum":0,"description":"Metres from the area's north edge"},
   "facing":{"type":"number","description":"The way they face in radians: 0 north, turning clockwise"},

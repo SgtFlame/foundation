@@ -118,6 +118,13 @@ export class Combat {
     }
   }
 
+  // One more joins the fight (S5: up through the hearthstone)
+  addFoe(f: { id: string; kind: string; x: number; z: number }): void {
+    const kind = CREATURES[f.kind]
+    if (!kind || this.foes.has(f.id)) return
+    this.foes.set(f.id, { id: f.id, kind, x: f.x, z: f.z, alive: true, hp: kind.hp, cooldown: 0.8 + this.rand() * 0.6, telling: 0, stagger: 0 })
+  }
+
   get over(): 'won' | 'fallen' | null {
     if (this.hp <= 0) return 'fallen'
     for (const f of this.foes.values()) if (f.alive) return null

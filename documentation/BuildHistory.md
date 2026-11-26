@@ -954,3 +954,11 @@ The first ship ([Game.md](Game.md) › *Built in V3*). Later game work must:
 - keep the flight model in `ship/Ship.ts`, free of rendering, so the Node runner (346) can fly ships on the server;
 - add a design as a JSON file in `features/game/designs/` and its id and block count to `cmd-game-startShip`'s checks (the list of designs and the `{skiff: 27}` table);
 - read the terrain's density as a signed distance, negative inside the ground, as the walker does.
+
+## Game S5 (forge 375)
+
+The first night of hearth defence ([Game.md](Game.md) › *Built in S5*). Later game work must:
+
+- keep a night's rules in `defence/HearthNight.ts`, pure and seeded, beside `Combat`, so the Node runner (346) can run both;
+- signal with the book's whistle code (one: the stone moved, two: something came through, three: about to die), never a new code;
+- treat a person of kind `watcher` as a house's hearth-watch.

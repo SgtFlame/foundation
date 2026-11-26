@@ -8,6 +8,9 @@ import { WalkGrid, type Point } from '../nav/WalkGrid.ts'
 import { moonLight, moons, type MoonPhase } from '../sky/Moons.ts'
 import { Combat, HERO_HP, isHostile, WEAPONS, type CombatEvent, type Skills, type Stance } from '../combat/Combat.ts'
 import { CombatHud } from '../combat/CombatHud.ts'
+import { HearthNight, WATCHER_HP } from '../defence/HearthNight.ts'
+import { NightHud } from '../defence/NightHud.ts'
+import { whistle } from '../defence/Whistle.ts'
 import { DialoguePanel } from './DialoguePanel.ts'
 import { ashPile, buildModel, CharacterModel, interiorShell, material } from './Models.ts'
 import { fit, pieceOf, turned, type AreaDef, type Dialogue, type Npc, type PieceSet, type Placement } from './PieceSet.ts'
@@ -90,6 +93,8 @@ export interface AreaStats {
   talking: { dialogue: string; node: string } | null
   // S4: the fight in play, if the area holds foes
   combat: { hp: number; stance: Stance; weapon: string; foes: number; alive: number; over: 'won' | 'fallen' | null; target: string | null } | null
+  // A night of hearth defence (S5)
+  hearth: { house: string; time: number; left: number; watcherHp: number; barrel: boolean; inside: number; outcome: 'held' | 'taken' | null; signals: number[] } | null
 }
 
 const GOOD = 0x4caf50
@@ -164,6 +169,9 @@ export class AreaViewport {
   private home: { area: AreaDef; set: PieceSet } | null = null
   // S4: the fight, its panel, the foes' ash and where the character was last sent toward its target
   private combat: Combat | null = null
+  private hearth: HearthNight | null = null
+  private hearthSignals: number[] = []
+  private readonly nightHud: NightHud
   private readonly hud: CombatHud
   private readonly ash = new THREE.Group()
   private weapon: string
@@ -214,6 +222,7 @@ export class AreaViewport {
     container.appendChild(this.hint)
     this.talk = new DialoguePanel(container, () => this.updateHint())
     this.hud = new CombatHud(container, (s) => this.setStance(s))
+    this.nightHud = new NightHud(container)
     this.weapon = opts.weapon ?? 'sword'
     this.skills = opts.skills ?? STARTING_SKILLS
     this.scene.add(this.ash)
@@ -358,7 +367,7 @@ export class AreaViewport {
     const from = this.area.id
     this.home ??= { area: this.area, set: this.set }
     this.talk.end()
-    this.area = area
+    this.area = this.withNight(area)
     this.set = set
     for (const p of this.pieces.values()) this.piecesGroup.remove(p.group)
     this.pieces.clear()
@@ -423,6 +432,8 @@ export class AreaViewport {
       this.marker.visible = false
       this.talk.end()
       this.endCombat()
+      this.hearth = null
+      this.nightHud.show(false)
       if (this.home) {
         // back to the area being edited
         const { area, set } = this.home
@@ -553,6 +564,18 @@ export class AreaViewport {
             target: this.combat.target,
           }
         : null,
+      hearth: this.hearth
+        ? {
+            house: this.hearth.house,
+            time: Math.round(this.hearth.time * 10) / 10,
+            left: Math.round(this.hearth.left),
+            watcherHp: this.hearth.watcherHp,
+            barrel: this.hearth.barrel,
+            inside: this.hearth.inside.size,
+            outcome: this.hearth.outcome,
+            signals: [...this.hearthSignals],
+          }
+        : null,
     }
   }
 
@@ -566,6 +589,7 @@ export class AreaViewport {
     for (const n of this.npcs.values()) n.label.remove()
     this.talk.dispose()
     this.hud.dispose()
+    this.nightHud.dispose()
     this.hint.remove()
     this.moonHud?.remove()
     this.renderer.dispose()
@@ -890,6 +914,7 @@ export class AreaViewport {
         this.floatText(e.foe, `-${e.damage}`, '#ff8a65')
         break
       case 'kill': {
+        this.hearth?.slay(e.foe)
         this.hud.say(e.vital === 'heart' ? `Through the heart. ${name(e.foe)} falls to ash.` : `Beheaded. ${name(e.foe)} falls to ash.`)
         const have = this.npcs.get(e.foe)
         if (have) {
@@ -1260,6 +1285,81 @@ export class AreaViewport {
   }
 
   // A short message in place of the hint
+  // --- Hearth defence (S5) ---
+
+  // Starts a night of hearth defence at a house (an interior area holding a
+  // hearth and, by day, a hearth-watch), while playing; length in seconds
+  startHearthNight(house: AreaDef, opts: { length?: number; seed?: number; raiders?: number; cell?: number } = {}): boolean {
+    if (!this.playing) return false
+    this.hearth = new HearthNight(house, { seed: opts.seed ?? hash(house.id + house.version), length: opts.length, raiders: opts.raiders, cell: opts.cell ?? 2 })
+    this.hearthSignals = []
+    this.nightHud.show(true)
+    this.nightHud.say(
+      this.hearth.watcher
+        ? `${this.hearth.watcher.name} keeps the watch in ${house.name}. Listen for the whistle.`
+        : `Nobody keeps the watch in ${house.name} tonight.`,
+    )
+    this.updateNightHud()
+    return true
+  }
+
+  // The house as the night has it: whatever came through stands in it
+  private withNight(area: AreaDef): AreaDef {
+    const h = this.hearth
+    if (!h || area.id !== h.house) return area
+    // those slain are gone; those still standing keep where they stand
+    const npcs = Object.fromEntries(Object.entries(area.npcs ?? {}).filter(([id]) => !id.startsWith('raider-') || h.inside.has(id)))
+    for (const f of h.inside.values()) if (!npcs[f.id]) npcs[f.id] = { id: f.id, name: 'Hollowed', kind: f.kind, x: f.x, z: f.z, facing: Math.PI }
+    return { ...area, npcs }
+  }
+
+  private updateNightHud(): void {
+    const h = this.hearth
+    if (!h) return
+    this.nightHud.update(h.left, h.watcher ? { hp: h.watcherHp, max: WATCHER_HP } : null, h.barrel, h.inside.size)
+  }
+
+  private nightTick = 0
+  private stepHearth(dt: number): void {
+    const h = this.hearth!
+    const present = this.area.id === h.house
+    const where = present ? 'by the hearth' : 'from the house'
+    for (const e of h.step(dt, present)) {
+      switch (e.kind) {
+        case 'whistle': {
+          this.hearthSignals.push(e.blasts)
+          whistle(e.blasts)
+          const meaning = { 1: 'One blast: the stone has moved.', 2: 'Two blasts: something has come through.', 3: 'Three blasts: the watch is about to die.' }[e.blasts]
+          this.nightHud.say(`♪ ${meaning} (${where})`)
+          this.hud.say(meaning)
+          break
+        }
+        case 'through':
+          if (present) {
+            this.area = this.withNight(this.area)
+            this.syncNpcs()
+            if (this.combat) this.combat.addFoe(e.foe)
+            else this.startCombat()
+            this.hud.say('The hearthstone heaves. Something comes up out of the dark.')
+          }
+          break
+        case 'taken':
+          this.nightHud.say(`The whistle stops. ${h.watcher ? `${h.watcher.name} is gone, and` : 'Nobody kept the watch, and'} the family with them, dragged under the stone.`)
+          this.flash('The house was lost. Press Stop to try the night again.')
+          break
+        case 'dawn':
+          this.nightHud.say('Dawn greys the shutters. The house held.')
+          this.flash('The house held until dawn')
+          break
+      }
+    }
+    this.nightTick -= dt
+    if (this.nightTick <= 0) {
+      this.nightTick = 0.25
+      this.updateNightHud()
+    }
+  }
+
   private flash(text: string): void {
     this.hint.textContent = text
     setTimeout(() => this.updateHint(), 1500)
@@ -1269,6 +1369,7 @@ export class AreaViewport {
     if (this.playing) this.stepCharacter(dt)
     this.loopTime += dt
     if (this.playing && this.combat) this.stepCombat(Math.min(dt, 0.1))
+    if (this.playing && this.hearth) this.stepHearth(dt)
     this.orbit.step(dt, this.input)
     if (this.playing && this.walk) {
       // The context cursor: a hand where the ground may be walked to
