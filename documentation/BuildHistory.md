@@ -914,3 +914,11 @@ The voxel game's first tracer bullet ([Game.md](Game.md) › *Built in V1*), bui
 - make every game definition command an op with its inverse, with a step in `TestEveryOpUndoes`, and its undo scope in `ops.ParseScope`;
 - write game rules as blueprints (`game.editTerrain` is the model), never as Go handlers;
 - keep the browser's generator and edit rules deterministic, because the Node runner (346) will have to produce the same chunks.
+
+## Game S1 and S2 (forge 375)
+
+Story game areas ([Game.md](Game.md) › *Built in S1 and S2*): piece sets, the `gameArea` ops, `game.describeArea`, the area viewport, night lighting with the moons' phases, Play on a walk grid. Later game work must:
+
+- give every area op its inverse and its items in `apps/ops` (`Items.go`), as the piece ops do;
+- read a piece's footprint and edges only through `Turned`/`turned`, never by hand;
+- treat the walk grid as a stand-in: movement moves to the server in S4, and Recast replaces the grid when areas get height levels.
