@@ -78,6 +78,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/extensions/rest/extensionshandlers"
 	extensionsimpl "github.com/SgtFlame/foundation/backend/features/extensions/services/extensionsservice/impl"
+	"github.com/SgtFlame/foundation/backend/features/game"
 	"github.com/SgtFlame/foundation/backend/features/identity"
 	"github.com/SgtFlame/foundation/backend/features/identity/rest/identityhandlers"
 	"github.com/SgtFlame/foundation/backend/features/identity/rest/tenanthandlers"
@@ -429,6 +430,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var uiService uiservice.Service
 		var madeDeps made.Deps
 		var workspaceDeps workspace.Deps
+		var gameDeps game.Deps
 		var configLive configservice.Service
 		var chatLive chatservice.Service
 		var conversationLive conversationservice.Service
@@ -448,6 +450,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		retrieval.ContributeAccess(registry)
 		activity.ContributeAccess(registry)  // a person's own recent activity (forge 15c)
 		workspace.ContributeAccess(registry) // a person's own workspaces (forge 16a)
+		game.ContributeAccess(registry)      // games, their worlds and play (forge 360 V1)
 		cognition.ContributeAccess(registry)
 		kbservice.ContributeAccess(registry)
 		ui.ContributeAccess(registry)
@@ -545,6 +548,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		uitools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
 		made.Contribute(registry, func() made.Deps { return madeDeps })                // chat.mode.*, chat.modes.made, chat.mode.create|options (forge 15h)
 		workspace.Contribute(registry, func() workspace.Deps { return workspaceDeps }) // workspace.*, workspace.list (forge 16a)
+		game.Contribute(registry, func() game.Deps { return gameDeps })                // game.* worlds, game.editTerrain, game.describeWorld (forge 360 V1)
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
 		uihandlers.ContributeLive(registry, func() uiservice.Service { return uiService })
 		confighandlers.ContributeLive(registry, func() configservice.Service { return configLive })
@@ -845,6 +849,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		authz.SetAgents(recordsdata.Agents{Deps: func() recordsdata.Deps { return recordDeps }}) // agents are records (forge 07j)
 		// Modes people made are listed after the chat.modes settings (forge 15h)
 		workspaceDeps = workspace.Deps{Store: projections, Bus: liveBus}
+		gameDeps = game.Deps{Store: projections}
 		workbenchcontext.SetWorkspaceNames(func(args features.ServiceArgs, id string) (string, bool) {
 			return workspace.Name(args, projections, id)
 		})
