@@ -6,8 +6,10 @@ import { Input } from '../input/Input.ts'
 import { Renderer } from '../render/Renderer.ts'
 import { WalkGrid, type Point } from '../nav/WalkGrid.ts'
 import { moonLight, moons, type MoonPhase } from '../sky/Moons.ts'
+import { Combat, HERO_HP, isHostile, WEAPONS, type CombatEvent, type Skills, type Stance } from '../combat/Combat.ts'
+import { CombatHud } from '../combat/CombatHud.ts'
 import { DialoguePanel } from './DialoguePanel.ts'
-import { buildModel, CharacterModel, interiorShell, material } from './Models.ts'
+import { ashPile, buildModel, CharacterModel, interiorShell, material } from './Models.ts'
 import { fit, pieceOf, turned, type AreaDef, type Dialogue, type Npc, type PieceSet, type Placement } from './PieceSet.ts'
 
 // What the editor asks for; the host sends it to the server, which decides
@@ -59,7 +61,14 @@ export interface AreaViewportOptions {
   onTravel?: (area: string) => void
   // A person was selected in the editor (null: none)
   onNpcSelect?: (id: string | null) => void
+  // S4: the weapon in hand in play (WEAPONS: sword, pitchfork) and the character's skills
+  weapon?: string
+  skills?: Skills
 }
+
+// The thimble's skills at the first fight (375 › the first hour): a little
+// blade from muscle memory, a farm hand's polearm, the first of reading
+export const STARTING_SKILLS: Skills = { blade: 2, polearm: 1, reading: 1 }
 
 export interface AreaStats {
   backend: string
@@ -79,6 +88,8 @@ export interface AreaStats {
   areaShown: string
   npcs: number
   talking: { dialogue: string; node: string } | null
+  // S4: the fight in play, if the area holds foes
+  combat: { hp: number; stance: Stance; weapon: string; foes: number; alive: number; over: 'won' | 'fallen' | null; target: string | null } | null
 }
 
 const GOOD = 0x4caf50
@@ -151,6 +162,14 @@ export class AreaViewport {
   private readonly talk: DialoguePanel
   private arrival: { kind: 'talk'; id: string } | { kind: 'travel'; area: string } | null = null
   private home: { area: AreaDef; set: PieceSet } | null = null
+  // S4: the fight, its panel, the foes' ash and where the character was last sent toward its target
+  private combat: Combat | null = null
+  private readonly hud: CombatHud
+  private readonly ash = new THREE.Group()
+  private weapon: string
+  private skills: Skills
+  private approachTick = 0
+  private loopTime = 0
 
   private constructor(container: HTMLElement, renderer: Renderer, opts: AreaViewportOptions) {
     this.container = container
@@ -194,6 +213,10 @@ export class AreaViewport {
       'font:13px system-ui,sans-serif;color:#eee;background:rgba(0,0,0,0.55);pointer-events:none;white-space:nowrap'
     container.appendChild(this.hint)
     this.talk = new DialoguePanel(container, () => this.updateHint())
+    this.hud = new CombatHud(container, (s) => this.setStance(s))
+    this.weapon = opts.weapon ?? 'sword'
+    this.skills = opts.skills ?? STARTING_SKILLS
+    this.scene.add(this.ash)
 
     canvas.addEventListener('pointerdown', this.onPointerDown)
     canvas.addEventListener('keydown', this.onKey)
@@ -286,6 +309,32 @@ export class AreaViewport {
     this.opts.onNpcSelect?.(id)
   }
 
+  // The weapon in hand (WEAPONS) and the character's skills; a fight under way restarts with them
+  setWeapon(id: string): void {
+    if (!WEAPONS[id] || id === this.weapon) return
+    this.weapon = id
+    if (this.combat) this.startCombat()
+  }
+
+  setSkills(s: Skills): void {
+    this.skills = s
+    if (this.combat) this.startCombat()
+  }
+
+  // Strike, Pivot or Guard, as keys 1 to 3 or the panel's buttons
+  setStance(s: Stance): void {
+    this.combat?.setStance(s)
+  }
+
+  // Orders the character to fight a foe (as clicking it in play does)
+  fight(id: string): boolean {
+    if (!this.combat?.foes.get(id)?.alive) return false
+    this.combat.attack(id)
+    this.talk.end()
+    this.arrival = null
+    return true
+  }
+
   // Talks to a person now, as walking up to them does in play
   talkTo(id: string): boolean {
     const n = this.area.npcs?.[id]
@@ -324,6 +373,7 @@ export class AreaViewport {
     this.orbit.target.set(at.x, 0, at.z)
     this.orbit.distance = this.set.interior ? 16 : 32
     this.grid.visible = false
+    this.startCombat()
   }
 
   setLighting(l: Lighting): void {
@@ -362,6 +412,7 @@ export class AreaViewport {
       this.orbit.distance = this.set.interior ? 16 : 32
       this.setNpcTool(null)
       this.selectNpc(null)
+      this.startCombat()
       this.grid.visible = false
     } else {
       if (this.character) this.scene.remove(this.character.group)
@@ -371,6 +422,7 @@ export class AreaViewport {
       this.arrival = null
       this.marker.visible = false
       this.talk.end()
+      this.endCombat()
       if (this.home) {
         // back to the area being edited
         const { area, set } = this.home
@@ -381,8 +433,8 @@ export class AreaViewport {
         this.pieces.clear()
         this.layout(false)
         this.syncPieces()
-        this.syncNpcs()
       }
+      this.syncNpcs(true)
       this.orbit.keyPan = true
       if (this.editCamera) {
         this.orbit.target.copy(this.editCamera.target)
@@ -490,6 +542,17 @@ export class AreaViewport {
       areaShown: this.area.id,
       npcs: this.npcs.size,
       talking: this.talk.state(),
+      combat: this.combat
+        ? {
+            hp: this.combat.hp,
+            stance: this.combat.stance,
+            weapon: this.combat.weapon.id,
+            foes: this.combat.foes.size,
+            alive: [...this.combat.foes.values()].filter((f) => f.alive).length,
+            over: this.combat.over,
+            target: this.combat.target,
+          }
+        : null,
     }
   }
 
@@ -502,6 +565,7 @@ export class AreaViewport {
     for (const r of this.remotes.values()) r.label.remove()
     for (const n of this.npcs.values()) n.label.remove()
     this.talk.dispose()
+    this.hud.dispose()
     this.hint.remove()
     this.moonHud?.remove()
     this.renderer.dispose()
@@ -674,20 +738,28 @@ export class AreaViewport {
   }
 
   // Adds, moves and removes the people to match the area (S3)
-  private syncNpcs(): void {
+  private syncNpcs(force = false): void {
     const want = this.area.npcs ?? {}
+    if (force) {
+      for (const have of this.npcs.values()) {
+        this.scene.remove(have.model.group)
+        have.label.remove()
+      }
+      this.npcs.clear()
+    }
     for (const [id, n] of Object.entries(want)) {
       const key = JSON.stringify(n)
       let have = this.npcs.get(id)
       if (have?.key === key) continue
+      if (this.combat?.foes.has(id)) continue // a foe in a fight moves by the fight, not the definition
       if (!have) {
-        const model = new CharacterModel(npcColor(n))
+        const model = new CharacterModel(npcColor(n), isHostile(n.kind))
         this.scene.add(model.group)
         const label = document.createElement('div')
         label.dataset.npc = id
         label.style.cssText =
           'position:absolute;z-index:2;padding:1px 6px;border-radius:3px;font:12px Georgia,serif;color:#f3e7cf;pointer-events:none;' +
-          'background:rgba(20,16,12,0.75);transform:translate(-50%,-160%);white-space:nowrap'
+          `background:${isHostile(n.kind) ? 'rgba(90,20,14,0.8)' : 'rgba(20,16,12,0.75)'};transform:translate(-50%,-160%);white-space:nowrap`
         this.container.appendChild(label)
         have = { key, model, label }
         this.npcs.set(id, have)
@@ -707,6 +779,166 @@ export class AreaViewport {
     if (this.playing) this.buildWalk()
   }
 
+  // Starts the fight with the area's foes, if it has any (play, travel, a new weapon)
+  private startCombat(): void {
+    this.endCombat()
+    const foes = Object.values(this.area.npcs ?? {}).filter((n) => isHostile(n.kind))
+    if (!foes.length || !this.playing) return
+    const walk = this.walk
+    this.combat = new Combat(
+      foes.map((n) => ({ id: n.id, kind: n.kind!, x: n.x, z: n.z })),
+      {
+        skills: this.skills,
+        weapon: WEAPONS[this.weapon] ?? WEAPONS.sword,
+        seed: hash(this.area.id + this.area.version),
+        walkable: walk ? (x, z) => walk.walkable(...walk.cellOf({ x, z })) : undefined,
+      },
+    )
+    this.hud.show(true)
+    this.hud.say(`${foes.length === 1 ? 'A Hollowed' : `${foes.length} Hollowed`}. Only the neck or the heart will end them.`)
+    this.updateHud()
+    this.updateHint()
+  }
+
+  private endCombat(): void {
+    if (!this.combat) return
+    this.combat = null
+    this.ash.clear()
+    this.hud.show(false)
+    this.syncNpcs(true)
+    this.updateHint()
+  }
+
+  private foeAt(x: number, z: number): string | null {
+    let best: string | null = null
+    let bestD = 1.6
+    for (const f of this.combat?.foes.values() ?? []) {
+      const d = Math.hypot(f.x - x, f.z - z)
+      if (f.alive && d < bestD) {
+        best = f.id
+        bestD = d
+      }
+    }
+    return best
+  }
+
+  private updateHud(): void {
+    const c = this.combat
+    if (!c) return
+    const skill = c.weapon.kind === 'polearm' ? `polearm ${this.skills.polearm}` : `blade ${this.skills.blade}`
+    this.hud.update(c.hp, HERO_HP, c.stance, c.weapon.title, `${skill}, reading ${this.skills.reading}`)
+  }
+
+  // One step of the fight: the character closes on its target or circles it
+  // when pivoting, the foes move and claw, and what happened is shown
+  private stepCombat(dt: number): void {
+    const c = this.combat!
+    const ch = this.character
+    if (!ch || c.over === 'fallen') return
+    const pos = ch.group.position
+    const t = c.target ? c.foes.get(c.target) : undefined
+    const want = c.wantsApproach(pos)
+    this.approachTick -= dt
+    if (want && this.approachTick <= 0) {
+      this.approachTick = 0.3
+      this.walkNear(want)
+    } else if (t?.alive && !want && this.path.length) {
+      this.path = [] // in reach: stand and fight
+      this.marker.visible = false
+    }
+    if (t?.alive && !want) {
+      ch.group.rotation.y = Math.atan2(t.x - pos.x, t.z - pos.z)
+      if (c.stance === 'pivot') {
+        // circle the target toward its flank
+        const a = Math.atan2(pos.x - t.x, pos.z - t.z) + dt * 1.6
+        const r = Math.hypot(pos.x - t.x, pos.z - t.z)
+        const nx = t.x + Math.sin(a) * r
+        const nz = t.z + Math.cos(a) * r
+        if (this.walk?.walkable(...this.walk.cellOf({ x: nx, z: nz }))) pos.set(nx, 0, nz)
+      }
+    }
+    for (const e of c.step(dt, pos)) this.showEvent(e)
+    // the foes follow the fight, lurching
+    let i = 0
+    for (const f of c.foes.values()) {
+      const have = this.npcs.get(f.id)
+      i++
+      if (!have || !f.alive) continue
+      const g = have.model.group
+      const moved = Math.hypot(f.x - g.position.x, f.z - g.position.z)
+      g.position.set(f.x + Math.sin(this.loopTime * 23 + i) * 0.03, 0, f.z)
+      g.rotation.y = Math.atan2(pos.x - f.x, pos.z - f.z) + Math.sin(this.loopTime * 9 + i) * 0.15
+      have.model.walk(this.loopTime * 14 + i, moved > 0.001 ? 1 : f.telling > 0 ? 0.6 : 0)
+    }
+    this.updateHud()
+  }
+
+  private showEvent(e: CombatEvent): void {
+    const name = (id: string) => this.area.npcs?.[id]?.name ?? 'It'
+    switch (e.kind) {
+      case 'tell':
+        this.floatText(e.foe, '!', '#ffcc66')
+        break
+      case 'miss':
+        this.hud.say('Your swing goes wide.')
+        break
+      case 'futile':
+        this.floatText(e.foe, 'hacked', '#b9ad94')
+        this.hud.say(`You cut ${name(e.foe)} half through. It keeps coming.`)
+        break
+      case 'hurt':
+        this.floatText(e.foe, `-${e.damage}`, '#ff8a65')
+        break
+      case 'kill': {
+        this.hud.say(e.vital === 'heart' ? `Through the heart. ${name(e.foe)} falls to ash.` : `Beheaded. ${name(e.foe)} falls to ash.`)
+        const have = this.npcs.get(e.foe)
+        if (have) {
+          const pile = ashPile()
+          pile.position.copy(have.model.group.position)
+          this.ash.add(pile)
+          this.scene.remove(have.model.group)
+          have.label.remove()
+          this.npcs.delete(e.foe)
+        }
+        if (this.combat?.over === 'won') this.hud.say('Quiet again. Nothing left but ash and rags.')
+        break
+      }
+      case 'claw':
+        if (e.blocked) this.hud.say(e.read ? 'You read the lunge and turn it on your knife arm. An opening.' : `Your guard takes most of it (-${e.damage}).`)
+        else if (e.dodged) this.hud.say('You pivot clear of the claws.')
+        else this.hud.say(`Nails rake you, burning (-${e.damage}).`)
+        break
+      case 'cadence':
+        this.hud.say('Strike, Pivot, Guard: the old cadence. Your next strike is aimed.')
+        break
+      case 'fallen':
+        this.hud.say('You go down under them. Press Stop to try again.')
+        this.path = []
+        this.flash('You were overwhelmed')
+        break
+    }
+  }
+
+  // A word over a foe's head that rises and fades
+  private floatText(id: string, text: string, color: string): void {
+    const have = this.npcs.get(id)
+    if (!have) return
+    const el = document.createElement('div')
+    el.textContent = text
+    el.style.cssText = `position:absolute;z-index:3;pointer-events:none;font:700 14px system-ui,sans-serif;color:${color};text-shadow:0 1px 2px #000;transition:transform 0.8s,opacity 0.8s`
+    const v = have.model.group.position.clone()
+    v.y = 2.6
+    v.project(this.orbit.camera)
+    el.style.left = `${((v.x + 1) / 2) * this.renderer.canvas.clientWidth}px`
+    el.style.top = `${((1 - v.y) / 2) * this.renderer.canvas.clientHeight}px`
+    this.container.appendChild(el)
+    requestAnimationFrame(() => {
+      el.style.transform = 'translateY(-24px)'
+      el.style.opacity = '0'
+    })
+    setTimeout(() => el.remove(), 900)
+  }
+
   // The person standing nearest a point on the ground, within reach
   private npcAt(x: number, z: number, reach = 1.2): Npc | null {
     let best: Npc | null = null
@@ -719,6 +951,11 @@ export class AreaViewport {
       }
     }
     return best
+  }
+
+  // Every door with where a character stands to go through it, linked or not
+  doorPoints(): { id: string; link: string; at: Point }[] {
+    return this.doors()
   }
 
   // The linked doors with where a character stands to go through each
@@ -766,9 +1003,16 @@ export class AreaViewport {
       if (!hit) return
       this.talk.end()
       this.arrival = null
+      // a foe: fight it
+      const foe = this.foeAt(hit.x, hit.z)
+      if (foe) {
+        this.fight(foe)
+        return
+      }
+      this.combat?.attack(null)
       // a person: walk up to them and talk
       const n = this.npcAt(hit.x, hit.z)
-      if (n) {
+      if (n && !isHostile(n.kind)) {
         if (!this.walkNear({ x: n.x, z: n.z })) this.flash('No way there')
         else this.arrival = { kind: 'talk', id: n.id }
         return
@@ -819,6 +1063,10 @@ export class AreaViewport {
   private onKey = (e: KeyboardEvent) => {
     if (this.playing) {
       if (e.key === 'Escape') this.path = []
+      if (this.combat && !this.talk.open) {
+        const s = ({ '1': 'strike', '2': 'pivot', '3': 'guard' } as Record<string, Stance>)[e.key]
+        if (s) this.setStance(s)
+      }
       return
     }
     if (this.selectedNpc) {
@@ -930,7 +1178,7 @@ export class AreaViewport {
         grid.block(minX, minZ, maxX - minX, maxZ - minZ)
       }
     }
-    for (const n of Object.values(this.area.npcs ?? {})) grid.block(n.x - 0.4, n.z - 0.4, 0.8, 0.8)
+    for (const n of Object.values(this.area.npcs ?? {})) if (!isHostile(n.kind)) grid.block(n.x - 0.4, n.z - 0.4, 0.8, 0.8)
     this.walk = grid
     this.navMs = performance.now() - t0
     // A piece laid on the character, or on its way, moves it aside or finds another way
@@ -1019,6 +1267,8 @@ export class AreaViewport {
 
   private step(dt: number): void {
     if (this.playing) this.stepCharacter(dt)
+    this.loopTime += dt
+    if (this.playing && this.combat) this.stepCombat(Math.min(dt, 0.1))
     this.orbit.step(dt, this.input)
     if (this.playing && this.walk) {
       // The context cursor: a hand where the ground may be walked to
@@ -1157,6 +1407,8 @@ export class AreaViewport {
   private updateHint(): void {
     this.hint.textContent = this.talk.open
       ? 'Pick an answer · 1 to 9 · Esc to end the talk'
+      : this.playing && this.combat
+      ? 'Fighting · click a Hollowed to attack it · 1 Strike · 2 Pivot · 3 Guard · click the ground to back away'
       : this.playing
       ? 'Playing · click the ground to walk there · click a person to talk · click a door to go through · Esc to stop walking'
       : this.npcTool
@@ -1201,7 +1453,7 @@ function round1(v: number): number {
 
 // A person's cloak, by their look
 function npcColor(n: Npc): number {
-  return { farmer: 0x7a6a3a, wife: 0x6b3b4a, child: 0x4a6b5a }[n.kind ?? ''] ?? 0x8a5a3a
+  return { farmer: 0x7a6a3a, wife: 0x6b3b4a, child: 0x4a6b5a, hollowed: 0x6f6a64 }[n.kind ?? ''] ?? 0x8a5a3a
 }
 
 function hash(s: string): number {

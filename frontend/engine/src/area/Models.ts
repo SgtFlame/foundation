@@ -371,7 +371,8 @@ export class CharacterModel {
   private readonly legs: THREE.Mesh[] = []
   private readonly body: THREE.Group
 
-  constructor(color: number) {
+  // eyes: a Hollowed's dull red embers in dark hollows (S4)
+  constructor(color: number, eyes = false) {
     this.body = new THREE.Group()
     const cloak = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.25, 7), material(color))
     cloak.position.y = 1.15
@@ -391,6 +392,14 @@ export class CharacterModel {
       this.legs.push(leg)
       this.group.add(leg)
     }
+    if (eyes) {
+      for (const x of [-0.08, 0.08]) {
+        const e = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, 0.04), material(0xff3b1a, 3))
+        e.position.set(x, 1.98, 0.2)
+        this.body.add(e)
+      }
+      this.body.rotation.x = 0.25 // hunched, lurching forward
+    }
     this.group.add(this.body)
   }
 
@@ -401,4 +410,15 @@ export class CharacterModel {
     this.legs[1].rotation.x = -swing
     this.body.position.y = Math.abs(Math.cos(phase)) * 0.06 * amount
   }
+}
+
+// What a Hollowed leaves when it is killed (S4): a heap of ash and the rags of its clothes
+export function ashPile(): THREE.Group {
+  const g = new THREE.Group()
+  const heap = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.25, 9), material(0x8d8984))
+  heap.position.y = 0.12
+  heap.receiveShadow = true
+  g.add(heap)
+  g.add(box(0.7, 0.04, 0.4, 0x4a3b30, 0.25, 0, 0.2), box(0.35, 0.03, 0.5, 0x3d3a44, -0.3, 0, -0.15))
+  return g
 }

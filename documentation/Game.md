@@ -89,6 +89,22 @@ The story game's third tracer bullet: go into the farmhouse and talk to the farm
 - `game.describeArea` lists the people and where each door leads.
 - **In the viewport**: `interiorShell` draws an interior's plank floor and walls. People are `CharacterModel`s with their names above them. With a person in hand (`setNpcTool(kind)`) a click stands one there; a click on a person selects them, Alt and the arrows move them half a metre, Delete removes them. In Play, clicking a person walks up to them and opens the talk panel (`area/DialoguePanel.ts`: their line and numbered answers, keys 1 to 9 and Escape). Clicking a linked door walks to the point its model names (`userData.door`) and calls `onTravel(area)`. The host reads that area and calls `travel(area, set)`, and the character comes in by the door that leads back. Stop returns to the area being edited. People block the walk grid. Stats add `areaShown`, `npcs` and `talking`.
 
+## Built in S4 (forge 375)
+
+The story game's fourth tracer bullet: the first fight, two Hollowed at the barn, decided by the character's skills.
+
+- **`combat/Combat.ts`** is a pure simulation, deterministic from its seed and the orders given, so it runs in Node tests and later in the Node runner (346). The player chooses a target and a stance; the character's skills (`blade`, `polearm`, `reading`, 0 to 5) decide whether a strike lands (`hitChance`) and whether it is vital (`vitalChance`).
+  - **Stances**: *Strike* attacks, *Pivot* circles the target, dodging half the claws and setting up a flank strike, and *Guard* turns claws on the knife arm (a fifth of the damage; none if the tell was read, which leaves an opening). Strike, Pivot, Guard held in turn and back to Strike is the old **cadence**, from blade skill 2: the next strike is aimed.
+  - **The Hollowed** (`CREATURES.hollowed`) take harm only to the neck or the heart. Any other hit staggers them, and they keep coming. They drive for the character, slide round blocked cells, and show a tell (`!`) before each claw to a character with reading 1 or more.
+  - **Weapons**: *Sword and knife* (blade, reach 1.5 m) and *Pitchfork* (polearm, reach 2.3 m, slower, aiming for the heart).
+  - A test checks that the thimble's starting skills (`STARTING_SKILLS`: blade 2, polearm 1, reading 1) win most fights against two Hollowed by striking alone, but not all of them.
+- **In the viewport**: a person whose kind is a creature (`isHostile`) is a foe. They are drawn ash-grey and hunched with ember eyes and a red label, and they do not block the walk grid. Play starts a fight when the area holds foes:
+  - Clicking a foe makes it the target. The character closes on it and strikes, and in Pivot circles it.
+  - Keys 1, 2 and 3 set the stance, or use the fight panel (`combat/CombatHud.ts`: health, stances, the weapon and skill, and the last three things that happened).
+  - A slain foe leaves a heap of ash and rags (`ashPile`).
+  - Stop ends the fight and stands the foes back where they were placed.
+  - `setWeapon`, `setSkills`, `setStance`, `fight(id)` and `doorPoints()` serve hosts and tests, and stats add `combat`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
@@ -100,3 +116,4 @@ The story game's third tracer bullet: go into the farmhouse and talk to the farm
 - Asteroids are generated from the world's seed, not placed one by one; bodies as their own definitions come with 361a.
 - S3's people stand still and have one dialogue each; schedules and routines come later (375 open question on NPC routines). Dialogues are built-in files; editing them in Forge comes with the dialogue editor.
 - Travel through a door reads the other area in the browser and shows it as it was read; the server holds the player's area when play moves to the server (S4).
+- S4's fight runs in the browser and nothing of it is stored. The Node runner (346) takes it to the server, with the same `Combat` rules. Skills are fixed at the thimble's start until the character sheet (379) arrives.

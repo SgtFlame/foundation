@@ -938,3 +938,11 @@ The farmhouse kitchen and the farmer ([Game.md](Game.md) › *Built in S3*). Lat
 - make interiors separate areas of an `interior` piece set, joined by doors linked with `game.linkDoor`;
 - keep a door's stand point in its model (`userData.door`), so travel arrives by the door that leads back;
 - give dialogues answers that lead to a node or end the talk, checked by `Dialogue.Check`, and keep their text out of Go.
+
+## Game S4 (forge 375)
+
+The first fight ([Game.md](Game.md) › *Built in S4*). Later game work must:
+
+- keep combat rules in `combat/Combat.ts`, pure and seeded, so the Node runner (346) can run the same fight on the server;
+- add a creature as a `CREATURES` entry and give people of that kind no dialogue; the viewport treats any creature kind as a foe;
+- decide outcomes from the character's skills, never from the player's aim or reflexes (the user, 2026-11-26).
