@@ -232,6 +232,36 @@ func contributeQueries(reg *extensions.Registry, r *reader) {
 		},
 	})
 	live.Queries.Register(reg, live.Query{
+		Descriptor: extensions.Descriptor{ID: "app.partAt", Source: "apps"}, Title: "A part at a commit",
+		Description: "One part of an app as a commit froze it (forge 19c), read-only: {commit, type, id, seq, value}, value its draft's state then (a prefab's, graph's, entity type's or the manifest's view, as prefab.describe, cognition.graph, entity.describe or app.describe give a draft), or null when the commit does not hold it. A commit never changes, so the snapshot is all.",
+		Params:      json.RawMessage(`{"type":"object","properties":{"commit":{"type":"string","description":"The commit's id (app.history)"},"type":{"type":"string","enum":["app","prefab","graph","entity"],"description":"The part's type"},"id":{"type":"string","description":"The part's id"}},"required":["commit","type","id"]}`),
+		Examples:    []json.RawMessage{json.RawMessage(`{"commit":"tasks-c01M8D1GHEX9QY","type":"prefab","id":"myTasks"}`)},
+		Action:      "app.read",
+		Resource: func(p features.Principal, raw json.RawMessage) string {
+			var a struct{ Commit string }
+			_ = json.Unmarshal(raw, &a)
+			return apps.Resource(p, AppOfCommit(a.Commit))
+		},
+		Run: func(f live.Feed) error {
+			var a struct{ Commit, Type, ID string }
+			_ = json.Unmarshal(f.Params(), &a)
+			if !live.ValidToken(a.Commit) || !live.ValidToken(a.ID) || !slices.Contains([]string{"app", "prefab", "graph", "entity"}, a.Type) {
+				return fmt.Errorf("give a commit, a type (app, prefab, graph, entity) and an id")
+			}
+			v, ok, err := r.PartAt(f.Context(), f.Args().Principal.TenantID, a.Commit, live.Target{Area: live.AreaDefinitions, Type: a.Type, ID: a.ID})
+			if err != nil {
+				return err
+			}
+			out := map[string]any{"commit": a.Commit, "type": a.Type, "id": a.ID, "value": nil}
+			if ok {
+				out["seq"], out["value"] = v.Seq, v.Value
+			}
+			f.Snapshot(out, nil)
+			<-f.Context().Done()
+			return nil
+		},
+	})
+	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "app.history", Source: "apps"}, Title: "An app's history",
 		Description: "An app's commits, newest first: {app, commits: [{id, app, branch, parent, mergeParent, parts, message, author, createdAt, structured, semantic, approvals}]}. With branch, only the commits its head reaches (through merges too).",
 		Params:      json.RawMessage(`{"type":"object","properties":{"app":{"type":"string","description":"The app's id"},"branch":{"type":"string","description":"Only the commits this branch's head reaches"}},"required":["app"]}`),

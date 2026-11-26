@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -279,6 +280,11 @@ func TestBranchDrafts(t *testing.T) {
 	got, ok, err := at(ada, first.ID, live.Target{Area: live.AreaDefinitions, Type: "prefab", ID: "allTasks"})
 	if err != nil || !ok || description(got.Value) != "" {
 		t.Fatalf("allTasks at the first commit: %s %v %v", got.Value, ok, err)
+	}
+	// The same through the app.partAt query (forge 19c)
+	pa, _, fail := f.subs.Once(ada, "app.partAt", json.RawMessage(`{"commit":"`+first.ID+`","type":"prefab","id":"allTasks"}`))
+	if raw, _ := json.Marshal(pa); fail != nil || !strings.Contains(string(raw), `"allTasks"`) || strings.Contains(string(raw), `"value":null`) {
+		t.Fatalf("app.partAt: %s %v", raw, fail)
 	}
 	// Listings of main never show a branch's drafts
 	data, _, fail := f.subs.Once(ada, "prefab.list", json.RawMessage(`{}`))

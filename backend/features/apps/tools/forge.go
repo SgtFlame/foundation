@@ -296,6 +296,38 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 	})
 
 	tools.Tools.Register(reg, tools.Tool{
+		Descriptor: extensions.Descriptor{ID: "forge.history", Source: "apps"}, Title: "Read an app's history", Effect: tools.EffectRead,
+		Description: "Lists an app's branches and commits (forge 19c): each branch with its status, base, head and the parts it changed since its last commit (what a commit now would hold), and the commits newest first with their branch, message, author, parents and the parts each froze (type.id@seq). branch keeps the commits that branch's head reaches. Commit a branch with app.commit; only main's head commit is published (app.publish {commit}).",
+		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string","description":"The app's id (app.list)"},"branch":{"type":"string","description":"Only the commits this branch's head reaches"}},"required":["appId"]}`),
+		Run: func(call tools.Call) (tools.Result, error) {
+			a, err := tools.Decode[struct{ AppID, Branch string }](call)
+			if err != nil {
+				return tools.Result{}, err
+			}
+			if !live.ValidToken(a.AppID) {
+				return tools.Result{}, fmt.Errorf("%q is not an app id", a.AppID)
+			}
+			brs, _, err := once(call, "app.branches", map[string]any{"app": a.AppID})
+			if err != nil {
+				return tools.Result{}, err
+			}
+			params := map[string]any{"app": a.AppID}
+			if b := branchName(a.Branch); b != "" {
+				params["branch"] = b
+			}
+			hist, _, err := once(call, "app.history", params)
+			if err != nil {
+				return tools.Result{}, err
+			}
+			content := map[string]any{"branches": brs, "history": hist}
+			raw, _ := json.Marshal(hist)
+			var h struct{ Commits []json.RawMessage }
+			_ = json.Unmarshal(raw, &h)
+			return tools.Result{Content: content, Summary: fmt.Sprintf("%s: %d commits", a.AppID, len(h.Commits))}, nil
+		},
+	})
+
+	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "forge.app", Source: "apps"}, Title: "Read an app", Effect: tools.EffectRead,
 		Description: "Reads an application's draft: its manifest (pages with their titles and descriptions, nav, editor kinds, entity types, commands, queries, roles, settings, triggers), its rev, and a summary of each part (the prefabs, graphs and entity types it names or owns: name, description, kind, rev, published version, missing); its current problems, each at a path with a fix; who else has it open; the position (stream → sequence) it was read at, and after, the sequence of the app's last op, to pass to forge.apply and forge.changes. Read a part in full with forge.read.",
 		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string","description":"The app's id (app.list)"},"branch":{"type":"string","description":"The app's branch to read (app.branches), its parts as the branch has them; main when left out"}},"required":["appId"]}`),

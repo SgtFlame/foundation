@@ -70,14 +70,16 @@ const VersionProjector = "apps.version"
 
 // Published is the app's published event: which version, from which rev.
 type Published struct {
-	Version int `json:"version"`
-	Rev     int `json:"rev"`
+	Version int    `json:"version"`
+	Rev     int    `json:"rev"`
+	Commit  string `json:"commit,omitempty"` // main's commit it froze (forge 19c)
 }
 
 // VersionSummary is one published version in the draft, newest last.
 type VersionSummary struct {
 	Version     int       `json:"version"`
 	Rev         int       `json:"rev"`
+	Commit      string    `json:"commit,omitempty"` // main's commit (forge 19c)
 	PublishedBy uint64    `json:"publishedBy,string"`
 	PublishedAt time.Time `json:"publishedAt"`
 }
@@ -394,7 +396,7 @@ func Apply(d *Draft, e live.Event) error {
 			if p.Rev == d.Rev {
 				d.PublishedRev = d.Rev + 1
 			}
-			d.Versions = append(d.Versions, VersionSummary{Version: p.Version, Rev: p.Rev, PublishedBy: e.UserID, PublishedAt: e.Time})
+			d.Versions = append(d.Versions, VersionSummary{Version: p.Version, Rev: p.Rev, Commit: p.Commit, PublishedBy: e.UserID, PublishedAt: e.Time})
 		}
 	case EventDeleted, EventRestored:
 		d.Deleted = e.Type == EventDeleted

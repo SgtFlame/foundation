@@ -18,9 +18,12 @@ import (
 // published again reaches the app's users only through a new app version
 // and an upgrade.
 type Version struct {
-	App      string   `json:"app"`
-	Version  int      `json:"version"`
-	Rev      int      `json:"rev"` // the draft's rev it was published from
+	App     string `json:"app"`
+	Version int    `json:"version"`
+	Rev     int    `json:"rev"` // the draft's rev it was published from
+	// Commit is main's commit it was published from (forge 19c); empty for
+	// a version published from a rev before the app had commits.
+	Commit   string   `json:"commit,omitempty"`
 	Manifest Manifest `json:"manifest"`
 	// Prefabs are the published versions of the prefabs its pages and frame
 	// render, and of those they render in turn.
