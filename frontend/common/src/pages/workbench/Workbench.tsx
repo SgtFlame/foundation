@@ -1,5 +1,5 @@
 import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material'
-import { Layout, Model, TabNode, TabSetNode, type IJsonModel, type IJsonRowNode } from 'flexlayout-react'
+import { Actions, Layout, Model, TabNode, TabSetNode, type IJsonModel, type IJsonRowNode } from 'flexlayout-react'
 import 'flexlayout-react/style/dark.css'
 import { useEffect, useRef, useState } from 'react'
 import { logsOn } from '../../editors/logs/LogsObject.ts'
@@ -122,6 +122,15 @@ function saverFor(id: string): LayoutSaver {
   })
 }
 
+// Opens what the page's deep link names: the Log Explorer
+// (?logs=<query>&range=1h), an app (?app=<appId>&route=/task/123) or a
+// workbench link (?open=workbench:<type>/<id>)
+function openLinks(registry: ReturnType<typeof getWorkbench>['registry']) {
+  const linked = fromSearch(location.search)
+  if (linked) registry.edit(logsOn(linked))
+  openDeepLink(registry, location.search)
+}
+
 function Workbench() {
   const { registry, factory } = getWorkbench()
   const [model, setModel] = useState(() => getWorkbench().model)
@@ -138,7 +147,14 @@ function Workbench() {
   // Shows row in place of the current layout
   const show = (row: LayoutNode) => {
     const wb = getWorkbench()
+    // the tab in front stays in front when the new layout has it (a deep
+    // link's tab, or the tab this window was looking at)
+    const front = wb.model.getActiveTabset()?.getSelectedNode()?.getId()
     const next = modelFor(row, wb.model)
+    if (front && next.getNodeById(front)) {
+      const tabset = next.getNodeById(front)!.getParent()
+      if (tabset instanceof TabSetNode && tabset.getSelectedNode()?.getId() !== front) next.doAction(Actions.selectTab(front))
+    }
     wb.model = next
     wb.registry.setModel(next)
     syncBorders(next)
@@ -177,6 +193,9 @@ function Workbench() {
       }
       // on load, tabs a deep link opened stay; a switch closes the rest
       show(rowToShow(layout?.layout, first ? editorTabs(getWorkbench().model) : []))
+      // a deep link opened before the layout came: its tab is focused again
+      // in the layout shown (editing an open tab focuses it)
+      if (first) openLinks(registry)
       shown.current = current.id
       base.current = current.version
       saver.current = saverFor(current.id)
@@ -247,16 +266,13 @@ function Workbench() {
     return () => window.removeEventListener('pagehide', flush)
   }, [])
 
-  // Log Explorer deep links (/workbench?logs=<query>&range=1h) and requests from other views
+  // Deep links (/workbench?logs=…, ?app=…, ?open=…) and the Log Explorer's requests from other views
   useEffect(() => {
-    const linked = fromSearch(location.search)
-    if (linked) registry.edit(logsOn(linked))
+    openLinks(registry)
     return onOpenLogs((view) => registry.edit(logsOn(view)))
   }, [registry])
   // The focused tab's subject, for the person's recent activity (forge 15c)
   useEffect(() => startActivityFocus(), [])
-  // App deep links (/workbench?app=<appId>&route=/task/123)
-  useEffect(() => openDeepLink(registry, location.search), [registry])
   // An app uninstalled, or an editor kind an upgrade removed: its tabs close
   useEffect(
     () =>

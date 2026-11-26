@@ -93,6 +93,8 @@ function tree(g: THREE.Group, x: number, z: number, scale: number, rand: () => n
   trunk.position.set(x, 1.2 * scale, z)
   trunk.castShadow = true
   g.add(trunk)
+  const r = 0.6 * scale
+  blockers(g, [[x - r, z - r, x + r, z + r]])
   const leaf = rand() < 0.5 ? palette.leaf : palette.leafDark
   for (let i = 0; i < 2; i++) {
     const crown = new THREE.Mesh(new THREE.IcosahedronGeometry((2.1 - i * 0.6) * scale, 0), material(leaf))
@@ -110,6 +112,12 @@ function tufts(g: THREE.Group, W: number, D: number, n: number, rand: () => numb
     t.position.set((rand() - 0.5) * (W - 1), 0.25, (rand() - 0.5) * (D - 1))
     g.add(t)
   }
+}
+
+// What a character cannot walk through, as rectangles [minX, minZ, maxX,
+// maxZ] in the model's own (unturned) metres (userData.blockers)
+function blockers(g: THREE.Group, rects: [number, number, number, number][]): void {
+  g.userData.blockers = [...((g.userData.blockers as [number, number, number, number][] | undefined) ?? []), ...rects]
 }
 
 // Windows and doors are lit from inside: emissive, and the viewport adds a
@@ -151,6 +159,7 @@ export function buildModel(model: string, w: number, d: number, cell: number, se
       const z = -D / 2 + 0.4
       for (let x = -W / 2 + 0.3; x <= W / 2 - 0.2; x += W / 4) g.add(box(0.25, 1.3, 0.25, palette.wood, x, 0, z))
       g.add(box(W - 0.4, 0.12, 0.1, palette.wood, 0, 0.55, z), box(W - 0.4, 0.12, 0.1, palette.wood, 0, 1.0, z))
+      blockers(g, [[-W / 2, z - 0.2, W / 2, z + 0.2]])
       break
     }
     case 'tree':
@@ -177,6 +186,7 @@ export function buildModel(model: string, w: number, d: number, cell: number, se
       // Its path leaves the south-east cell's south edge
       g.add(strip(W / 4, 2, W / 4, D / 2 - road / 2, road * 0.7))
       g.add(box(12, 4.5, 8, palette.stone, -1, 0, -2))
+      blockers(g, [[-7, -6, 5, 2]])
       g.add(box(12.2, 0.4, 8.2, palette.stoneDark, -1, 0, -2))
       g.add(gable(13, 3.5, 9.4, palette.thatch, -1, 4.5, -2))
       g.add(box(1.2, 3.5, 1.2, palette.stoneDark, -5.2, 5, -3.2)) // the hearth's chimney
@@ -194,6 +204,7 @@ export function buildModel(model: string, w: number, d: number, cell: number, se
       // Its doors open onto the south-west cell's south edge
       g.add(strip(-W / 4, 6, -W / 4, D / 2 - road / 2, road))
       g.add(box(14, 6, 20, palette.timber, -1, 0, -3))
+      blockers(g, [[-8, -13, 6, 7]])
       g.add(gable(21.5, 4.5, 15, palette.roofSlate, -1, 6, -3).rotateY(Math.PI / 2))
       g.add(box(5, 4.2, 0.2, palette.wood, -W / 4, 0, 7.05))
       g.add(box(1, 0.8, 0.15, palette.window, 3, 3.5, 7.05, 0.8))
@@ -213,6 +224,11 @@ export function buildModel(model: string, w: number, d: number, cell: number, se
       g.add(box(0.2, 2.6, 0.2, palette.wood, -8.1, 0, -6), box(0.2, 2.6, 0.2, palette.wood, -5.9, 0, -6), gable(2.8, 0.9, 1.8, palette.thatch, -7, 2.6, -6))
       for (let i = 0; i < 3; i++) g.add(box(1, 1, 1, palette.wood, -10 + i * 1.3, 0, 8)) // crates
       g.add(box(3, 0.9, 1.2, palette.wood, 9, 0, -9)) // a cart
+      blockers(g, [
+        [-8.4, -7.4, -5.6, -4.6], // the well
+        [-10.5, 7.5, -6.7, 8.5], // crates
+        [7.5, -9.6, 10.5, -8.4], // the cart
+      ])
       lights(g, [[-7, 3.2, -6]])
       break
     }
@@ -220,4 +236,43 @@ export function buildModel(model: string, w: number, d: number, cell: number, se
       g.add(ground(W, D, 0xaa44aa))
   }
   return g
+}
+
+// A placeholder character (forge 375 S2): a cloaked figure in one colour,
+// its legs swung by walk(phase). About 1.8 m tall, facing -z.
+export class CharacterModel {
+  readonly group = new THREE.Group()
+  private readonly legs: THREE.Mesh[] = []
+  private readonly body: THREE.Group
+
+  constructor(color: number) {
+    this.body = new THREE.Group()
+    const cloak = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.25, 7), material(color))
+    cloak.position.y = 1.15
+    const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 0), material(0xd9b38c))
+    head.position.y = 1.95
+    const hood = new THREE.Mesh(new THREE.ConeGeometry(0.27, 0.35, 7), material(color))
+    hood.position.y = 2.15
+    for (const m of [cloak, head, hood]) {
+      m.castShadow = true
+      this.body.add(m)
+    }
+    for (const x of [-0.14, 0.14]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.6, 0.16), material(0x3a2a1e))
+      leg.geometry.translate(0, -0.3, 0)
+      leg.position.set(x, 0.6, 0)
+      leg.castShadow = true
+      this.legs.push(leg)
+      this.group.add(leg)
+    }
+    this.group.add(this.body)
+  }
+
+  // phase in radians; amount 0 (standing) to 1 (walking)
+  walk(phase: number, amount: number): void {
+    const swing = Math.sin(phase) * 0.6 * amount
+    this.legs[0].rotation.x = swing
+    this.legs[1].rotation.x = -swing
+    this.body.position.y = Math.abs(Math.cos(phase)) * 0.06 * amount
+  }
 }
