@@ -11,7 +11,7 @@ export type Vec3 = { x: number; y: number; z: number }
 export type Quat = [number, number, number, number] // x, y, z, w
 
 export interface DesignBlock {
-  type: 'armor' | 'cockpit' | 'gyro' | 'light' | 'thruster' | 'battery' | 'cargo' | 'refinery' | 'solar'
+  type: 'armor' | 'cockpit' | 'gyro' | 'light' | 'thruster' | 'battery' | 'cargo' | 'refinery' | 'solar' | 'log' | 'door' | 'bed' | 'bench' | 'forge' // V13: a building's (V14: the bench, V20: the forge)
   at: [number, number, number]
   push?: 'up' | 'down' | 'forward' | 'back' | 'left' | 'right'
 }
@@ -22,6 +22,7 @@ export interface ShipDesign {
   description: string
   blockSize: number
   blocks: DesignBlock[]
+  static?: boolean // V13: a building, never flown; the walker cannot pass its blocks but for doors
 }
 
 // A ship as the server keeps it (game.worldShips)
@@ -38,13 +39,14 @@ export interface ShipState {
   v: [number, number, number]
   pilot: string
   crew?: string[] // V7: the users riding as its crew
-  cargo?: { dust: number; rock: number; iron: number } // V4: its hold, m³
+  cargo?: { dust: number; rock: number; iron: number; ore?: number } // V4: its hold, m³ (V8: ore)
   charge?: number // V4: its battery, 0 to 1
+  forge?: { ore: number; at: number } // V20: the ore smelting in a cabin's forge
   seq: number
   updatedAt?: string
 }
 
-export const BLOCK_MASS: Record<DesignBlock['type'], number> = { armor: 120, cockpit: 200, gyro: 150, light: 20, thruster: 80, battery: 150, cargo: 100, refinery: 300, solar: 30 }
+export const BLOCK_MASS: Record<DesignBlock['type'], number> = { armor: 120, cockpit: 200, gyro: 150, light: 20, thruster: 80, battery: 150, cargo: 100, refinery: 300, solar: 30, log: 200, door: 60, bed: 80, bench: 90, forge: 400 }
 
 // Power (V4, a thin 367): a design with a battery or solar panels runs on
 // power. Thrusters draw by how hard they push, the gyroscope while turning;
@@ -146,6 +148,26 @@ const unit = (a: Vec3): Vec3 => scale(a, 1 / (Math.hypot(a.x, a.y, a.z) || 1))
 export function blockWorld(state: { x: number; y: number; z: number; q: Quat }, b: DesignBlock, size = 1): Vec3 {
   const o = rotate(state.q, { x: b.at[0] * size, y: b.at[1] * size, z: b.at[2] * size })
   return { x: state.x + o.x, y: state.y + o.y, z: state.z + o.z }
+}
+
+// V13: the signed distance from a point to a building's nearest placed
+// block (doors are open; a bed is a slab half a block high), Infinity with none
+export function buildingDistance(design: ShipDesign, placed: Iterable<number>, pose: { x: number; y: number; z: number; q: Quat }, p: Vec3): number {
+  const size = design.blockSize
+  const local = rotate(conj(pose.q), { x: p.x - pose.x, y: p.y - pose.y, z: p.z - pose.z })
+  let best = Infinity
+  for (const i of placed) {
+    const b = design.blocks[i]
+    if (!b || b.type === 'door') continue
+    const h = b.type === 'bed' ? 0.25 : b.type === 'bench' ? 0.4 : 0.5
+    const cy = b.at[1] * size
+    const dx = Math.abs(local.x - b.at[0] * size) - 0.5 * size
+    const dy = Math.abs(local.y - cy) - h * size
+    const dz = Math.abs(local.z - b.at[2] * size) - 0.5 * size
+    const d = Math.hypot(Math.max(dx, 0), Math.max(dy, 0), Math.max(dz, 0)) + Math.min(Math.max(dx, dy, dz), 0)
+    if (d < best) best = d
+  }
+  return best
 }
 
 // What the terrain answers (the walker's terrain): density is the signed

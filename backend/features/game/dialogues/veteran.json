@@ -1,0 +1,41 @@
+{
+  "id": "veteran",
+  "title": "Corran Vey, a veteran of the Drum, at the cottage door",
+  "description": "The first companion offers to walk with the player (375 S17). A veteran from the Drum, a kind of person the reference describes; never one of the book's cast. Placeholder name and lines.",
+  "speaker": "Corran Vey",
+  "start": "door",
+  "nodes": {
+    "door": {
+      "text": "Morning. Don't get up. Name's Corran Vey; I stood twenty years in the Drum before my knees gave out. They're saying at the well you held Harrow's house against the eyeless ones, alone, through a night with no moon.",
+      "choices": [
+        {"text": "Not quite alone. Wenlan had a poker.", "next": "laugh"},
+        {"text": "What do you want?", "next": "offer"}
+      ]
+    },
+    "laugh": {
+      "text": "Ha. Good man, Harrow. Still. Whatever comes up out of the dark comes again, and a pike at your flank is worth two at your back.",
+      "choices": [
+        {"text": "You're offering to come with me?", "next": "offer"}
+      ]
+    },
+    "offer": {
+      "text": "I'm too old to farm and too stubborn to sit. You go looking where the eyeless ones went; I'll take their flank while you take their front. Neck or heart, isn't it? I remember.",
+      "choices": [
+        {"text": "Walk with me, then.", "next": "join"},
+        {"text": "It's dangerous.", "next": "danger"}
+      ]
+    },
+    "danger": {
+      "text": "Twenty years in the Drum. I know what dangerous is. Now, are we walking?",
+      "choices": [
+        {"text": "We're walking.", "next": "join"}
+      ]
+    },
+    "join": {
+      "text": "Lead on. I'll keep a step behind, and closer when it counts.",
+      "choices": [
+        {"text": "Let's go.", "end": true}
+      ]
+    }
+  }
+}

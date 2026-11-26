@@ -1,0 +1,345 @@
+{
+  "id": "cmd-game-placeTurret",
+  "name": "game.placeTurret",
+  "description": "Decides where the sender's sentry turret stands on the moon.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.placeTurret",
+    "title": "Set down a sentry turret",
+    "description": "Sets the sender's sentry turret down on the moon (V17), or moves it there; the target is the world's id and x, y, z the point, metres from the moon's centre. During a swarm surge the turret shoots down drones within 28 m of it. Refused until the sender has crafted a turret at a cabin's bench (game.craft turret), or for a point off the moon.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number",
+          "description": "The point's x in metres from the moon's centre"
+        },
+        "y": {
+          "type": "number",
+          "description": "The point's y in metres"
+        },
+        "z": {
+          "type": "number",
+          "description": "The point's z in metres"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ]
+    },
+    "area": "game",
+    "targetType": "terrain",
+    "projection": "game.surges",
+    "action": "game.play",
+    "events": [
+      "turretPlaced"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "x",
+            "type": "number",
+            "description": "The point's x"
+          },
+          {
+            "id": "y",
+            "type": "number",
+            "description": "The point's y"
+          },
+          {
+            "id": "z",
+            "type": "number",
+            "description": "The point's z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 450
+      }
+    },
+    {
+      "id": "playerKey",
+      "type": "data.expression",
+      "title": "Player key",
+      "position": {
+        "x": 250,
+        "y": 300
+      },
+      "config": {
+        "expr": "target + \".\" + user",
+        "type": "string"
+      }
+    },
+    {
+      "id": "player",
+      "type": "live.readProjection",
+      "title": "Read the sender's progress",
+      "position": {
+        "x": 500,
+        "y": 300
+      },
+      "config": {
+        "projector": "game.players"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why it is refused",
+      "position": {
+        "x": 800,
+        "y": 150
+      },
+      "config": {
+        "expr": "let r = (x ** 2 + y ** 2 + z ** 2) ** 0.5; !(player?.tools?.turret ?? false) ? \"craft a turret at a cabin's field bench first\" : r \u003e 130 ? \"the turret guards the moon: set it down there\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Allowed?",
+      "position": {
+        "x": 1050,
+        "y": 150
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "position": {
+        "x": 1300,
+        "y": 0
+      }
+    },
+    {
+      "id": "placed",
+      "type": "data.expression",
+      "title": "Placed",
+      "position": {
+        "x": 1300,
+        "y": 350
+      },
+      "config": {
+        "expr": "{x: x, y: y, z: z}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "position": {
+        "x": 1600,
+        "y": -100
+      },
+      "config": {
+        "event": "turretPlaced"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "position": {
+        "x": 1600,
+        "y": 150
+      },
+      "config": {
+        "path": "args",
+        "fix": "craft a turret with game.craft at a cabin's bench (2 m³ of ore, 1.5 m³ of rock), then set it down on the moon"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "playerKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "playerKey",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "playerKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "player",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "player",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "player"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "x"
+      },
+      "to": {
+        "node": "check",
+        "pin": "x"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "y"
+      },
+      "to": {
+        "node": "check",
+        "pin": "y"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "z"
+      },
+      "to": {
+        "node": "check",
+        "pin": "z"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "x"
+      },
+      "to": {
+        "node": "placed",
+        "pin": "x"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "y"
+      },
+      "to": {
+        "node": "placed",
+        "pin": "y"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "z"
+      },
+      "to": {
+        "node": "placed",
+        "pin": "z"
+      }
+    },
+    {
+      "from": {
+        "node": "placed",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    }
+  ]
+}

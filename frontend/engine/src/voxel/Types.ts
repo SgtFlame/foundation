@@ -2,10 +2,14 @@
 // metres: negative inside solid ground, positive in empty space, zero on
 // the surface. Each sample also has a material id.
 
-// Material ids. V1 has two placeholder materials.
+// Material ids. V1 has two placeholder materials; V8 adds ore, found only
+// off the moon (the asteroids), which bigger ships need
 export const MATERIAL_DUST = 0
 export const MATERIAL_ROCK = 1
-export const MATERIAL_COUNT = 2
+export const MATERIAL_ORE = 2
+// V9: the living soil of a planet with air, where the moon has dust
+export const MATERIAL_SOIL = 3
+export const MATERIAL_COUNT = 4
 
 // The chunk grid: CHUNK_SIZE cells along each axis
 export const CHUNK_SIZE = 32
@@ -29,6 +33,10 @@ export interface MoonParams {
   dustDepth: number
   // Small asteroids floating near the moon (forge 360 V2), 0 to 8
   asteroids?: number
+  // How much of the rock is ore, 0 to 1 (V8): none on the moon itself
+  ore?: number
+  // Soil in place of dust (V9): a planet with air
+  soil?: boolean
 }
 
 export const DEFAULT_MOON: MoonParams = {

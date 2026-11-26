@@ -1,0 +1,356 @@
+{
+  "id": "cmd-game-forage",
+  "name": "game.forage",
+  "description": "Decides a fish caught or a grazer hunted on the planet with air.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.forage",
+    "title": "Fish or hunt",
+    "description": "Takes food from the wild on the planet with air into the sender's pack (V12); the target is the world's id. kind fish is a fish caught from the shore (one ration); kind hunt is a grazer of the herd (animal g00 to g23) brought down (three rations), gone for everyone for 300 s. Refused away from the planet, for an unknown grazer, or one taken less than 300 s ago.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "fish or hunt"
+        },
+        "animal": {
+          "type": "string",
+          "description": "The grazer hunted, g00 to g23; empty for a fish"
+        },
+        "x": {
+          "type": "number",
+          "description": "Where the player stands, metres from the moon's centre"
+        },
+        "y": {
+          "type": "number",
+          "description": "The point's y in metres"
+        },
+        "z": {
+          "type": "number",
+          "description": "The point's z in metres"
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "y",
+        "z"
+      ]
+    },
+    "area": "game",
+    "targetType": "terrain",
+    "projection": "game.wildlife",
+    "action": "game.play",
+    "events": [
+      "foraged"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "kind",
+            "type": "string",
+            "description": "fish or hunt"
+          },
+          {
+            "id": "animal",
+            "type": "string",
+            "description": "The grazer, or empty"
+          },
+          {
+            "id": "x",
+            "type": "number",
+            "description": "The point's x in metres"
+          },
+          {
+            "id": "y",
+            "type": "number",
+            "description": "The point's y in metres"
+          },
+          {
+            "id": "z",
+            "type": "number",
+            "description": "The point's z in metres"
+          }
+        ]
+      }
+    },
+    {
+      "id": "wildKey",
+      "type": "data.expression",
+      "title": "Wildlife key",
+      "position": {
+        "x": 250,
+        "y": 0
+      },
+      "config": {
+        "expr": "\"terrain.\" + target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "wild",
+      "type": "live.readProjection",
+      "title": "Read the wildlife taken",
+      "position": {
+        "x": 500,
+        "y": 0
+      },
+      "config": {
+        "projector": "game.wildlife"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why it is refused",
+      "position": {
+        "x": 800,
+        "y": 150
+      },
+      "config": {
+        "expr": "let r = ((x - 1600) ** 2 + y ** 2 + z ** 2) ** 0.5; let a = animal ?? \"\"; let t = (state?.taken ?? {})[a]; !(kind in [\"fish\", \"hunt\"]) ? \"kind is fish or hunt\" : r \u003c 120 || r \u003e 160 ? \"fish and hunt on the planet with air\" : kind == \"hunt\" \u0026\u0026 !(a matches \"^g[0-2][0-3]$\") ? \"there is no grazer \" + a : kind == \"hunt\" \u0026\u0026 t != nil \u0026\u0026 now().UnixMilli() - t \u003c 300000 ? \"that grazer was taken \" + string(int((now().UnixMilli() - t) / 1000)) + \" s ago\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Allowed?",
+      "position": {
+        "x": 1050,
+        "y": 150
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "position": {
+        "x": 1300,
+        "y": 0
+      }
+    },
+    {
+      "id": "foraged",
+      "type": "data.expression",
+      "title": "Foraged",
+      "position": {
+        "x": 1300,
+        "y": 350
+      },
+      "config": {
+        "expr": "{kind: kind, animal: kind == \"hunt\" ? animal : \"\", pack: {food: kind == \"hunt\" ? 3 : 1}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "position": {
+        "x": 1600,
+        "y": -100
+      },
+      "config": {
+        "event": "foraged"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "position": {
+        "x": 1600,
+        "y": 150
+      },
+      "config": {
+        "path": "args",
+        "fix": "fish from the planet's shore, or hunt a grazer of the herd that is there"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "wildKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "wildKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "wild",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "wild",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "kind"
+      },
+      "to": {
+        "node": "check",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "animal"
+      },
+      "to": {
+        "node": "check",
+        "pin": "animal"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "x"
+      },
+      "to": {
+        "node": "check",
+        "pin": "x"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "y"
+      },
+      "to": {
+        "node": "check",
+        "pin": "y"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "z"
+      },
+      "to": {
+        "node": "check",
+        "pin": "z"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "kind"
+      },
+      "to": {
+        "node": "foraged",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "animal"
+      },
+      "to": {
+        "node": "foraged",
+        "pin": "animal"
+      }
+    },
+    {
+      "from": {
+        "node": "foraged",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    }
+  ]
+}

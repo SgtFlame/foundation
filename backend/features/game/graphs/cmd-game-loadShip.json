@@ -96,7 +96,7 @@
         "y": 0
       },
       "config": {
-        "expr": "let holds = {skiff: [], prospector: [28]}; let mine = found ? (holds[ship.design] ?? []) : []; let placed = filter(mine, # in ship.placed); let room = len(placed) * 6 - (ship?.cargo?.dust ?? 0) - (ship?.cargo?.rock ?? 0) - (ship?.cargo?.iron ?? 0); let have = packed ? pack : {dust: 0, rock: 0}; let d = min(max(have.dust, 0), max(room, 0)); let r = min(max(have.rock, 0), max(room - d, 0)); {holds: len(placed), room: room, d: d, r: r}",
+        "expr": "let holds = {skiff: [], prospector: [28], hauler: [27, 37, 38, 39, 40, 41]}; let mine = found ? (holds[ship.design] ?? []) : []; let placed = filter(mine, # in ship.placed); let room = len(placed) * 6 - (ship?.cargo?.dust ?? 0) - (ship?.cargo?.rock ?? 0) - (ship?.cargo?.iron ?? 0) - (ship?.cargo?.ore ?? 0); let have = packed ? pack : {dust: 0, rock: 0, ore: 0}; let o = min(max(have?.ore ?? 0, 0), max(room, 0)); let d = min(max(have.dust, 0), max(room - o, 0)); let r = min(max(have.rock, 0), max(room - o - d, 0)); {holds: len(placed), room: room, d: d, r: r, o: o}",
         "type": "json"
       }
     },
@@ -109,7 +109,7 @@
         "y": 150
       },
       "config": {
-        "expr": "!found ? \"there is no ship \" + target : hold.holds == 0 ? \"this ship has no cargo hold placed\" : hold.room \u003c= 0.0001 ? \"the hold is full\" : hold.d + hold.r \u003c= 0.0001 ? \"your pack is empty: dig first\" : \"\"",
+        "expr": "!found ? \"there is no ship \" + target : hold.holds == 0 ? \"this ship has no cargo hold placed\" : hold.room \u003c= 0.0001 ? \"the hold is full\" : hold.d + hold.r + hold.o \u003c= 0.0001 ? \"your pack is empty: dig first\" : \"\"",
         "type": "string"
       }
     },
@@ -143,7 +143,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{world: ship.world, cargo: {dust: hold.d, rock: hold.r}, pack: {dust: -hold.d, rock: -hold.r}}",
+        "expr": "{world: ship.world, cargo: {dust: hold.d, rock: hold.r, ore: hold.o}, pack: {dust: -hold.d, rock: -hold.r, ore: -hold.o}}",
         "type": "json"
       }
     },

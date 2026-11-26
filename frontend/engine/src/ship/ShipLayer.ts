@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu'
-import { blockWorld, type DesignBlock, type Helm, PUSH, type Quat, rotate, ShipBody, type ShipDesign, type ShipState, type ShipTerrain, type Vec3 } from './Ship.ts'
+import { blockWorld, buildingDistance, type DesignBlock, type Helm, PUSH, type Quat, rotate, ShipBody, type ShipDesign, type ShipState, type ShipTerrain, type Vec3 } from './Ship.ts'
 
 // Ships in a voxel viewport (forge 360 V3): each ship's blocks drawn as
 // boxes, the blocks still to place as a translucent outline the walker can
@@ -16,6 +16,11 @@ const COLORS: Record<DesignBlock['type'], number> = {
   cargo: 0xa1887f,
   refinery: 0xc0583a,
   solar: 0x1a2a6c,
+  log: 0xa8743f,
+  door: 0x4a3020,
+  bed: 0xa8463a,
+  bench: 0x8a6a44,
+  forge: 0x5a5a60,
 }
 
 interface Shown {
@@ -81,7 +86,7 @@ export class ShipLayer {
         color: COLORS[type],
         roughness: type === 'cockpit' ? 0.15 : 0.6,
         metalness: 0.1,
-        emissive: type === 'light' ? 0xfff59d : type === 'cockpit' ? 0x0b3c55 : type === 'refinery' ? 0x3a0e04 : 0x000000,
+        emissive: type === 'light' ? 0xfff59d : type === 'cockpit' ? 0x0b3c55 : type === 'refinery' ? 0x3a0e04 : type === 'log' || type === 'door' ? 0x3a2410 : 0x000000,
       })
       this.mats.set(type, m)
     }
@@ -156,6 +161,60 @@ export class ShipLayer {
       mesh.position.y = -0.42
       const g = new THREE.Group()
       g.add(mesh)
+      return g
+    }
+    // V13: a door is an open frame; a bed a low frame with a blanket and a pillow
+    if (b.type === 'door') {
+      const g = new THREE.Group()
+      for (const sx of [-0.45, 0.45]) {
+        const post = new THREE.Mesh(this.box, this.material('door'))
+        post.scale.set(0.1, 1, 0.3)
+        post.position.x = sx
+        g.add(post)
+      }
+      return g
+    }
+    if (b.type === 'bed') {
+      const g = new THREE.Group()
+      mesh.scale.set(0.9, 0.5, 0.95)
+      const pillow = new THREE.Mesh(this.box, this.material('light'))
+      pillow.scale.set(0.6, 0.12, 0.22)
+      pillow.position.set(0, 0.3, -0.33)
+      g.add(mesh, pillow)
+      return g
+    }
+    // V14: a field bench is a table top on four legs, a vice at one end
+    if (b.type === 'bench') {
+      const g = new THREE.Group()
+      mesh.scale.set(0.95, 0.12, 0.6)
+      mesh.position.y = 0.28
+      g.add(mesh)
+      for (const sx of [-0.4, 0.4])
+        for (const sz of [-0.22, 0.22]) {
+          const leg = new THREE.Mesh(this.box, this.material('door'))
+          leg.scale.set(0.08, 0.7, 0.08)
+          leg.position.set(sx, -0.07, sz)
+          g.add(leg)
+        }
+      const vice = new THREE.Mesh(this.box, this.material('armor'))
+      vice.scale.set(0.18, 0.16, 0.2)
+      vice.position.set(0.3, 0.42, 0)
+      g.add(vice)
+      return g
+    }
+    // V20: a forge is a squat stone furnace with a glowing mouth
+    if (b.type === 'forge') {
+      const g = new THREE.Group()
+      mesh.scale.set(0.9, 0.8, 0.9)
+      mesh.position.y = -0.1
+      g.add(mesh)
+      const mouth = new THREE.Mesh(this.box, new THREE.MeshBasicMaterial({ color: 0xff7a2a }))
+      mouth.scale.set(0.4, 0.25, 0.05)
+      mouth.position.set(0, -0.2, -0.46)
+      const chimney = new THREE.Mesh(this.box, this.material('forge'))
+      chimney.scale.set(0.25, 0.6, 0.25)
+      chimney.position.set(0.2, 0.55, 0.2)
+      g.add(mouth, chimney)
       return g
     }
     if (b.type !== 'thruster' || !b.push) return mesh
@@ -255,6 +314,56 @@ export class ShipLayer {
         bestD = d
         best = s.state.id
       }
+    }
+    return best
+  }
+
+  // V13: a placed bed within reach of a point: the building's id
+  bedNear(p: Vec3, reach = 2.2): string | null {
+    return this.blockNear('bed', p, reach)
+  }
+
+  // V14: a placed field bench within reach of a point: the building's id
+  benchNear(p: Vec3, reach = 2.2): string | null {
+    return this.blockNear('bench', p, reach)
+  }
+
+  // V20: a placed forge within reach of a point: the building's id
+  forgeNear(p: Vec3, reach = 2.2): string | null {
+    return this.blockNear('forge', p, reach)
+  }
+
+  private blockNear(type: string, p: Vec3, reach: number): string | null {
+    for (const s of this.shown.values()) {
+      const i = s.design.blocks.findIndex((b) => b.type === type)
+      if (i < 0 || !s.placed.has(i)) continue
+      const c = blockWorld({ x: s.at.x, y: s.at.y, z: s.at.z, q: [s.q.x, s.q.y, s.q.z, s.q.w] }, s.design.blocks[i], s.design.blockSize)
+      if (Math.hypot(c.x - p.x, c.y - p.y, c.z - p.z) < reach) return s.state.id
+    }
+    return null
+  }
+
+  // V13: where to wake by a building's bed: just above it
+  bedPoint(id: string): Vec3 | null {
+    const s = this.shown.get(id)
+    const i = s ? s.design.blocks.findIndex((b) => b.type === 'bed') : -1
+    if (!s || i < 0) return null
+    const pose = { x: s.at.x, y: s.at.y, z: s.at.z, q: [s.q.x, s.q.y, s.q.z, s.q.w] as Quat }
+    const b = s.design.blocks[i]
+    return blockWorld(pose, { ...b, at: [b.at[0] - 1, b.at[1] + 0.2, b.at[2]] as [number, number, number] }, s.design.blockSize)
+  }
+
+  // V13: the signed distance from a point to the nearest placed block of a
+  // building (static designs), doors left open; Infinity with none near.
+  // The walker takes the lesser of this and the terrain's, so walls stop it
+  // and a roof or floor holds it up.
+  densityAt(p: Vec3): number {
+    let best = Infinity
+    for (const s of this.shown.values()) {
+      if (!s.design.static) continue
+      if (s.at.distanceTo(new THREE.Vector3(p.x, p.y, p.z)) > 6 * s.design.blockSize + 4) continue
+      const d = buildingDistance(s.design, s.placed, { x: s.at.x, y: s.at.y, z: s.at.z, q: [s.q.x, s.q.y, s.q.z, s.q.w] }, p)
+      if (d < best) best = d
     }
     return best
   }

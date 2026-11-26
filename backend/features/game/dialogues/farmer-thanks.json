@@ -1,0 +1,41 @@
+{
+  "id": "farmer-thanks",
+  "title": "Wenlan Harrow, the morning after the foretold night",
+  "description": "The Sheaflands farmer after the player held his house through the night with both moons dark (375 S15: the village remembers). Placeholder lines; the knot from the last sheaf is made up for now and wards off the Chill.",
+  "speaker": "Wenlan Harrow",
+  "start": "greet",
+  "nodes": {
+    "greet": {
+      "text": "You're still here. I sat up behind that door with the poker all night, listening to them scratch, and every time I thought it would give, I heard you out there. The Brannocks' boy came over at first light to see if there was anyone left to bury. There wasn't.",
+      "choices": [
+        {"text": "They'll come back. The cards said as much.", "next": "back"},
+        {"text": "Is everyone at the Brannocks' safe?", "next": "brannocks"},
+        {"text": "I'm glad the house held.", "next": "gift"}
+      ]
+    },
+    "back": {
+      "text": "Then let them. We'll bar the byres and keep the hearths high, and when the moons go dark we'll know it a week ahead, thanks to you. That's more than my father ever had.",
+      "choices": [
+        {"text": "Keep the almanac close.", "next": "gift"}
+      ]
+    },
+    "brannocks": {
+      "text": "The old man's gone. Took him the night the hearth went dark, the night you came. But the rest are alive, and they know who to thank. Word's gone up the road to Hawk's Rest already; you won't buy your own bread there for a while.",
+      "choices": [
+        {"text": "I only did what anyone would.", "next": "gift"}
+      ]
+    },
+    "gift": {
+      "text": "Here. I cut this from the last sheaf over the hearth: a knot of her straw. My grandmother said the last sheaf keeps the cold out of the hands that tend the fields. Carry it. Whatever you spend out there in the dark, let it cost you less.",
+      "choices": [
+        {"text": "Thank you, Wenlan.", "next": "farewell"}
+      ]
+    },
+    "farewell": {
+      "text": "Come back in daylight. There's always work, and always cake. And now there's always a bed.",
+      "choices": [
+        {"text": "Goodbye.", "end": true}
+      ]
+    }
+  }
+}

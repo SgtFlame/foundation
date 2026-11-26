@@ -9,7 +9,7 @@ import type { MoonParams } from './Types.ts'
 // sampler, the mesher and collisions treat them as one terrain.
 
 export interface Body {
-  kind: 'moon' | 'asteroid'
+  kind: 'moon' | 'asteroid' | 'planet'
   // Centre in world metres
   x: number
   y: number
@@ -57,10 +57,33 @@ export function asteroidsOf(params: MoonParams): Body[] {
       craters: 5,
       craterMaxRadius: r * 0.45,
       dustDepth: 0.6,
+      // V8: the asteroids carry the ore the moon lacks
+      ore: 0.6,
     })
     out.push(body('asteroid', s * Math.cos(a) * d, u * d, s * Math.sin(a) * d, r, gen))
   }
   return out
+}
+
+// V9: the planet with air, a short flight from the moon (a jump drive comes
+// later): green soil, gentle hills, no craters, at PLANET's place for every
+// world. The server's play graphs allow points near it too.
+export const PLANET = { x: 1600, y: 0, z: 0, radius: 140, amplitude: 9, air: 60 }
+
+export function planetOf(params: MoonParams): Body {
+  const gen = new MoonGenerator({
+    seed: (params.seed * 7919 + 3) >>> 0,
+    voxelSize: params.voxelSize,
+    radius: PLANET.radius,
+    amplitude: PLANET.amplitude,
+    frequency: 0.012,
+    octaves: 4,
+    craters: 0,
+    craterMaxRadius: 1,
+    dustDepth: 1.5,
+    soil: true,
+  })
+  return body('planet', PLANET.x, PLANET.y, PLANET.z, PLANET.radius, gen)
 }
 
 function body(kind: Body['kind'], x: number, y: number, z: number, radius: number, gen: MoonGenerator): Body {
@@ -80,7 +103,7 @@ export class WorldGenerator {
   constructor(params: MoonParams) {
     this.params = params
     const moon = new MoonGenerator(params)
-    this.bodies = [body('moon', 0, 0, 0, params.radius, moon), ...asteroidsOf(params)]
+    this.bodies = [body('moon', 0, 0, 0, params.radius, moon), ...asteroidsOf(params), planetOf(params)]
     this.active = this.bodies
   }
 

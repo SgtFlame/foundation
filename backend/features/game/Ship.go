@@ -34,6 +34,10 @@ const (
 	EventShipRefined    = "refined" // {world, rock, iron, charge} (V4: the changes)
 	EventShipDamaged    = "damaged" // {world, blocks} (V5: the indices a crash broke)
 	EventShipCrewed     = "crewed"  // {world, user, aboard} (V7: who boards or leaves the crew seat)
+	EventSlept          = "slept"   // {world} (V13: the sender slept in this cabin's bed: their home)
+	EventCrafted        = "crafted" // {world, item, pack} (V14: the sender crafted a tool at this cabin's bench from their pack)
+	EventSmelting       = "smelting" // {world, ore, at, pack} (V20: ore from the sender's pack put in this cabin's forge at Unix ms at)
+	EventIngots         = "ingots"   // {world, iron, pack} (V20: the forge's iron taken into the sender's pack; the forge is empty again)
 )
 
 // ShipDesign is a premade ship: its blocks in its own grid, x right, y up
@@ -44,10 +48,13 @@ type ShipDesign struct {
 	Description string        `json:"description"`
 	BlockSize   float64       `json:"blockSize"`
 	Blocks      []DesignBlock `json:"blocks"`
+	// V13: a building (a static grid): never flown, no cockpit
+	Static bool `json:"static,omitempty"`
 }
 
-// DesignBlock is one block of a design: armor, cockpit, gyro, light or
-// thruster (push: the way it pushes the ship: up, down, forward, back,
+// DesignBlock is one block of a design: armor, cockpit, gyro, light,
+// battery, cargo, refinery, solar, a building's log, door (an opening) or
+// bed (V13), bench (V14), or thruster (push: the way it pushes the ship: up, down, forward, back,
 // left, right).
 type DesignBlock struct {
 	Type string `json:"type"`
@@ -74,15 +81,32 @@ type Ship struct {
 	// a design without power blocks has no charge to keep
 	Cargo     Cargo     `json:"cargo"`
 	Charge    float64   `json:"charge"`
+	// V20: a cabin's forge: the ore smelting in it and since when (Unix ms)
+	Forge *Forge `json:"forge,omitempty"`
 	Seq       uint64    `json:"seq"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
+
+// Forge is the ore smelting in a cabin's forge (V20): SmeltMs a m³,
+// IronYield of iron for each m³ of ore.
+type Forge struct {
+	Ore float64 `json:"ore"`
+	At  int64   `json:"at"`
+}
+
+const (
+	// SmeltMs is how long the forge takes for each m³ of ore.
+	SmeltMs = 45_000
+	// IronYield is the iron a m³ of ore gives.
+	IronYield = 0.8
+)
 
 // Cargo is what a ship's hold carries, in m³.
 type Cargo struct {
 	Dust float64 `json:"dust"`
 	Rock float64 `json:"rock"`
 	Iron float64 `json:"iron"`
+	Ore  float64 `json:"ore"` // V8: from the asteroids
 }
 
 // CargoPerHold is what one cargo block holds, in m³; the loadShip blueprint checks it.
@@ -130,7 +154,7 @@ func (d ShipDesign) Check() string {
 		switch b.Type {
 		case "cockpit":
 			cockpits++
-		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar":
+		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar", "log", "door", "bed", "bench", "forge":
 		case "thruster":
 			switch b.Push {
 			case "up", "down", "forward", "back", "left", "right":
@@ -140,6 +164,12 @@ func (d ShipDesign) Check() string {
 		default:
 			return fmt.Sprintf("blocks %d: unknown block type %q", i, b.Type)
 		}
+	}
+	if d.Static {
+		if cockpits != 0 {
+			return "a building has no cockpit"
+		}
+		return ""
 	}
 	if cockpits != 1 {
 		return "a design has one cockpit"
@@ -169,8 +199,10 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		Cargo  Cargo      `json:"cargo"`
 		Rock   float64    `json:"rock"`
 		Iron   float64    `json:"iron"`
+		Ore    float64    `json:"ore"`
 		User   string     `json:"user"`
 		Aboard bool       `json:"aboard"`
+		At     int64      `json:"at"`
 	}
 	// a damaged event's blocks are indices, read on their own below
 	if err := json.Unmarshal(f.Event.Data, &d); err != nil && f.Event.Type != EventShipDamaged {
@@ -185,6 +217,9 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 			if i == len(s.Placed) || s.Placed[i] != *d.Index {
 				s.Placed = append(s.Placed[:i], append([]int{*d.Index}, s.Placed[i:]...)...)
 			}
+			if *d.Index >= s.Blocks { // V20: a cabin started before its design grew a forge
+				s.Blocks = *d.Index + 1
+			}
 		}
 	case EventShipFlown:
 		s.X, s.Y, s.Z, s.Q, s.V, s.Pilot = d.X, d.Y, d.Z, d.Q, d.V, d.Pilot
@@ -196,6 +231,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	case EventShipLoaded:
 		s.Cargo.Dust = round3(s.Cargo.Dust + d.Cargo.Dust)
 		s.Cargo.Rock = round3(s.Cargo.Rock + d.Cargo.Rock)
+		s.Cargo.Ore = round3(s.Cargo.Ore + d.Cargo.Ore)
 	case EventShipDamaged:
 		// Broken blocks go back to the outline; a broken cockpit seats nobody
 		var b struct {
@@ -218,13 +254,19 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		if gone[0] {
 			s.Pilot = ""
 		}
+	case EventSmelting:
+		s.Forge = &Forge{Ore: d.Ore, At: d.At}
+	case EventIngots:
+		s.Forge = nil
 	case EventShipCrewed:
 		s.Crew = without(s.Crew, d.User)
 		if d.Aboard && d.User != "" {
 			s.Crew = append(s.Crew, d.User)
 		}
 	case EventHandedIn:
+		s.Cargo.Rock = round3(s.Cargo.Rock + d.Rock)
 		s.Cargo.Iron = round3(s.Cargo.Iron + d.Iron)
+		s.Cargo.Ore = round3(s.Cargo.Ore + d.Ore)
 	case EventShipRefined:
 		s.Cargo.Rock = round3(s.Cargo.Rock + d.Rock)
 		s.Cargo.Iron = round3(s.Cargo.Iron + d.Iron)
@@ -238,7 +280,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	return json.Marshal(s)
 }
 
-const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron} (m³ in its hold), charge (its battery, 0 to 1), seq, updatedAt}"
+const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron, ore} (m³ in its hold), charge (its battery, 0 to 1), forge {ore, at} (V20: a cabin's forge smelting ore since Unix ms at), seq, updatedAt}"
 
 func without(list []string, v string) []string {
 	out := []string{}

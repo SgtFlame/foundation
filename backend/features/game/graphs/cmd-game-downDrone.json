@@ -1,0 +1,380 @@
+{
+  "id": "cmd-game-downDrone",
+  "name": "game.downDrone",
+  "description": "Decides a swarm surge's drone shot down, paying its shooter scrap.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.downDrone",
+    "title": "Shoot down a drone",
+    "description": "Pays scrap for one of a swarm surge's drones shot down on the moon (V16); the target is the world's id. surge is the surge's index (Unix ms / 720000) and drone its drone, 0 to 7; the sender's pack gets 0.1 m³ of ore, once per sender, surge and drone (game.surges). Refused for a surge that is neither the current nor the last one, an unknown drone, one the sender already downed, or a full pack.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "surge": {
+          "type": "integer",
+          "description": "The surge's index: Unix ms / 720000, rounded down"
+        },
+        "drone": {
+          "type": "integer",
+          "description": "The drone, 0 to 7"
+        }
+      },
+      "required": [
+        "surge",
+        "drone"
+      ]
+    },
+    "area": "game",
+    "targetType": "terrain",
+    "projection": "game.surges",
+    "action": "game.play",
+    "events": [
+      "downed"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "surge",
+            "type": "number",
+            "description": "The surge"
+          },
+          {
+            "id": "drone",
+            "type": "number",
+            "description": "The drone"
+          }
+        ]
+      }
+    },
+    {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 450
+      }
+    },
+    {
+      "id": "surgeKey",
+      "type": "data.expression",
+      "title": "Surges key",
+      "position": {
+        "x": 250,
+        "y": 0
+      },
+      "config": {
+        "expr": "\"terrain.\" + target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "surges",
+      "type": "live.readProjection",
+      "title": "Read the drones downed",
+      "position": {
+        "x": 500,
+        "y": 0
+      },
+      "config": {
+        "projector": "game.surges"
+      }
+    },
+    {
+      "id": "packKey",
+      "type": "data.expression",
+      "title": "Pack key",
+      "position": {
+        "x": 250,
+        "y": 300
+      },
+      "config": {
+        "expr": "target + \".\" + user",
+        "type": "string"
+      }
+    },
+    {
+      "id": "pack",
+      "type": "live.readProjection",
+      "title": "Read the sender's pack",
+      "position": {
+        "x": 500,
+        "y": 300
+      },
+      "config": {
+        "projector": "game.packs"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why it is refused",
+      "position": {
+        "x": 800,
+        "y": 150
+      },
+      "config": {
+        "expr": "let cur = int(now().UnixMilli() / 720000); let k = string(int(surge)) + \".\" + string(int(drone)) + \".\" + user; let held = (pack?.dust ?? 0) + (pack?.rock ?? 0) + (pack?.ore ?? 0) + (pack?.iron ?? 0); surge != cur \u0026\u0026 surge != cur - 1 ? \"that surge is over\" : drone \u003c 0 || drone \u003e 7 || drone != int(drone) ? \"a surge's drones are 0 to 7\" : (state?.downed ?? {})[k] ?? false ? \"you already shot that drone down\" : held + 0.1 \u003e 4 ? \"your pack is full: load it into a ship's hold\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Allowed?",
+      "position": {
+        "x": 1050,
+        "y": 150
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "position": {
+        "x": 1300,
+        "y": 0
+      }
+    },
+    {
+      "id": "downed",
+      "type": "data.expression",
+      "title": "Downed",
+      "position": {
+        "x": 1300,
+        "y": 350
+      },
+      "config": {
+        "expr": "{surge: int(surge), drone: int(drone), pack: {ore: 0.1}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "position": {
+        "x": 1600,
+        "y": -100
+      },
+      "config": {
+        "event": "downed"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "position": {
+        "x": 1600,
+        "y": 150
+      },
+      "config": {
+        "path": "args",
+        "fix": "shoot down a drone of the surge that is on now, with room in your pack"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "surgeKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "surgeKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "surges",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "packKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pack",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "surges",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "pack",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "pack"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "check",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "surge"
+      },
+      "to": {
+        "node": "check",
+        "pin": "surge"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "drone"
+      },
+      "to": {
+        "node": "check",
+        "pin": "drone"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "surge"
+      },
+      "to": {
+        "node": "downed",
+        "pin": "surge"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "drone"
+      },
+      "to": {
+        "node": "downed",
+        "pin": "drone"
+      }
+    },
+    {
+      "from": {
+        "node": "downed",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    }
+  ]
+}
