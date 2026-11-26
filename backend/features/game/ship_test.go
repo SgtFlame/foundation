@@ -365,7 +365,7 @@ func TestCraftDrill(t *testing.T) {
 	if r := st.refused("game.craft", "c1", map[string]any{"item": "drill"}); !strings.Contains(r.Common.Message, "ore") {
 		t.Fatalf("craft with an empty pack: %q", r.Common.Message)
 	}
-	if r := st.refused("game.craft", "c1", map[string]any{"item": "rocket"}); !strings.Contains(r.Common.Message, "one recipe") {
+	if r := st.refused("game.craft", "c1", map[string]any{"item": "rocket"}); !strings.Contains(r.Common.Message, "two recipes") {
 		t.Fatalf("unknown recipe: %q", r.Common.Message)
 	}
 	dug := st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 200, "z": 0, "radius": 1.5, "took": map[string]any{"dust": 0, "rock": 1.2, "ore": 2.5}})
@@ -381,5 +381,42 @@ func TestCraftDrill(t *testing.T) {
 	}
 	if r := st.refused("game.craft", "c1", map[string]any{"item": "drill"}); !strings.Contains(r.Common.Message, "already") {
 		t.Fatalf("a second drill: %q", r.Common.Message)
+	}
+}
+
+// V17: a sentry turret crafted at the bench and set down on the moon
+func TestTurret(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Turret moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	if r := st.refused("game.placeTurret", world, map[string]any{"x": 0, "y": 104, "z": 0}); !strings.Contains(r.Common.Message, "craft a turret") {
+		t.Fatalf("a turret before crafting one: %q", r.Common.Message)
+	}
+	st.ok("game.startShip", "c1", map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": 0, "q": q})
+	st.ok("game.placeBlock", "c1", map[string]any{"index": 74})
+	dug := st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 200, "z": 0, "radius": 1.5, "took": map[string]any{"dust": 0, "rock": 1, "ore": 2}})
+	var pack game.Pack
+	st.read(game.PacksProjector, game.PackKey(world, 1), dug.Seq, &pack)
+	if r := st.refused("game.craft", "c1", map[string]any{"item": "turret"}); !strings.Contains(r.Common.Message, "1.5 m³ of rock") {
+		t.Fatalf("a turret from too little: %q", r.Common.Message)
+	}
+	dug = st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 200, "z": 3, "radius": 1.5, "took": map[string]any{"dust": 0, "rock": 0.5, "ore": 0.25}})
+	st.read(game.PacksProjector, game.PackKey(world, 1), dug.Seq, &pack)
+	res := st.ok("game.craft", "c1", map[string]any{"item": "turret"})
+	var p game.Player
+	if !st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p) || !p.Tools["turret"] || p.Tools["drill"] {
+		t.Fatalf("player %+v", p)
+	}
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Ore != 0.25 || pack.Rock != 0 {
+		t.Fatalf("pack %+v", pack)
+	}
+	if r := st.refused("game.placeTurret", world, map[string]any{"x": 1600, "y": 142, "z": 0}); !strings.Contains(r.Common.Message, "moon") {
+		t.Fatalf("a turret on the planet: %q", r.Common.Message)
+	}
+	st.ok("game.placeTurret", world, map[string]any{"x": 0, "y": 104, "z": 0})
+	res = st.ok("game.placeTurret", world, map[string]any{"x": 2, "y": 103, "z": 1})
+	var s game.Surges
+	if !st.read(game.SurgesProjector, game.TerrainType+"."+world, res.Seq, &s) || len(s.Turrets) != 1 || s.Turrets["1"].X != 2 {
+		t.Fatalf("surges %+v", s)
 	}
 }

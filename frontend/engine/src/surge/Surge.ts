@@ -65,3 +65,23 @@ export function shotHits(eye: Vec3, dir: Vec3, p: Vec3): number | null {
 }
 
 export const downedKey = (surge: number, drone: number): string => `${surge}.${drone}`
+
+// Sentry turrets (forge 360 V17; the play design's base defence, its
+// second step: "a turret block that holds the line while you work"). A
+// player sets their one turret down on the moon (game.placeTurret); while
+// a surge is on, every turret shoots the nearest drone in reach, one shot
+// per TURRET_RELOAD seconds, and a drone it downs is counted for the
+// player who sees it fall, as their own shot would be.
+export const TURRET_RANGE = 28 // m
+export const TURRET_RELOAD = 2.2 // s between shots
+
+// The drone a turret at a point shoots next: the nearest within reach
+export function turretPick(turret: Vec3, drones: readonly { id: number; at: Vec3 | null; gone: boolean }[]): number | null {
+  let best: { id: number; d: number } | null = null
+  for (const x of drones) {
+    if (!x.at || x.gone) continue
+    const d = Math.hypot(x.at.x - turret.x, x.at.y - turret.y, x.at.z - turret.z)
+    if (d <= TURRET_RANGE && (!best || d < best.d)) best = { id: x.id, d }
+  }
+  return best?.id ?? null
+}

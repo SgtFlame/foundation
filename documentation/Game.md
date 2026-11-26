@@ -338,6 +338,16 @@ The voxel game's sixteenth tracer bullet: the first threat on a schedule (the pl
 - **`game.downDrone {surge, drone}`** (`cmd-game-downDrone`, target the world) refuses a surge that is neither the current nor the last one, a drone outside 0 to 7, one the sender already downed or a full pack; it emits `downed`, which `game.packs` folds and the new `game.surges` projection keeps per world (`{downed: {<surge>.<drone>.<userId>: true}, count}`, a query too). `TestDownDrone` covers it.
 - Known: drones are not shared between players and pass through walls; there are no turrets or shelters yet.
 
+## Built in V17 (forge 360)
+
+The voxel game's seventeenth tracer bullet: the base defence's second step, a turret that holds the line while you work.
+
+- **The recipe**: the cabin's field bench now knows two recipes (`craft/Crafting.ts` `RECIPES`, `nextRecipe`): the hand drill, then the **sentry turret** (2 m³ of ore and 1.5 m³ of rock, so it fits one pack). U at the bench makes the next one not made yet. `game.craft {item: "turret"}` decides it (`cmd-game-craft`), and `game.player` then gives `tools.turret`.
+- **Setting it down**: on the moon, Y sets your one turret down 3 m ahead of you, or moves it there. `game.placeTurret {x, y, z}` (`cmd-game-placeTurret`, target the world, projection `game.surges`) refuses a player without a turret or a point off the moon (more than 130 m from its centre) and emits `turretPlaced`; `game.surges` keeps the turrets by user id (`turrets: {<userId>: {x, y, z}}`), so every player sees every turret.
+- **Firing**: during a surge each turret turns its head to the nearest drone within 28 m (`turretPick`, `TURRET_RANGE`) and shoots every 2.2 s (`TURRET_RELOAD`), a yellow tracer. A drone a turret downs counts as yours (`game.downDrone`), so its scrap goes to your pack.
+- `TestTurret` covers crafting, the refusals and moving the turret.
+- Known: drones are still each player's own, so a turret fires in each player's view at that player's drones; turrets cannot be damaged and need no power or ammunition.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

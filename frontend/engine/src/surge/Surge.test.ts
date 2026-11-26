@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { countdown, dronesOf, shotHits, SURGE_LENGTH, SURGE_PERIOD, surgeAt } from './Surge.ts'
+import { countdown, dronesOf, SHOT_RANGE, shotHits, SURGE_LENGTH, SURGE_PERIOD, surgeAt, TURRET_RANGE, TURRET_RELOAD, turretPick } from './Surge.ts'
 
 test('a surge every period, on for its length, seen coming', () => {
   const t = 100 * SURGE_PERIOD
@@ -24,4 +24,18 @@ test('a shot hits what is close to its line, ahead and in range', () => {
   assert.equal(shotHits(eye, dir, { x: 3, y: 0, z: -10 }), null)
   assert.equal(shotHits(eye, dir, { x: 0, y: 0, z: 10 }), null)
   assert.equal(shotHits(eye, dir, { x: 0, y: 0, z: -80 }), null)
+})
+
+test('a turret shoots the nearest awake drone within reach', () => {
+  const t = { x: 0, y: 100, z: 0 }
+  const drones = [
+    { id: 0, at: { x: 0, y: 120, z: 0 }, gone: false },
+    { id: 1, at: { x: 0, y: 110, z: 0 }, gone: true },
+    { id: 2, at: null, gone: false },
+    { id: 3, at: { x: 5, y: 112, z: 0 }, gone: false },
+    { id: 4, at: { x: 0, y: 100, z: 40 }, gone: false },
+  ]
+  assert.equal(turretPick(t, drones), 3)
+  assert.equal(turretPick(t, [drones[4]]), null)
+  assert.ok(TURRET_RANGE < SHOT_RANGE && TURRET_RELOAD > 1)
 })

@@ -7,13 +7,13 @@
   "spec": {
     "command": "game.craft",
     "title": "Craft at a bench",
-    "description": "Crafts a tool at the field bench of a cabin (V14); the target is the cabin's id. The one recipe so far is drill (a hand drill: 2 m³ of ore and 1 m³ of rock from the sender's pack), which digs wider and faster than bare hands; game.player then gives tools: {drill: true}. Refused for a ship that is not a cabin, a cabin whose bench is not placed, an unknown item, a tool the sender already has, or a pack without the materials.",
+    "description": "Crafts a tool at the field bench of a cabin (V14); the target is the cabin's id. Its recipes are drill (a hand drill: 2 m³ of ore and 1 m³ of rock from the sender's pack), which digs wider and faster than bare hands, and turret (V17, a sentry turret: 2 m³ of ore and 1.5 m³ of rock), set down on the moon with game.placeTurret; game.player then gives tools: {drill: true, turret: true}. Refused for a ship that is not a cabin, a cabin whose bench is not placed, an unknown item, a tool the sender already has, or a pack without the materials.",
     "args": {
       "type": "object",
       "properties": {
         "item": {
           "type": "string",
-          "description": "What to craft: drill"
+          "description": "What to craft: drill or turret"
         }
       },
       "required": [
@@ -125,7 +125,7 @@
         "y": 150
       },
       "config": {
-        "expr": "!found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a field bench\" : !(74 in ship.placed) ? \"the cabin's field bench is not placed yet\" : item != \"drill\" ? \"the bench knows one recipe: drill\" : (player?.tools?.drill ?? false) ? \"you already have a drill\" : (pack?.ore ?? 0) \u003c 2 || (pack?.rock ?? 0) \u003c 1 ? \"a drill takes 2 m³ of ore and 1 m³ of rock from your pack\" : \"\"",
+        "expr": "let need = item == \"turret\" ? {ore: 2, rock: 1.5} : {ore: 2, rock: 1}; !found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a field bench\" : !(74 in ship.placed) ? \"the cabin's field bench is not placed yet\" : !(item in [\"drill\", \"turret\"]) ? \"the bench knows two recipes: drill and turret\" : (player?.tools?.[item] ?? false) ? \"you already have a \" + item : (pack?.ore ?? 0) \u003c need.ore || (pack?.rock ?? 0) \u003c need.rock ? \"a \" + item + \" takes \" + string(need.ore) + \" m³ of ore and \" + string(need.rock) + \" m³ of rock from your pack\" : \"\"",
         "type": "string"
       }
     },
@@ -159,7 +159,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{world: ship.world, item: item, pack: {ore: -2, rock: -1}}",
+        "expr": "{world: ship.world, item: item, pack: item == \"turret\" ? {ore: -2, rock: -1.5} : {ore: -2, rock: -1}}",
         "type": "json"
       }
     },
@@ -183,7 +183,7 @@
       },
       "config": {
         "path": "args",
-        "fix": "place the bench (block 74) with game.placeBlock, and bring 2 m³ of ore from the asteroids and 1 m³ of rock"
+        "fix": "place the bench (block 74) with game.placeBlock, and bring the ore from the asteroids and the rock the recipe takes (drill: 2 and 1 m³; turret: 2 and 1.5 m³)"
       }
     }
   ],

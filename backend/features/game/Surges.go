@@ -22,6 +22,8 @@ const (
 	SurgesProjector = "game.surges"
 	// EventDowned is a surge's drone shot down: {surge, drone, pack: {ore}}.
 	EventDowned = "downed"
+	// EventTurretPlaced is the sender's sentry turret set down (V17): {x, y, z}.
+	EventTurretPlaced = "turretPlaced"
 	// SurgePeriodMs is the time between surges (the engine's SURGE_PERIOD).
 	SurgePeriodMs = 12 * 60_000
 	// DroneScrap is the ore a downed drone gives, in m³.
@@ -30,8 +32,16 @@ const (
 
 // Surges is what a world's players shot down.
 type Surges struct {
-	Downed map[string]bool `json:"downed"` // <surge>.<drone>.<userId>
-	Count  int             `json:"count"`
+	Downed  map[string]bool   `json:"downed"` // <surge>.<drone>.<userId>
+	Count   int               `json:"count"`
+	Turrets map[string]Turret `json:"turrets,omitempty"` // by user id (V17)
+}
+
+// Turret is a player's sentry turret, set down on the moon (V17).
+type Turret struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"`
 }
 
 func foldSurges(f live.Fold) (json.RawMessage, error) {
@@ -43,6 +53,17 @@ func foldSurges(f live.Fold) (json.RawMessage, error) {
 	}
 	if s.Downed == nil {
 		s.Downed = map[string]bool{}
+	}
+	if f.Event.Type == EventTurretPlaced {
+		var t Turret
+		if err := json.Unmarshal(f.Event.Data, &t); err != nil {
+			return nil, err
+		}
+		if s.Turrets == nil {
+			s.Turrets = map[string]Turret{}
+		}
+		s.Turrets[fmt.Sprint(f.Event.UserID)] = t
+		return json.Marshal(s)
 	}
 	if f.Event.Type != EventDowned {
 		// stored with every event on the target, so a command's expected sequence is the target's
@@ -66,13 +87,13 @@ func foldSurges(f live.Fold) (json.RawMessage, error) {
 func contributeSurges(reg *extensions.Registry) {
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: SurgesProjector, Source: source}, Title: "Swarm surges",
-		Description: "The drones each world's players shot down in its swarm surges, keyed terrain.<worldId>: {downed: {<surge>.<drone>.<userId>: true}, count}",
+		Description: "The drones each world's players shot down in its swarm surges, keyed terrain.<worldId>: {downed: {<surge>.<drone>.<userId>: true}, count, turrets: {<userId>: {x, y, z}}}",
 		Area:        Area, Types: []string{TerrainType},
 		Fold: foldSurges,
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.surges", Source: source}, Title: "Swarm surges",
-		Description: fmt.Sprintf("A world's swarm surges: {downed: {<surge>.<drone>.<userId>: true}, count}, then each change. A surge comes every %d minutes (surge index = Unix ms / %d); each drone shot down with game.downDrone gave its shooter %g m³ of ore.", SurgePeriodMs/60_000, SurgePeriodMs, DroneScrap),
+		Description: fmt.Sprintf("A world's swarm surges: {downed: {<surge>.<drone>.<userId>: true}, count, turrets: {<userId>: {x, y, z}}}, then each change. A surge comes every %d minutes (surge index = Unix ms / %d); each drone shot down with game.downDrone gave its shooter %g m³ of ore; turrets are the players' sentry turrets set down with game.placeTurret.", SurgePeriodMs/60_000, SurgePeriodMs, DroneScrap),
 		Params:      json.RawMessage(`{"type":"object","properties":{"world":{"type":"string","description":"The world's id"}},"required":["world"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"world":"w123"}`)},
 		Action:      "game.read",

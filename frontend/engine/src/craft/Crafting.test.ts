@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { digLimits, missing, RECIPES, spend } from './Crafting.ts'
+import { digLimits, missing, nextRecipe, RECIPES, spend } from './Crafting.ts'
 
 const drill = RECIPES[0]
 
@@ -16,4 +16,13 @@ test('the drill digs wider and faster than hands', () => {
   const d = digLimits({ drill: true })
   assert.ok(d.maxBrush > hand.maxBrush * 2)
   assert.ok(d.repeat < hand.repeat / 2)
+})
+
+test('the bench offers the drill, then the turret, then nothing', () => {
+  assert.equal(nextRecipe(undefined)?.id, 'drill')
+  assert.equal(nextRecipe({ drill: true })?.id, 'turret')
+  assert.equal(nextRecipe({ drill: true, turret: true }), null)
+  const t = RECIPES.find((r) => r.id === 'turret')!
+  assert.equal(missing(t, { ore: 2, rock: 1 }, { drill: true }).includes('1.5 m³ of rock'), true)
+  assert.deepEqual(spend(t, { ore: 2.25, rock: 1.5, dust: 0 }), { ore: 0.25, rock: 0, dust: 0 })
 })

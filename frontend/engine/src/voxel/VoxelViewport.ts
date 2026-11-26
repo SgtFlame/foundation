@@ -16,9 +16,9 @@ import { VoxelWorld } from './VoxelWorld.ts'
 import { PLANET } from './Bodies.ts'
 import { available, Fishing, FLEE_RANGE, floatModel, grazerDir, grazerModel, herdOf, HUNT_REACH, SEA_RADIUS, seaMesh, type Grazer } from '../wildlife/Wildlife.ts'
 import { eat, FRESH, hungry, NeedsHud, rounded, stepNeeds, type Needs } from '../survival/Needs.ts'
-import { countdown, DRONE_HIT, DRONE_SCRAP, dronesOf, shotHits, surgeAt, type Drone } from '../surge/Surge.ts'
+import { countdown, DRONE_HIT, DRONE_SCRAP, dronesOf, shotHits, surgeAt, TURRET_RANGE, TURRET_RELOAD, turretPick, type Drone } from '../surge/Surge.ts'
 import { nearestSalvage, SALVAGE_ORE, salvageKey, wreckSites, type Vec3 as WVec3 } from '../wreck/Wreck.ts'
-import { digLimits, missing, RECIPES, spend, type DigLimits } from '../craft/Crafting.ts'
+import { digLimits, missing, nextRecipe, spend, type DigLimits } from '../craft/Crafting.ts'
 
 // What the player asks for; the host sends it to the server, which decides
 export interface EditIntent {
@@ -68,6 +68,7 @@ export type ShipIntent =
   | { kind: 'stand'; x: number; y: number; z: number; needs?: Needs } // V8: save where the player stands (V10: and their needs)
   | { kind: 'eat' } // V10: one ration from the pack
   | { kind: 'downDrone'; surge: number; drone: number } // V16: a swarm surge's drone shot down
+  | { kind: 'placeTurret'; x: number; y: number; z: number } // V17: the player's sentry turret set down on the moon
   | { kind: 'salvage'; wreck: string; index: number; x: number; y: number; z: number } // V15: a wreck's block torn off for scrap
   | { kind: 'forage'; what: 'fish' | 'hunt'; animal?: string; x: number; y: number; z: number } // V12: a fish caught, a grazer hunted
   | { kind: 'sleep'; id: string } // V13: a night in a cabin's bed
@@ -234,6 +235,10 @@ export class VoxelViewport {
   private surgeIndex = -1
   private swarm: { d: Drone; mesh: THREE.Mesh; at: THREE.Vector3 | null; gone: boolean }[] = []
   private surgeTick = 0
+  // V17: sentry turrets, by user id, and when each fires next
+  private turrets: Record<string, { at: THREE.Vector3; mesh: THREE.Group; head: THREE.Object3D; reload: number }> = {}
+  private readonly turretGroup = new THREE.Group()
+  myUserId = ''
   private herd: { g: Grazer; model: THREE.Group; shown: boolean; run: number; at: THREE.Vector3 }[] = []
   private taken: Record<string, number> = {}
   private readonly fishing = new Fishing(7)
@@ -341,7 +346,7 @@ export class VoxelViewport {
     this.scene.add(globe, glow, this.cropsGroup)
     // V12: the sea in the planet's hollows, its herd and a fishing float
     this.float.visible = false
-    this.scene.add(seaMesh(), this.wildGroup, this.float, this.wreckGroup, this.surgeGroup)
+    this.scene.add(seaMesh(), this.wildGroup, this.float, this.wreckGroup, this.surgeGroup, this.turretGroup)
   }
 
   // V9: the sky turns blue and the stars fade as the camera goes down into the planet's air
@@ -591,7 +596,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.benchHint()}${this.nearWreck ? 'Z: salvage scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.benchHint()}${this.nearWreck ? 'Z: salvage scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -916,13 +921,14 @@ export class VoxelViewport {
   // drones coming down at the player in the open; Q shoots
   private stepSurge(dt: number): void {
     const w = this.walker
-    const onMoon = this.mode === 'walk' && !!w && Math.hypot(w.pos.x, w.pos.y, w.pos.z) < this.world.generator.params.radius + 60
+    const onMoon = this.onMoon()
     const st = surgeAt(Date.now() + this.surgeOffset)
     this.surgeTick -= dt
     if (this.surgeTick <= 0) {
       this.surgeTick = 0.5
       this.drawSurgeHud(onMoon, st.active, st.startsIn)
     }
+    if (onMoon && w && this.progress?.tools?.turret && this.input.locked && this.input.pressed('KeyY')) this.placeTurret()
     if (!st.active || !onMoon || !w) {
       if (this.swarm.length && !st.active) this.endSurge()
       return
@@ -957,8 +963,90 @@ export class VoxelViewport {
       x.mesh.position.copy(x.at)
       x.mesh.rotation.y += dt * 3
     }
+    if (this.stepTurrets(dt)) changed = true
     if (changed) this.updateHint()
     if (this.input.locked && this.input.pressed('KeyQ')) this.shoot()
+  }
+
+  private onMoon(): boolean {
+    const w = this.walker
+    return this.mode === 'walk' && !!w && Math.hypot(w.pos.x, w.pos.y, w.pos.z) < this.world.generator.params.radius + 60
+  }
+
+  // --- Sentry turrets (V17) ---
+
+  // The players' turrets, as game.surges keeps them
+  setTurrets(t: Record<string, { x: number; y: number; z: number }> | null | undefined): void {
+    const next = t ?? {}
+    for (const id of Object.keys(this.turrets)) if (!next[id]) {
+      this.turretGroup.remove(this.turrets[id].mesh)
+      delete this.turrets[id]
+    }
+    for (const [id, p] of Object.entries(next)) this.showTurret(id, new THREE.Vector3(p.x, p.y, p.z))
+  }
+
+  private showTurret(id: string, at: THREE.Vector3): void {
+    const old = this.turrets[id]
+    if (old) {
+      if (old.at.distanceTo(at) < 0.01) return
+      this.turretGroup.remove(old.mesh)
+    }
+    const up = at.clone().normalize()
+    const g = new THREE.Group()
+    g.name = `turret:${id}`
+    const metal = new THREE.MeshStandardNodeMaterial({ color: id === this.myUserId ? 0x5f7f9a : 0x7a7f86, roughness: 0.5, metalness: 0.6 })
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.7, 0.6, 10), metal)
+    base.position.y = 0.3
+    const head = new THREE.Group()
+    head.position.y = 0.95
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.4, 12, 8), metal)
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.1, 8), new THREE.MeshStandardNodeMaterial({ color: 0x2a2f36, roughness: 0.4 }))
+    barrel.rotation.x = Math.PI / 2
+    barrel.position.z = 0.55
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshStandardNodeMaterial({ color: 0x103040, emissive: 0x4fd6ff }))
+    eye.position.set(0, 0.18, 0.32)
+    head.add(dome, barrel, eye)
+    g.add(base, head)
+    g.position.copy(at)
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), up)
+    this.turretGroup.add(g)
+    this.turrets[id] = { at, mesh: g, head, reload: old?.reload ?? 0 }
+  }
+
+  // Y on the moon: your turret stands where you are (moved if it stood elsewhere)
+  placeTurret(): void {
+    const w = this.walker
+    if (!w) return
+    const at = new THREE.Vector3(w.pos.x, w.pos.y, w.pos.z)
+    const up = at.clone().normalize()
+    const look = w.look()
+    const fwd = new THREE.Vector3(look.x, look.y, look.z).projectOnPlane(up)
+    if (fwd.lengthSq() > 1e-6) at.addScaledVector(fwd.normalize(), 3)
+    this.showTurret(this.myUserId || 'me', at)
+    this.opts.onShipIntent?.({ kind: 'placeTurret', x: round2(at.x), y: round2(at.y), z: round2(at.z) })
+    this.flashHint(`Your sentry turret unfolds and starts to scan: it shoots drones within ${TURRET_RANGE} m`)
+  }
+
+  // While a surge is on, each turret turns to the nearest drone in reach
+  // and fires every TURRET_RELOAD seconds; a drone it downs is yours
+  private stepTurrets(dt: number): boolean {
+    let changed = false
+    for (const t of Object.values(this.turrets)) {
+      t.reload = Math.max(0, t.reload - dt)
+      const pick = turretPick(t.at, this.swarm.map((x) => ({ id: x.d.id, at: x.at, gone: x.gone })))
+      const x = pick === null ? null : this.swarm.find((s) => s.d.id === pick)
+      if (!x?.at) continue
+      t.head.lookAt(x.at)
+      if (t.reload > 0) continue
+      t.reload = TURRET_RELOAD
+      const from = t.head.getWorldPosition(new THREE.Vector3())
+      const bolt = new THREE.Line(new THREE.BufferGeometry().setFromPoints([from, x.at.clone()]), new THREE.LineBasicNodeMaterial({ color: 0xffd36b }))
+      this.surgeGroup.add(bolt)
+      setTimeout(() => this.surgeGroup.remove(bolt), 140)
+      this.downed(x, 'Your turret barks: a drone tumbles out of the sky, and its scrap is yours')
+      changed = true
+    }
+    return changed
   }
 
   private beginSurge(index: number): void {
@@ -997,14 +1085,18 @@ export class VoxelViewport {
     this.surgeGroup.add(bolt)
     setTimeout(() => this.surgeGroup.remove(bolt), 120)
     if (!best) return false
-    best.x.gone = true
-    best.x.mesh.visible = false
+    this.downed(best.x, `Down it goes in a spray of sparks: ${DRONE_SCRAP} m³ of scrap`)
+    return true
+  }
+
+  private downed(x: { d: Drone; mesh: THREE.Mesh; gone: boolean }, line: string): void {
+    x.gone = true
+    x.mesh.visible = false
     const c = this.carried
     if (c && c.dust + c.rock + (c.ore ?? 0) + DRONE_SCRAP <= c.capacity) this.carried = { ...c, ore: Math.round(((c.ore ?? 0) + DRONE_SCRAP) * 1000) / 1000 }
     this.drawPack()
-    this.opts.onShipIntent?.({ kind: 'downDrone', surge: this.surgeIndex, drone: best.x.d.id })
-    this.flashHint(`Down it goes in a spray of sparks: ${DRONE_SCRAP} m³ of scrap`)
-    return true
+    this.opts.onShipIntent?.({ kind: 'downDrone', surge: this.surgeIndex, drone: x.d.id })
+    this.flashHint(line)
   }
 
   private drawSurgeHud(onMoon: boolean, active: boolean, startsIn: number): void {
@@ -1155,13 +1247,17 @@ export class VoxelViewport {
 
   private benchHint(): string {
     if (!this.nearBench) return ''
-    const r = RECIPES[0]
-    return this.progress?.tools?.[r.id] ? 'The bench: your drill is made · ' : `U: craft a ${r.title} (${Object.entries(r.needs).map(([k, n]) => `${n} m³ ${k}`).join(', ')}) · `
+    const r = nextRecipe(this.progress?.tools)
+    return !r ? 'The bench: your drill and turret are made · ' : `U: craft a ${r.title} (${Object.entries(r.needs).map(([k, n]) => `${n} m³ ${k}`).join(', ')}) · `
   }
 
   // V14: U at the bench makes the drill when the pack holds what it takes
   craftAt(id: string): void {
-    const r = RECIPES[0]
+    const r = nextRecipe(this.progress?.tools)
+    if (!r) {
+      this.flashHint('The bench has nothing more to teach you yet')
+      return
+    }
     const why = missing(r, this.carried, this.progress?.tools)
     if (why) {
       this.flashHint(why[0].toUpperCase() + why.slice(1))
@@ -1171,8 +1267,11 @@ export class VoxelViewport {
     this.drawPack()
     if (this.progress) this.progress = { ...this.progress, tools: { ...this.progress.tools, [r.id]: true } }
     this.opts.onShipIntent?.({ kind: 'craft', id, item: r.id })
-    this.brushRadius = Math.max(this.brushRadius, 2)
-    this.flashHint(`You file and fit the parts at the bench: a ${r.title}. It ${r.line}; the wheel opens its bite to ${this.dig().maxBrush} m`)
+    if (r.id === 'drill') {
+      this.brushRadius = Math.max(this.brushRadius, 2)
+      this.flashHint(`You file and fit the parts at the bench: a ${r.title}. It ${r.line}; the wheel opens its bite to ${this.dig().maxBrush} m`)
+    } else this.flashHint(`You bolt the parts together at the bench: a ${r.title}. It ${r.line}`)
+    this.updateHint()
   }
 
   // V13: a night in a cabin's bed: full health, and the cabin is home

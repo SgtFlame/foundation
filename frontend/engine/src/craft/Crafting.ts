@@ -13,7 +13,14 @@ export interface Recipe {
 
 export const RECIPES: readonly Recipe[] = [
   { id: 'drill', title: 'hand drill', needs: { ore: 2, rock: 1 }, line: 'digs wider and faster than bare hands' },
+  // V17: the base defence's turret, set down on the moon with Y
+  { id: 'turret', title: 'sentry turret', needs: { ore: 2, rock: 1.5 }, line: 'shoots down the surge\'s drones near where you set it; Y on the moon sets it down' },
 ]
+
+// The recipe the bench offers next: the first not made yet, or null
+export function nextRecipe(tools: Readonly<Record<string, boolean>> | undefined): Recipe | null {
+  return RECIPES.find((r) => !tools?.[r.id]) ?? null
+}
 
 export interface Carried {
   dust?: number
