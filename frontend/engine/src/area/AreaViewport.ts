@@ -13,7 +13,7 @@ import { NightHud } from '../defence/NightHud.ts'
 import { whistle } from '../defence/Whistle.ts'
 import { DialoguePanel } from './DialoguePanel.ts'
 import { FirstHourPanel } from '../objectives/FirstHour.ts'
-import { dragMarks, drawCard, howl, nextStep, showCard, SIGNATURE_TEXT, storySteps } from '../story/FirstHourStory.ts'
+import { dragMarks, drawCard, herbSpots, howl, nextStep, showCard, showHerbal, SIGNATURE_TEXT, storySteps } from '../story/FirstHourStory.ts'
 import { ashPile, buildModel, CharacterModel, interiorShell, material } from './Models.ts'
 import { fit, pieceOf, turned, type AreaDef, type Dialogue, type Npc, type PieceSet, type Placement } from './PieceSet.ts'
 
@@ -70,8 +70,9 @@ export interface AreaViewportOptions {
   weapon?: string
   skills?: Skills
   // S6: a step of the first hour reached (step empty: only the place, saved
-  // now and then); the host sends it as game.reachStory to the story's area
-  onStory?: (s: { step: string; area: string; x: number; z: number }) => void
+  // now and then); the host sends it as game.reachStory to the story's area.
+  // S7: item and spot, a herb gathered
+  onStory?: (s: { step: string; area: string; x: number; z: number; item?: string; spot?: string }) => void
 }
 
 // S6: a player's place in a story as the server keeps it (game.story)
@@ -80,6 +81,9 @@ export interface StoryPlace {
   last?: string
   area?: string
   at?: [number, number]
+  // S7: herbs gathered, and the spots they came from
+  items?: Record<string, number>
+  picked?: Record<string, boolean>
 }
 
 // The thimble's skills at the first fight (375 › the first hour): a little
@@ -109,7 +113,7 @@ export interface AreaStats {
   // A night of hearth defence (S5)
   hearth: { house: string; time: number; left: number; watcherHp: number; barrel: boolean; inside: number; outcome: 'held' | 'taken' | null; signals: number[] } | null
   // The first hour (S6): the story's area, the steps done and the next, and the card drawn
-  story: { area: string; done: string[]; next: string | null; card: string | null } | null
+  story: { area: string; done: string[]; next: string | null; card: string | null; items: Record<string, number> } | null
 }
 
 const GOOD = 0x4caf50
@@ -196,7 +200,9 @@ export class AreaViewport {
   // S6: the first hour being played: its area, the steps done, the marks the
   // raid left, where to stand after resuming in another area, the door last
   // taken, the last place saved and the card drawn
-  private story: { area: string; done: Record<string, boolean>; card: string | null } | null = null
+  private story: { area: string; done: Record<string, boolean>; card: string | null; items: Record<string, number>; picked: Record<string, boolean> } | null = null
+  private readonly herbs = new THREE.Group()
+  private herbal: HTMLDivElement | null = null
   private readonly storyPanel: FirstHourPanel
   private readonly marks = new THREE.Group()
   private signature: Point | null = null
@@ -253,7 +259,7 @@ export class AreaViewport {
     this.nightHud = new NightHud(container)
     this.weapon = opts.weapon ?? 'sword'
     this.skills = opts.skills ?? STARTING_SKILLS
-    this.scene.add(this.ash, this.marks)
+    this.scene.add(this.ash, this.marks, this.herbs)
     this.storyPanel = new FirstHourPanel(container, 96)
     this.caption = document.createElement('div')
     this.caption.dataset.storyCaption = ''
@@ -485,6 +491,9 @@ export class AreaViewport {
       this.story = null
       this.resumeAt = null
       this.marks.clear()
+      this.herbs.clear()
+      this.herbal?.remove()
+      this.herbal = null
       this.storyPanel.show([], false)
       this.caption.style.display = 'none'
       if (this.home) {
@@ -630,7 +639,7 @@ export class AreaViewport {
           }
         : null,
       story: this.story
-        ? { area: this.story.area, done: Object.keys(this.story.done).filter((k) => this.story!.done[k]), next: nextStep(this.story.done), card: this.story.card }
+        ? { area: this.story.area, done: Object.keys(this.story.done).filter((k) => this.story!.done[k]), next: nextStep(this.story.done), card: this.story.card, items: { ...this.story.items } }
         : null,
     }
   }
@@ -1162,6 +1171,7 @@ export class AreaViewport {
         this.showStory()
       }
       if (this.story && (e.key === 'r' || e.key === 'R')) this.rest()
+      if (this.story && (e.key === 'k' || e.key === 'K')) this.openHerbal()
       if (this.combat && !this.talk.open) {
         const s = ({ '1': 'strike', '2': 'pivot', '3': 'guard' } as Record<string, Stance>)[e.key]
         if (s) this.setStance(s)
@@ -1441,7 +1451,8 @@ export class AreaViewport {
   // the player last stood at (the host travels there through onTravel)
   playStory(place: StoryPlace | null): void {
     if (this.playing) this.play(false)
-    this.story = { area: this.area.id, done: { ...(place?.done ?? {}) }, card: null }
+    this.story = { area: this.area.id, done: { ...(place?.done ?? {}) }, card: null, items: { ...(place?.items ?? {}) }, picked: { ...(place?.picked ?? {}) } }
+    if (this.story.done.rest) this.setLighting('day') // the first day
     const at = place?.at ? { x: place.at[0], z: place.at[1] } : null
     this.play(true)
     this.syncNpcs(true) // the Hollowed hide until the trail is followed
@@ -1525,6 +1536,7 @@ export class AreaViewport {
   // in the story's area once the howl is heard
   private drawMarks(): void {
     this.marks.clear()
+    this.drawHerbs()
     const st = this.story
     if (!st || this.area.id !== st.area || !st.done.howl) return
     const c = this.set.cell
@@ -1552,12 +1564,70 @@ export class AreaViewport {
     }
   }
 
+  // S7: the herbs by the trees, in the story's area, from the first morning until gathered
+  private drawHerbs(): void {
+    this.herbs.clear()
+    const st = this.story
+    if (!st || this.area.id !== st.area || !st.done.morning) return
+    for (const h of herbSpots(this.area.pieces, this.set.cell)) {
+      if (st.picked[h.spot]) continue
+      const g = new THREE.Group()
+      const mat = new THREE.MeshStandardNodeMaterial({ color: h.herb.color, roughness: 0.9 })
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2
+        const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 4), mat)
+        leaf.position.set(Math.cos(a) * 0.25, 0.15 + (i % 2) * 0.12, Math.sin(a) * 0.25)
+        g.add(leaf)
+      }
+      g.position.set(h.x, 0, h.z)
+      g.userData.spot = h.spot
+      this.herbs.add(g)
+    }
+  }
+
+  // K: the herbal, once something is gathered; reading it after foraging is a step
+  private openHerbal(): void {
+    const st = this.story
+    if (!st) return
+    if (this.herbal?.isConnected) {
+      this.herbal.remove()
+      this.herbal = null
+      return
+    }
+    this.herbal = showHerbal(this.container, st.items)
+    if (st.done.forage) this.reach('herbal')
+  }
+
   // Each frame of the first hour: the signature found, the trail followed,
   // and the place saved now and then
   private stepStory(): void {
     const st = this.story!
     const p = this.player()
     if (!p) return
+    // S7: the first morning, once play has reached where the player rested
+    if (st.done.rest && !st.done.morning && !this.resumeAt) {
+      const card = drawCard(hash(st.area) + 1)
+      st.card = card.id
+      this.reach('morning')
+      showCard(this.container, card)
+      this.say(`Morning. Frost on the sill, and the day's card: ${card.title}. Out by the farmstead's trees, the herbs are up.`)
+      this.drawMarks()
+    }
+    if (this.area.id === st.area && st.done.morning && !st.done.forage) {
+      const spots = herbSpots(this.area.pieces, this.set.cell)
+      for (const h of spots) {
+        if (st.picked[h.spot] || Math.hypot(p.x - h.x, p.z - h.z) > 2) continue
+        st.picked[h.spot] = true
+        st.items[h.herb.id] = (st.items[h.herb.id] ?? 0) + 1
+        this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: h.herb.id, spot: h.spot })
+        this.say(`${h.herb.title}. You gather a handful.`)
+        this.drawHerbs()
+        if (spots.every((x) => st.picked[x.spot])) {
+          this.reach('forage')
+          this.say('All three. Press K to write them in the herbal.')
+        }
+      }
+    }
     if (this.area.id === st.area && st.done.howl) {
       if (!st.done.signature && this.signature && Math.hypot(p.x - this.signature.x, p.z - this.signature.z) < 4) {
         this.reach('signature')
@@ -1592,7 +1662,10 @@ export class AreaViewport {
     st.card = card.id
     this.reach('rest')
     showCard(this.container, card)
-    this.say('Stillness. The cottage settles around you, and your hand finds the old deck on the shelf. The first hour is over.')
+    this.say('Stillness. The cottage settles around you, and your hand finds the old deck on the shelf. The first hour is over; sleep until morning.')
+    setTimeout(() => {
+      if (this.story === st) this.setLighting('day')
+    }, 4000)
   }
 
   private flash(text: string): void {
@@ -1745,7 +1818,7 @@ export class AreaViewport {
     this.hint.textContent = this.talk.open
       ? 'Pick an answer · 1 to 9 · Esc to end the talk'
       : this.playing && this.story && !this.combat
-      ? `The first hour · click the ground to walk · click a person to talk · click a door to go through · J hides the steps${this.nearHearth() && this.story.done.road && !this.story.done.rest ? ' · R to rest by the hearth' : ''}`
+      ? `The first hour · click the ground to walk · click a person to talk · click a door to go through · J hides the steps${this.nearHearth() && this.story.done.road && !this.story.done.rest ? ' · R to rest by the hearth' : ''}${this.story.done.morning ? ' · K: the herbal' : ''}`
       : this.playing && this.combat
       ? 'Fighting · click a Hollowed to attack it · 1 Strike · 2 Pivot · 3 Guard · click the ground to back away'
       : this.playing

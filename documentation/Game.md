@@ -207,6 +207,14 @@ A thin first step off the moon to a planet with air (the user's progression, 202
 - **Crops**: `game.plant {x, y, z}` (`cmd-game-plant`) plants barley on the planet's surface, refused off it or within 1.5 m of another crop; `game.harvest {crop}` (`cmd-game-harvest`) takes a ripe one (90 s, `RipeSeconds`) as a ration of food, which `game.packs` folds (`Pack.Food`). `game.crops` keeps each world's crops, keyed `terrain.<worldId>`, and the `game.crops {world}` query lists them. `editTerrain`, `standAt` and `startShip` allow points near the planet.
 - **In the viewport**: walking, P plants where the player looks on the planet's soil and H harvests the ripe crop beside them; crops grow from small and green to full and gold. The pack line shows food, and the first-hour guide adds *Grow food on the green planet* (thirteen steps). Stats add `crops`.
 
+## Built in S7 (forge 375)
+
+The story game's seventh tracer bullet: the first day after the first hour (the user, 2026-11-26: "both, a thin slice each").
+
+- **Steps**: `StorySteps` gains `morning`, `forage` and `herbal`; `game.reachStory` takes `item` and `spot` (a herb gathered: `StoryItems` thyme, nettle, yarrow), refused for an unknown item, and `game.story` gives `items` (counts) and `picked` (the spots gathered, each counted once).
+- **`story/FirstHourStory.ts`**: `HERBS` (title, colour, the herbal's line), `herbSpots(pieces, cell)` (one herb by each of the area's first three tree or copse pieces, in a fixed order, keyed by the piece's id) and `showHerbal` (the herbal page).
+- **In the viewport**: once `rest` is done, play continuing (after any resume) reaches `morning`: day light, the day's card drawn and shown. In the story's starting area the herbs grow by the trees; walking within 2 m of one gathers it (sent through `onStory` with `item` and `spot`); all three reach `forage`, and K opens the herbal, which reaches `herbal`, the story's last step for now. Stats' `story` adds `items`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

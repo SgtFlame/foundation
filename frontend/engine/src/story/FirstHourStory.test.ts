@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { fit, type PieceSet } from '../area/PieceSet.ts'
 import { farmstead, hawksRest, SIGNPOST } from '../area/Samples.ts'
-import { dragMarks, drawCard, LESSER_DECK, nextStep, STORY_STEPS, storySteps } from './FirstHourStory.ts'
+import { dragMarks, drawCard, herbSpots, HERBS, LESSER_DECK, nextStep, STORY_STEPS, storySteps } from './FirstHourStory.ts'
 
 test("the first hour's steps are the server's (S6)", () => {
   const go = readFileSync(new URL('../../../../backend/features/game/Story.go', import.meta.url), 'utf8')
@@ -23,7 +23,19 @@ test('a later step done counts the earlier ones, and the next is the first left'
   const s = storySteps({ fight: true })
   assert.ok(s.slice(0, 6).every((x) => x.done))
   assert.equal(nextStep({ fight: true }), 'road')
-  assert.equal(nextStep({ rest: true }), null)
+  assert.equal(nextStep({ rest: true }), 'morning')
+  assert.equal(nextStep({ herbal: true }), null)
+})
+
+test('three herbs grow by the farmstead trees, one per tree, the same each time (S7)', () => {
+  const pieces = Object.fromEntries(farmstead.pieces.map((p, i) => [`p${i}`, { ...p, id: `p${i}` }]))
+  const a = herbSpots(pieces, 4)
+  assert.equal(a.length, 3)
+  assert.deepEqual(a.map((s) => s.herb.id), HERBS.map((h) => h.id))
+  assert.equal(new Set(a.map((s) => s.spot)).size, 3)
+  assert.deepEqual(herbSpots(pieces, 4), a)
+  const go = readFileSync(new URL('../../../../backend/features/game/Story.go', import.meta.url), 'utf8')
+  for (const h of HERBS) assert.ok(go.includes(`"${h.id}"`), h.id)
 })
 
 test('drag marks run from the signature toward the barn, and the same seed draws the same card', () => {

@@ -24,7 +24,71 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'fight', title: 'The first fight', how: 'Click a Hollowed to fight it. 1 Strike, 2 Pivot, 3 Guard. Only the neck or the heart ends them.' },
   { id: 'road', title: "The road west to Hawk's Rest", how: "Follow the north road to the signpost and click it to take the road to Hawk's Rest." },
   { id: 'rest', title: 'Rest by a cold hearth', how: 'The empty cottage approves of its guest. Stand by the hearth and press R to rest and draw the first card.' },
+  // S7: the first day
+  { id: 'morning', title: 'The first morning', how: 'Morning comes to Hawk\'s Rest. The day\'s card is drawn.' },
+  { id: 'forage', title: 'Forage for the herbal', how: 'Take the road back to the farmstead and gather the three herbs growing by the trees: thyme, nettle and yarrow. Walk up to each.' },
+  { id: 'herbal', title: 'Write them in the herbal', how: 'Press K to open the herbal and read what each herb is for.' },
 ]
+
+// S7: the herbs a character gathers for the herbal (placeholders in the
+// book's spirit: the herbal of Hawk's Rest)
+export interface Herb {
+  id: string
+  title: string
+  note: string
+  color: number
+}
+
+export const HERBS: readonly Herb[] = [
+  { id: 'thyme', title: 'Wild thyme', note: 'Steeped in hot milk, it warms a chilled body: good against the Chill after spending the Hum.', color: 0x9b7fc4 },
+  { id: 'nettle', title: 'Nettle', note: 'Gloves first. Boiled, it makes a soup that keeps hunger off through a long watch.', color: 0x4e8a3a },
+  { id: 'yarrow', title: 'Yarrow', note: 'Pressed into a cut, it stops the bleeding. The old name is soldier\'s woundwort.', color: 0xe9e4c8 },
+]
+
+// Where the herbs grow in an area: by its trees and copses, one herb at
+// each of the first three, a few metres south of the tree, in the order
+// HERBS lists them. Spot ids are stable for a layout (the piece's id).
+export function herbSpots(pieces: Readonly<Record<string, { id: string; piece: string; x: number; z: number }>>, cell: number): { spot: string; herb: Herb; x: number; z: number }[] {
+  const trees = Object.values(pieces)
+    .filter((p) => p.piece === 'tree' || p.piece === 'copse')
+    .sort((a, b) => a.z - b.z || a.x - b.x)
+  return trees.slice(0, HERBS.length).map((t, i) => ({ spot: t.id, herb: HERBS[i], x: (t.x + 0.5) * cell, z: (t.z + 1) * cell + 1.5 }))
+}
+
+// The herbal (S7): the herbs gathered, with what each is for. Pure DOM.
+export function showHerbal(container: HTMLElement, items: Readonly<Record<string, number>>): HTMLDivElement {
+  const el = document.createElement('div')
+  el.dataset.herbal = ''
+  el.style.cssText =
+    'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;width:min(420px,calc(100% - 32px));padding:16px 18px;border-radius:8px;cursor:pointer;' +
+    'background:#efe4c9;border:1px solid #8a6d43;box-shadow:0 6px 30px rgba(0,0,0,0.6);font:14px Georgia,serif;color:#3b2c1a'
+  const h = document.createElement('div')
+  h.style.cssText = 'font:600 17px Georgia,serif;margin-bottom:8px'
+  h.textContent = "The herbal of Hawk's Rest"
+  el.append(h)
+  for (const herb of HERBS) {
+    const n = items[herb.id] ?? 0
+    const row = document.createElement('div')
+    row.dataset.herb = herb.id
+    row.style.cssText = `margin:6px 0;opacity:${n ? 1 : 0.45}`
+    row.innerHTML = ''
+    const t = document.createElement('div')
+    t.style.cssText = 'font-weight:600'
+    t.textContent = `${herb.title}${n ? ` (${n})` : ' (not found yet)'}`
+    const d = document.createElement('div')
+    d.style.cssText = 'font-style:italic;line-height:1.35'
+    d.textContent = n ? herb.note : '…'
+    row.append(t, d)
+    el.append(row)
+  }
+  const foot = document.createElement('div')
+  foot.style.cssText = 'margin-top:10px;font:11px system-ui,sans-serif;opacity:0.6'
+  foot.textContent = 'Click or press K to close.'
+  el.append(foot)
+  el.addEventListener('click', () => el.remove())
+  container.appendChild(el)
+  return el
+}
 
 // The steps with which are done, a later one counting the earlier
 export function storySteps(done: Readonly<Record<string, boolean>>): Step[] {

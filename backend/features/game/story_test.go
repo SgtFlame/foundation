@@ -27,4 +27,12 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "road" || len(p.Done) != 3 || p.At[0] != 3 {
 		t.Fatalf("place saved alone %+v", p)
 	}
+	// S7: a herb gathered counts once per spot; an unknown herb is refused
+	st.refused("game.reachStory", farm, map[string]any{"item": "mandrake", "spot": "s1", "area": farm, "x": 3, "z": 3})
+	st.ok("game.reachStory", farm, map[string]any{"item": "thyme", "spot": "s1", "area": farm, "x": 3, "z": 3})
+	st.ok("game.reachStory", farm, map[string]any{"item": "thyme", "spot": "s1", "area": farm, "x": 3, "z": 3})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "forage", "item": "nettle", "spot": "s2", "area": farm, "x": 4, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Items["thyme"] != 1 || p.Items["nettle"] != 1 || !p.Done["forage"] {
+		t.Fatalf("items %+v", p)
+	}
 }

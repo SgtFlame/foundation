@@ -7,13 +7,21 @@
   "spec": {
     "command": "game.reachStory",
     "title": "Save my place in the story",
-    "description": "Saves the sender's place in a story: the target is the story's starting area (the farmstead of the first hour), step the step just reached (empty to save only where they are), area the area they are in and x, z where they stand in it. game.story gives it back, so Play the first hour resumes there. Refused for an unknown step, or an area that does not exist.",
+    "description": "Saves the sender's place in a story: the target is the story's starting area (the farmstead of the first hour), step the step just reached (empty to save only where they are), area the area they are in and x, z where they stand in it. game.story gives it back, so Play the first hour resumes there. item and spot record a herb gathered (S7). Refused for an unknown step or item, or an area that does not exist.",
     "args": {
       "type": "object",
       "properties": {
         "step": {
           "type": "string",
-          "description": "The step just reached: arrive, farmer, howl, signature, trail, fight, road or rest; empty to save only the place"
+          "description": "The step just reached: arrive, farmer, howl, signature, trail, fight, road, rest, morning, forage or herbal; empty to save only the place"
+        },
+        "item": {
+          "type": "string",
+          "description": "S7: a herb just gathered (thyme, nettle or yarrow), with spot; empty for none"
+        },
+        "spot": {
+          "type": "string",
+          "description": "S7: where the item was gathered, so each spot gives it once"
         },
         "area": {
           "type": "string",
@@ -56,6 +64,16 @@
             "id": "step",
             "type": "string",
             "description": "The step just reached, or empty"
+          },
+          {
+            "id": "item",
+            "type": "string",
+            "description": "A herb gathered, or empty"
+          },
+          {
+            "id": "spot",
+            "type": "string",
+            "description": "Where it was gathered"
           },
           {
             "id": "area",
@@ -134,7 +152,7 @@
         "y": 150
       },
       "config": {
-        "expr": "!started || start?.deleted == true ? \"there is no area \" + target + \" to start a story in\" : (step ?? \"\") not in [\"\", \"arrive\", \"farmer\", \"howl\", \"signature\", \"trail\", \"fight\", \"road\", \"rest\"] ? \"there is no step \" + step + \" in the first hour\" : !found || here?.deleted == true ? \"there is no area \" + area : x \u003c 0 || z \u003c 0 || x \u003e here.width * 10 + 1 || z \u003e here.depth * 10 + 1 ? \"the point is outside \" + here.name : \"\"",
+        "expr": "!started || start?.deleted == true ? \"there is no area \" + target + \" to start a story in\" : (step ?? \"\") not in [\"\", \"arrive\", \"farmer\", \"howl\", \"signature\", \"trail\", \"fight\", \"road\", \"rest\", \"morning\", \"forage\", \"herbal\"] ? \"there is no step \" + step + \" in the story\" : (item ?? \"\") not in [\"\", \"thyme\", \"nettle\", \"yarrow\"] ? \"there is no herb \" + item + \" to gather\" : !found || here?.deleted == true ? \"there is no area \" + area : x \u003c 0 || z \u003c 0 || x \u003e here.width * 10 + 1 || z \u003e here.depth * 10 + 1 ? \"the point is outside \" + here.name : \"\"",
         "type": "string"
       }
     },
@@ -168,7 +186,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{step: step ?? \"\", area: area, x: round(x * 100) / 100, z: round(z * 100) / 100}",
+        "expr": "{step: step ?? \"\", item: item ?? \"\", spot: spot ?? \"\", area: area, x: round(x * 100) / 100, z: round(z * 100) / 100}",
         "type": "json"
       }
     },
@@ -310,6 +328,16 @@
     {
       "from": {
         "node": "event",
+        "pin": "item"
+      },
+      "to": {
+        "node": "check",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
         "pin": "area"
       },
       "to": {
@@ -395,6 +423,26 @@
       "to": {
         "node": "reached",
         "pin": "step"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "item"
+      },
+      "to": {
+        "node": "reached",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "spot"
+      },
+      "to": {
+        "node": "reached",
+        "pin": "spot"
       }
     },
     {
