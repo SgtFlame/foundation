@@ -84,7 +84,8 @@ export class VoxelViewport {
   private brushKind: EditKind = 'dig'
   private brushHit: THREE.Vector3 | null = null
   private repeat = 0
-  private lastSent = 0
+  // When each edit still on its way was asked for, oldest first
+  private sentAt: number[] = []
   private readonly remotes = new Map<string, { mesh: THREE.Mesh; label: HTMLDivElement; state: RemoteCamera }>()
   private editRoundTripMs: number | null = null
   private lastCamera: CameraState | null = null
@@ -214,7 +215,8 @@ export class VoxelViewport {
     // click carves a bowl rather than a buried bubble
     const n = at.clone().normalize()
     const c = kind === 'dig' ? at.clone().addScaledVector(n, this.brushRadius * 0.35) : at.clone().addScaledVector(n, -this.brushRadius * 0.2)
-    this.lastSent = performance.now()
+    this.sentAt.push(performance.now())
+    if (this.sentAt.length > 64) this.sentAt.shift()
     this.opts.onEditIntent?.({ kind, x: c.x, y: c.y, z: c.z, radius: Number(this.brushRadius.toFixed(2)) })
   }
 
@@ -271,10 +273,13 @@ export class VoxelViewport {
     this.world.setEdits(edits)
   }
 
-  // New edits from the server. Pass mine = true for the edit this viewport
-  // asked for, to measure the round trip.
-  addEdits(edits: readonly VoxelEdit[], mine = false): void {
-    if (mine && this.lastSent > 0) this.editRoundTripMs = performance.now() - this.lastSent
+  // New edits from the server. mine counts those this viewport asked for,
+  // to measure the round trip from the click to the edit coming back.
+  addEdits(edits: readonly VoxelEdit[], mine = 0): void {
+    for (let i = 0; i < mine; i++) {
+      const t = this.sentAt.shift()
+      if (t !== undefined) this.editRoundTripMs = performance.now() - t
+    }
     this.world.addEdits(edits)
   }
 

@@ -13,6 +13,8 @@ import { log } from '../logging/index.ts'
 import { canIn } from '../session/permissions.ts'
 import { Ui, type AppInfo, type EditorKindInfo } from '../services/Ui.ts'
 import { extensions } from '../workbench/extensions/index.ts'
+import type { EditorRegistry } from '../pages/workbench/EditorRegistry.ts'
+import { openWorkbenchLink } from '../workbench/links.ts'
 import { commands, editors, type EditorProps } from '../workbench/points.ts'
 import { AppEditorObject } from './AppEditorObject.ts'
 import { iconComponent } from './renderers/mui/iconMap.ts'
@@ -75,11 +77,14 @@ export function openApp(registry: Registry, app: Pick<AppInfo, 'id' | 'title' | 
   else pending.set(tabId, route)
 }
 
-// A deep link, /workbench?app=<appId>&route=/task/123, opens the app there
-export function openDeepLink(registry: Registry, search: string) {
+// A deep link, /workbench?app=<appId>&route=/task/123, opens the app there;
+// /workbench?open=<workbench link> opens a subject
+export function openDeepLink(registry: EditorRegistry, search: string) {
   const params = new URLSearchParams(search)
   const app = params.get('app')
   if (app) openAppAt(registry, app, params.get('route') ?? '')
+  const open = params.get('open')
+  if (open) void openWorkbenchLink(registry, open)
 }
 
 // Opens an app's own tab at a route, by the app's id

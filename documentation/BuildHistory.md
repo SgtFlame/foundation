@@ -905,3 +905,12 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 54. What the Agents app needed (Forge 7m) | forge 007-Email 6 (an `engine` field), 8 (a per-agent cap) and 13 (both a library and the app's own records, with copy and paste), and 07m 1 (both filters), the user's answers | the decisions in [forge AgentsApp.md](../../forge/documentation/AgentsApp.md#decisions-to-review-after-seeing-it), the agent editor read by someone who is not a developer |
 | 55. What the Mail app's sync needed (Forge 7n) | forge 07n 3 (files held by a record the caller may read) and 4 (connections held by the app's own records, a gap found while reading), the user's answers | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-5) |
 | 56. What the mail client needed (Forge 7o) | forge 007-Email 7 (Owners read all mail, Administrators only when granted, reading marks nothing read) and 07o 1 (members' grants kept by the app, a gap found while reading), the user's answers | the decisions in [forge MailApp.md](../../forge/documentation/MailApp.md#decisions-to-review-after-seeing-it-1), the thread with summary, labels and presence |
+
+## Game engine V1 (forge 360)
+
+The voxel game's first tracer bullet ([Game.md](Game.md) › *Built in V1*), built beside the slices above rather than numbered among them. It added the `frontend/engine` workspace (`@foundation/engine`) and `backend/features/game`. Later game work must:
+
+- put engine code in `frontend/engine` and keep its modules free of React and of `common`;
+- make every game definition command an op with its inverse, with a step in `TestEveryOpUndoes`, and its undo scope in `ops.ParseScope`;
+- write game rules as blueprints (`game.editTerrain` is the model), never as Go handlers;
+- keep the browser's generator and edit rules deterministic, because the Node runner (346) will have to produce the same chunks.

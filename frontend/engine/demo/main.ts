@@ -21,7 +21,7 @@ const viewport = await VoxelViewport.create(container, {
   viewDistance: num('view', 160),
   onEditIntent: (intent) => {
     const e = log.commit(intent)
-    if (typeof e !== 'string') viewport.addEdits([e], true)
+    if (typeof e !== 'string') viewport.addEdits([e], 1)
   },
 })
 // For browser tests and the console

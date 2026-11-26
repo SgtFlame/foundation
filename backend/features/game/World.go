@@ -261,8 +261,8 @@ func contributeWorlds(reg *extensions.Registry) {
 
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.worlds", Source: source}, Title: "Game worlds",
-		Description: "Every game world that is not deleted, by key gameWorld.<id>: " + worldFields,
-		Params:      json.RawMessage(`{"type":"object","properties":{}}`),
+		Description: "Every game world that is not deleted (with deleted: true, the deleted ones too), by key gameWorld.<id>: " + worldFields,
+		Params:      json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean","description":"Also list the deleted worlds, which game.restoreWorld brings back"}}}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{}`)},
 		Action:      "game.read",
 		Run:         liveWorlds,
@@ -285,9 +285,13 @@ func contributeWorlds(reg *extensions.Registry) {
 	})
 }
 
-// liveWorlds is game.worlds: the worlds that are not deleted, as a map by
+// liveWorlds is game.worlds: the worlds that are not deleted (or all), as a map by
 // key, then upserts and removals.
 func liveWorlds(f live.Feed) error {
+	var p struct {
+		Deleted bool `json:"deleted"`
+	}
+	_ = json.Unmarshal(f.Params(), &p)
 	entries, err := f.Store().Watch(f.Context(), f.Args().Principal.TenantID, WorldsProjector, WorldType+".*")
 	if err != nil {
 		return err
@@ -303,7 +307,7 @@ func liveWorlds(f live.Feed) error {
 		}
 		pos = pos.Merge(e.Value.Position())
 		var w World
-		gone := e.Deleted || json.Unmarshal(e.Value.Value, &w) != nil || w.Deleted
+		gone := e.Deleted || json.Unmarshal(e.Value.Value, &w) != nil || (w.Deleted && !p.Deleted)
 		if gone {
 			if _, had := out[e.Key]; had {
 				delete(out, e.Key)
