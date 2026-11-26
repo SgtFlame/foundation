@@ -85,3 +85,20 @@ test('without a battery a prospector gets only what its panels give; parked, the
   // the skiff has no power blocks and does not count power
   assert.equal(new ShipBody(skiff, all, { x: 0, y: 10, z: 0, q: [0, 0, 0, 1] }, flat).powered, false)
 })
+
+test('a gentle landing breaks nothing; a fall from high breaks the blocks that struck, and it flies on without them', () => {
+  const noLift = all.filter((i) => skiff.blocks[i].push !== 'up')
+  const soft = new ShipBody(skiff, noLift, { x: 0, y: 4, z: 0, q: [0, 0, 0, 1] }, flat)
+  run(soft, 4)
+  assert.deepEqual(soft.takeBroken(), [])
+  const hard = new ShipBody(skiff, noLift, { x: 0, y: 40, z: 0, q: [0, 0, 0, 1] }, flat)
+  const mass = hard.mass
+  run(hard, 9)
+  const broken = hard.takeBroken()
+  assert.ok(broken.length > 0, 'something broke')
+  // the floor struck first: every broken block is on the bottom row (y 0, the lift thrusters being gone)
+  assert.ok(broken.every((i) => skiff.blocks[i].at[1] === 0), JSON.stringify(broken.map((i) => skiff.blocks[i].at)))
+  assert.ok(hard.mass < mass)
+  assert.ok(broken.every((i) => !hard.blocks().includes(i)))
+  assert.deepEqual(hard.takeBroken(), [])
+})

@@ -970,3 +970,11 @@ Power, a hold and a refinery on a ship ([Game.md](Game.md) › *Built in V4*). L
 - move material between a player and a ship with one event on the ship that the pack projector also folds, as `loaded` does, rather than a command with two targets;
 - add a design's hold and refinery indices to `cmd-game-loadShip` and `cmd-game-refineShip` as well as its block count to `cmd-game-startShip`;
 - refuse a command that changes a ship's charge while someone flies it, since the pilot's window owns the charge then.
+
+## Game V5 (forge 360)
+
+Crashes and repair ([Game.md](Game.md) › *Built in V5*). Later game work must:
+
+- keep crash rules in `ShipBody` (`SAFE_IMPACT`, `WRECK_IMPACT`) so the server can run them later;
+- read a `damaged` event's `blocks` as indices, apart from the `started` event's block count of the same name;
+- repair by placing from the outline, so any later cost of a block applies to repairs too.

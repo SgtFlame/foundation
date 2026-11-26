@@ -40,6 +40,7 @@ export type ShipIntent =
   | { kind: 'fly'; id: string; x: number; y: number; z: number; q: Quat; v: [number, number, number]; pilot: boolean; charge?: number }
   | { kind: 'load'; id: string } // V4: empty the pack into its hold
   | { kind: 'refine'; id: string } // V4: one run of its refinery
+  | { kind: 'damage'; id: string; blocks: number[] } // V5: blocks a crash broke
 
 export interface CameraState {
   x: number
@@ -98,6 +99,7 @@ export interface ViewportStats {
   gravity: number
   speed: number
   ships: number
+  crashes: number
   piloting: string | null
 }
 
@@ -518,6 +520,37 @@ export class VoxelViewport {
     })
   }
 
+  // A hard landing broke blocks (V5): tell the server, throw the pieces,
+  // and put the pilot out when the cockpit broke; true when they were
+  private crashed(): boolean {
+    const b = this.shipLayer.body
+    const id = this.shipLayer.pilotOf
+    if (!b || !id) return false
+    const broken = b.takeBroken()
+    if (!broken.length) return false
+    this.opts.onShipIntent?.({ kind: 'damage', id, blocks: broken })
+    const at = { x: b.x, y: b.y, z: b.z }
+    this.shipLayer.debris(id, broken, this.terrain().gravity(at.x, at.y, at.z, { x: 0, y: 0, z: 0 }))
+    this.crashes++
+    const d = this.shipLayer.design(this.shipLayer.ships().find((s) => s.id === id)?.design ?? '')
+    const cockpit = d?.blocks.findIndex((x) => x.type === 'cockpit') ?? -1
+    this.hint.textContent = `Crunch: ${broken.length} block${broken.length === 1 ? '' : 's'} broken. Place them again from the outline.`
+    if (broken.includes(cockpit)) {
+      // thrown out: the server already seats nobody, so no flight is sent
+      const out = this.shipLayer.exitPoint()
+      this.shipLayer.leave()
+      if (this.walker && out) {
+        this.walker.pos = { ...out }
+        this.walker.vel = { x: 0, y: 0, z: 0 }
+      }
+      this.hint.textContent = 'The cockpit is smashed and you are thrown clear. Place it again from the outline.'
+      return true
+    }
+    setTimeout(() => this.updateHint(), 2500)
+    return false
+  }
+  private crashes = 0
+
   // The helm from the keys and mouse: the mouse turns at a rate
   private helm(): Helm {
     const input = this.input
@@ -542,6 +575,7 @@ export class VoxelViewport {
       return
     }
     this.shipLayer.step(dt, this.helm())
+    if (this.crashed()) return
     this.packTick -= dt
     if (this.packTick <= 0) {
       this.packTick = 0.2
@@ -793,6 +827,7 @@ export class VoxelViewport {
           ? Math.hypot(this.walker.vel.x, this.walker.vel.y, this.walker.vel.z)
           : 0,
       ships: this.shipLayer.ships().length,
+      crashes: this.crashes,
       piloting: this.shipLayer.pilotOf,
     }
   }

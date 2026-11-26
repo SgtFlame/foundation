@@ -122,3 +122,33 @@ func TestProspector(t *testing.T) {
 		t.Fatalf("no rock left: %q", r.Common.Message)
 	}
 }
+
+// V5: a crash breaks blocks, reported by the pilot; they go back to the outline and are placed again
+func TestShipDamage(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Crash moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	st.ok("game.startShip", "c1", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 104, "z": 0, "q": q})
+	for _, i := range []int{0, 4, 5, 6} {
+		st.ok("game.placeBlock", "c1", map[string]any{"index": i})
+	}
+	read := func(seq uint64) game.Ship {
+		var s game.Ship
+		st.read(game.ShipsProjector, game.ShipType+".c1", seq, &s)
+		return s
+	}
+	if r := st.refused("game.damageShip", "c1", map[string]any{"blocks": []int{4}}); !strings.Contains(r.Common.Message, "pilot") {
+		t.Fatalf("not flying: %q", r.Common.Message)
+	}
+	st.ok("game.flyShip", "c1", map[string]any{"x": 0, "y": 104, "z": 0, "q": q, "pilot": true})
+	st.refused("game.damageShip", "c1", map[string]any{"blocks": []int{20}})
+	res := st.ok("game.damageShip", "c1", map[string]any{"blocks": []int{4, 5, 20}})
+	if s := read(res.Seq); len(s.Placed) != 2 || s.Placed[0] != 0 || s.Placed[1] != 6 || s.Pilot != "1" || s.Blocks != 27 {
+		t.Fatalf("damaged %+v", s)
+	}
+	st.ok("game.placeBlock", "c1", map[string]any{"index": 4})
+	res = st.ok("game.damageShip", "c1", map[string]any{"blocks": []int{0}})
+	if s := read(res.Seq); s.Pilot != "" || len(s.Placed) != 2 {
+		t.Fatalf("cockpit broken %+v", s)
+	}
+}

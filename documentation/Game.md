@@ -137,6 +137,15 @@ The voxel game's fourth tracer bullet: power and a hold on the ship, and refinin
 - `Ship` adds `cargo {dust, rock, iron}` and `charge` (a new ship starts charged).
 - **In the viewport**: within 4 m of a ship, L loads the pack into its hold and R refines (`onShipIntent({kind: 'load' | 'refine'})`). The panel in the corner shows the ship's charge, power and hold while near it or flying it.
 
+## Built in V5 (forge 360)
+
+The voxel game's fifth tracer bullet: crash a ship, lose blocks, repair it.
+
+- **Crashes** (`ship/Ship.ts`, a thin 366b and 366e): a landing harder than 5 m/s along up breaks some of the blocks that struck the ground, the deepest first, and every one of them at 12 m/s or more. `ShipBody` refits at once (mass, thrust, gyroscope, power) and gives the broken indices through `takeBroken()`.
+- **`game.damageShip {blocks}`** (`cmd-game-damageShip`) is sent by the pilot's window, like movement. Only the ship's pilot may send it, and indices not placed are ignored. Its `damaged` event takes the blocks out of `placed`, so they show in the outline again. A broken cockpit seats nobody.
+- **Repair** is placing them again from the outline with `game.placeBlock`.
+- **In the viewport**: pieces of each broken block fly off and fade (`ShipLayer.debris`), and the hint says how many broke. A smashed cockpit throws the pilot clear beside the ship. Stats add `crashes`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
@@ -152,3 +161,4 @@ The voxel game's fourth tracer bullet: power and a hold on the ship, and refinin
 - V3's pilot's browser decides where the ship is and the server keeps what it sends (one pilot at a time); the Node runner (346) takes the flight model to the server. Blocks are placed from the design for free; costing them from the pack comes with crafting (363).
 - S5's night runs in the browser on a fixed timeline, nothing of it stored. The Hollowed need only come up and fight; the raid signature, drag marks and the watch's own choices come later (382, 383). One house only; a row of houses and watches placed by day come with 383.
 - V4's power is counted in the pilot's browser and stored as one charge; a power network per grid (367a) replaces it. Refining is one run per command rather than a queue that works over time (368c). The block indices of a design's hold and refinery are written in the two blueprints, as the block counts are in `cmd-game-startShip`.
+- V5 trusts the pilot's window to say what a crash broke, as it trusts where the ship is; the Node runner (346) decides it on the server. A block is whole or broken, with no integrity in between (366a), and a ship never splits in two (366d). Repair costs nothing until crafting (363, 368).

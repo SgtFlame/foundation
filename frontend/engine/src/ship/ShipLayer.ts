@@ -115,6 +115,11 @@ export class ShipLayer {
     design.blocks.forEach((b, i) => {
       const size = design.blockSize
       const local = new THREE.Vector3(b.at[0] * size, b.at[1] * size, b.at[2] * size)
+      // a block broken in a crash (V5) goes back to the outline
+      if (!placed.has(i) && s.blocks[i]) {
+        s.group.remove(s.blocks[i] as THREE.Object3D)
+        s.blocks[i] = null
+      }
       if (placed.has(i) && !s.blocks[i]) {
         const obj = this.blockMesh(b)
         obj.position.copy(local)
@@ -186,6 +191,44 @@ export class ShipLayer {
     if (!hit) return null
     const u = hit.object.userData as { ship: string; index: number }
     return { ship: u.ship, index: u.index, distance: hit.distance }
+  }
+
+  // Pieces of broken blocks thrown from where they were, falling and fading
+  private readonly bits: { mesh: THREE.Mesh; v: THREE.Vector3; g: THREE.Vector3; life: number }[] = []
+  private readonly bitGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3)
+  debris(id: string, indices: readonly number[], gravity: Vec3): void {
+    const s = this.shown.get(id)
+    if (!s) return
+    const pose = { x: s.at.x, y: s.at.y, z: s.at.z, q: [s.q.x, s.q.y, s.q.z, s.q.w] as Quat }
+    const up = new THREE.Vector3(-gravity.x, -gravity.y, -gravity.z).normalize()
+    for (const i of indices) {
+      const b = s.design.blocks[i]
+      if (!b) continue
+      const c = blockWorld(pose, b, s.design.blockSize)
+      for (let k = 0; k < 5; k++) {
+        const mesh = new THREE.Mesh(this.bitGeo, this.material(b.type))
+        mesh.position.set(c.x + (Math.random() - 0.5) * 0.6, c.y + (Math.random() - 0.5) * 0.6, c.z + (Math.random() - 0.5) * 0.6)
+        mesh.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3)
+        const v = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(5).addScaledVector(up, 2.5)
+        this.group.add(mesh)
+        this.bits.push({ mesh, v, g: new THREE.Vector3(gravity.x, gravity.y, gravity.z), life: 2.5 })
+      }
+    }
+  }
+
+  private stepDebris(dt: number): void {
+    for (let i = this.bits.length - 1; i >= 0; i--) {
+      const b = this.bits[i]
+      b.life -= dt
+      b.v.addScaledVector(b.g, dt)
+      b.mesh.position.addScaledVector(b.v, dt)
+      b.mesh.rotation.x += dt * 3
+      b.mesh.scale.setScalar(Math.max(0.01, Math.min(1, b.life)))
+      if (b.life <= 0) {
+        this.group.remove(b.mesh)
+        this.bits.splice(i, 1)
+      }
+    }
   }
 
   aim(hit: GhostHit | null): void {
@@ -260,6 +303,7 @@ export class ShipLayer {
   // the server's place carried on by its velocity (at most half a second)
   frame(dt: number): void {
     const now = performance.now()
+    this.stepDebris(dt)
     for (const s of this.shown.values()) {
       if (this.pilotOf === s.state.id && this.body) {
         const b = this.body
@@ -304,6 +348,7 @@ export class ShipLayer {
   dispose(): void {
     for (const id of this.shown.keys()) this.drop(id)
     this.box.dispose()
+    this.bitGeo.dispose()
     this.nozzle.dispose()
     for (const m of this.mats.values()) m.dispose()
     this.ghostMat.dispose()

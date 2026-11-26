@@ -55,6 +55,12 @@ export const GYRO_KW = 2
 export const SOLAR_KW = 2
 export const BATTERY_KJ = 3000
 export const CARGO_PER_HOLD = 6 // m³; the loadShip blueprint holds the same
+
+// Crashes (V5, a thin 366): striking the ground faster than SAFE_IMPACT
+// (m/s, along up) breaks some of the blocks that struck, all of them at
+// WRECK_IMPACT; broken blocks are gone until placed again from the outline
+export const SAFE_IMPACT = 5
+export const WRECK_IMPACT = 12
 export const THRUST = 6000 // newtons per thruster
 export const TURN_RATE = 1.4 // radians a second with a gyroscope
 
@@ -168,39 +174,61 @@ export class ShipBody {
   q: Quat
   v: Vec3
   grounded = false
-  readonly mass: number
-  readonly thrust: Record<NonNullable<DesignBlock['push']>, number>
-  readonly canTurn: boolean
+  // What its placed blocks give; refit when blocks break (V5)
+  mass = 1
+  thrust: Record<NonNullable<DesignBlock['push']>, number> = { up: 0, down: 0, forward: 0, back: 0, left: 0, right: 0 }
+  canTurn = false
   // Power (V4): whether it counts power, its battery store (kJ, 0 without
   // one), what its panels give (kW), and its charge, 0 to 1
   readonly powered: boolean
-  readonly store: number
-  readonly solar: number
+  store = 0
+  solar = 0
   charge: number
   // what the last step drew (kW) and the share of what it asked for that it got
   draw = 0
   power = 1
   private readonly design: ShipDesign
-  private readonly placed: DesignBlock[]
+  private placed: DesignBlock[] = []
+  private placedIdx: number[] = []
+  // blocks broken in crashes since the host last took them (V5)
+  private broken: number[] = []
   private readonly terrain: ShipTerrain
 
   constructor(design: ShipDesign, placed: readonly number[], state: { x: number; y: number; z: number; q: Quat; v?: [number, number, number]; charge?: number }, terrain: ShipTerrain) {
     this.design = design
     this.terrain = terrain
-    this.placed = placed.map((i) => design.blocks[i]).filter(Boolean)
-    this.mass = this.placed.reduce((m, b) => m + BLOCK_MASS[b.type], 0) || 1
-    this.thrust = { up: 0, down: 0, forward: 0, back: 0, left: 0, right: 0 }
-    for (const b of this.placed) if (b.type === 'thruster' && b.push) this.thrust[b.push] += THRUST
-    this.canTurn = this.placed.some((b) => b.type === 'gyro')
     this.powered = design.blocks.some((b) => b.type === 'battery' || b.type === 'solar')
-    this.store = this.placed.filter((b) => b.type === 'battery').length * BATTERY_KJ
-    this.solar = this.placed.filter((b) => b.type === 'solar').length * SOLAR_KW
+    this.refit(placed)
     this.charge = Math.min(1, Math.max(0, state.charge ?? 1))
     this.x = state.x
     this.y = state.y
     this.z = state.z
     this.q = normalize(state.q)
     this.v = { x: state.v?.[0] ?? 0, y: state.v?.[1] ?? 0, z: state.v?.[2] ?? 0 }
+  }
+
+  // Its mass, thrust, turning and power from the blocks placed
+  private refit(placed: readonly number[]): void {
+    this.placedIdx = placed.filter((i) => this.design.blocks[i])
+    this.placed = this.placedIdx.map((i) => this.design.blocks[i])
+    this.mass = this.placed.reduce((m, b) => m + BLOCK_MASS[b.type], 0) || 1
+    this.thrust = { up: 0, down: 0, forward: 0, back: 0, left: 0, right: 0 }
+    for (const b of this.placed) if (b.type === 'thruster' && b.push) this.thrust[b.push] += THRUST
+    this.canTurn = this.placed.some((b) => b.type === 'gyro')
+    this.store = this.placed.filter((b) => b.type === 'battery').length * BATTERY_KJ
+    this.solar = this.placed.filter((b) => b.type === 'solar').length * SOLAR_KW
+  }
+
+  // The design's indices of the blocks still placed
+  blocks(): number[] {
+    return [...this.placedIdx]
+  }
+
+  // The blocks broken since this was last asked, by design index
+  takeBroken(): number[] {
+    const out = this.broken
+    this.broken = []
+    return out
   }
 
   // The most acceleration (m/s²) its thrusters give along a local axis, each way
@@ -269,7 +297,8 @@ export class ShipBody {
     const up = unit(scale(g, -1))
     let deepest = 0
     let touching = false
-    for (const b of this.placed) {
+    const hit: { index: number; depth: number }[] = []
+    for (const [k, b] of this.placed.entries()) {
       const p = blockWorld(this, b, this.design.blockSize)
       // the block's lower face, half a block below its centre along up
       const base = sub(p, scale(up, 0.5 * this.design.blockSize))
@@ -287,9 +316,18 @@ export class ShipBody {
         else lift = mid
       }
       deepest = Math.max(deepest, lift)
+      hit.push({ index: this.placedIdx[k], depth: lift })
     }
     this.grounded = touching || deepest > 0
     if (!deepest) return
+    // A hard landing breaks the blocks that struck, the deepest first (V5)
+    const impact = -dot(this.v, up)
+    if (impact > SAFE_IMPACT && hit.length) {
+      const count = Math.ceil(Math.min(1, (impact - SAFE_IMPACT) / (WRECK_IMPACT - SAFE_IMPACT)) * hit.length)
+      const gone = hit.sort((a, b) => b.depth - a.depth).slice(0, count).map((h) => h.index)
+      this.broken.push(...gone)
+      this.refit(this.placedIdx.filter((i) => !gone.includes(i)))
+    }
     this.x += up.x * deepest
     this.y += up.y * deepest
     this.z += up.z * deepest

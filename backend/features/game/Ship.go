@@ -32,6 +32,7 @@ const (
 	EventShipFlown      = "flown"   // {world, x, y, z, q, v, pilot, charge?}
 	EventShipLoaded     = "loaded"  // {world, cargo: {dust, rock}, pack: {dust, rock}} (V4: the pack's change, negative)
 	EventShipRefined    = "refined" // {world, rock, iron, charge} (V4: the changes)
+	EventShipDamaged    = "damaged" // {world, blocks} (V5: the indices a crash broke)
 )
 
 // ShipDesign is a premade ship: its blocks in its own grid, x right, y up
@@ -166,7 +167,8 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		Rock   float64    `json:"rock"`
 		Iron   float64    `json:"iron"`
 	}
-	if err := json.Unmarshal(f.Event.Data, &d); err != nil {
+	// a damaged event's blocks are indices, read on their own below
+	if err := json.Unmarshal(f.Event.Data, &d); err != nil && f.Event.Type != EventShipDamaged {
 		return nil, err
 	}
 	switch f.Event.Type {
@@ -187,6 +189,28 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	case EventShipLoaded:
 		s.Cargo.Dust = round3(s.Cargo.Dust + d.Cargo.Dust)
 		s.Cargo.Rock = round3(s.Cargo.Rock + d.Cargo.Rock)
+	case EventShipDamaged:
+		// Broken blocks go back to the outline; a broken cockpit seats nobody
+		var b struct {
+			Blocks []int `json:"blocks"`
+		}
+		if err := json.Unmarshal(f.Event.Data, &b); err != nil {
+			return nil, err
+		}
+		gone := map[int]bool{}
+		for _, i := range b.Blocks {
+			gone[i] = true
+		}
+		kept := []int{}
+		for _, i := range s.Placed {
+			if !gone[i] {
+				kept = append(kept, i)
+			}
+		}
+		s.Placed = kept
+		if gone[0] {
+			s.Pilot = ""
+		}
 	case EventShipRefined:
 		s.Cargo.Rock = round3(s.Cargo.Rock + d.Rock)
 		s.Cargo.Iron = round3(s.Cargo.Iron + d.Iron)
