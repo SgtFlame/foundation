@@ -70,5 +70,5 @@ export const kitchen: {
     { id: 'door', piece: 'door', x: 2, z: 4, rot: 2 },
     { piece: 'window', x: 4, z: 4, rot: 2 },
   ],
-  npcs: [{ name: 'The farmer', kind: 'farmer', x: 8.8, z: 3, facing: 3.9, dialogue: 'farmer' }],
+  npcs: [{ name: 'Wenlan Harrow', kind: 'farmer', x: 8.8, z: 3, facing: 3.9, dialogue: 'farmer' }],
 }

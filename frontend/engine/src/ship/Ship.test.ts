@@ -102,3 +102,13 @@ test('a gentle landing breaks nothing; a fall from high breaks the blocks that s
   assert.ok(broken.every((i) => !hard.blocks().includes(i)))
   assert.deepEqual(hard.takeBroken(), [])
 })
+
+const hauler = JSON.parse(readFileSync(new URL('../../../../backend/features/game/designs/hauler.json', import.meta.url), 'utf8')) as ShipDesign
+
+test('a finished hauler holds six holds and still hovers on the moon (V8)', () => {
+  assert.equal(hauler.blocks.filter((b) => b.type === 'cargo').length, 6)
+  const b = new ShipBody(hauler, hauler.blocks.map((_, i) => i), { x: 0, y: 10, z: 0, q: [0, 0, 0, 1], charge: 1 }, flat)
+  assert.ok(b.reach().y[1] > 1.62 * 2, `lift ${b.reach().y[1]}`)
+  run(b, 5)
+  assert.ok(Math.abs(b.y - 10) < 0.5, `holds its height: ${b.y}`)
+})

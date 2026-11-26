@@ -155,7 +155,7 @@ func TestShipDamage(t *testing.T) {
 
 // V6: contracts handed in with a ship at the outpost pay a skill once
 func TestOutpost(t *testing.T) {
-	if c := game.ContractsOf(); len(c.Contracts) != 2 || c.Giver.Name == "" {
+	if c := game.ContractsOf(); len(c.Contracts) != 4 || c.Giver.Name == "" {
 		t.Fatalf("contracts %+v", c)
 	}
 	st := newStack(t)
@@ -237,5 +237,48 @@ func TestStandAt(t *testing.T) {
 	var p game.Player
 	if !st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p) || p.At == nil || p.At[0] != 1.23 || p.At[1] != 101.5 {
 		t.Fatalf("stood %+v", p)
+	}
+}
+
+// V8: ore dug on an asteroid rides the pack and the hold; cobalt for the
+// shipyard unlocks the hauler, and the haul needs one
+func TestOreAndHauler(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Ore moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	st.ok("game.startShip", "p1", map[string]any{"world": world, "design": "prospector", "x": 0, "y": 104, "z": 5, "q": q})
+	for i := 0; i < 32; i++ {
+		st.ok("game.placeBlock", "p1", map[string]any{"index": i})
+	}
+	if r := st.refused("game.startShip", "h0", map[string]any{"world": world, "design": "hauler", "x": 0, "y": 104, "z": -8, "q": q}); !strings.Contains(r.Common.Message, "cobalt") {
+		t.Fatalf("locked hauler: %q", r.Common.Message)
+	}
+	res := st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 200, "z": 0, "radius": 1.5, "took": map[string]any{"dust": 0.2, "rock": 0.3, "ore": 2.5}})
+	var pk game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pk) || pk.Ore != 2.5 {
+		t.Fatalf("pack %+v", pk)
+	}
+	res = st.ok("game.loadShip", "p1", map[string]any{})
+	var s game.Ship
+	if !st.read(game.ShipsProjector, game.ShipType+".p1", res.Seq, &s) || s.Cargo.Ore != 2.5 {
+		t.Fatalf("hold %+v", s.Cargo)
+	}
+	if r := st.refused("game.handIn", "p1", map[string]any{"contract": "ore-haul"}); !strings.Contains(r.Common.Message, "hauler") {
+		t.Fatalf("haul in a prospector: %q", r.Common.Message)
+	}
+	res = st.ok("game.handIn", "p1", map[string]any{"contract": "cobalt-shipyard"})
+	var p game.Player
+	if !st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p) || !p.Unlocked["hauler"] || p.XP["mining"] != 100 {
+		t.Fatalf("unlocked %+v", p)
+	}
+	res = st.ok("game.startShip", "h1", map[string]any{"world": world, "design": "hauler", "x": 0, "y": 104, "z": -8, "q": q})
+	if !st.read(game.ShipsProjector, game.ShipType+".h1", res.Seq, &s) || s.Blocks != 58 {
+		t.Fatalf("hauler %+v", s)
+	}
+	if !st.read(game.ShipsProjector, game.ShipType+".p1", 0, &s) || s.Cargo.Ore != 0.5 {
+		t.Fatalf("hold after %+v", s.Cargo)
+	}
+	if r := st.refused("game.handIn", "h1", map[string]any{"contract": "ore-haul"}); !strings.Contains(r.Common.Message, "12") {
+		t.Fatalf("empty hauler: %q", r.Common.Message)
 	}
 }

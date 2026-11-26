@@ -57,6 +57,8 @@ export function asteroidsOf(params: MoonParams): Body[] {
       craters: 5,
       craterMaxRadius: r * 0.45,
       dustDepth: 0.6,
+      // V8: the asteroids carry the ore the moon lacks
+      ore: 0.6,
     })
     out.push(body('asteroid', s * Math.cos(a) * d, u * d, s * Math.sin(a) * d, r, gen))
   }

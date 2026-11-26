@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import type { ShipState } from '../ship/Ship.ts'
 import { firstHour, type FirstHourInput } from './FirstHour.ts'
 
-const blocks = { skiff: 27, prospector: 32 }
+const blocks = { skiff: 27, prospector: 32, hauler: 58 }
 const ship = (design: string, placed: number, cargo?: ShipState['cargo']) =>
   ({ id: design, world: 'w', design, blocks: blocks[design as 'skiff'], placed: Array.from({ length: placed }, (_, i) => i), x: 0, y: 0, z: 0, q: [0, 0, 0, 1], v: [0, 0, 0], pilot: '', cargo, seq: 1 }) as ShipState
 const none: FirstHourInput = { walked: false, flew: false, pack: null, ships: [], blocks, progress: null }

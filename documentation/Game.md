@@ -179,6 +179,16 @@ The landing and the saved place.
 - **The drop pod** (`landing/DropPod.ts`): the first walk in a world with no `at` brings the player down in a pod that falls 160 m over 9 s onto the ground near the outpost, braking with its retro rocket at the end, watched from beside the landing point; the player steps out of the hatch and the place is saved. Later walks start where they last stood.
 - **Saving**: while walking, the place is saved every 15 s when the player has moved 3 m and stands on the ground, and when the tab closes. Stats add `landing`.
 
+## Built in V8, third part (forge 360)
+
+A reason to leave the moon (the user, 2026-11-26: the moon has what a first ship needs, not what bigger ships need).
+
+- **Ore** (`MATERIAL_ORE`, voxel material 2): `MoonParams.ore` (0 to 1) puts veins of ore in a body's rock; the moon has none and the asteroids `0.6`. Surface nets pass `(rocky + ore) / solid` per vertex, so the terrain material blends dust, rock and a blue-grey speckled ore. A dig's `took`, the pack (`game.pack`'s `ore`) and a ship's hold (`cargo.ore`) carry ore; fills never spend it; `game.loadShip` loads ore first.
+- **Contracts with needs and unlocks** (`contracts/contracts.json`): each contract may give `needs` (`complete`, `iron`, `ore`), `design` (the ship it must be handed in from) and `unlocks` (a design). `game.handIn` reads them from one table, takes the iron and ore from the hold and records the unlock, which `game.players` folds into `unlocked` on `game.player`. Two new contracts: *Cobalt for the shipyard* (2 ore, Mining, unlocks the hauler) and *Ore haul* (12 ore, from a hauler, Mining).
+- **The hauler** (`designs/hauler.json`): 58 blocks with six holds (36 m³) and a refinery; `game.startShip` refuses it until the sender has it unlocked, and the ship graphs know its holds, refinery and crew seat.
+- **Names** (placeholders, the user, 2026-11-26): the farmer is Wenlan Harrow and the quartermaster Ines Varga.
+- The first-hour guide has twelve steps: mine ore on an asteroid, hand in the cobalt, build a hauler.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

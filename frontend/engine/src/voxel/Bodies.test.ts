@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { asteroidsOf, MOON_GRAVITY, WorldGenerator } from './Bodies.ts'
 import { sampleChunk } from './ChunkSampler.ts'
-import { CHUNK_SIZE, DEFAULT_MOON } from './Types.ts'
+import { CHUNK_SIZE, DEFAULT_MOON, MATERIAL_ORE } from './Types.ts'
 
 const params = { ...DEFAULT_MOON, seed: 7, asteroids: 3 }
 
@@ -67,4 +67,27 @@ test('standing on an asteroid, its own pull wins over the moon\'s', () => {
       assert.ok(toward > 0.2, `pull toward the asteroid on side ${side}: ${toward}`)
     }
   }
+})
+
+test('ore lies in the asteroids and not in the moon (V8)', () => {
+  const w = new WorldGenerator(params)
+  const count = (cx: number, cy: number, cz: number, r: number) => {
+    let ore = 0
+    let solid = 0
+    for (let i = 0; i < 4000; i++) {
+      const x = cx + (Math.random() * 2 - 1) * r
+      const y = cy + (Math.random() * 2 - 1) * r
+      const z = cz + (Math.random() * 2 - 1) * r
+      const d = w.density(x, y, z)
+      if (d >= 0) continue
+      solid++
+      if (w.material(x, y, z, d) === MATERIAL_ORE) ore++
+    }
+    return { ore, solid }
+  }
+  const a = asteroidsOf(params)[0]
+  const rock = count(a.x, a.y, a.z, a.radius * 0.8)
+  assert.ok(rock.solid > 100 && rock.ore / rock.solid > 0.2, `asteroid ore ${rock.ore} of ${rock.solid}`)
+  const moon = count(0, params.radius - 10, 0, 8)
+  assert.ok(moon.solid > 100 && moon.ore === 0, `moon ore ${moon.ore} of ${moon.solid}`)
 })

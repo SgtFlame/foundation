@@ -88,7 +88,7 @@
         "y": 150
       },
       "config": {
-        "expr": "let crew = found ? (ship.crew ?? []) : []; let seats = {skiff: 1, prospector: 1}; !found ? \"there is no ship \" + target : !aboard ? (user in crew ? \"\" : \"you are not aboard this ship\") : len(ship.placed) \u003c ship.blocks ? \"finish the ship before crewing it\" : ship.pilot == user ? \"you are flying this ship; leave the seat first\" : user in crew ? \"you are already aboard\" : len(crew) \u003e= (seats[ship.design] ?? 0) ? \"the ship's crew seat is taken\" : \"\"",
+        "expr": "let crew = found ? (ship.crew ?? []) : []; let seats = {skiff: 1, prospector: 1, hauler: 2}; !found ? \"there is no ship \" + target : !aboard ? (user in crew ? \"\" : \"you are not aboard this ship\") : len(ship.placed) \u003c ship.blocks ? \"finish the ship before crewing it\" : ship.pilot == user ? \"you are flying this ship; leave the seat first\" : user in crew ? \"you are already aboard\" : len(crew) \u003e= (seats[ship.design] ?? 0) ? \"the ship's crew seat is taken\" : \"\"",
         "type": "string"
       }
     },

@@ -10,7 +10,7 @@ import type { ShipState } from '../ship/Ship.ts'
 export interface FirstHourInput {
   walked: boolean
   flew: boolean
-  pack: { dust: number; rock: number } | null
+  pack: { dust: number; rock: number; ore?: number } | null
   ships: readonly ShipState[]
   // the number of blocks in each design, by id
   blocks: Record<string, number>
@@ -38,6 +38,10 @@ export function firstHour(i: FirstHourInput): Step[] {
     { id: 'prospector', title: 'Build a prospector', how: 'Start a prospector and place all its blocks.', done: finished('prospector') },
     { id: 'iron', title: 'Refine iron', how: 'Dig rock, L to load it into the hold, R to refine it into iron.', done: i.ships.some((s) => (s.cargo?.iron ?? 0) > 0) },
     { id: 'beacon-iron', title: 'Bring iron for the beacon', how: 'Park the prospector at the beacon with 1 m³ of iron and hand in Iron for the beacon.', done: !!done['beacon-iron'] },
+    // V8: the moon has no ore; the asteroids do
+    { id: 'ore', title: 'Mine an asteroid', how: 'Fly the prospector to an asteroid, dig its blue-grey ore and load it with L.', done: i.ships.some((s) => (s.cargo?.ore ?? 0) > 0) || (i.pack?.ore ?? 0) > 0 },
+    { id: 'cobalt-shipyard', title: 'Cobalt for the shipyard', how: 'Bring 2 m³ of ore to the beacon and hand in Cobalt for the shipyard: it unlocks the hauler.', done: !!done['cobalt-shipyard'] },
+    { id: 'hauler', title: 'Build a hauler', how: 'Start a hauler and place its 58 blocks: six holds for the haul the outpost wants next.', done: finished('hauler') },
   ]
   // a later step done means the earlier ones were
   for (let k = steps.length - 1, later = false; k >= 0; k--) {

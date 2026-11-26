@@ -38,7 +38,7 @@ export interface ShipState {
   v: [number, number, number]
   pilot: string
   crew?: string[] // V7: the users riding as its crew
-  cargo?: { dust: number; rock: number; iron: number } // V4: its hold, m³
+  cargo?: { dust: number; rock: number; iron: number; ore?: number } // V4: its hold, m³ (V8: ore)
   charge?: number // V4: its battery, 0 to 1
   seq: number
   updatedAt?: string

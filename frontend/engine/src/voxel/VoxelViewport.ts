@@ -23,7 +23,7 @@ export interface EditIntent {
   radius: number
   // What a dig took (m³ by material) or a fill needs, as this viewport
   // reckons it from the terrain it has; the server bounds it (V2)
-  took?: { dust: number; rock: number }
+  took?: { dust: number; rock: number; ore?: number }
   needs?: number
 }
 
@@ -31,6 +31,7 @@ export interface EditIntent {
 export interface Carried {
   dust: number
   rock: number
+  ore?: number // V8: from the asteroids
   capacity: number
 }
 
@@ -370,8 +371,9 @@ export class VoxelViewport {
     const lines: string[] = []
     if (ship) lines.push(ship)
     if (c) {
-      const total = c.dust + c.rock
-      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}`)
+      const ore = c.ore ?? 0
+      const total = c.dust + c.rock + ore
+      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}`)
     }
     if (w && !this.riding && !this.pod.falling) {
       const g = Math.hypot(w.gravity.x, w.gravity.y, w.gravity.z)
@@ -511,7 +513,8 @@ export class VoxelViewport {
     }
     if (holds) {
       const c = s.cargo ?? { dust: 0, rock: 0, iron: 0 }
-      parts.push(`hold ${(c.dust + c.rock + c.iron).toFixed(2)} / ${holds * CARGO_PER_HOLD} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)} · iron ${c.iron.toFixed(2)}`)
+      const ore = c.ore ?? 0
+      parts.push(`hold ${(c.dust + c.rock + c.iron + ore).toFixed(2)} / ${holds * CARGO_PER_HOLD} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)} · iron ${c.iron.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}`)
     }
     return parts.join(' · ')
   }
@@ -610,7 +613,7 @@ export class VoxelViewport {
 
   private journalSteps() {
     const blocks: Record<string, number> = {}
-    for (const id of ['skiff', 'prospector']) {
+    for (const id of ['skiff', 'prospector', 'hauler']) {
       const d = this.shipLayer.design(id)
       if (d) blocks[id] = d.blocks.length
     }
@@ -724,9 +727,9 @@ export class VoxelViewport {
     const rows = list.contracts.map((c) => {
       // the first ship that qualifies, else the first parked, decides the row
       const blocks = (s: ShipState) => this.shipLayer.design(s.design)?.blocks.length ?? 0
-      const ok = parked.find((s) => !handInProblem(c.id, s, this.progress, blocks(s)))
+      const ok = parked.find((s) => !handInProblem(c.id, s, this.progress, blocks(s), c))
       const s = ok ?? parked[0] ?? null
-      return { id: c.id, ship: s?.id ?? '', problem: handInProblem(c.id, s, this.progress, s ? blocks(s) : 0) }
+      return { id: c.id, ship: s?.id ?? '', problem: handInProblem(c.id, s, this.progress, s ? blocks(s) : 0, c) }
     })
     this.contracts.show(list, rows, this.progress, (id) => {
       const r = rows.find((x) => x.id === id)
@@ -939,7 +942,7 @@ export class VoxelViewport {
       y: c.y,
       z: c.z,
       radius,
-      ...(kind === 'dig' ? { took: { dust: r2(has.dust), rock: r2(has.rock) } } : { needs: r2(has.empty) }),
+      ...(kind === 'dig' ? { took: { dust: r2(has.dust), rock: r2(has.rock), ...(has.ore > 0 ? { ore: r2(has.ore) } : {}) } } : { needs: r2(has.empty) }),
     })
   }
 

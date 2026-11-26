@@ -1,19 +1,39 @@
 {
-  "giver": {"name": "Quartermaster Ines", "title": "The Pole Beacon outpost", "line": "Fliers and diggers welcome. The beacon wants iron and the outpost wants proof that people can build out here. Do me a job and the work will teach you something."},
+  "giver": {"name": "Quartermaster Ines Varga", "title": "The Pole Beacon outpost", "line": "Fliers and diggers welcome. The moon gives you enough to build a small ship and not a scrap more; anything bigger is made of what is out there, in the asteroids and what is left of the broken moons. Do me a job and the work will teach you something."},
   "contracts": [
     {
       "id": "first-flight",
       "title": "A ship that flies",
       "description": "Bring a ship with every block of its design placed and park it at the outpost, within 40 m of the beacon.",
       "skill": "piloting",
-      "xp": 100
+      "xp": 100,
+      "needs": {"complete": true}
     },
     {
       "id": "beacon-iron",
       "title": "Iron for the beacon",
       "description": "Refine iron aboard a prospector and hand 1 m³ of it over from the ship's hold, parked within 40 m of the beacon.",
       "skill": "prospecting",
-      "xp": 100
+      "xp": 100,
+      "needs": {"iron": 1}
+    },
+    {
+      "id": "cobalt-shipyard",
+      "title": "Cobalt for the shipyard",
+      "description": "The moon has no cobalt. Fly out to an asteroid, dig its blue-grey ore, load it into a ship's hold and bring 2 m³ back to the beacon. The shipyard then builds you a hauler's frame.",
+      "skill": "mining",
+      "xp": 100,
+      "needs": {"ore": 2},
+      "unlocks": "hauler"
+    },
+    {
+      "id": "ore-haul",
+      "title": "A proper haul",
+      "description": "The outpost is building. Bring 12 m³ of ore in one trip, more than a prospector's hold carries: you will need a hauler.",
+      "skill": "mining",
+      "xp": 150,
+      "needs": {"ore": 12},
+      "design": "hauler"
     }
   ]
 }

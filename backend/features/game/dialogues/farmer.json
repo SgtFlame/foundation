@@ -1,8 +1,8 @@
 {
   "id": "farmer",
-  "title": "The farmer, the night of the first snow",
-  "description": "The Sheaflands farmer in his kitchen as the first snow falls (375 first hour, step 1). Placeholder lines drawn from the play design's first hour, to be replaced by the user's own.",
-  "speaker": "The farmer",
+  "title": "Wenlan Harrow, the farmer, the night of the first snow",
+  "description": "The Sheaflands farmer in his kitchen as the first snow falls (375 first hour, step 1). Placeholder lines drawn from the play design's first hour; the name is made up for now (the user, 2026-11-26).",
+  "speaker": "Wenlan Harrow",
   "start": "greet",
   "nodes": {
     "greet": {

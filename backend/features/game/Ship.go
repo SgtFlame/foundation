@@ -83,6 +83,7 @@ type Cargo struct {
 	Dust float64 `json:"dust"`
 	Rock float64 `json:"rock"`
 	Iron float64 `json:"iron"`
+	Ore  float64 `json:"ore"` // V8: from the asteroids
 }
 
 // CargoPerHold is what one cargo block holds, in m³; the loadShip blueprint checks it.
@@ -169,6 +170,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		Cargo  Cargo      `json:"cargo"`
 		Rock   float64    `json:"rock"`
 		Iron   float64    `json:"iron"`
+		Ore    float64    `json:"ore"`
 		User   string     `json:"user"`
 		Aboard bool       `json:"aboard"`
 	}
@@ -196,6 +198,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	case EventShipLoaded:
 		s.Cargo.Dust = round3(s.Cargo.Dust + d.Cargo.Dust)
 		s.Cargo.Rock = round3(s.Cargo.Rock + d.Cargo.Rock)
+		s.Cargo.Ore = round3(s.Cargo.Ore + d.Cargo.Ore)
 	case EventShipDamaged:
 		// Broken blocks go back to the outline; a broken cockpit seats nobody
 		var b struct {
@@ -225,6 +228,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		}
 	case EventHandedIn:
 		s.Cargo.Iron = round3(s.Cargo.Iron + d.Iron)
+		s.Cargo.Ore = round3(s.Cargo.Ore + d.Ore)
 	case EventShipRefined:
 		s.Cargo.Rock = round3(s.Cargo.Rock + d.Rock)
 		s.Cargo.Iron = round3(s.Cargo.Iron + d.Iron)
@@ -238,7 +242,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	return json.Marshal(s)
 }
 
-const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron} (m³ in its hold), charge (its battery, 0 to 1), seq, updatedAt}"
+const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron, ore} (m³ in its hold), charge (its battery, 0 to 1), seq, updatedAt}"
 
 func without(list []string, v string) []string {
 	out := []string{}

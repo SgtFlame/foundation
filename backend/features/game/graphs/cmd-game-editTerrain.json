@@ -7,7 +7,7 @@
   "spec": {
     "command": "game.editTerrain",
     "title": "Dig or fill terrain",
-    "description": "Digs (removes) or fills (adds) a smooth sphere of a world's terrain; the target is the world's id. Everyone viewing the world sees the edit, in the server's order. A player walking the world sends took (what a dig takes into their pack) or needs (what a fill spends from it); the pack holds 4 m³. Refused when the world does not exist, the radius is outside 0.5 to 6 m, the brush is far from the world's bodies, a dig would overfill the pack or a fill needs more than it holds.",
+    "description": "Digs (removes) or fills (adds) a smooth sphere of a world's terrain; the target is the world's id. Everyone viewing the world sees the edit, in the server's order. A player walking the world sends took (what a dig takes into their pack) or needs (what a fill spends from it); the pack holds 4 m³, and a fill spends dust and rock, never ore. Refused when the world does not exist, the radius is outside 0.5 to 6 m, the brush is far from the world's bodies, a dig would overfill the pack or a fill needs more than it holds.",
     "args": {
       "type": "object",
       "properties": {
@@ -50,6 +50,11 @@
               "type": "number",
               "minimum": 0,
               "description": "Cubic metres of rock"
+            },
+            "ore": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Cubic metres of ore, found in the asteroids (V8)"
             }
           }
         },
@@ -113,7 +118,7 @@
           {
             "id": "took",
             "type": "json",
-            "description": "What a dig takes into the pack, {dust, rock} in m³, when playing"
+            "description": "What a dig takes into the pack, {dust, rock, ore} in m³, when playing"
           },
           {
             "id": "needs",
@@ -190,7 +195,7 @@
         "y": 550
       },
       "config": {
-        "expr": "let V = 4.18879 * radius ** 3; let have = packed ? pack : {dust: 0, rock: 0}; let playing = took != nil || needs != nil; let td = kind == \"dig\" \u0026\u0026 took != nil ? min(max(took?.dust ?? 0, 0), V) : 0; let tr = kind == \"dig\" \u0026\u0026 took != nil ? min(max(took?.rock ?? 0, 0), V - td) : 0; let n = kind == \"fill\" \u0026\u0026 needs != nil ? min(max(needs, 0), V) : 0; let sd = min(have.dust, n); let sr = max(n - sd, 0); {room: 4 - have.dust - have.rock, take: td + tr, have: have.dust + have.rock, need: n, delta: {dust: td - sd, rock: tr - sr}, material: sr \u003e sd ? 1 : 0}",
+        "expr": "let V = 4.18879 * radius ** 3; let have = packed ? pack : {dust: 0, rock: 0, ore: 0}; let ho = have?.ore ?? 0; let playing = took != nil || needs != nil; let td = kind == \"dig\" \u0026\u0026 took != nil ? min(max(took?.dust ?? 0, 0), V) : 0; let tr = kind == \"dig\" \u0026\u0026 took != nil ? min(max(took?.rock ?? 0, 0), V - td) : 0; let tore = kind == \"dig\" \u0026\u0026 took != nil ? min(max(took?.ore ?? 0, 0), V - td - tr) : 0; let n = kind == \"fill\" \u0026\u0026 needs != nil ? min(max(needs, 0), V) : 0; let sd = min(have.dust, n); let sr = max(n - sd, 0); {room: 4 - have.dust - have.rock - ho, take: td + tr + tore, have: have.dust + have.rock, need: n, delta: {dust: td - sd, rock: tr - sr, ore: tore}, material: sr \u003e sd ? 1 : 0}",
         "type": "json"
       }
     },
@@ -237,7 +242,7 @@
         "y": 400
       },
       "config": {
-        "expr": "{kind: kind, x: x, y: y, z: z, radius: radius, material: kind == \"fill\" ? amounts.material : nil, pack: amounts.delta.dust == 0 \u0026\u0026 amounts.delta.rock == 0 ? nil : amounts.delta}",
+        "expr": "{kind: kind, x: x, y: y, z: z, radius: radius, material: kind == \"fill\" ? amounts.material : nil, pack: amounts.delta.dust == 0 \u0026\u0026 amounts.delta.rock == 0 \u0026\u0026 amounts.delta.ore == 0 ? nil : amounts.delta}",
         "type": "json"
       }
     },

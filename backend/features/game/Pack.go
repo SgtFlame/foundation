@@ -28,6 +28,7 @@ const (
 type Pack struct {
 	Dust     float64 `json:"dust"`
 	Rock     float64 `json:"rock"`
+	Ore      float64 `json:"ore"` // V8: from the asteroids
 	Capacity float64 `json:"capacity"`
 }
 
@@ -69,6 +70,7 @@ func contributePacks(reg *extensions.Registry) {
 				Pack *struct {
 					Dust float64 `json:"dust"`
 					Rock float64 `json:"rock"`
+					Ore  float64 `json:"ore"`
 				} `json:"pack"`
 			}
 			if err := json.Unmarshal(f.Event.Data, &d); err != nil {
@@ -80,13 +82,14 @@ func contributePacks(reg *extensions.Registry) {
 			round := func(v float64) float64 { return math.Max(0, math.Round(v*1000)/1000) }
 			p.Dust = round(p.Dust + d.Pack.Dust)
 			p.Rock = round(p.Rock + d.Pack.Rock)
+			p.Ore = round(p.Ore + d.Pack.Ore)
 			p.Capacity = PackCapacity
 			return json.Marshal(p)
 		},
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.pack", Source: source}, Title: "My pack",
-		Description: fmt.Sprintf("What the caller carries in a world: {dust, rock, capacity} in m³ (an empty pack holds %g m³), then each change as they dig and fill", PackCapacity),
+		Description: fmt.Sprintf("What the caller carries in a world: {dust, rock, ore, capacity} in m³ (an empty pack holds %g m³), then each change as they dig and fill", PackCapacity),
 		Params:      json.RawMessage(`{"type":"object","properties":{"world":{"type":"string","description":"The world's id"}},"required":["world"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"world":"w123"}`)},
 		Action:      "game.read",
@@ -99,7 +102,7 @@ func contributePacks(reg *extensions.Registry) {
 				return "", fmt.Errorf("game.pack needs a world's id")
 			}
 			return PackKey(p.World, f.Args().Principal.UserID), nil
-		}, json.RawMessage(fmt.Sprintf(`{"dust":0,"rock":0,"capacity":%g}`, PackCapacity))),
+		}, json.RawMessage(fmt.Sprintf(`{"dust":0,"rock":0,"ore":0,"capacity":%g}`, PackCapacity))),
 	})
 }
 

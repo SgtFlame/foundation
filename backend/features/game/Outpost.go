@@ -39,6 +39,8 @@ type Player struct {
 	Done   map[string]bool    `json:"done"`   // contracts handed in
 	XP     map[string]float64 `json:"xp"`     // experience per skill
 	Levels map[string]int     `json:"levels"` // 1 + xp / XPPerLevel
+	// V8: the designs the contracts they did unlocked (the hauler)
+	Unlocked map[string]bool `json:"unlocked,omitempty"`
 	// V8: where they last stood, and so whether they have landed yet
 	At *[3]float64 `json:"at,omitempty"`
 }
@@ -56,6 +58,11 @@ type Contracts struct {
 		Description string  `json:"description"`
 		Skill       string  `json:"skill"`
 		XP          float64 `json:"xp"`
+		// V8: what the ship must bring ({complete}, {iron}, {ore} in m³), the
+		// design the job needs, and the design it unlocks
+		Needs   map[string]any `json:"needs,omitempty"`
+		Design  string         `json:"design,omitempty"`
+		Unlocks string         `json:"unlocks,omitempty"`
 	} `json:"contracts"`
 }
 
@@ -81,6 +88,7 @@ func foldPlayer(f live.Fold) (json.RawMessage, error) {
 		Contract string  `json:"contract"`
 		Skill    string  `json:"skill"`
 		XP       float64 `json:"xp"`
+		Unlock   string  `json:"unlock"`
 		X        float64 `json:"x"`
 		Y        float64 `json:"y"`
 		Z        float64 `json:"z"`
@@ -99,6 +107,12 @@ func foldPlayer(f live.Fold) (json.RawMessage, error) {
 		p.XP = map[string]float64{}
 	}
 	p.Done[d.Contract] = true
+	if d.Unlock != "" {
+		if p.Unlocked == nil {
+			p.Unlocked = map[string]bool{}
+		}
+		p.Unlocked[d.Unlock] = true
+	}
 	p.XP[d.Skill] += d.XP
 	p.Levels = map[string]int{}
 	for k, v := range p.XP {
@@ -134,7 +148,7 @@ func contributeOutpost(reg *extensions.Registry) {
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.player", Source: source}, Title: "My progress",
-		Description: fmt.Sprintf("The caller's progress in a world: {done: {<contract>: true}, xp: {<skill>: n}, levels: {<skill>: n} (a level each %d xp, from 1), at: [x, y, z] (where they last stood; missing until they have landed)}, then each change as they hand in contracts and move", XPPerLevel),
+		Description: fmt.Sprintf("The caller's progress in a world: {done: {<contract>: true}, xp: {<skill>: n}, levels: {<skill>: n} (a level each %d xp, from 1), unlocked: {<design>: true} (designs contracts opened), at: [x, y, z] (where they last stood; missing until they have landed)}, then each change as they hand in contracts and move", XPPerLevel),
 		Params:      json.RawMessage(`{"type":"object","properties":{"world":{"type":"string","description":"The world's id"}},"required":["world"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"world":"w123"}`)},
 		Action:      "game.read",
