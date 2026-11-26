@@ -39,4 +39,5 @@ What is built. Each document describes a feature as it works now, with what was 
 | [Game.md](Game.md) › *V4* | The prospector: power from a battery and solar panels, a cargo hold loaded from the pack, a refinery turning rock into iron (forge 360 V4) |
 | [Game.md](Game.md) › *V5* | Crashes break the blocks that struck, the pilot reports them with `game.damageShip`, and they are placed again from the outline (forge 360 V5) |
 | [Game.md](Game.md) › *V6* | An outpost at the pole with a quartermaster, contracts handed in with `game.handIn`, and skills from `game.player` (forge 360 V6) |
+| [Game.md](Game.md) › *V7* | A second player boards a finished ship as crew with `game.crewShip`, rides along and refines while it is flown (forge 360 V7) |
 | [BuildHistory.md](BuildHistory.md) | The plans' dependencies, the seams that broke their cycles, and each tracer-bullet slice with what it decided |

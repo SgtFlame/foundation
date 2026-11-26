@@ -43,6 +43,7 @@ export type ShipIntent =
   | { kind: 'refine'; id: string } // V4: one run of its refinery
   | { kind: 'damage'; id: string; blocks: number[] } // V5: blocks a crash broke
   | { kind: 'handIn'; id: string; contract: string } // V6: a contract at the outpost
+  | { kind: 'crew'; id: string; aboard: boolean } // V7: board or leave as crew
 
 export interface CameraState {
   x: number
@@ -106,6 +107,8 @@ export interface ViewportStats {
   // V6: the outpost's panel is open, and the player's skill levels
   outpost: boolean
   levels: Record<string, number>
+  // V7: the ship this player rides as crew
+  crew: string | null
 }
 
 const MIN_BRUSH = 0.75
@@ -150,6 +153,8 @@ export class VoxelViewport {
   private contractList: ContractList | null = null
   private progress: Progress | null = null
   private outpostPlaced = false
+  // V7: the ship this player rides as crew, as the server says
+  private riding: string | null = null
   private nearGiver = false
 
   private readonly container: HTMLElement
@@ -253,6 +258,13 @@ export class VoxelViewport {
         : 'Click to fly the ship'
       return
     }
+    if (this.riding) {
+      const s = this.shipLayer.ships().find((x) => x.id === this.riding)
+      this.hint.textContent = this.input.locked
+        ? `Riding as crew${s?.pilot ? '' : ' (nobody flies it yet)'} · R: refine rock · B: leave the ship · Esc: release`
+        : 'Click to ride along'
+      return
+    }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
         ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearShipHint()}Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
@@ -324,7 +336,8 @@ export class VoxelViewport {
   private drawPack(): void {
     const c = this.carried
     const w = this.walker
-    const flying = this.shipLayer.pilotOf ? (this.shipLayer.ships().find((s) => s.id === this.shipLayer.pilotOf) ?? null) : null
+    const aboard = this.shipLayer.pilotOf ?? this.riding
+    const flying = aboard ? (this.shipLayer.ships().find((s) => s.id === aboard) ?? null) : null
     const ship = this.shipLine(flying ?? this.nearShip)
     if (this.mode !== 'walk' && !c && !ship) {
       this.pack.style.display = 'none'
@@ -336,7 +349,7 @@ export class VoxelViewport {
       const total = c.dust + c.rock
       lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}`)
     }
-    if (w) {
+    if (w && !this.riding) {
       const g = Math.hypot(w.gravity.x, w.gravity.y, w.gravity.z)
       lines.push(`Pull ${g.toFixed(2)} m/s² · ${Math.hypot(w.vel.x, w.vel.y, w.vel.z).toFixed(1)} m/s · thrust pack ${w.thrustPack ? 'on' : 'off'}${w.grounded ? '' : ' · in the air'}`)
     }
@@ -382,6 +395,11 @@ export class VoxelViewport {
     const input = this.input
     if (this.shipLayer.pilotOf && this.shipLayer.body) {
       this.stepPilot(dt)
+      input.endStep()
+      return
+    }
+    if (this.riding) {
+      this.stepRider(dt)
       input.endStep()
       return
     }
@@ -438,7 +456,7 @@ export class VoxelViewport {
     if (!s) return ''
     const d = this.shipLayer.design(s.design)
     const has = (type: string) => d?.blocks.some((b, i) => b.type === type && s.placed.includes(i))
-    return `${has('cargo') ? 'L: load your pack into the hold · ' : ''}${has('refinery') ? 'R: refine rock · ' : ''}`
+    return `${has('cargo') ? 'L: load your pack into the hold · ' : ''}${has('refinery') ? 'R: refine rock · ' : ''}${this.canBoard(s) ? 'B: board as crew · ' : ''}`
   }
 
   // A line about a ship: its charge, hold and power
@@ -485,7 +503,66 @@ export class VoxelViewport {
     }
     if (near && input.locked && input.pressed('KeyL')) this.opts.onShipIntent?.({ kind: 'load', id: near.id })
     if (near && input.locked && input.pressed('KeyR')) this.opts.onShipIntent?.({ kind: 'refine', id: near.id })
+    if (near && input.locked && input.pressed('KeyB') && this.canBoard(near)) this.opts.onShipIntent?.({ kind: 'crew', id: near.id, aboard: true })
     this.stepOutpost()
+  }
+
+  // --- Crew (V7) ---
+
+  // A finished ship someone else may fly with its crew seat free
+  private canBoard(s: ShipState): boolean {
+    const me = this.opts.userId ?? ''
+    const d = this.shipLayer.design(s.design)
+    return !!d && s.placed.length >= d.blocks.length && s.pilot !== me && !(s.crew ?? []).length
+  }
+
+  // Riding as crew: the camera on the ship as it is flown, R refines, B leaves
+  private stepRider(dt: number): void {
+    const id = this.riding as string
+    const input = this.input
+    if (input.locked && input.pressed('KeyB')) this.opts.onShipIntent?.({ kind: 'crew', id, aboard: false })
+    if (input.locked && input.pressed('KeyR')) this.opts.onShipIntent?.({ kind: 'refine', id })
+    input.takeMouse()
+    this.packTick -= dt
+    if (this.packTick <= 0) {
+      this.packTick = 0.2
+      this.drawPack()
+    }
+  }
+
+  // Follows the ship's eased pose each frame, smoother than the fixed step
+  private placeRider(): void {
+    const c = this.riding ? this.shipLayer.ride(this.riding) : null
+    if (!c) return
+    const cam = this.fly.camera
+    cam.position.set(c.eye.x, c.eye.y, c.eye.z)
+    cam.up.set(c.up.x, c.up.y, c.up.z)
+    cam.lookAt(c.look.x, c.look.y, c.look.z)
+    this.fly.position.copy(cam.position)
+  }
+
+  // Boarding or leaving, as the server's ships say
+  private followCrew(ships: readonly ShipState[]): void {
+    const me = this.opts.userId ?? ''
+    const now = me ? (ships.find((s) => (s.crew ?? []).includes(me))?.id ?? null) : null
+    if (now === this.riding) return
+    const was = this.riding
+    this.riding = now
+    if (!now && was) {
+      const out = this.shipLayer.exitOf(was)
+      if (this.walker && out) {
+        this.walker.pos = { ...out }
+        this.walker.vel = { x: 0, y: 0, z: 0 }
+      }
+    }
+    if (now) {
+      this.ghostHit = null
+      this.shipLayer.aim(null)
+      this.brushHit = null
+      this.contracts.hide()
+    }
+    this.updateHint()
+    this.drawPack()
   }
 
   // --- The outpost (V6) ---
@@ -694,6 +771,7 @@ export class VoxelViewport {
   // The world's ships from the server
   setShips(ships: readonly ShipState[]): void {
     this.shipLayer.setShips(ships)
+    this.followCrew(ships)
     // Someone else took the seat (or the ship is gone): stand up
     const id = this.shipLayer.pilotOf
     if (id) {
@@ -749,10 +827,11 @@ export class VoxelViewport {
 
   private lastFrame = performance.now()
   private render(alpha: number): void {
-    if (this.mode === 'fly' && !this.shipLayer.pilotOf) this.fly.apply(alpha)
+    if (this.mode === 'fly' && !this.shipLayer.pilotOf && !this.riding) this.fly.apply(alpha)
     const now = performance.now()
     this.shipLayer.frame(Math.min(0.1, (now - this.lastFrame) / 1000))
     this.placeOutpost()
+    this.placeRider()
     this.outpost.blink(now / 1000)
     this.lastFrame = now
     this.world.update(this.fly.camera.position)
@@ -924,6 +1003,7 @@ export class VoxelViewport {
       piloting: this.shipLayer.pilotOf,
       outpost: this.contracts.open,
       levels: { ...(this.progress?.levels ?? {}) },
+      crew: this.riding,
     }
   }
 

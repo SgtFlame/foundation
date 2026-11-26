@@ -986,3 +986,10 @@ The outpost, contracts and skills ([Game.md](Game.md) › *Built in V6*). Later 
 - add contracts to `contracts.json` and their needs to `cmd-game-handIn` and `handInProblem` together, so the panel and the blueprint agree;
 - change a player's progress only through events folded by `game.players`, never a second target on a command;
 - read skill effects from `game.player`'s levels (`thrustFor` is the first), so the 350 skill system can take them over.
+
+## Game V7 (forge 360)
+
+A second player crews the ship ([Game.md](Game.md) › *Built in V7*). Later game work must:
+
+- give a design more crew seats by its entry in `cmd-game-crewShip`'s seat table, and a crew station's work by a check on `ship.crew` in that work's blueprint (refining is the first);
+- keep the rider's camera on the ship's eased pose, so a crew member sees what everyone else sees, not a second simulation.

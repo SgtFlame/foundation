@@ -156,6 +156,14 @@ The voxel game's sixth tracer bullet: an outpost, a quartermaster, contracts and
 - **Skills** (`game.player {world}`): `{done, xp, levels}`, a level per 100 xp from level 1. Each piloting level past the first makes thrusters answer a tenth harder (`thrustFor`, `ShipBody.thrustScale`).
 - **In the viewport**: T beside the quartermaster opens the contracts panel (`data-contracts`), which says what each contract still needs from the ships parked at the beacon; Esc frees the mouse to click *Hand in* (`data-hand-in=<id>`). A level gained shows in the hint. Stats add `outpost` and `levels`.
 
+## Built in V7 (forge 360)
+
+The voxel game's seventh tracer bullet: a second player crews the ship (a thin 373).
+
+- **`game.crewShip {aboard}`** (`cmd-game-crewShip`): boards a finished ship as its crew, or leaves it. Each design has one crew seat. It is refused for an unfinished ship, for its pilot, for someone already aboard, when the seat is taken, and for leaving a ship the sender is not aboard. Its `crewed` event keeps the ship's `crew` (user ids); whoever takes the pilot's seat leaves the crew seat.
+- **The crew's job**: `game.refineShip` now also runs while the ship is flown when its sender is the crew, so one player flies and the other refines.
+- **In the viewport**: B beside a finished ship boards it. The rider's camera follows the ship as others see it move (`ShipLayer.ride`), R refines and B leaves, standing on the ship's right (`ShipLayer.exitOf`). The pack panel shows the ship's line. Stats add `crew`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

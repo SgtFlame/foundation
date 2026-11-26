@@ -7,7 +7,7 @@
   "spec": {
     "command": "game.refineShip",
     "title": "Refine aboard a ship",
-    "description": "Runs a ship's refinery once: up to 1 m³ of rock from its hold becomes half as much iron, drawing a tenth of the battery; the target is the ship's id. Refused when the ship does not exist, has no refinery placed, someone is flying it, its battery holds less than a tenth or its hold has no rock.",
+    "description": "Runs a ship's refinery once: up to 1 m³ of rock from its hold becomes half as much iron, drawing a tenth of the battery; the target is the ship's id. Refused when the ship does not exist, has no refinery placed, someone is flying it and the sender is not its crew, its battery holds less than a tenth or its hold has no rock.",
     "args": {
       "type": "object",
       "properties": {}
@@ -55,6 +55,14 @@
       }
     },
     {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 250,
+        "y": 300
+      }
+    },
+    {
       "id": "check",
       "type": "data.expression",
       "title": "Why it is refused",
@@ -63,7 +71,7 @@
         "y": 150
       },
       "config": {
-        "expr": "let refineries = {skiff: [], prospector: [29]}; let mine = found ? (refineries[ship.design] ?? []) : []; !found ? \"there is no ship \" + target : len(filter(mine, # in ship.placed)) == 0 ? \"this ship has no refinery placed\" : ship.pilot != \"\" ? \"land and leave the seat before refining\" : (ship.charge ?? 0) \u003c 0.1 ? \"the battery is too low to run the refinery\" : (ship.cargo?.rock ?? 0) \u003c= 0.0001 ? \"there is no rock in the hold to refine\" : \"\"",
+        "expr": "let refineries = {skiff: [], prospector: [29]}; let mine = found ? (refineries[ship.design] ?? []) : []; !found ? \"there is no ship \" + target : len(filter(mine, # in ship.placed)) == 0 ? \"this ship has no refinery placed\" : ship.pilot != \"\" \u0026\u0026 !(user in (ship.crew ?? [])) ? \"land and leave the seat before refining, or run it from the crew seat\" : (ship.charge ?? 0) \u003c 0.1 ? \"the battery is too low to run the refinery\" : (ship.cargo?.rock ?? 0) \u003c= 0.0001 ? \"there is no rock in the hold to refine\" : \"\"",
         "type": "string"
       }
     },
@@ -184,6 +192,16 @@
       "to": {
         "node": "check",
         "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "check",
+        "pin": "user"
       }
     },
     {

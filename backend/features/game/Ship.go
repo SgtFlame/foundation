@@ -33,6 +33,7 @@ const (
 	EventShipLoaded     = "loaded"  // {world, cargo: {dust, rock}, pack: {dust, rock}} (V4: the pack's change, negative)
 	EventShipRefined    = "refined" // {world, rock, iron, charge} (V4: the changes)
 	EventShipDamaged    = "damaged" // {world, blocks} (V5: the indices a crash broke)
+	EventShipCrewed     = "crewed"  // {world, user, aboard} (V7: who boards or leaves the crew seat)
 )
 
 // ShipDesign is a premade ship: its blocks in its own grid, x right, y up
@@ -67,6 +68,8 @@ type Ship struct {
 	Q      [4]float64 `json:"q"` // orientation quaternion x, y, z, w
 	V      [3]float64 `json:"v"` // velocity m/s, for others to carry it on between updates
 	Pilot  string     `json:"pilot"`
+	// V7: the users riding as its crew
+	Crew []string `json:"crew"`
 	// V4: what its hold carries (m³) and its battery's charge (0 to 1);
 	// a design without power blocks has no charge to keep
 	Cargo     Cargo     `json:"cargo"`
@@ -166,6 +169,8 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		Cargo  Cargo      `json:"cargo"`
 		Rock   float64    `json:"rock"`
 		Iron   float64    `json:"iron"`
+		User   string     `json:"user"`
+		Aboard bool       `json:"aboard"`
 	}
 	// a damaged event's blocks are indices, read on their own below
 	if err := json.Unmarshal(f.Event.Data, &d); err != nil && f.Event.Type != EventShipDamaged {
@@ -173,7 +178,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	}
 	switch f.Event.Type {
 	case EventShipStarted:
-		s = Ship{ID: f.Event.Target.ID, World: d.World, Design: d.Design, Blocks: d.Blocks, Placed: []int{}, X: d.X, Y: d.Y, Z: d.Z, Q: d.Q, Charge: 1}
+		s = Ship{ID: f.Event.Target.ID, World: d.World, Design: d.Design, Blocks: d.Blocks, Placed: []int{}, Crew: []string{}, X: d.X, Y: d.Y, Z: d.Z, Q: d.Q, Charge: 1}
 	case EventBlockPlaced:
 		if d.Index != nil {
 			i := sort.SearchInts(s.Placed, *d.Index)
@@ -183,6 +188,8 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		}
 	case EventShipFlown:
 		s.X, s.Y, s.Z, s.Q, s.V, s.Pilot = d.X, d.Y, d.Z, d.Q, d.V, d.Pilot
+		// whoever takes the pilot's seat leaves the crew seat
+		s.Crew = without(s.Crew, d.Pilot)
 		if d.Charge != nil {
 			s.Charge = clamp01(*d.Charge)
 		}
@@ -211,6 +218,11 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		if gone[0] {
 			s.Pilot = ""
 		}
+	case EventShipCrewed:
+		s.Crew = without(s.Crew, d.User)
+		if d.Aboard && d.User != "" {
+			s.Crew = append(s.Crew, d.User)
+		}
 	case EventHandedIn:
 		s.Cargo.Iron = round3(s.Cargo.Iron + d.Iron)
 	case EventShipRefined:
@@ -226,7 +238,17 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	return json.Marshal(s)
 }
 
-const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), cargo {dust, rock, iron} (m³ in its hold), charge (its battery, 0 to 1), seq, updatedAt}"
+const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron} (m³ in its hold), charge (its battery, 0 to 1), seq, updatedAt}"
+
+func without(list []string, v string) []string {
+	out := []string{}
+	for _, x := range list {
+		if x != v {
+			out = append(out, x)
+		}
+	}
+	return out
+}
 
 func round3(v float64) float64 { return math.Max(0, math.Round(v*1000)/1000) }
 

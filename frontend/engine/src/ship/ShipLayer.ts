@@ -336,6 +336,31 @@ export class ShipLayer {
     }
   }
 
+  // V7: where a crew member's camera rides on a ship someone else flies,
+  // behind and above it as the pilot's chase camera, from its eased pose
+  ride(id: string): { eye: Vec3; look: Vec3; up: Vec3 } | null {
+    const s = this.shown.get(id)
+    if (!s) return null
+    const q: Quat = [s.q.x, s.q.y, s.q.z, s.q.w]
+    const off = rotate(q, { x: 1.5, y: 3.6, z: 10 })
+    const ahead = rotate(q, { x: 0, y: 0.5, z: -6 })
+    const a = s.at
+    return {
+      eye: { x: a.x + off.x, y: a.y + off.y, z: a.z + off.z },
+      look: { x: a.x + ahead.x, y: a.y + ahead.y, z: a.z + ahead.z },
+      up: rotate(q, { x: 0, y: 1, z: 0 }),
+    }
+  }
+
+  // V7: where to stand after leaving a ship ridden as crew: on its right
+  exitOf(id: string): Vec3 | null {
+    const s = this.shown.get(id)
+    if (!s) return null
+    const q: Quat = [s.q.x, s.q.y, s.q.z, s.q.w]
+    const right = rotate(q, { x: 3, y: 0.5, z: 0 })
+    return { x: s.at.x + right.x, y: s.at.y + right.y, z: s.at.z + right.z }
+  }
+
   // Where to stand after leaving the seat: beside the cockpit, on its left
   exitPoint(): Vec3 | null {
     const b = this.body

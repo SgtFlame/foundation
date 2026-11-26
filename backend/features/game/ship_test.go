@@ -185,3 +185,44 @@ func TestOutpost(t *testing.T) {
 		t.Fatalf("no iron: %q", r.Common.Message)
 	}
 }
+
+// V7: a crew member boards a finished ship, refines from the crew seat
+// while it is flown, and leaves it
+func TestShipCrew(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Crew moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	st.ok("game.startShip", "k1", map[string]any{"world": world, "design": "prospector", "x": 0, "y": 104, "z": 0, "q": q})
+	read := func(seq uint64) game.Ship {
+		var s game.Ship
+		st.read(game.ShipsProjector, game.ShipType+".k1", seq, &s)
+		return s
+	}
+	if r := st.refused("game.crewShip", "k1", map[string]any{"aboard": true}); !strings.Contains(r.Common.Message, "finish") {
+		t.Fatalf("unfinished: %q", r.Common.Message)
+	}
+	for i := 0; i < 32; i++ {
+		st.ok("game.placeBlock", "k1", map[string]any{"index": i})
+	}
+	st.refused("game.crewShip", "k1", map[string]any{"aboard": false})
+	res := st.ok("game.crewShip", "k1", map[string]any{"aboard": true})
+	if s := read(res.Seq); len(s.Crew) != 1 || s.Crew[0] != "1" {
+		t.Fatalf("boarded %+v", s.Crew)
+	}
+	if r := st.refused("game.crewShip", "k1", map[string]any{"aboard": true}); !strings.Contains(r.Common.Message, "already") {
+		t.Fatalf("twice: %q", r.Common.Message)
+	}
+	st.ok("game.crewShip", "k1", map[string]any{"aboard": false})
+	// the pilot cannot crew, and taking the seat leaves the crew seat
+	st.ok("game.crewShip", "k1", map[string]any{"aboard": true})
+	res = st.ok("game.flyShip", "k1", map[string]any{"x": 0, "y": 104, "z": 0, "q": q, "pilot": true})
+	if s := read(res.Seq); len(s.Crew) != 0 || s.Pilot != "1" {
+		t.Fatalf("seated %+v", s)
+	}
+	if r := st.refused("game.crewShip", "k1", map[string]any{"aboard": true}); !strings.Contains(r.Common.Message, "flying") {
+		t.Fatalf("pilot crews: %q", r.Common.Message)
+	}
+	if r := st.refused("game.refineShip", "k1", map[string]any{}); !strings.Contains(r.Common.Message, "crew seat") {
+		t.Fatalf("refine while flown: %q", r.Common.Message)
+	}
+}
