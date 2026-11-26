@@ -315,9 +315,18 @@ The voxel game's fifteenth tracer bullet: scavenging (the play design's "wrecks 
 The story game's thirteenth tracer bullet: the clue journal (the play design's investigation: "a clue journal collects people, places and evidence; some entries can be linked to draw a conclusion, which opens the next step").
 
 - **`story/Journal.ts`**: `journalEntries(done)` gives the notes the story has reached (Wenlan Harrow, Hawk's Rest, the raid by the well, ember eyes in the barn, the moon almanac, the Ash card); `link(a, b, night)` gives what two notes conclude, or null; `nextNoMoon(night)` is the next night with the greater moon dark and the lesser all but dark. `JournalScene` is the notes' page in the herbal's style (`data-note`, `data-conclusion`).
-- **N** opens the notes once Wenlan's ditch is clear (before, *Nothing to write down yet*). Clicking two notes links them: the Ash card with the moon almanac concludes the night the eyeless ones come back (*Day 23, the next night with no moon*), the story's new last step **`foretold`**; the raid with the ember eyes concludes the Hollowed took the Brannocks (a note only); other pairs *do not fit together*.
+- **N** opens the notes once Wenlan's ditch is clear (before, *Nothing to write down yet*). Clicking two notes links them: the Ash card with the moon almanac concludes the night the eyeless ones come back (*Day …, the next night with no moon*, both moons new), the story's new last step **`foretold`**; the raid with the ember eyes concludes the Hollowed took the Brannocks (a note only); other pairs *do not fit together*.
 - `game.reachStory` takes the step `foretold`; the Area tab's *Play the story again* now follows it.
 - Known: only the conclusion that is a step is saved, and its night is worked out again from the story's clock when the notes open.
+
+## Built in S14 (forge 375)
+
+The story game's fourteenth tracer bullet: the night the notes foretold, played as S5's hearth defence at Wenlan's farmhouse, so the reading, the investigation and the defence join into one thread.
+
+- New last steps **`watch`** (the foretold night begun) and **`defended`** (the house held until dawn); `game.reachStory` takes both.
+- After `foretold`, R by a hearth waits for the dark night: the clock jumps to 20:00 of the next night with both moons new (`nextNoMoon`, stricter since S14 so the moon HUD agrees), Wenlan bars the byre, and the viewport asks its host to start the night (`AreaViewportOptions.onStoryNight`; the Area tab starts `startHearthNight` at the farmhouse, as its *A night of hearth defence* button does).
+- At dawn the house held reaches `defended` and Wenlan's thanks; a house lost says so, and R by a hearth waits for the next dark night to try again.
+- The Area tab's *Play the story again* now follows `defended`.
 
 ## Decisions to review after seeing it
 

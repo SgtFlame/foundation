@@ -64,4 +64,11 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || !p.Done["foretold"] || p.Last != "foretold" {
 		t.Fatalf("foretold %+v", p)
 	}
+	// S14: the foretold night kept, and the house held
+	st.ok("game.reachStory", farm, map[string]any{"step": "watch", "area": farm, "x": 3, "z": 3})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "defended", "area": farm, "x": 3, "z": 3})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || !p.Done["watch"] || p.Last != "defended" {
+		t.Fatalf("defended %+v", p)
+	}
 }

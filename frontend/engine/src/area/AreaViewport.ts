@@ -13,12 +13,12 @@ import { NightHud } from '../defence/NightHud.ts'
 import { whistle } from '../defence/Whistle.ts'
 import { DialoguePanel } from './DialoguePanel.ts'
 import { FirstHourPanel } from '../objectives/FirstHour.ts'
-import { JournalScene, journalEntries, link } from '../story/Journal.ts'
+import { JournalScene, journalEntries, link, nextNoMoon } from '../story/Journal.ts'
 import { edgePoint, SensesLayer, senseCues, spread, type Source } from '../story/Senses.ts'
 import { dragMarks, drawCard, herbSpots, howl, nextStep, showCard, showHerbal, SIGNATURE_TEXT, storySteps } from '../story/FirstHourStory.ts'
 import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../story/DayCard.ts'
 import { clarity, ditchSpot, ReadingScene, wenlanAnswer, type Told } from '../story/Reading.ts'
-import { canSleep, CLOCK_START, clockText, isDay, nightOf, showAlmanac, sleep, stepClock, type Clock } from '../story/Clock.ts'
+import { canSleep, CLOCK_START, clockText, FIRST_NIGHT, isDay, nightOf, showAlmanac, sleep, stepClock, type Clock } from '../story/Clock.ts'
 import { BODY_START, BodyHud, breathe, BreathPrompt, humPool, rounded as roundBody, showCooking, stepBody, type Body } from '../story/Hum.ts'
 import { ashPile, buildModel, CharacterModel, interiorShell, material } from './Models.ts'
 import { fit, pieceOf, turned, type AreaDef, type Dialogue, type Npc, type PieceSet, type Placement } from './PieceSet.ts'
@@ -70,6 +70,8 @@ export interface AreaViewportOptions {
   // Play (S3): the character walked through a linked door; the host
   // fetches the area it leads to and gives it back with travel()
   onTravel?: (area: string) => void
+  // S14: the story's foretold night has come: the host starts the night of hearth defence at the farmhouse
+  onStoryNight?: () => void
   // A person was selected in the editor (null: none)
   onNpcSelect?: (id: string | null) => void
   // S4: the weapon in hand in play (WEAPONS: sword, pitchfork) and the character's skills
@@ -1488,11 +1490,17 @@ export class AreaViewport {
           break
         case 'taken':
           this.nightHud.say(`The whistle stops. ${h.watcher ? `${h.watcher.name} is gone, and` : 'Nobody kept the watch, and'} the family with them, dragged under the stone.`)
-          this.flash('The house was lost. Press Stop to try the night again.')
+          if (this.story?.done.watch && !this.story.done.defended) this.say('The house was lost. Wenlan will not forgive it, but the dark comes round again: by a hearth, press R to wait for the next night with no moon.')
+          else this.flash('The house was lost. Press Stop to try the night again.')
           break
         case 'dawn':
           this.nightHud.say('Dawn greys the shutters. The house held.')
           this.flash('The house held until dawn')
+          // S14: the foretold night, survived
+          if (this.story?.done.watch && !this.story.done.defended) {
+            this.reach('defended')
+            this.say('Dawn. The hearthstone lies still, and the Harrows are alive, every one. Wenlan grips your hand: "My father said the eyeless ones were a tale. You came back for us."')
+          }
           break
       }
     }
@@ -1939,6 +1947,7 @@ export class AreaViewport {
   // R by Hawk's Rest's hearth: rest, and draw the first card
   private rest(): void {
     const st = this.story
+    if (st?.done.foretold && !st.done.defended) return this.waitForDark()
     if (st?.done.rest) return this.sleepHere()
     if (!st || !st.done.road || st.done.rest) return
     if (!this.nearHearth()) {
@@ -1953,6 +1962,27 @@ export class AreaViewport {
     setTimeout(() => {
       if (this.story === st) st.clock = sleep(st.clock)
     }, 4000)
+  }
+
+  // S14: R by a hearth once the notes foretold the night: the days pass
+  // until it, and the night of hearth defence at the farmhouse begins
+  private waitForDark(): void {
+    const st = this.story!
+    if (!this.nearHearth()) return this.flash('Stand by a hearth to wait for the dark night')
+    if (this.hearth && !this.hearth.outcome) return this.flash('The night has come: keep the watch at the farmhouse')
+    const n = nextNoMoon(nightOf(st.clock) - 1)
+    st.clock = { day: n - FIRST_NIGHT, hour: 20 }
+    this.slept = true
+    const fade = document.createElement('div')
+    fade.style.cssText = 'position:absolute;inset:0;background:#000;opacity:1;transition:opacity 2s;z-index:3;pointer-events:none'
+    this.container.appendChild(fade)
+    setTimeout(() => (fade.style.opacity = '0'), 600)
+    setTimeout(() => fade.remove(), 2800)
+    this.drawMarks()
+    if (st.done.watch) this.savePlace(true)
+    else this.reach('watch')
+    this.say(`The days pass. You help Wenlan bar the byre and set a hooded lamp by the hearthstone. Day ${st.clock.day + 1}: no moon tonight. Keep the watch at the farmhouse.`)
+    this.opts.onStoryNight?.()
   }
 
   // S9: R by a hearth once night is falling: sleep until seven

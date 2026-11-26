@@ -11,8 +11,8 @@ test('the notes hold what the story reached', () => {
 test('the next night with no moon', () => {
   const n = nextNoMoon(12)
   assert.ok(n > 12)
-  assert.ok(moons(n).greater.lit < 0.1 && moons(n).lesser.lit < 0.3)
-  for (let k = 13; k < n; k++) assert.ok(!(moons(k).greater.lit < 0.1 && moons(k).lesser.lit < 0.3))
+  assert.ok(moons(n).greater.lit < 0.04 && moons(n).lesser.lit < 0.25)
+  for (let k = 13; k < n; k++) assert.ok(!(moons(k).greater.lit < 0.04 && moons(k).lesser.lit < 0.25))
 })
 
 test('the Ash card and the almanac name the night; other pairs do not fit', () => {

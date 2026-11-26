@@ -30,13 +30,13 @@ export function journalEntries(done: Readonly<Record<string, boolean>>): Entry[]
 }
 
 // The next night with no moon after a night: the greater moon dark and the
-// lesser all but dark
+// lesser all but dark (both new as the moon HUD names them)
 export function nextNoMoon(after: number): number {
   for (let n = after + 1; n < after + 400; n++) {
     const m = moons(n)
-    if (m.greater.lit < 0.1 && m.lesser.lit < 0.3) return n
+    if (m.greater.lit < 0.04 && m.lesser.lit < 0.25) return n
   }
-  for (let n = after + 1; ; n++) if (moons(n).greater.lit < 0.1) return n
+  for (let n = after + 1; ; n++) if (moons(n).greater.lit < 0.04) return n
 }
 
 export interface Conclusion {
