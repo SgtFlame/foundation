@@ -445,3 +445,111 @@ func mustEntries(t *testing.T, f *fixture) []ops.Entry {
 	}
 	return e
 }
+
+// Merges (forge 19e): a branch merges into main with no conflict; a second
+// branch changing the same field conflicts until resolved; a merge
+// prepared before main moved is stale and, requested again, keeps its
+// resolutions; the merge commit has the source's head as second parent.
+func TestMerge(t *testing.T) {
+	f := setup(t)
+	f.tasks()
+	ctx := context.Background()
+	settle := func() {
+		for _, p := range []string{branches.Projector, branches.CommitProjector, branches.MergeProjector, entities.DraftProjector, prefabs.DraftProjector} {
+			_ = f.p.Settle(ctx, 1, p)
+		}
+	}
+	entityDesc := func() string {
+		settle()
+		v, _ := f.read("", entities.DraftProjector, "entity.task", 0)
+		var d struct{ Entity struct{ Description string } }
+		_ = json.Unmarshal(v, &d)
+		return d.Entity.Description
+	}
+	f.ok("tasks", "", "app.branch.create", "", map[string]any{"app": "tasks", "name": "a"})
+	f.ok("tasks", "", "app.branch.create", "", map[string]any{"app": "tasks", "name": "b"})
+	f.ok("tasks", "a", "entity.setInfo", "task", map[string]any{"description": "From a"})
+	f.ok("tasks", "a", "prefab.setInfo", "myTasks", map[string]any{"description": "Mine, from a"})
+	f.ok("tasks", "", "app.commit", "", map[string]any{"app": "tasks", "branch": "a", "message": "A"})
+	f.ok("tasks", "b", "entity.setInfo", "task", map[string]any{"description": "From b"})
+	f.ok("tasks", "b", "prefab.setInfo", "allTasks", map[string]any{"description": "All, from b"})
+	f.ok("tasks", "", "app.commit", "", map[string]any{"app": "tasks", "branch": "b", "message": "B"})
+	settle()
+
+	merge := func(source, again string) branches.Merge {
+		t.Helper()
+		args := map[string]any{"app": "tasks", "source": source}
+		if again != "" {
+			args["again"] = again
+		}
+		res := f.ok("tasks", "", "app.merge.request", "", args)
+		settle()
+		m, ok := branches.GetMerge(ctx, f.p, 1, res.Target)
+		if !ok {
+			t.Fatalf("no merge %s", res.Target)
+		}
+		return m
+	}
+	land := func(m branches.Merge) {
+		t.Helper()
+		f.ok("tasks", "", "app.merge.approve", "", map[string]any{"merge": m.ID})
+		f.ok("tasks", "", "app.merge.complete", "", map[string]any{"merge": m.ID})
+		settle()
+		f.ok("tasks", "", "app.commit", "", map[string]any{"app": "tasks", "message": "Merges " + m.Source, "merge": m.ID})
+		settle()
+	}
+
+	// a merges cleanly: main did not change
+	m := merge("a", "")
+	if m.Status != branches.MergeReady || m.Open != 0 || len(m.Parts) != 2 {
+		t.Fatalf("merge a: %+v", m)
+	}
+	f.refused("merge_not_approved", "tasks", "", "app.merge.complete", "", map[string]any{"merge": m.ID})
+	land(m)
+	main, _ := branches.GetRecord(ctx, f.p, 1, "tasks", "main")
+	a, _ := branches.GetRecord(ctx, f.p, 1, "tasks", "a")
+	c, _ := branches.GetCommit(ctx, f.p, 1, main.Head)
+	if c.MergeParent != a.Head || a.Status != branches.StatusMerged || entityDesc() != "From a" {
+		t.Fatalf("after merging a: commit %+v, a %+v, entity %q", c, a, entityDesc())
+	}
+	if m, _ = branches.GetMerge(ctx, f.p, 1, m.ID); m.Status != branches.MergeMerged || m.Commit != main.Head {
+		t.Fatalf("the merge of a: %+v", m)
+	}
+
+	// b changed the entity's description too: a conflict
+	m = merge("b", "")
+	if m.Status != branches.MergeConflicts || m.Open != 1 {
+		t.Fatalf("merge b: %+v", m)
+	}
+	i := slices.IndexFunc(m.Parts, func(p branches.MergePart) bool { return p.Type == "entity" })
+	if !m.Parts[i].Both || m.Parts[i].Conflicts[0].Path != "entity:task.description" {
+		t.Fatalf("the entity's conflict: %+v", m.Parts[i])
+	}
+	f.refused("merge_conflicts", "tasks", "", "app.merge.complete", "", map[string]any{"merge": m.ID})
+	f.ok("tasks", "", "app.merge.resolve", "", map[string]any{"merge": m.ID, "type": "entity", "id": "task", "path": "entity:task.description", "take": "theirs"})
+	settle()
+	m, _ = branches.GetMerge(ctx, f.p, 1, m.ID)
+	if m.Status != branches.MergeReady {
+		t.Fatalf("resolved: %+v", m)
+	}
+	f.ok("tasks", "", "app.merge.approve", "", map[string]any{"merge": m.ID})
+	// main moves: the merge is stale, and again keeps its resolution
+	f.ok("tasks", "", "app.setInfo", "tasks", map[string]any{"description": "Who does what"})
+	f.ok("tasks", "", "app.commit", "", map[string]any{"app": "tasks", "message": "Describes the app"})
+	settle()
+	f.refused("merge_stale", "tasks", "", "app.merge.complete", "", map[string]any{"merge": m.ID})
+	m = merge("b", m.ID)
+	if m.Status != branches.MergeReady || m.Open != 0 {
+		t.Fatalf("b again: %+v", m)
+	}
+	land(m)
+	if entityDesc() != "From b" {
+		t.Fatalf("the entity after merging b: %q", entityDesc())
+	}
+	if v, _ := f.read("", prefabs.DraftProjector, "prefab.allTasks", 0); description(v) != "All, from b" {
+		t.Fatalf("allTasks after merging b: %s", v)
+	}
+	if v, _ := f.read("", prefabs.DraftProjector, "prefab.myTasks", 0); description(v) != "Mine, from a" {
+		t.Fatalf("myTasks after merging b: %s", v)
+	}
+}

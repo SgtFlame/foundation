@@ -262,6 +262,37 @@ func contributeQueries(reg *extensions.Registry, r *reader) {
 		},
 	})
 	live.Queries.Register(reg, live.Query{
+		Descriptor: extensions.Descriptor{ID: "app.merges", Source: "apps"}, Title: "An app's merges",
+		Description: "An app's merges of one branch into another (forge 19e), newest first: {app, merges: [{id, source, target, base, sourceHead, targetHead, status (conflicts, ready, landed, merged), open, kinds, approved, waiting, approvals, commit, parts: [{type, id, both, removed, conflicts: [{path, base, ours, theirs, absent}], resolutions, changes}]}]}. A merge whose branches were committed since it was prepared is stale: request it again.",
+		Params:      json.RawMessage(`{"type":"object","properties":{"app":{"type":"string","description":"The app's id"}},"required":["app"]}`),
+		Examples:    []json.RawMessage{json.RawMessage(`{"app":"tasks"}`)},
+		Action:      "app.read", Resource: resource,
+		Run: func(f live.Feed) error {
+			app, _, err := appParam(f.Params())
+			if err != nil {
+				return err
+			}
+			last := ""
+			return watchAll(f, r.deps().Projections, [][2]string{{MergeProjector, MergeType + ".*"}, {Projector, TargetType + ".*"}}, func(initial bool, pos live.Position) {
+				v, err := r.mergesOf(f.Context(), f.Args().Principal.TenantID, app)
+				if err != nil {
+					log.Error(f.Context(), err, "cannot read the merges of %s", app)
+					return
+				}
+				raw, _ := json.Marshal(v)
+				switch {
+				case initial:
+					f.Snapshot(v, pos)
+				case string(raw) != last:
+					f.Change(live.Delta{Op: "replace", Value: raw}, pos)
+				default:
+					f.Change(live.Reached, pos)
+				}
+				last = string(raw)
+			})
+		},
+	})
+	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "app.history", Source: "apps"}, Title: "An app's history",
 		Description: "An app's commits, newest first: {app, commits: [{id, app, branch, parent, mergeParent, parts, message, author, createdAt, structured, semantic, approvals}]}. With branch, only the commits its head reaches (through merges too).",
 		Params:      json.RawMessage(`{"type":"object","properties":{"app":{"type":"string","description":"The app's id"},"branch":{"type":"string","description":"Only the commits this branch's head reaches"}},"required":["app"]}`),
@@ -292,4 +323,46 @@ func contributeQueries(reg *extensions.Registry, r *reader) {
 			})
 		},
 	})
+}
+
+// MergeView is a merge as app.merges lists it: Stale when a branch was
+// committed since it was prepared.
+type MergeView struct {
+	Merge
+	Stale bool `json:"stale,omitempty"`
+}
+
+// Merges is app.merges' result.
+type Merges struct {
+	App    string      `json:"app"`
+	Merges []MergeView `json:"merges"`
+}
+
+// mergesOf reads an app's merges, newest first.
+func (r *reader) mergesOf(ctx context.Context, tenant uint64, app string) (Merges, error) {
+	out := Merges{App: app, Merges: []MergeView{}}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	entries, err := r.deps().Projections.Watch(ctx, tenant, MergeProjector, MergeType+".*")
+	if err != nil {
+		return out, err
+	}
+	for e := range entries {
+		if e == nil {
+			break
+		}
+		m, err := decode[Merge](e.Value.Value)
+		if err != nil || m.App != app {
+			continue
+		}
+		v := MergeView{Merge: m}
+		if m.Status != MergeMerged {
+			src, _ := r.record(ctx, tenant, app, m.Source)
+			tgt, _ := r.record(ctx, tenant, app, m.Target)
+			v.Stale = src.Head != m.SourceHead || tgt.Head != m.TargetHead
+		}
+		out.Merges = append(out.Merges, v)
+	}
+	slices.SortFunc(out.Merges, func(a, b MergeView) int { return b.CreatedAt.Compare(a.CreatedAt) })
+	return out, nil
 }

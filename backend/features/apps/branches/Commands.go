@@ -95,6 +95,9 @@ type CommitArgs struct {
 	Branch       string `json:"branch,omitempty"` // main when left out
 	Message      string `json:"message"`
 	ExpectedHead string `json:"expectedHead,omitempty"`
+	// Merge is a landed merge into this branch (forge 19e): the commit
+	// records its source's head as the second parent and closes it.
+	Merge string `json:"merge,omitempty"`
 }
 
 // DiscardArgs are app.discard's arguments.
@@ -190,9 +193,9 @@ func specs() []spec {
 			return []live.NewEvent{{Type: EventAbandoned, Data: map[string]any{}}}, nil
 		},
 	}, {
-		id: "app.commit", title: "Commit an app branch", events: []string{EventCreated, EventCommitted},
+		id: "app.commit", title: "Commit an app branch", events: []string{EventCreated, EventCommitted, EventMergeDone, EventMerged},
 		description: "Commits what a branch (main by default) changed since its last commit: an immutable record of those parts as they are now, linked to the last commit, which becomes the branch's head. expectedHead is the head the sender saw: when someone committed since, it is refused with app_head_moved, and the sender reviews and commits again.",
-		args:        `{"type":"object","properties":{"app":{"type":"string","description":"The app's id"},"branch":{"type":"string","description":"The branch; main when left out"},"message":{"type":"string","description":"What the commit changes, in a sentence"},"expectedHead":{"type":"string","description":"The head commit the sender saw (app.branches)"}},"required":["app","message"]}`,
+		args:        `{"type":"object","properties":{"app":{"type":"string","description":"The app's id"},"branch":{"type":"string","description":"The branch; main when left out"},"message":{"type":"string","description":"What the commit changes, in a sentence"},"expectedHead":{"type":"string","description":"The head commit the sender saw (app.branches)"},"merge":{"type":"string","description":"A landed merge into this branch (app.merge.complete): the commit records the source's head as its second parent and marks the source merged"}},"required":["app","message"]}`,
 		example:     `{"app":"tasks","branch":"refund-limits","message":"Adds a refund limit to orders"}`,
 		target: func(raw json.RawMessage) string {
 			app, name := appBranchOf(raw)
@@ -241,6 +244,24 @@ func specs() []spec {
 			}
 			structured, _ := json.Marshal(pd)
 			id := newCommitID(a.App)
+			var mergeParent string
+			var after []live.NewEvent
+			if a.Merge != "" {
+				var m Merge
+				if ok, err := c.read(MergeProjector, mergeTarget(a.Merge), &m); err != nil || !ok || m.App != a.App || m.Target != name {
+					return nil, problem("merge_not_found", "merge", fmt.Sprintf("there is no merge %q into %s", a.Merge, name), "")
+				}
+				if m.Status != MergeLanded {
+					return nil, problem("merge_"+m.Status, "merge", fmt.Sprintf("the merge is %s, not landed", m.Status), "land it with app.merge.complete")
+				}
+				mergeParent = m.SourceHead
+				mt := mergeTarget(m.ID)
+				after = append(after, live.NewEvent{Type: EventMergeDone, Target: &mt, Data: map[string]string{"commit": id}})
+				if m.Source != live.Main {
+					st := branchTarget(a.App, m.Source)
+					after = append(after, live.NewEvent{Type: EventMerged, Target: &st, Data: map[string]string{"into": name, "commit": id}})
+				}
+			}
 			// Its semantic diff is a job, enqueued if the commit is stored
 			if c.r.semantic() {
 				if err := c.r.deps().Outbox(c.ServiceArgs, live.AreaDefinitions); err != nil {
@@ -250,9 +271,9 @@ func specs() []spec {
 				c.Enqueue(live.Job{ID: "app-diff-" + id, Graph: SemanticDiffGraph, Inputs: inputs, As: c.Principal.Ref()})
 			}
 			ct := live.Target{Area: live.AreaDefinitions, Type: CommitType, ID: id}
-			return append(events,
-				live.NewEvent{Type: EventCreated, Target: &ct, Data: Commit{ID: id, App: a.App, Branch: name, Parent: rec.Head, Parts: parts, Message: strings.TrimSpace(a.Message), Structured: structured}},
-				live.NewEvent{Type: EventCommitted, Data: map[string]string{"commit": id}}), nil
+			return append(append(events,
+				live.NewEvent{Type: EventCreated, Target: &ct, Data: Commit{ID: id, App: a.App, Branch: name, Parent: rec.Head, MergeParent: mergeParent, Parts: parts, Message: strings.TrimSpace(a.Message), Structured: structured}},
+				live.NewEvent{Type: EventCommitted, Data: map[string]string{"commit": id}}), after...), nil
 		},
 	}, {
 		id: "app.discard", title: "Discard a part's changes", events: []string{live.EventBranched},
@@ -355,6 +376,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	}
 	contributeQueries(reg, r)
 	contributeReview(reg)
+	contributeMerge(reg, r)
 }
 
 // PartAt is a part's state at a commit, for the features that publish,
