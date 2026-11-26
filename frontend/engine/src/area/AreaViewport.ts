@@ -18,6 +18,7 @@ import { edgePoint, SensesLayer, senseCues, spread, type Source } from '../story
 import { dragMarks, drawCard, herbSpots, howl, nextStep, showCard, showHerbal, SIGNATURE_TEXT, storySteps } from '../story/FirstHourStory.ts'
 import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../story/DayCard.ts'
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
+import { companionStep, VETERAN } from '../story/Companion.ts'
 import { clarity, ditchSpot, ReadingScene, wenlanAnswer, type Told } from '../story/Reading.ts'
 import { canSleep, CLOCK_START, clockText, FIRST_NIGHT, isDay, nightOf, showAlmanac, sleep, stepClock, type Clock } from '../story/Clock.ts'
 import { BODY_START, BodyHud, breathe, BreathPrompt, humPool, rounded as roundBody, showCooking, stepBody, type Body } from '../story/Hum.ts'
@@ -243,6 +244,8 @@ export class AreaViewport {
   private via = ''
   private talkingWith = ''
   private welcomed = false // S15: Hawk's Rest's welcome said this session
+  // S17: the first companion, walking with the character once joined
+  private companion: { model: CharacterModel; at: { x: number; z: number }; cooldown: number } | null = null
   private ateHot = false // S16: something hot eaten since the last sleep (a warm night heals a dream wound)
   private saved = { x: 0, z: 0, t: 0 }
   private readonly caption: HTMLDivElement
@@ -466,6 +469,7 @@ export class AreaViewport {
     this.path = []
     this.arrival = null
     this.character?.group.position.set(at.x, 0, at.z)
+    if (this.companion) this.companion.at = { x: at.x - 1, z: at.z - 1 }
     this.orbit.target.set(at.x, 0, at.z)
     this.orbit.distance = this.set.interior ? 16 : 32
     this.grid.visible = false
@@ -976,8 +980,9 @@ export class AreaViewport {
   private updateHud(): void {
     const c = this.combat
     if (!c) return
-    const skill = c.weapon.kind === 'polearm' ? `polearm ${this.skills.polearm}` : `blade ${this.skills.blade}`
-    this.hud.update(c.hp, HERO_HP, c.stance, c.weapon.title, `${skill}, reading ${this.skills.reading}`)
+    const k = remembered(this.skills, this.story?.done ?? {})
+    const skill = c.weapon.kind === 'polearm' ? `polearm ${k.polearm}` : `blade ${k.blade}`
+    this.hud.update(c.hp, HERO_HP, c.stance, c.weapon.title, `${skill}, reading ${k.reading}`)
   }
 
   // One step of the fight: the character closes on its target or circles it
@@ -1726,6 +1731,12 @@ export class AreaViewport {
     const was = this.talkingWith
     this.talkingWith = ''
     this.updateHint()
+    // S17: the veteran walks with you from now on
+    if (this.story && was === VETERAN.id && !this.story.done.companion) {
+      this.reach('companion')
+      this.say(`${VETERAN.name}, ${VETERAN.title}, picks up his pike and falls in a step behind you. In a fight he takes the flank.`)
+      return
+    }
     // S15: the knot of the last sheaf, Wenlan's thanks
     if (this.story && was === 'farmer-thanks' && !this.story.done.thanked) {
       this.story.items.knot = 1
@@ -2041,9 +2052,11 @@ export class AreaViewport {
         showCard(this.container, card)
         this.drawMarks()
         this.say(`You remember the long spear: your polearm skill rises. Your side aches where the dream's claw went in; until a warm night, some of the Chill stays. ${morning}`)
+        this.knock()
       })
       return
     }
+    if (st.done.dream && !st.done.companion && this.blessed()) this.knock()
     showCard(this.container, card)
     this.drawMarks() // S11: the new day's card may light what is hidden
     if (st.items.wound && warm) {
@@ -2061,6 +2074,60 @@ export class AreaViewport {
   private blessed(): boolean {
     const st = this.story
     return !!st && !!this.set.interior && this.area.id !== st.area && !Object.keys(this.area.npcs ?? {}).length
+  }
+
+  // S17: a knock at the cottage door in the morning: the first companion
+  private knock(): void {
+    const d = this.dialogues[VETERAN.id]
+    if (!d) return
+    setTimeout(() => {
+      if (!this.playing || !this.story || this.story.done.companion) return
+      this.talkingWith = d.id
+      this.caption.style.display = 'none'
+      this.talk.start(d, VETERAN.name)
+      this.updateHint()
+    }, 3500)
+  }
+
+  // S17: the companion follows a step behind, and in a fight takes the
+  // foe's flank and strikes with the pike on their own time
+  private stepCompanion(dt: number): void {
+    const ch = this.character
+    const want = this.playing && !!ch && !!this.story?.done.companion
+    if (!want) {
+      if (this.companion) this.scene.remove(this.companion.model.group)
+      this.companion = null
+      return
+    }
+    if (!this.companion) {
+      const model = new CharacterModel(VETERAN.color)
+      const p = ch!.group.position
+      this.companion = { model, at: { x: p.x - 1, z: p.z - 1 }, cooldown: 1 }
+      this.scene.add(model.group)
+    }
+    const cp = this.companion
+    const pos = ch!.group.position
+    const c = this.combat
+    const foes = c ? [...c.foes.values()].map((f) => ({ id: f.id, x: f.x, z: f.z, alive: f.alive })) : []
+    const r = companionStep(VETERAN, cp, { x: pos.x, z: pos.z, facing: ch!.group.rotation.y }, foes, c?.target ?? null, dt)
+    const moved = Math.hypot(r.at.x - cp.at.x, r.at.z - cp.at.z)
+    cp.at = r.at
+    cp.cooldown = r.cooldown
+    cp.model.group.position.set(r.at.x, 0, r.at.z)
+    cp.model.group.rotation.y = r.facing
+    cp.model.walk(this.loopTime * 12, moved > 0.002 ? 1 : 0)
+    if (r.strike && c && c.over !== 'fallen') {
+      const e = c.allyStrike(r.strike, VETERAN.polearm, VETERAN.aim)
+      if (!e) return
+      const name = this.area.npcs?.[r.strike]?.name ?? 'it'
+      if (e.kind === 'kill') {
+        this.showEvent(e)
+        this.hud.say(`${VETERAN.name}'s pike takes ${name} through the ${e.vital ?? 'heart'} from the flank.`)
+      } else if (e.kind === 'futile') {
+        this.floatText(r.strike, 'pike', '#b9ad94')
+        this.hud.say(`${VETERAN.name} drives the pike into ${name}'s side. It shrugs it off.`)
+      } else if (e.kind === 'miss') this.floatText(r.strike, 'parried', '#8a8a8a')
+    }
   }
 
   // The fight again with the character's skills as they are now
@@ -2114,6 +2181,7 @@ export class AreaViewport {
     if (this.playing && this.hearth) this.stepHearth(dt)
     if (this.playing && this.story) this.stepStory()
     if (this.playing && this.story) this.stepBodyFrame(dt)
+    this.stepCompanion(dt)
     this.orbit.step(dt, this.input)
     if (this.playing && this.walk) {
       // The context cursor: a hand where the ground may be walked to

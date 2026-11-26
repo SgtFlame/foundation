@@ -44,6 +44,8 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'thanked', title: 'The village remembers', how: "Morning after the foretold night. Go into the farmhouse kitchen and click Wenlan: he has something for you." },
   // S16: remembering
   { id: 'dream', title: 'A dream at the ford', how: "Sleep in the empty cottage at Hawk's Rest: stand by its hearth after 19:00 and press R." },
+  // S17: the first companion
+  { id: 'companion', title: 'Someone to take the flank', how: "The morning after the dream, someone knocks at the cottage door at Hawk's Rest. Answer, and ask them to walk with you." },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

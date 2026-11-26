@@ -93,4 +93,10 @@ func TestStorySaves(t *testing.T) {
 	if r := st.refused("game.reachStory", farm, map[string]any{"step": "", "use": "wound", "area": farm, "x": 3, "z": 3}); !strings.Contains(r.Common.Message, "no wound") {
 		t.Fatalf("healed twice: %q", r.Common.Message)
 	}
+	// S17: the first companion joins
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "companion", "area": farm, "x": 3, "z": 3})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "companion" {
+		t.Fatalf("companion %+v", p)
+	}
 }

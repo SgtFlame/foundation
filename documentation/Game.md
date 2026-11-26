@@ -383,6 +383,15 @@ Working the ground by holding (the user, 2026-11-26: "use a tool to harvest reso
 - **Hold actions**: holding Z cuts a wreck's plate free (3 s by hand, under a second with the powered drill), and holding H cuts a ripe crop (1.5 s), with the same ring.
 - Filling (right button) and digging from the flying camera act at once, as before.
 
+## Built in S17 (forge 375)
+
+The story game's seventeenth tracer bullet: the first companion (the play design's party, one companion at the start by the user's rule; companions are kinds of people the reference describes, never the book's cast).
+
+- **Corran Vey, a veteran of the Drum** (`story/Companion.ts` `VETERAN`, `dialogues/veteran.json`; placeholder name and lines). The morning after the dream, a knock at the cottage door at Hawk's Rest opens his talk; when it ends he joins, the new last step **`companion`** (`game.reachStory` takes it).
+- **Following**: out of a fight he keeps a step behind the character (`companionStep`), and comes along through doors.
+- **Fighting**: in a fight he goes for the character's target, or the nearest foe, from its flank (beside it, square to the character), and strikes with a pike every 2.6 s with polearm 3. `Combat.allyStrike` decides it as the character's own strikes are decided (hit chance, then a vital chance with the pike's aim and the flank), so he can behead or pierce a Hollowed's heart; his strikes show as *pike* over the foe and a line in the fight panel.
+- The fight panel now shows the skills the story has given (`remembered`).
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

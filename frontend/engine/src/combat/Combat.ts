@@ -179,6 +179,22 @@ export class Combat {
 
   private pending: CombatEvent[] = []
 
+  // S17: a companion's strike at a foe (from its flank): whether it lands,
+  // and for one harmed only in the neck or heart, whether it is vital
+  allyStrike(id: string, skill: number, aim: number): CombatEvent | null {
+    const f = this.foes.get(id)
+    if (!f?.alive) return null
+    if (this.rand() > Math.min(0.95, 0.55 + 0.08 * skill)) return { kind: 'miss', foe: id }
+    f.stagger = Math.max(f.stagger, 0.4)
+    const vital = this.rand() < Math.min(0.85, 0.12 + 0.07 * skill + aim + 0.15)
+    if (f.kind.vitalOnly && !vital) return { kind: 'futile', foe: id }
+    f.hp -= vital ? f.hp : 1
+    if (f.hp > 0) return { kind: 'hurt', foe: id, damage: 1 }
+    f.alive = false
+    if (this.target === id) this.target = null
+    return { kind: 'kill', foe: id, vital: vital ? (this.rand() < 0.5 ? 'neck' : 'heart') : null }
+  }
+
   // Advances the fight by dt seconds with the character at hero; returns
   // what happened. The host moves the character (toward its target when
   // out of reach: wantsApproach) and the foes move here.
