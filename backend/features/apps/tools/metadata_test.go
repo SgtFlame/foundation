@@ -34,6 +34,7 @@ import (
 	cognitionnodes "github.com/SgtFlame/foundation/backend/features/cognition/nodes"
 	conversationnodes "github.com/SgtFlame/foundation/backend/features/conversation/nodes"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	"github.com/SgtFlame/foundation/backend/features/game"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	livenodes "github.com/SgtFlame/foundation/backend/features/live/nodes"
 	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
@@ -94,7 +95,8 @@ func everything(t *testing.T) *extensions.Registry {
 	connectorsnodes.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
 	connections.Contribute(reg, func() connections.Deps { return connections.Deps{} })
 	scripted.Contribute(reg, func() scripted.Deps { return scripted.Deps{} })
-	connectorstest.Contribute(reg) // the builtin contracts a test registry has
+	game.Contribute(reg, func() game.Deps { return game.Deps{} }) // forge 360 V1
+	connectorstest.Contribute(reg)                                // the builtin contracts a test registry has
 	return reg
 }
 

@@ -23,8 +23,10 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/cognition/drafts"
 	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
 	cognitionnodes "github.com/SgtFlame/foundation/backend/features/cognition/nodes"
+	"github.com/SgtFlame/foundation/backend/features/conversation/made"
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	"github.com/SgtFlame/foundation/backend/features/game"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	"github.com/SgtFlame/foundation/backend/features/live/natsd"
@@ -37,7 +39,6 @@ import (
 	recordsnodes "github.com/SgtFlame/foundation/backend/features/records/nodes"
 	"github.com/SgtFlame/foundation/backend/features/ui"
 	uicomponents "github.com/SgtFlame/foundation/backend/features/ui/components"
-	"github.com/SgtFlame/foundation/backend/features/conversation/made"
 	uinodes "github.com/SgtFlame/foundation/backend/features/ui/nodes"
 	"github.com/SgtFlame/foundation/backend/features/ui/prefabs"
 )
@@ -78,7 +79,8 @@ func setup(t *testing.T) *fixture {
 	manifests.Contribute(reg, func() manifests.Deps { return appDeps })
 	installs.Contribute(reg, func() installs.Deps { return installDep })
 	ui.ContributeOverlays(reg)
-	made.Contribute(reg, func() made.Deps { return madeDeps }) // chat.mode.* (forge 15h)
+	made.Contribute(reg, func() made.Deps { return madeDeps })    // chat.mode.* (forge 15h)
+	game.Contribute(reg, func() game.Deps { return game.Deps{} }) // game.* worlds (forge 360 V1)
 	ui.Pages.Register(reg, ui.Page{Descriptor: extensions.Descriptor{ID: "demo/main", Source: "test"}, App: "demo", Title: "Demo"})
 	ops.Contribute(reg)
 	var undoDeps ops.Deps
@@ -197,6 +199,11 @@ func (f *fixture) state(command, target string, seq uint64) string {
 		projector, key = "ui.overlay", ui.OverlayType+"."+target
 	case "chat":
 		projector, key = made.Projector, made.TargetType+"."+target
+	case "game":
+		projector, key = game.WorldsProjector, game.WorldType+"."+target
+		if strings.Contains(command, "Area") || strings.Contains(command, "Piece") || strings.Contains(command, "Npc") || strings.Contains(command, "Door") {
+			projector, key = game.AreasProjector, game.AreaType+"."+target
+		}
 	default:
 		projector, key = manifests.DraftProjector, manifests.TargetType+"."+target
 	}
@@ -246,6 +253,20 @@ func (f *fixture) state(command, target string, seq uint64) string {
 			return "null"
 		}
 		out = []any{d.Manifest, d.Seed, d.Published}
+	case game.WorldsProjector:
+		var w game.World
+		_ = json.Unmarshal(v.Value, &w)
+		if w.Deleted {
+			return "null" // a deleted world is gone as far as anyone sees
+		}
+		out = []any{w.Name, w.Generator}
+	case game.AreasProjector:
+		var a game.GameArea
+		_ = json.Unmarshal(v.Value, &a)
+		if a.Deleted {
+			return "null"
+		}
+		out = []any{a.Name, a.Width, a.Depth, a.Pieces, a.Npcs}
 	case made.Projector:
 		var x made.Mode
 		_ = json.Unmarshal(v.Value, &x)
@@ -428,6 +449,27 @@ func steps() []step {
 		s("chat.mode.update", "mode-1", m{"everywhere": true}),
 		s("chat.mode.share", "mode-1", m{"shared": true}),
 		s("chat.mode.delete", "mode-1", m{}),
+		// Game worlds (forge 360 V1)
+		s("game.createWorld", "moon1", m{"name": "Moon one", "generator": m{"seed": 3}}),
+		s("game.setWorld", "moon1", m{"generator": m{"seed": 9, "craters": 40}}),
+		s("game.setWorld", "moon1", m{"name": "Moon two"}),
+		s("game.deleteWorld", "moon1", m{}),
+		s("game.restoreWorld", "moon1", m{}),
+		// Game areas (forge 375 S1)
+		s("game.createArea", "farm1", m{"name": "Farmstead", "width": 10, "depth": 8}),
+		s("game.placePiece", "farm1", m{"id": "house", "piece": "farmhouse", "x": 2, "z": 2}),
+		s("game.placePiece", "farm1", m{"id": "lane", "piece": "road", "x": 3, "z": 4}),
+		s("game.movePiece", "farm1", m{"id": "lane", "z": 5}),
+		s("game.setArea", "farm1", m{"name": "Sheaflands", "width": 12}),
+		s("game.createArea", "kitchen1", m{"name": "Kitchen", "width": 6, "depth": 5, "pieceSet": "kitchen"}),
+		s("game.linkDoor", "farm1", m{"id": "house", "area": "kitchen1"}),
+		s("game.linkDoor", "farm1", m{"id": "house", "area": ""}),
+		s("game.placeNpc", "farm1", m{"id": "farmer", "name": "The farmer", "kind": "farmer", "x": 4, "z": 6, "dialogue": "farmer"}),
+		s("game.moveNpc", "farm1", m{"id": "farmer", "x": 5}),
+		s("game.removeNpc", "farm1", m{"id": "farmer"}),
+		s("game.removePiece", "farm1", m{"id": "house"}),
+		s("game.deleteArea", "farm1", m{}),
+		s("game.restoreArea", "farm1", m{}),
 	}
 }
 

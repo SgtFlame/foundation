@@ -98,6 +98,32 @@ func itemsOf(command string, raw json.RawMessage, add func(kind, key string)) {
 		}
 	}
 	switch family {
+	case "game": // game worlds (forge 360 V1) and areas (375 S1): made, deleted and restored whole, changed per field or piece
+		switch name {
+		case "createWorld", "deleteWorld", "restoreWorld", "createArea", "deleteArea", "restoreArea":
+			add("", "")
+		case "placePiece", "movePiece", "removePiece": // areas (forge 375 S1): per placed piece
+			add("piece", str("id"))
+		case "linkDoor": // doors (forge 375 S3): a piece's link
+			add("piece", str("id"))
+		case "placeNpc", "moveNpc", "removeNpc": // people (forge 375 S3): per person
+			add("npc", str("id"))
+		case "setArea":
+			for _, k := range []string{"name", "width", "depth"} {
+				if _, ok := a[k]; ok {
+					add("field", k)
+				}
+			}
+		default:
+			if g, ok := a["generator"].(map[string]any); ok {
+				for k := range g {
+					add("field", "generator."+k)
+				}
+			}
+			if _, ok := a["name"]; ok {
+				add("field", "name")
+			}
+		}
 	case "prefab":
 		switch name {
 		case "setInfo":

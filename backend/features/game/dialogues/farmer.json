@@ -1,0 +1,51 @@
+{
+  "id": "farmer",
+  "title": "The farmer, the night of the first snow",
+  "description": "The Sheaflands farmer in his kitchen as the first snow falls (375 first hour, step 1). Placeholder lines drawn from the play design's first hour, to be replaced by the user's own.",
+  "speaker": "The farmer",
+  "start": "greet",
+  "nodes": {
+    "greet": {
+      "text": "Come in, come in, before the snow follows you. First fall of the winter, and on a night like this. There are hot cakes on the hearth, and nobody turns a traveller from the door here.",
+      "choices": [
+        {"text": "Thank you. What is that straw figure over the hearth?", "next": "sheaf"},
+        {"text": "Why is there a cup of milk on the sill?", "next": "milk"},
+        {"text": "Did you see the light from the capital?", "next": "light"},
+        {"text": "I should be going.", "end": true}
+      ]
+    },
+    "sheaf": {
+      "text": "The last sheaf. We plait her from the last of the harvest and she rides the last cart home. She hangs there all winter, and in spring she goes into the first furrow, so the field remembers what it's for. Touch her for luck if you like.",
+      "choices": [
+        {"text": "And the milk on the sill?", "next": "milk"},
+        {"text": "Thank you for the cakes.", "next": "farewell"}
+      ]
+    },
+    "milk": {
+      "text": "Old custom. A cup for whatever walks on the first snow. My grandmother put one out every year and said the night was kinder for it. I don't know that I believe her. I put it out all the same.",
+      "choices": [
+        {"text": "Did you see the light from the capital?", "next": "light"},
+        {"text": "Thank you for the cakes.", "next": "farewell"}
+      ]
+    },
+    "light": {
+      "text": "Like dawn, but white and gold, and in the wrong place. Rolled over the fields from the east and was gone. The dogs went quiet. You look as though you felt it too. Sit by the fire a while.",
+      "choices": [
+        {"text": "I felt something. Warm, in my chest.", "next": "warm"},
+        {"text": "Thank you for the cakes.", "next": "farewell"}
+      ]
+    },
+    "warm": {
+      "text": "Then you're luckier than the rest of us; we only got cold feet. Eat. Whatever it was, it'll keep till morning.",
+      "choices": [
+        {"text": "Thank you.", "next": "farewell"}
+      ]
+    },
+    "farewell": {
+      "text": "Mind the road if you go. The snow hides the ditches. And come back in daylight; there's always work, and always cake.",
+      "choices": [
+        {"text": "Goodbye.", "end": true}
+      ]
+    }
+  }
+}

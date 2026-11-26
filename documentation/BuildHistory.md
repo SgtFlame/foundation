@@ -905,3 +905,105 @@ Which open questions each slice needed answered (the open ones are now in each p
 | 54. What the Agents app needed (Forge 7m) | forge 007-Email 6 (an `engine` field), 8 (a per-agent cap) and 13 (both a library and the app's own records, with copy and paste), and 07m 1 (both filters), the user's answers | the decisions in [forge AgentsApp.md](../../forge/documentation/AgentsApp.md#decisions-to-review-after-seeing-it), the agent editor read by someone who is not a developer |
 | 55. What the Mail app's sync needed (Forge 7n) | forge 07n 3 (files held by a record the caller may read) and 4 (connections held by the app's own records, a gap found while reading), the user's answers | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-5) |
 | 56. What the mail client needed (Forge 7o) | forge 007-Email 7 (Owners read all mail, Administrators only when granted, reading marks nothing read) and 07o 1 (members' grants kept by the app, a gap found while reading), the user's answers | the decisions in [forge MailApp.md](../../forge/documentation/MailApp.md#decisions-to-review-after-seeing-it-1), the thread with summary, labels and presence |
+
+## Game engine V1 (forge 360)
+
+The voxel game's first tracer bullet ([Game.md](Game.md) › *Built in V1*), built beside the slices above rather than numbered among them. It added the `frontend/engine` workspace (`@foundation/engine`) and `backend/features/game`. Later game work must:
+
+- put engine code in `frontend/engine` and keep its modules free of React and of `common`;
+- make every game definition command an op with its inverse, with a step in `TestEveryOpUndoes`, and its undo scope in `ops.ParseScope`;
+- write game rules as blueprints (`game.editTerrain` is the model), never as Go handlers;
+- keep the browser's generator and edit rules deterministic, because the Node runner (346) will have to produce the same chunks.
+
+## Game S1 and S2 (forge 375)
+
+Story game areas ([Game.md](Game.md) › *Built in S1 and S2*): piece sets, the `gameArea` ops, `game.describeArea`, the area viewport, night lighting with the moons' phases, Play on a walk grid. Later game work must:
+
+- give every area op its inverse and its items in `apps/ops` (`Items.go`), as the piece ops do;
+- read a piece's footprint and edges only through `Turned`/`turned`, never by hand;
+- treat the walk grid as a stand-in: movement moves to the server in S4, and Recast replaces the grid when areas get height levels.
+
+## Game V2 (forge 360)
+
+Walking the moon and its asteroids ([Game.md](Game.md) › *Built in V2*). Later game work must:
+
+- read the terrain only through `WorldGenerator` (and `VoxelWorld.densityAt` for edits), never a `MoonGenerator` alone, since a world has several bodies;
+- keep pack rules in the `cmd-game-editTerrain` blueprint and mirror them in `LocalEdits.ts` for the demo;
+- give any new play state that follows a player a projector keyed `<worldId>.<userId>`, as `game.packs` is.
+
+## Game S3 (forge 375)
+
+The farmhouse kitchen and the farmer ([Game.md](Game.md) › *Built in S3*). Later game work must:
+
+- make interiors separate areas of an `interior` piece set, joined by doors linked with `game.linkDoor`;
+- keep a door's stand point in its model (`userData.door`), so travel arrives by the door that leads back;
+- give dialogues answers that lead to a node or end the talk, checked by `Dialogue.Check`, and keep their text out of Go.
+
+## Game S4 (forge 375)
+
+The first fight ([Game.md](Game.md) › *Built in S4*). Later game work must:
+
+- keep combat rules in `combat/Combat.ts`, pure and seeded, so the Node runner (346) can run the same fight on the server;
+- add a creature as a `CREATURES` entry and give people of that kind no dialogue; the viewport treats any creature kind as a foe;
+- decide outcomes from the character's skills, never from the player's aim or reflexes (the user, 2026-11-26).
+
+## Game V3 (forge 360)
+
+The first ship ([Game.md](Game.md) › *Built in V3*). Later game work must:
+
+- keep the flight model in `ship/Ship.ts`, free of rendering, so the Node runner (346) can fly ships on the server;
+- add a design as a JSON file in `features/game/designs/` and its id and block count to `cmd-game-startShip`'s checks (the list of designs and the `{skiff: 27}` table);
+- read the terrain's density as a signed distance, negative inside the ground, as the walker does.
+
+## Game S5 (forge 375)
+
+The first night of hearth defence ([Game.md](Game.md) › *Built in S5*). Later game work must:
+
+- keep a night's rules in `defence/HearthNight.ts`, pure and seeded, beside `Combat`, so the Node runner (346) can run both;
+- signal with the book's whistle code (one: the stone moved, two: something came through, three: about to die), never a new code;
+- treat a person of kind `watcher` as a house's hearth-watch.
+
+## Game V4 (forge 360)
+
+Power, a hold and a refinery on a ship ([Game.md](Game.md) › *Built in V4*). Later game work must:
+
+- move material between a player and a ship with one event on the ship that the pack projector also folds, as `loaded` does, rather than a command with two targets;
+- add a design's hold and refinery indices to `cmd-game-loadShip` and `cmd-game-refineShip` as well as its block count to `cmd-game-startShip`;
+- refuse a command that changes a ship's charge while someone flies it, since the pilot's window owns the charge then.
+
+## Game V5 (forge 360)
+
+Crashes and repair ([Game.md](Game.md) › *Built in V5*). Later game work must:
+
+- keep crash rules in `ShipBody` (`SAFE_IMPACT`, `WRECK_IMPACT`) so the server can run them later;
+- read a `damaged` event's `blocks` as indices, apart from the `started` event's block count of the same name;
+- repair by placing from the outline, so any later cost of a block applies to repairs too.
+
+## Game V6 (forge 360)
+
+The outpost, contracts and skills ([Game.md](Game.md) › *Built in V6*). Later game work must:
+
+- add contracts to `contracts.json` and their needs to `cmd-game-handIn` and `handInProblem` together, so the panel and the blueprint agree;
+- change a player's progress only through events folded by `game.players`, never a second target on a command;
+- read skill effects from `game.player`'s levels (`thrustFor` is the first), so the 350 skill system can take them over.
+
+## Game V7 (forge 360)
+
+A second player crews the ship ([Game.md](Game.md) › *Built in V7*). Later game work must:
+
+- give a design more crew seats by its entry in `cmd-game-crewShip`'s seat table, and a crew station's work by a check on `ship.crew` in that work's blueprint (refining is the first);
+- keep the rider's camera on the ship's eased pose, so a crew member sees what everyone else sees, not a second simulation.
+
+## Game V8, first part (forge 360)
+
+The first-hour guide ([Game.md](Game.md) › *Built in V8, first part*). Later game work must:
+
+- add a step to `firstHour` when a slice adds play a new player must learn, derived from server state where it can be;
+- keep the steps in order so a later step done implies the earlier ones.
+
+## Game V8, second part (forge 360)
+
+The drop pod and the saved place ([Game.md](Game.md) › *Built in V8, second part*). Later game work must:
+
+- treat a missing `at` in `game.player` as "not landed yet", and add any other per-player saved state to `game.players` the same way, from events on a target the sender may name (the world's terrain), keyed by the event's user;
+- keep saves infrequent: `stood` events share the terrain target with edits, so each one moves that target's expected sequence.

@@ -1,0 +1,451 @@
+{
+  "id": "cmd-game-flyShip",
+  "name": "game.flyShip",
+  "description": "Decides a ship's new place and who flies it, as its pilot flies it.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.flyShip",
+    "title": "Fly a ship",
+    "description": "Sets where a ship is and how it moves, and whether the sender is piloting it; the target is the ship's id. The pilot's window sends it a few times a second while flying, with pilot true; sitting down sends it with pilot true and leaving with pilot false. Refused when the ship does not exist, its cockpit is not placed, or someone else is flying it.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number",
+          "description": "Where its block 0 0 0 is, metres from the moon's centre"
+        },
+        "y": {
+          "type": "number",
+          "description": "The point's y in metres"
+        },
+        "z": {
+          "type": "number",
+          "description": "The point's z in metres"
+        },
+        "q": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Its orientation as a quaternion [x, y, z, w]"
+        },
+        "v": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Its velocity [x, y, z] in m/s, so others carry it on between updates"
+        },
+        "pilot": {
+          "type": "boolean",
+          "description": "Whether the sender is in its cockpit"
+        },
+        "charge": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Its battery's charge, 0 to 1, as its pilot's flight drew and its panels gave (V4)"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z",
+        "q",
+        "pilot"
+      ]
+    },
+    "area": "game",
+    "targetType": "gameShip",
+    "projection": "game.ships",
+    "action": "game.play",
+    "events": [
+      "flown"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "x",
+            "type": "number",
+            "description": "The point's x in metres"
+          },
+          {
+            "id": "y",
+            "type": "number",
+            "description": "The point's y in metres"
+          },
+          {
+            "id": "z",
+            "type": "number",
+            "description": "The point's z in metres"
+          },
+          {
+            "id": "q",
+            "type": "json",
+            "description": "The orientation quaternion"
+          },
+          {
+            "id": "v",
+            "type": "json",
+            "description": "The velocity"
+          },
+          {
+            "id": "pilot",
+            "type": "bool",
+            "description": "Whether the sender is piloting"
+          },
+          {
+            "id": "charge",
+            "type": "number",
+            "description": "The battery's charge"
+          }
+        ]
+      }
+    },
+    {
+      "id": "shipKey",
+      "type": "data.expression",
+      "title": "Ship key",
+      "position": {
+        "x": 250,
+        "y": 0
+      },
+      "config": {
+        "expr": "\"gameShip.\" + target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ship",
+      "type": "live.readProjection",
+      "title": "Read the ship",
+      "position": {
+        "x": 500,
+        "y": 0
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 250,
+        "y": 300
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why it is refused",
+      "position": {
+        "x": 800,
+        "y": 150
+      },
+      "config": {
+        "expr": "!found ? \"there is no ship \" + target : !(0 in ship.placed) ? \"place the cockpit (block 0) before flying\" : ship.pilot != \"\" \u0026\u0026 ship.pilot != user ? \"someone else is flying this ship\" : type(q) != \"array\" || len(q) != 4 ? \"q is a quaternion [x, y, z, w]\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Allowed?",
+      "position": {
+        "x": 1050,
+        "y": 150
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "position": {
+        "x": 1300,
+        "y": 0
+      }
+    },
+    {
+      "id": "flown",
+      "type": "data.expression",
+      "title": "Where it is",
+      "position": {
+        "x": 1300,
+        "y": 350
+      },
+      "config": {
+        "expr": "{world: ship.world, x: x, y: y, z: z, q: q, v: v ?? [0, 0, 0], pilot: pilot ? user : \"\", charge: charge}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "position": {
+        "x": 1600,
+        "y": -100
+      },
+      "config": {
+        "event": "flown"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "position": {
+        "x": 1600,
+        "y": 150
+      },
+      "config": {
+        "path": "args",
+        "fix": "place the cockpit first, and fly only a ship nobody else is flying"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "shipKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "shipKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ship",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "flown",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "check",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "flown",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "check",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "q"
+      },
+      "to": {
+        "node": "check",
+        "pin": "q"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "x"
+      },
+      "to": {
+        "node": "flown",
+        "pin": "x"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "y"
+      },
+      "to": {
+        "node": "flown",
+        "pin": "y"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "z"
+      },
+      "to": {
+        "node": "flown",
+        "pin": "z"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "q"
+      },
+      "to": {
+        "node": "flown",
+        "pin": "q"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "v"
+      },
+      "to": {
+        "node": "flown",
+        "pin": "v"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "pilot"
+      },
+      "to": {
+        "node": "flown",
+        "pin": "pilot"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "charge"
+      },
+      "to": {
+        "node": "flown",
+        "pin": "charge"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "flown",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    }
+  ]
+}
