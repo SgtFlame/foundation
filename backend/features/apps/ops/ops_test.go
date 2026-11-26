@@ -201,6 +201,9 @@ func (f *fixture) state(command, target string, seq uint64) string {
 		projector, key = made.Projector, made.TargetType+"."+target
 	case "game":
 		projector, key = game.WorldsProjector, game.WorldType+"."+target
+		if strings.Contains(command, "Area") || strings.Contains(command, "Piece") {
+			projector, key = game.AreasProjector, game.AreaType+"."+target
+		}
 	default:
 		projector, key = manifests.DraftProjector, manifests.TargetType+"."+target
 	}
@@ -257,6 +260,13 @@ func (f *fixture) state(command, target string, seq uint64) string {
 			return "null" // a deleted world is gone as far as anyone sees
 		}
 		out = []any{w.Name, w.Generator}
+	case game.AreasProjector:
+		var a game.GameArea
+		_ = json.Unmarshal(v.Value, &a)
+		if a.Deleted {
+			return "null"
+		}
+		out = []any{a.Name, a.Width, a.Depth, a.Pieces}
 	case made.Projector:
 		var x made.Mode
 		_ = json.Unmarshal(v.Value, &x)
@@ -445,6 +455,15 @@ func steps() []step {
 		s("game.setWorld", "moon1", m{"name": "Moon two"}),
 		s("game.deleteWorld", "moon1", m{}),
 		s("game.restoreWorld", "moon1", m{}),
+		// Game areas (forge 375 S1)
+		s("game.createArea", "farm1", m{"name": "Farmstead", "width": 10, "depth": 8}),
+		s("game.placePiece", "farm1", m{"id": "house", "piece": "farmhouse", "x": 2, "z": 2}),
+		s("game.placePiece", "farm1", m{"id": "lane", "piece": "road", "x": 3, "z": 4}),
+		s("game.movePiece", "farm1", m{"id": "lane", "z": 5}),
+		s("game.setArea", "farm1", m{"name": "Sheaflands", "width": 12}),
+		s("game.removePiece", "farm1", m{"id": "house"}),
+		s("game.deleteArea", "farm1", m{}),
+		s("game.restoreArea", "farm1", m{}),
 	}
 }
 

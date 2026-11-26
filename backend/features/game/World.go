@@ -88,9 +88,9 @@ func checkName(name string) (string, []live.Problem) {
 	name = strings.TrimSpace(name)
 	switch {
 	case name == "":
-		return "", problem("", "args.name", "a world needs a name", "")
+		return "", problem("", "args.name", "a name is needed", "")
 	case utf8.RuneCountInString(name) > MaxName:
-		return "", problem("", "args.name", fmt.Sprintf("a world's name is at most %d characters", MaxName), "")
+		return "", problem("", "args.name", fmt.Sprintf("a name is at most %d characters", MaxName), "")
 	}
 	return name, nil
 }
@@ -285,14 +285,18 @@ func contributeWorlds(reg *extensions.Registry) {
 	})
 }
 
-// liveWorlds is game.worlds: the worlds that are not deleted (or all), as a map by
-// key, then upserts and removals.
-func liveWorlds(f live.Feed) error {
+// liveWorlds is game.worlds: the worlds that are not deleted (or all).
+func liveWorlds(f live.Feed) error { return liveDefs(f, WorldsProjector, WorldType) }
+
+// liveDefs is a live map of a definition type's projection, keyed
+// <type>.<id>: those not deleted, or with params {deleted: true} all, as a
+// map by key, then upserts and removals.
+func liveDefs(f live.Feed, projector, typ string) error {
 	var p struct {
 		Deleted bool `json:"deleted"`
 	}
 	_ = json.Unmarshal(f.Params(), &p)
-	entries, err := f.Store().Watch(f.Context(), f.Args().Principal.TenantID, WorldsProjector, WorldType+".*")
+	entries, err := f.Store().Watch(f.Context(), f.Args().Principal.TenantID, projector, typ+".*")
 	if err != nil {
 		return err
 	}
@@ -306,8 +310,10 @@ func liveWorlds(f live.Feed) error {
 			continue
 		}
 		pos = pos.Merge(e.Value.Position())
-		var w World
-		gone := e.Deleted || json.Unmarshal(e.Value.Value, &w) != nil || (w.Deleted && !p.Deleted)
+		var d struct {
+			Deleted bool `json:"deleted"`
+		}
+		gone := e.Deleted || json.Unmarshal(e.Value.Value, &d) != nil || (d.Deleted && !p.Deleted)
 		if gone {
 			if _, had := out[e.Key]; had {
 				delete(out, e.Key)

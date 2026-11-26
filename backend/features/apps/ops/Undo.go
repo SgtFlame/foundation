@@ -29,7 +29,7 @@ type Deps struct {
 // prefab, graph or entity type (prefab:<id>, graph:<id>, entity:<id>). A
 // request is in a scope when one of its ops is.
 type Scope struct {
-	Kind string `json:"kind"` // app, manifest, prefab, graph, entity or gameWorld
+	Kind string `json:"kind"` // app, manifest, prefab, graph, entity, gameWorld or gameArea
 	ID   string `json:"id"`
 }
 
@@ -41,9 +41,9 @@ func ParseScope(s string) (Scope, error) {
 			kind, id = "manifest", app
 		}
 	}
-	// gameWorld: a game world definition (forge 360 V1)
-	if !slices.Contains([]string{"app", "manifest", "prefab", "graph", "entity", "gameWorld"}, kind) || !live.ValidToken(id) {
-		return Scope{}, log.Code("invalid_scope").Errorf("%q is not a scope: use app:<id>, app:<id>/manifest, prefab:<id>, graph:<id>, entity:<id> or gameWorld:<id>", s)
+	// gameWorld: a game world definition (forge 360 V1); gameArea: a game area (forge 375 S1)
+	if !slices.Contains([]string{"app", "manifest", "prefab", "graph", "entity", "gameWorld", "gameArea"}, kind) || !live.ValidToken(id) {
+		return Scope{}, log.Code("invalid_scope").Errorf("%q is not a scope: use app:<id>, app:<id>/manifest, prefab:<id>, graph:<id>, entity:<id>, gameWorld:<id> or gameArea:<id>", s)
 	}
 	return Scope{Kind: kind, ID: id}, nil
 }
