@@ -45,6 +45,8 @@ type Player struct {
 	At *[3]float64 `json:"at,omitempty"`
 	// V10: their body's needs when last saved, each 0 to 100
 	Needs *Needs `json:"needs,omitempty"`
+	// V11: how many times they did each job of the job board
+	Jobs map[string]int `json:"jobs,omitempty"`
 }
 
 // Needs are a player's body's needs (V10): air in the suit, how well fed, health.
@@ -72,6 +74,10 @@ type Contracts struct {
 		Needs   map[string]any `json:"needs,omitempty"`
 		Design  string         `json:"design,omitempty"`
 		Unlocks string         `json:"unlocks,omitempty"`
+		// V11: a job of the job board, done again and again, and the Trade
+		// level it needs; jobs alone teach Trade, which unlocks the freighter
+		Job   bool `json:"job,omitempty"`
+		Level int  `json:"level,omitempty"`
 	} `json:"contracts"`
 }
 
@@ -98,6 +104,7 @@ func foldPlayer(f live.Fold) (json.RawMessage, error) {
 		Skill    string  `json:"skill"`
 		XP       float64 `json:"xp"`
 		Unlock   string  `json:"unlock"`
+		Job      bool    `json:"job"`
 		X        float64 `json:"x"`
 		Y        float64 `json:"y"`
 		Z        float64 `json:"z"`
@@ -119,7 +126,14 @@ func foldPlayer(f live.Fold) (json.RawMessage, error) {
 	if p.XP == nil {
 		p.XP = map[string]float64{}
 	}
-	p.Done[d.Contract] = true
+	if d.Job {
+		if p.Jobs == nil {
+			p.Jobs = map[string]int{}
+		}
+		p.Jobs[d.Contract]++
+	} else {
+		p.Done[d.Contract] = true
+	}
 	if d.Unlock != "" {
 		if p.Unlocked == nil {
 			p.Unlocked = map[string]bool{}

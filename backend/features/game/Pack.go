@@ -28,7 +28,7 @@ const (
 type Pack struct {
 	Dust     float64 `json:"dust"`
 	Rock     float64 `json:"rock"`
-	Ore      float64 `json:"ore"` // V8: from the asteroids
+	Ore      float64 `json:"ore"`  // V8: from the asteroids
 	Food     float64 `json:"food"` // V9: harvested on the planet with air
 	Capacity float64 `json:"capacity"`
 }

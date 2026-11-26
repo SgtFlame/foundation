@@ -87,7 +87,7 @@ func contributeCrops(reg *extensions.Registry) {
 		Descriptor: extensions.Descriptor{ID: CropsProjector, Source: source}, Title: "Crops",
 		Description: "Each world's crops on the planet with air, keyed terrain.<worldId>: {crops: {<id>: {x, y, z, at (planted, Unix ms), by}}, next}",
 		Area:        Area, Types: []string{TerrainType},
-		Fold:        foldCrops,
+		Fold: foldCrops,
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.crops", Source: source}, Title: "Crops",

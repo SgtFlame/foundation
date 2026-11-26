@@ -232,6 +232,15 @@ The story game's eighth tracer bullet: the Hum, Chill and Hunger (the design's r
 - **In the viewport**: after the herbal, B by a hearth starts stillness (moving, a fight or leaving the hearth breaks it; the first breath reaches `stillness`), and C opens the hearth's cooking (cooking reaches `cook` and spends the herb). The body is sent with every step and saved place (`onStory` `body`, `use`).
 - **Server**: `game.reachStory` takes `use` (a herb spent, refused unless held: the graph reads `game.stories`) and `body {hum, chill, hunger}` (clamped); `StorySteps` gains `stillness` and `cook`; `game.story` gives `body` and counts a spent herb off `items`.
 
+## Built in V11 (forge 360)
+
+The voxel game's eleventh tracer bullet: the job board (the user, 2026-11-26: the job board asks for larger and larger ships, and some skills rise only from jobs).
+
+- **Jobs** are contracts with `job: true` in `contracts/contracts.json`, done again and again: *Rock for the landing pads* (3 m³ of rock), *An ore run* (8 m³ of ore, more than a prospector holds), *Bulk ore for the smelter* (30 m³, Trade 2) and *Ore for the new station* (50 m³, Trade 3, only a freighter holds it). Each pays **Trade**, a skill no other work teaches; `level` is the Trade level a job needs.
+- **`game.handIn`** (`cmd-game-handIn`) knows the jobs: it refuses a job above the sender's Trade level and checks rock in the hold; it emits `job: true` and `rock`, and once the Trade experience reaches 200 (level 3) it unlocks the **freighter**. `game.players` counts each job in `jobs` instead of marking it done; the ship's hold gives up the rock.
+- **The freighter** (`designs/freighter.json`, 82 blocks, eleven holds): `game.startShip` refuses it until unlocked.
+- **Engine**: `handInProblem` never calls a job done and checks its Trade level and rock; the quartermaster's panel shows a *Job board* section with how many times each was done, the skills line Trade, and scrolls when long.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

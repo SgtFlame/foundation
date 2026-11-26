@@ -155,7 +155,7 @@ func TestShipDamage(t *testing.T) {
 
 // V6: contracts handed in with a ship at the outpost pay a skill once
 func TestOutpost(t *testing.T) {
-	if c := game.ContractsOf(); len(c.Contracts) != 4 || c.Giver.Name == "" {
+	if c := game.ContractsOf(); len(c.Contracts) != 8 || c.Giver.Name == "" {
 		t.Fatalf("contracts %+v", c)
 	}
 	st := newStack(t)
@@ -280,5 +280,46 @@ func TestOreAndHauler(t *testing.T) {
 	}
 	if r := st.refused("game.handIn", "h1", map[string]any{"contract": "ore-haul"}); !strings.Contains(r.Common.Message, "12") {
 		t.Fatalf("empty hauler: %q", r.Common.Message)
+	}
+}
+
+// V11: the job board's jobs are done again and again, alone teach Trade,
+// and Trade 3 unlocks the freighter
+func TestJobBoard(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Job moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	st.ok("game.startShip", "p1", map[string]any{"world": world, "design": "prospector", "x": 0, "y": 104, "z": 5, "q": q})
+	for i := 0; i < 32; i++ {
+		st.ok("game.placeBlock", "p1", map[string]any{"index": i})
+	}
+	if r := st.refused("game.startShip", "f0", map[string]any{"world": world, "design": "freighter", "x": 0, "y": 104, "z": -8, "q": q}); !strings.Contains(r.Common.Message, "Trade") {
+		t.Fatalf("locked freighter: %q", r.Common.Message)
+	}
+	if r := st.refused("game.handIn", "p1", map[string]any{"contract": "bulk-ore"}); !strings.Contains(r.Common.Message, "Trade level 2") {
+		t.Fatalf("bulk at trade 1: %q", r.Common.Message)
+	}
+	var p game.Player
+	for i := 0; i < 5; i++ {
+		dug := st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 200, "z": 0, "radius": 1.5, "took": map[string]any{"dust": 0, "rock": 3.2, "ore": 0}})
+		var pk game.Pack
+		if !st.read(game.PacksProjector, game.PackKey(world, 1), dug.Seq, &pk) || pk.Rock < 3 {
+			t.Fatalf("pack %+v", pk)
+		}
+		st.ok("game.loadShip", "p1", map[string]any{})
+		res := st.ok("game.handIn", "p1", map[string]any{"contract": "pad-rock"})
+		p = game.Player{}
+		st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p)
+	}
+	if p.Jobs["pad-rock"] != 5 || p.XP["trade"] != 200 || p.Levels["trade"] != 3 || !p.Unlocked["freighter"] || p.Done["pad-rock"] {
+		t.Fatalf("after five jobs %+v", p)
+	}
+	if r := st.refused("game.handIn", "p1", map[string]any{"contract": "pad-rock"}); !strings.Contains(r.Common.Message, "rock") {
+		t.Fatalf("empty hold: %q", r.Common.Message)
+	}
+	res := st.ok("game.startShip", "f1", map[string]any{"world": world, "design": "freighter", "x": 0, "y": 104, "z": -8, "q": q})
+	var s game.Ship
+	if !st.read(game.ShipsProjector, game.ShipType+".f1", res.Seq, &s) || s.Blocks != 82 {
+		t.Fatalf("freighter %+v", s)
 	}
 }

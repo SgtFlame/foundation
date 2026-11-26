@@ -34,6 +34,44 @@
       "xp": 150,
       "needs": {"ore": 12},
       "design": "hauler"
+    },
+    {
+      "id": "pad-rock",
+      "job": true,
+      "title": "Rock for the landing pads",
+      "description": "Job board, any time: bring 3 m³ of rock in a ship's hold. The outpost always needs more pad.",
+      "skill": "trade",
+      "xp": 40,
+      "needs": {"rock": 3}
+    },
+    {
+      "id": "ore-run",
+      "job": true,
+      "title": "An ore run",
+      "description": "Job board, any time: bring 8 m³ of asteroid ore in one trip, more than a prospector's hold carries.",
+      "skill": "trade",
+      "xp": 70,
+      "needs": {"ore": 8}
+    },
+    {
+      "id": "bulk-ore",
+      "job": true,
+      "title": "Bulk ore for the smelter",
+      "description": "Job board, for pilots of Trade 2: bring 30 m³ of ore in one trip, a hauler nearly full.",
+      "skill": "trade",
+      "xp": 100,
+      "needs": {"ore": 30},
+      "level": 2
+    },
+    {
+      "id": "station-ore",
+      "job": true,
+      "title": "Ore for the new station",
+      "description": "Job board, for pilots of Trade 3: bring 50 m³ of ore in one trip. Only a freighter carries it.",
+      "skill": "trade",
+      "xp": 150,
+      "needs": {"ore": 50},
+      "level": 3
     }
   ]
 }
