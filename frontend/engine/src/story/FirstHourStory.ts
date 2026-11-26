@@ -37,6 +37,7 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   // S10: a three-card reading for Wenlan
   { id: 'reading', title: 'A reading for Wenlan', how: "Wenlan Harrow's winter wheat is drowning. Go into the farmhouse kitchen by day and click Wenlan to read three cards for him." },
   { id: 'ditch', title: 'Clear the ditch', how: 'Find the willow bough the cards showed, at the low corner of the east field, and walk up to it to haul it out.' },
+  { id: 'foretold', title: 'What the cards foretold', how: 'Press N to open your notes, then click the Ash card and the moon almanac: together they name the night the eyeless ones come back.' },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

@@ -42,7 +42,7 @@ func TestDialogues(t *testing.T) {
 	if err := d.Check(); err != "" {
 		t.Fatal(err)
 	}
-	bad := d
+	bad := *d // a copy: d is the shared farmer dialogue
 	bad.Nodes = map[string]game.DialogueNode{"greet": {Text: "Hello", Choices: []game.DialogueChoice{{Text: "Go on", Next: "nowhere"}}}}
 	bad.Start = "greet"
 	if bad.Check() == "" {

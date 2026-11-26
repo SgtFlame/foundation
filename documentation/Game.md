@@ -302,6 +302,23 @@ The story game's twelfth tracer bullet: the senses layer (the design's rule 6), 
 - **The first hour's sources** (`AreaViewport.senseSources()`): after the howl, *old pennies, and scorched snow* from the raid signature by the well; after the signature, *burnt sugar and old iron* from the barn and, at night, *the owls have gone silent*; on the first morning each unpicked herb (*Wild thyme, green on the air*); after the reading, *water, choked and gurgling* from the culvert.
 - Engine only: senses are not saved, and the server is unchanged.
 
+## Built in V15 (forge 360)
+
+The voxel game's fifteenth tracer bullet: scavenging (the play design's "wrecks hold salvageable blocks; tearing down a block yields part of its materials, so salvage and mining feed the same chain").
+
+- **Two wrecks** (`wreck/Wreck.ts`): derelict skiffs `k0` and `k1` lie half buried on the moon, 30° to 45° from its top on opposite sides (a walk of about 50 to 80 m from the outpost), placed from the world's seed (`wreckSites`) so every player sees them in the same place; drawn from the skiff's design in rust colours, each block a little askew. They are scenery to the walker (not solid yet).
+- **Salvage**: by a wreck, Z tears off the nearest block still there (`nearestSalvage`, within 2.6 m; *Z: salvage scrap from the wreck*), and its scrap goes into the pack as 0.25 m³ of **ore**, so a wreck feeds the refinery and the drill's recipe as an asteroid does.
+- **`game.salvage {wreck, index, x, y, z}`** (`cmd-game-salvage`, target the world) refuses a point off the moon, an unknown wreck or block (0 to 26), a block already salvaged or a full pack; it emits `salvaged`, which `game.packs` folds (the ore) and the new `game.wrecks` projection folds per world (`{salvaged: {<wreck>.<index>: true}, count}`; it folds every event on the terrain target, so the command's expected sequence is the target's). The `game.wrecks` query keeps the World tab current: a block salvaged is gone for everyone. `TestSalvage` covers it.
+
+## Built in S13 (forge 375)
+
+The story game's thirteenth tracer bullet: the clue journal (the play design's investigation: "a clue journal collects people, places and evidence; some entries can be linked to draw a conclusion, which opens the next step").
+
+- **`story/Journal.ts`**: `journalEntries(done)` gives the notes the story has reached (Wenlan Harrow, Hawk's Rest, the raid by the well, ember eyes in the barn, the moon almanac, the Ash card); `link(a, b, night)` gives what two notes conclude, or null; `nextNoMoon(night)` is the next night with the greater moon dark and the lesser all but dark. `JournalScene` is the notes' page in the herbal's style (`data-note`, `data-conclusion`).
+- **N** opens the notes once Wenlan's ditch is clear (before, *Nothing to write down yet*). Clicking two notes links them: the Ash card with the moon almanac concludes the night the eyeless ones come back (*Day 23, the next night with no moon*), the story's new last step **`foretold`**; the raid with the ember eyes concludes the Hollowed took the Brannocks (a note only); other pairs *do not fit together*.
+- `game.reachStory` takes the step `foretold`; the Area tab's *Play the story again* now follows it.
+- Known: only the conclusion that is a step is saved, and its night is worked out again from the story's clock when the notes open.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

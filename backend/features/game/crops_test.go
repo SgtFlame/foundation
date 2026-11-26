@@ -78,3 +78,38 @@ func TestForage(t *testing.T) {
 		t.Fatalf("pack %+v", pk)
 	}
 }
+
+// V15: a wreck's block salvaged gives scrap as ore, once, for everyone
+func TestSalvage(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Wreck moon"}).Target
+	at := map[string]any{"x": 40, "y": 90, "z": 0}
+	with := func(m map[string]any) map[string]any {
+		for k, v := range at {
+			m[k] = v
+		}
+		return m
+	}
+	if r := st.refused("game.salvage", world, map[string]any{"wreck": "k0", "index": 3, "x": 1600, "y": 140, "z": 0}); !strings.Contains(r.Common.Message, "moon") {
+		t.Fatalf("salvage on the planet: %q", r.Common.Message)
+	}
+	if r := st.refused("game.salvage", world, with(map[string]any{"wreck": "k9", "index": 3})); !strings.Contains(r.Common.Message, "no wreck") {
+		t.Fatalf("unknown wreck: %q", r.Common.Message)
+	}
+	if r := st.refused("game.salvage", world, with(map[string]any{"wreck": "k0", "index": 27})); !strings.Contains(r.Common.Message, "0 to 26") {
+		t.Fatalf("unknown block: %q", r.Common.Message)
+	}
+	res := st.ok("game.salvage", world, with(map[string]any{"wreck": "k0", "index": 3}))
+	var w game.Wrecks
+	if !st.read(game.WrecksProjector, game.TerrainType+"."+world, res.Seq, &w) || !w.Salvaged["k0.3"] || w.Count != 1 {
+		t.Fatalf("wrecks %+v", w)
+	}
+	var pack game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Ore != game.SalvageOre {
+		t.Fatalf("pack %+v", pack)
+	}
+	if r := st.refused("game.salvage", world, with(map[string]any{"wreck": "k0", "index": 3})); !strings.Contains(r.Common.Message, "already") {
+		t.Fatalf("salvaged twice: %q", r.Common.Message)
+	}
+	st.ok("game.salvage", world, with(map[string]any{"wreck": "k1", "index": 3}))
+}

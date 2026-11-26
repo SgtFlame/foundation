@@ -16,6 +16,7 @@ import { VoxelWorld } from './VoxelWorld.ts'
 import { PLANET } from './Bodies.ts'
 import { available, Fishing, FLEE_RANGE, floatModel, grazerDir, grazerModel, herdOf, HUNT_REACH, SEA_RADIUS, seaMesh, type Grazer } from '../wildlife/Wildlife.ts'
 import { eat, FRESH, hungry, NeedsHud, rounded, stepNeeds, type Needs } from '../survival/Needs.ts'
+import { nearestSalvage, SALVAGE_ORE, salvageKey, wreckSites, type Vec3 as WVec3 } from '../wreck/Wreck.ts'
 import { digLimits, missing, RECIPES, spend, type DigLimits } from '../craft/Crafting.ts'
 
 // What the player asks for; the host sends it to the server, which decides
@@ -65,6 +66,7 @@ export type ShipIntent =
   | { kind: 'crew'; id: string; aboard: boolean } // V7: board or leave as crew
   | { kind: 'stand'; x: number; y: number; z: number; needs?: Needs } // V8: save where the player stands (V10: and their needs)
   | { kind: 'eat' } // V10: one ration from the pack
+  | { kind: 'salvage'; wreck: string; index: number; x: number; y: number; z: number } // V15: a wreck's block torn off for scrap
   | { kind: 'forage'; what: 'fish' | 'hunt'; animal?: string; x: number; y: number; z: number } // V12: a fish caught, a grazer hunted
   | { kind: 'sleep'; id: string } // V13: a night in a cabin's bed
   | { kind: 'craft'; id: string; item: string } // V14: a tool made at a cabin's bench
@@ -219,6 +221,10 @@ export class VoxelViewport {
   private blackouts = 0
   // V12: the sea, the herd and the fishing line
   private readonly wildGroup = new THREE.Group()
+  private readonly wreckGroup = new THREE.Group() // V15
+  private wrecks: { id: string; meshes: THREE.Mesh[]; centres: WVec3[] }[] = []
+  private salvaged: Record<string, boolean> = {}
+  private nearWreck: { wreck: string; index: number } | null = null
   private herd: { g: Grazer; model: THREE.Group; shown: boolean; run: number; at: THREE.Vector3 }[] = []
   private taken: Record<string, number> = {}
   private readonly fishing = new Fishing(7)
@@ -326,7 +332,7 @@ export class VoxelViewport {
     this.scene.add(globe, glow, this.cropsGroup)
     // V12: the sea in the planet's hollows, its herd and a fishing float
     this.float.visible = false
-    this.scene.add(seaMesh(), this.wildGroup, this.float)
+    this.scene.add(seaMesh(), this.wildGroup, this.float, this.wreckGroup)
   }
 
   // V9: the sky turns blue and the stars fade as the camera goes down into the planet's air
@@ -576,7 +582,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.benchHint()}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.benchHint()}${this.nearWreck ? 'Z: salvage scrap from the wreck · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -740,6 +746,7 @@ export class VoxelViewport {
     if (this.mode === 'walk' && this.walker && input.locked && input.pressed('KeyE')) this.eatRation()
     else this.fly.step(dt, input)
     this.stepShipsOnFoot()
+    this.stepWrecks()
     const wheel = input.takeWheel()
     if (wheel !== 0) {
       this.brushRadius = Math.max(MIN_BRUSH, Math.min(this.maxBrush(), this.brushRadius * (wheel < 0 ? 1.15 : 1 / 1.15)))
@@ -812,6 +819,85 @@ export class VoxelViewport {
       parts.push(`hold ${(c.dust + c.rock + c.iron + ore).toFixed(2)} / ${holds * CARGO_PER_HOLD} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)} · iron ${c.iron.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}`)
     }
     return parts.join(' · ')
+  }
+
+  // --- Wrecks (V15) ---
+
+  // The blocks salvaged from the moon's wrecks, as game.wrecks keeps them
+  setWrecks(w: { salvaged: Record<string, boolean> } | null): void {
+    this.salvaged = { ...(w?.salvaged ?? {}) }
+    this.showSalvaged()
+  }
+
+  private showSalvaged(): void {
+    for (const w of this.wrecks) w.meshes.forEach((m, i) => (m.visible = !this.salvaged[salvageKey(w.id, i)]))
+  }
+
+  // Lays the two derelict skiffs on the moon once the skiff's design is known
+  private buildWrecks(): void {
+    const d = this.shipLayer.design('skiff')
+    if (!d || this.wrecks.length) return
+    const g = this.world.generator.params
+    const t = this.terrain()
+    const rust = [0x6b4a3a, 0x5a4034, 0x7a5a44].map((color) => new THREE.MeshStandardNodeMaterial({ color, roughness: 1, metalness: 0.2 }))
+    const box = new THREE.BoxGeometry(d.blockSize * 0.96, d.blockSize * 0.96, d.blockSize * 0.96)
+    for (const site of wreckSites(g.seed)) {
+      const top = { x: site.dir.x * (g.radius + g.amplitude + 15), y: site.dir.y * (g.radius + g.amplitude + 15), z: site.dir.z * (g.radius + g.amplitude + 15) }
+      const ground = surfaceBelow(t, top, 80)
+      if (!ground) continue
+      const up = new THREE.Vector3(site.dir.x, site.dir.y, site.dir.z)
+      const group = new THREE.Group()
+      group.name = `wreck:${site.id}`
+      group.quaternion
+        .setFromUnitVectors(new THREE.Vector3(0, 1, 0), up)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), site.spin))
+        .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), site.tilt))
+      group.position.set(ground.x, ground.y, ground.z).addScaledVector(up, 0.4)
+      const meshes = d.blocks.map((b, i) => {
+        const m = new THREE.Mesh(box, rust[(i * 7) % 3])
+        const j = ((i * 37) % 11) / 11 - 0.5
+        m.position.set(b.at[0] * d.blockSize + j * 0.12, b.at[1] * d.blockSize - Math.abs(j) * 0.2, b.at[2] * d.blockSize + j * 0.08)
+        m.rotation.set(j * 0.3, j * 0.5, -j * 0.2)
+        group.add(m)
+        return m
+      })
+      this.wreckGroup.add(group)
+      group.updateMatrixWorld(true)
+      const centres = meshes.map((m) => {
+        const c = m.getWorldPosition(new THREE.Vector3())
+        return { x: c.x, y: c.y, z: c.z }
+      })
+      this.wrecks.push({ id: site.id, meshes, centres })
+    }
+    this.showSalvaged()
+  }
+
+  // On foot by a wreck: Z tears off the nearest block still there
+  private stepWrecks(): void {
+    this.buildWrecks()
+    const w = this.walker
+    const near = this.mode === 'walk' && w ? nearestSalvage(this.wrecks.map((x) => ({ id: x.id, blocks: x.centres })), this.salvaged, w.pos) : null
+    if (near?.wreck !== this.nearWreck?.wreck || near?.index !== this.nearWreck?.index) {
+      this.nearWreck = near ? { wreck: near.wreck, index: near.index } : null
+      this.updateHint()
+    }
+    if (near && w && this.input.locked && this.input.pressed('KeyZ')) this.salvage(near.wreck, near.index)
+  }
+
+  salvage(wreck: string, index: number): void {
+    const c = this.carried
+    const held = (c?.dust ?? 0) + (c?.rock ?? 0) + (c?.ore ?? 0)
+    if (held + SALVAGE_ORE > (c?.capacity ?? 4)) {
+      this.flashHint('Your pack is full: load it into a ship\'s hold')
+      return
+    }
+    const p = this.walker?.pos ?? { x: 0, y: 0, z: 0 }
+    this.salvaged = { ...this.salvaged, [salvageKey(wreck, index)]: true }
+    this.showSalvaged()
+    if (c) this.carried = { ...c, ore: Math.round(((c.ore ?? 0) + SALVAGE_ORE) * 1000) / 1000 }
+    this.drawPack()
+    this.opts.onShipIntent?.({ kind: 'salvage', wreck, index, x: round2(p.x), y: round2(p.y), z: round2(p.z) })
+    this.flashHint(`You wrench a plate off the wreck: ${SALVAGE_ORE} m³ of scrap for the refinery, counted as ore`)
   }
 
   // On foot: aim at outline blocks, and F sits in a cockpit within reach

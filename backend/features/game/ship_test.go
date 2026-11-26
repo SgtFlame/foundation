@@ -91,7 +91,8 @@ func TestProspector(t *testing.T) {
 		t.Fatalf("empty pack: %q", r.Common.Message)
 	}
 	// dig 1 dust and 1.5 rock into the pack, then load it
-	st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 100, "z": 0, "radius": 1, "took": map[string]any{"dust": 1, "rock": 1.5}})
+	dug := st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 100, "z": 0, "radius": 1, "took": map[string]any{"dust": 1, "rock": 1.5}})
+	pack(dug.Seq) // the hold reads the pack's projection, which folds on its own
 	res := st.ok("game.loadShip", "p1", map[string]any{})
 	if s := read(res.Seq); s.Cargo.Dust != 1 || s.Cargo.Rock != 1.5 {
 		t.Fatalf("loaded %+v", s.Cargo)
@@ -367,13 +368,14 @@ func TestCraftDrill(t *testing.T) {
 	if r := st.refused("game.craft", "c1", map[string]any{"item": "rocket"}); !strings.Contains(r.Common.Message, "one recipe") {
 		t.Fatalf("unknown recipe: %q", r.Common.Message)
 	}
-	st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 200, "z": 0, "radius": 1.5, "took": map[string]any{"dust": 0, "rock": 1.2, "ore": 2.5}})
+	dug := st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 200, "z": 0, "radius": 1.5, "took": map[string]any{"dust": 0, "rock": 1.2, "ore": 2.5}})
+	var pack game.Pack
+	st.read(game.PacksProjector, game.PackKey(world, 1), dug.Seq, &pack) // the bench reads the pack's projection, which folds on its own
 	res := st.ok("game.craft", "c1", map[string]any{"item": "drill"})
 	var p game.Player
 	if !st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p) || !p.Tools["drill"] {
 		t.Fatalf("player %+v", p)
 	}
-	var pack game.Pack
 	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Ore != 0.5 || pack.Rock != 0.2 {
 		t.Fatalf("pack %+v", pack)
 	}

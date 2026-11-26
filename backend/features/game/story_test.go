@@ -58,4 +58,10 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Told != "ditch" || p.Items["silver"] != 1 || !p.Done["ditch"] {
 		t.Fatalf("reading %+v", p)
 	}
+	// S13: the conclusion drawn in the notes is a step
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "foretold", "area": farm, "x": 3, "z": 3})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || !p.Done["foretold"] || p.Last != "foretold" {
+		t.Fatalf("foretold %+v", p)
+	}
 }

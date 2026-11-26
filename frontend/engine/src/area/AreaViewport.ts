@@ -13,6 +13,7 @@ import { NightHud } from '../defence/NightHud.ts'
 import { whistle } from '../defence/Whistle.ts'
 import { DialoguePanel } from './DialoguePanel.ts'
 import { FirstHourPanel } from '../objectives/FirstHour.ts'
+import { JournalScene, journalEntries, link } from '../story/Journal.ts'
 import { edgePoint, SensesLayer, senseCues, spread, type Source } from '../story/Senses.ts'
 import { dragMarks, drawCard, herbSpots, howl, nextStep, showCard, showHerbal, SIGNATURE_TEXT, storySteps } from '../story/FirstHourStory.ts'
 import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../story/DayCard.ts'
@@ -223,6 +224,7 @@ export class AreaViewport {
   private bodySaved: Body | null = null
   private readonly herbs = new THREE.Group()
   private herbal: HTMLDivElement | null = null
+  private journal: JournalScene | null = null // S13: the notes
   private senses: SensesLayer | null = null // S12: the smells and sounds at the screen's edge
   private focus = false // S12: F held
   private readonly storyPanel: FirstHourPanel
@@ -524,6 +526,8 @@ export class AreaViewport {
       this.herbal = null
       this.senses?.dispose()
       this.senses = null
+      this.journal?.el.remove()
+      this.journal = null
       this.focus = false
       this.storyPanel.show([], false)
       this.caption.style.display = 'none'
@@ -1222,6 +1226,7 @@ export class AreaViewport {
       if (this.story && (e.key === 'b' || e.key === 'B')) this.startStillness()
       if (this.story && (e.key === 'c' || e.key === 'C')) this.openCooking()
       if (this.story && (e.key === 'm' || e.key === 'M')) this.openAlmanac()
+      if (this.story && (e.key === 'n' || e.key === 'N')) this.openJournal()
       if (this.story && (e.key === 'f' || e.key === 'F') && !this.focus) {
         this.focus = true
         this.updateHint()
@@ -1972,6 +1977,27 @@ export class AreaViewport {
     this.say(`You sleep by the hearth. Day ${st.clock.day + 1}; the day's card: ${card.title}${e?.line ? `: ${e.line}` : ''}.`)
   }
 
+  // S13: N, the notes, once Wenlan's ditch is clear: link two that belong together
+  openJournal(): void {
+    const st = this.story
+    if (!st) return
+    if (this.journal?.el.isConnected) {
+      this.journal.el.remove()
+      this.journal = null
+      return
+    }
+    if (!st.done.ditch) {
+      this.say('Nothing to write down yet.')
+      return
+    }
+    const night = nightOf(st.clock)
+    const concluded = st.done.foretold ? [link('ash', 'almanac', night)!] : []
+    this.journal = new JournalScene(this.container, journalEntries(st.done), concluded, night, (c) => {
+      this.say(c.text)
+      if (c.step) this.reach(c.step)
+    })
+  }
+
   // S9: M, the moon almanac
   private openAlmanac(): void {
     const st = this.story
@@ -2136,7 +2162,7 @@ export class AreaViewport {
     this.hint.textContent = this.talk.open
       ? 'Pick an answer · 1 to 9 · Esc to end the talk'
       : this.playing && this.story && !this.combat
-      ? `The story · click to walk, talk or go through a door · J hides the steps${this.nearHearth() && this.story.done.road && !this.story.done.rest ? ' · R to rest by the hearth' : ''}${this.story.done.morning ? ' · K: the herbal' : ''}${this.story.done.herbal && this.nearHearth() ? ' · B: stillness · C: cook' : ''}${this.story.done.rest ? ' · M: the almanac' : ''}${this.story.done.rest && this.nearHearth() && canSleep(this.story.clock) ? ' · R: sleep' : ''}${this.focus ? ' · focusing: your senses sharpen' : this.story.done.howl ? ' · hold F to focus your senses' : ''}`
+      ? `The story · click to walk, talk or go through a door · J hides the steps${this.nearHearth() && this.story.done.road && !this.story.done.rest ? ' · R to rest by the hearth' : ''}${this.story.done.morning ? ' · K: the herbal' : ''}${this.story.done.herbal && this.nearHearth() ? ' · B: stillness · C: cook' : ''}${this.story.done.rest ? ' · M: the almanac' : ''}${this.story.done.rest && this.nearHearth() && canSleep(this.story.clock) ? ' · R: sleep' : ''}${this.story.done.ditch ? ' · N: notes' : ''}${this.focus ? ' · focusing: your senses sharpen' : this.story.done.howl ? ' · hold F to focus your senses' : ''}`
       : this.playing && this.combat
       ? 'Fighting · click a Hollowed to attack it · 1 Strike · 2 Pivot · 3 Guard · click the ground to back away'
       : this.playing

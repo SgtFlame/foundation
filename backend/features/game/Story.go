@@ -31,7 +31,7 @@ const (
 
 // StorySteps are the first hour's steps in order (375 › the first hour).
 // S7 adds the first day: the morning's card, foraging and the herbal.
-var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch"}
+var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch", "foretold"}
 
 // S10: the step that pays for Wenlan's reading, and the coin it pays
 const (
