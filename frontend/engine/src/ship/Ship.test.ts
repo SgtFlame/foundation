@@ -57,3 +57,31 @@ test('the dampeners stop it when the helm is let go', () => {
   run(b, 6)
   assert.ok(Math.hypot(b.v.x, b.v.y, b.v.z) < 0.2)
 })
+
+const prospector = JSON.parse(readFileSync(new URL('../../../../backend/features/game/designs/prospector.json', import.meta.url), 'utf8')) as ShipDesign
+const every = prospector.blocks.map((_, i) => i)
+
+test('a prospector hovers on its battery, which drains, and falls once it is flat', () => {
+  const b = new ShipBody(prospector, every, { x: 0, y: 10, z: 0, q: [0, 0, 0, 1], charge: 0.05 }, flat)
+  assert.ok(b.powered && b.store > 0 && b.solar > 0)
+  run(b, 2)
+  assert.ok(b.charge < 0.05, `drains: ${b.charge}`)
+  run(b, 30)
+  assert.ok(b.charge < 1e-6, `flat: ${b.charge}`)
+  assert.ok(b.power < 1, 'the panels alone cannot hold it up')
+  run(b, 20)
+  assert.ok(b.grounded, `falls: y ${b.y}`)
+})
+
+test('without a battery a prospector gets only what its panels give; parked, the panels charge it', () => {
+  const noBattery = every.filter((i) => prospector.blocks[i].type !== 'battery')
+  const b = new ShipBody(prospector, noBattery, { x: 0, y: 10, z: 0, q: [0, 0, 0, 1] }, flat)
+  assert.equal(b.store, 0)
+  run(b, 1)
+  assert.ok(b.power < 1)
+  const c = new ShipBody(prospector, every, { x: 0, y: 0.6, z: 0, q: [0, 0, 0, 1], charge: 0.2 }, flat)
+  c.recharge(60)
+  assert.ok(Math.abs(c.charge - (0.2 + (c.solar * 60) / c.store)) < 1e-9)
+  // the skiff has no power blocks and does not count power
+  assert.equal(new ShipBody(skiff, all, { x: 0, y: 10, z: 0, q: [0, 0, 0, 1] }, flat).powered, false)
+})

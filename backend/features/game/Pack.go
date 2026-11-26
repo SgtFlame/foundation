@@ -37,13 +37,26 @@ func PackKey(world string, user uint64) string { return world + "." + strconv.Fo
 func contributePacks(reg *extensions.Registry) {
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: PacksProjector, Source: source}, Title: "Players' packs",
-		Description: "What each player carries in each world, keyed <worldId>.<userId>: {dust, rock, capacity} in m³, folded from the pack changes terrain edits carry",
-		Area:        Area, Types: []string{TerrainType},
+		Description: "What each player carries in each world, keyed <worldId>.<userId>: {dust, rock, capacity} in m³, folded from the pack changes terrain edits carry and what loading a ship's hold took",
+		Area:        Area, Types: []string{TerrainType, ShipType},
 		KeyOf: func(e live.Event) string {
-			if e.Type != EventEdited || e.UserID == 0 || !hasPack(e.Data) {
+			if e.UserID == 0 || !hasPack(e.Data) {
 				return ""
 			}
-			return PackKey(e.Target.ID, e.UserID)
+			switch {
+			case e.Type == EventEdited && e.Target.Type == TerrainType:
+				return PackKey(e.Target.ID, e.UserID)
+			case e.Type == EventShipLoaded && e.Target.Type == ShipType:
+				// V4: loading a ship's hold empties the loader's pack
+				var d struct {
+					World string `json:"world"`
+				}
+				if json.Unmarshal(e.Data, &d) != nil || !live.ValidToken(d.World) {
+					return ""
+				}
+				return PackKey(d.World, e.UserID)
+			}
+			return ""
 		},
 		Fold: func(f live.Fold) (json.RawMessage, error) {
 			p := Pack{Capacity: PackCapacity}

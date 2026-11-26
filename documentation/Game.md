@@ -126,6 +126,17 @@ The story game's fifth tracer bullet: a night of hearth defence at one house, wi
 - The **hearth-watch** is a person of kind `watcher` standing in the house. They whistle as the book's watchers do: one blast when the stone moves, two when something comes through, three when about to die. Alone with what came through they hold it off with the pike and are clawed (45 health, 6 a claw). When they fall the family is taken and the night is lost. While the character is in the house, the watch stands back and takes no harm. Dawn (3 minutes by default) ends the night: the house held. With no watch in the house, nobody whistles and the family is taken as soon as something comes through.
 - **In the viewport**: `startHearthNight(house)` starts a night while playing. The night runs whatever area is shown. Whistles play as a tin whistle through Web Audio (`defence/Whistle.ts`, no sound file), and each signal's meaning shows in the night panel (`defence/NightHud.ts`: time to dawn, the watch's health, the hearthstone, how many came through). Travelling into the house shows what came through standing by the hearth, and the fight of S4 begins (`Combat.addFoe` adds each newcomer). A slain one is gone from the night too. Stop ends the night. Stats add `hearth`.
 
+## Built in V4 (forge 360)
+
+The voxel game's fourth tracer bullet: power and a hold on the ship, and refining ore aboard.
+
+- **The prospector** (`designs/prospector.json`, 32 blocks) is the skiff with a battery, a cargo hold, a refinery and two solar panels. `ShipDesign.Check` knows the new block types.
+- **Power** (`ship/Ship.ts`, a thin 367): a design with a battery or panels counts power; the skiff does not. Thrusters draw by how hard they push (10 kW each at full push), the gyroscope 2 kW while turning, and each panel gives 2 kW. A battery stores 3 MJ. When it runs flat, or with no battery placed, the ship gets only what the panels give, so a prospector sinks to the ground. The pilot's window sends the charge with `game.flyShip` (`charge`). Sitting down adds what the panels gave while it stood, from `updatedAt` (`ShipBody.recharge`).
+- **The hold**: `game.loadShip {}` (`cmd-game-loadShip`) empties the sender's pack into the ship's hold, dust first, up to 6 m³ per cargo block placed. Its `loaded` event carries the hold's gain and the pack's loss. `game.packs` also folds ship `loaded` events, keyed by the loader, so one event changes both and no second target is needed.
+- **Refining**: `game.refineShip {}` (`cmd-game-refineShip`) runs the refinery once. Up to 1 m³ of rock becomes half as much iron, for a tenth of the battery. It is refused while someone flies the ship, so the pilot's charge never overwrites it.
+- `Ship` adds `cargo {dust, rock, iron}` and `charge` (a new ship starts charged).
+- **In the viewport**: within 4 m of a ship, L loads the pack into its hold and R refines (`onShipIntent({kind: 'load' | 'refine'})`). The panel in the corner shows the ship's charge, power and hold while near it or flying it.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
@@ -140,3 +151,4 @@ The story game's fifth tracer bullet: a night of hearth defence at one house, wi
 - S4's fight runs in the browser and nothing of it is stored. The Node runner (346) takes it to the server, with the same `Combat` rules. Skills are fixed at the thimble's start until the character sheet (379) arrives.
 - V3's pilot's browser decides where the ship is and the server keeps what it sends (one pilot at a time); the Node runner (346) takes the flight model to the server. Blocks are placed from the design for free; costing them from the pack comes with crafting (363).
 - S5's night runs in the browser on a fixed timeline, nothing of it stored. The Hollowed need only come up and fight; the raid signature, drag marks and the watch's own choices come later (382, 383). One house only; a row of houses and watches placed by day come with 383.
+- V4's power is counted in the pilot's browser and stored as one charge; a power network per grid (367a) replaces it. Refining is one run per command rather than a queue that works over time (368c). The block indices of a design's hold and refinery are written in the two blueprints, as the block counts are in `cmd-game-startShip`.

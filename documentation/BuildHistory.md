@@ -962,3 +962,11 @@ The first night of hearth defence ([Game.md](Game.md) › *Built in S5*). Later 
 - keep a night's rules in `defence/HearthNight.ts`, pure and seeded, beside `Combat`, so the Node runner (346) can run both;
 - signal with the book's whistle code (one: the stone moved, two: something came through, three: about to die), never a new code;
 - treat a person of kind `watcher` as a house's hearth-watch.
+
+## Game V4 (forge 360)
+
+Power, a hold and a refinery on a ship ([Game.md](Game.md) › *Built in V4*). Later game work must:
+
+- move material between a player and a ship with one event on the ship that the pack projector also folds, as `loaded` does, rather than a command with two targets;
+- add a design's hold and refinery indices to `cmd-game-loadShip` and `cmd-game-refineShip` as well as its block count to `cmd-game-startShip`;
+- refuse a command that changes a ship's charge while someone flies it, since the pilot's window owns the charge then.

@@ -6,7 +6,7 @@ import { StatsOverlay } from '../debug/StatsOverlay.ts'
 import { Input } from '../input/Input.ts'
 import { Renderer } from '../render/Renderer.ts'
 import { mulberry32 } from './Noise.ts'
-import { IDLE_HELM, lookQuat, type Helm, type Quat, type ShipDesign, type ShipState } from '../ship/Ship.ts'
+import { CARGO_PER_HOLD, IDLE_HELM, lookQuat, type Helm, type Quat, type ShipDesign, type ShipState } from '../ship/Ship.ts'
 import { type GhostHit, ShipLayer } from '../ship/ShipLayer.ts'
 import type { EditKind, MoonParams, VoxelEdit } from './Types.ts'
 import { VoxelWorld } from './VoxelWorld.ts'
@@ -37,7 +37,9 @@ export type ViewMode = 'fly' | 'walk'
 export type ShipIntent =
   | { kind: 'start'; id: string; design: string; x: number; y: number; z: number; q: Quat }
   | { kind: 'place'; id: string; index: number }
-  | { kind: 'fly'; id: string; x: number; y: number; z: number; q: Quat; v: [number, number, number]; pilot: boolean }
+  | { kind: 'fly'; id: string; x: number; y: number; z: number; q: Quat; v: [number, number, number]; pilot: boolean; charge?: number }
+  | { kind: 'load'; id: string } // V4: empty the pack into its hold
+  | { kind: 'refine'; id: string } // V4: one run of its refinery
 
 export interface CameraState {
   x: number
@@ -237,7 +239,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearShipHint()}Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -306,11 +308,14 @@ export class VoxelViewport {
   private drawPack(): void {
     const c = this.carried
     const w = this.walker
-    if (this.mode !== 'walk' && !c) {
+    const flying = this.shipLayer.pilotOf ? (this.shipLayer.ships().find((s) => s.id === this.shipLayer.pilotOf) ?? null) : null
+    const ship = this.shipLine(flying ?? this.nearShip)
+    if (this.mode !== 'walk' && !c && !ship) {
       this.pack.style.display = 'none'
       return
     }
     const lines: string[] = []
+    if (ship) lines.push(ship)
     if (c) {
       const total = c.dust + c.rock
       lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}`)
@@ -410,6 +415,35 @@ export class VoxelViewport {
 
   private nearSeat: string | null = null
 
+  // What a ship within reach offers: its hold and its refinery (V4)
+  private nearShip: ShipState | null = null
+  private nearShipHint(): string {
+    const s = this.nearShip
+    if (!s) return ''
+    const d = this.shipLayer.design(s.design)
+    const has = (type: string) => d?.blocks.some((b, i) => b.type === type && s.placed.includes(i))
+    return `${has('cargo') ? 'L: load your pack into the hold · ' : ''}${has('refinery') ? 'R: refine rock · ' : ''}`
+  }
+
+  // A line about a ship: its charge, hold and power
+  private shipLine(s: ShipState | null): string | null {
+    if (!s) return null
+    const d = this.shipLayer.design(s.design)
+    if (!d) return null
+    const holds = d.blocks.filter((b, i) => b.type === 'cargo' && s.placed.includes(i)).length
+    const body = this.shipLayer.pilotOf === s.id ? this.shipLayer.body : null
+    const parts = [d.title]
+    if (d.blocks.some((b) => b.type === 'battery' || b.type === 'solar')) {
+      const charge = body ? body.charge : (s.charge ?? 0)
+      parts.push(`charge ${Math.round(charge * 100)}%${body && body.power < 0.999 ? ` · power ${Math.round(body.power * 100)}%` : ''}`)
+    }
+    if (holds) {
+      const c = s.cargo ?? { dust: 0, rock: 0, iron: 0 }
+      parts.push(`hold ${(c.dust + c.rock + c.iron).toFixed(2)} / ${holds * CARGO_PER_HOLD} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)} · iron ${c.iron.toFixed(2)}`)
+    }
+    return parts.join(' · ')
+  }
+
   // On foot: aim at outline blocks, and F sits in a cockpit within reach
   private stepShipsOnFoot(): void {
     const input = this.input
@@ -427,6 +461,14 @@ export class VoxelViewport {
       this.updateHint()
     }
     if (seat && input.locked && input.pressed('KeyF')) this.sit(seat)
+    const near = this.walker ? this.shipLayer.shipNear(this.walker.eye()) : null
+    if (near?.id !== this.nearShip?.id || near?.seq !== this.nearShip?.seq) {
+      this.nearShip = near
+      this.updateHint()
+      this.drawPack()
+    }
+    if (near && input.locked && input.pressed('KeyL')) this.opts.onShipIntent?.({ kind: 'load', id: near.id })
+    if (near && input.locked && input.pressed('KeyR')) this.opts.onShipIntent?.({ kind: 'refine', id: near.id })
   }
 
   // Sits in a ship's cockpit and flies it from here on
@@ -463,7 +505,17 @@ export class VoxelViewport {
     if (!b || !id) return
     const s = b.state()
     const r = (v: number) => Math.round(v * 1000) / 1000
-    this.opts.onShipIntent?.({ kind: 'fly', id, x: r(s.x), y: r(s.y), z: r(s.z), q: s.q.map((c) => Math.round(c * 1e5) / 1e5) as Quat, v: s.v.map(r) as [number, number, number], pilot })
+    this.opts.onShipIntent?.({
+      kind: 'fly',
+      id,
+      x: r(s.x),
+      y: r(s.y),
+      z: r(s.z),
+      q: s.q.map((c) => Math.round(c * 1e5) / 1e5) as Quat,
+      v: s.v.map(r) as [number, number, number],
+      pilot,
+      ...(b.powered ? { charge: Math.round(b.charge * 1e4) / 1e4 } : {}),
+    })
   }
 
   // The helm from the keys and mouse: the mouse turns at a rate
@@ -490,6 +542,11 @@ export class VoxelViewport {
       return
     }
     this.shipLayer.step(dt, this.helm())
+    this.packTick -= dt
+    if (this.packTick <= 0) {
+      this.packTick = 0.2
+      this.drawPack()
+    }
     this.flyTick -= dt
     if (this.flyTick <= 0) {
       this.flyTick = 0.25

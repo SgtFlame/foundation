@@ -60,3 +60,65 @@ func TestShips(t *testing.T) {
 		t.Fatalf("after leaving: %q", r.Common.Message)
 	}
 }
+
+// V4: a prospector's hold takes what the pack dug, and its refinery turns rock into iron for charge
+func TestProspector(t *testing.T) {
+	d, ok := game.DesignOf("prospector")
+	if !ok || d.Check() != "" || d.Blocks[28].Type != "cargo" || d.Blocks[29].Type != "refinery" {
+		t.Fatalf("prospector %+v", d)
+	}
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Ore moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	st.ok("game.startShip", "p1", map[string]any{"world": world, "design": "prospector", "x": 0, "y": 104, "z": 0, "q": q})
+	read := func(seq uint64) game.Ship {
+		var s game.Ship
+		if !st.read(game.ShipsProjector, game.ShipType+".p1", seq, &s) {
+			t.Fatal("no ship")
+		}
+		return s
+	}
+	pack := func(seq uint64) game.Pack {
+		var p game.Pack
+		st.read(game.PacksProjector, game.PackKey(world, 1), seq, &p)
+		return p
+	}
+	if r := st.refused("game.loadShip", "p1", map[string]any{}); !strings.Contains(r.Common.Message, "cargo hold") {
+		t.Fatalf("no hold: %q", r.Common.Message)
+	}
+	st.ok("game.placeBlock", "p1", map[string]any{"index": 28})
+	if r := st.refused("game.loadShip", "p1", map[string]any{}); !strings.Contains(r.Common.Message, "pack is empty") {
+		t.Fatalf("empty pack: %q", r.Common.Message)
+	}
+	// dig 1 dust and 1.5 rock into the pack, then load it
+	st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 100, "z": 0, "radius": 1, "took": map[string]any{"dust": 1, "rock": 1.5}})
+	res := st.ok("game.loadShip", "p1", map[string]any{})
+	if s := read(res.Seq); s.Cargo.Dust != 1 || s.Cargo.Rock != 1.5 {
+		t.Fatalf("loaded %+v", s.Cargo)
+	}
+	if p := pack(res.Seq); p.Dust != 0 || p.Rock != 0 {
+		t.Fatalf("pack after loading %+v", p)
+	}
+	// refining needs the refinery, nobody flying, charge, and rock
+	if r := st.refused("game.refineShip", "p1", map[string]any{}); !strings.Contains(r.Common.Message, "no refinery") {
+		t.Fatalf("no refinery: %q", r.Common.Message)
+	}
+	st.ok("game.placeBlock", "p1", map[string]any{"index": 29})
+	st.ok("game.placeBlock", "p1", map[string]any{"index": 0})
+	st.ok("game.flyShip", "p1", map[string]any{"x": 0, "y": 104, "z": 0, "q": q, "pilot": true, "charge": 0.5})
+	if r := st.refused("game.refineShip", "p1", map[string]any{}); !strings.Contains(r.Common.Message, "leave the seat") {
+		t.Fatalf("flying: %q", r.Common.Message)
+	}
+	res = st.ok("game.flyShip", "p1", map[string]any{"x": 0, "y": 104, "z": 0, "q": q, "pilot": false})
+	if s := read(res.Seq); s.Charge != 0.5 {
+		t.Fatalf("charge kept %+v", s.Charge)
+	}
+	res = st.ok("game.refineShip", "p1", map[string]any{})
+	if s := read(res.Seq); s.Cargo.Rock != 0.5 || s.Cargo.Iron != 0.5 || s.Charge != 0.4 {
+		t.Fatalf("refined %+v charge %v", s.Cargo, s.Charge)
+	}
+	st.ok("game.refineShip", "p1", map[string]any{})
+	if r := st.refused("game.refineShip", "p1", map[string]any{}); !strings.Contains(r.Common.Message, "no rock") {
+		t.Fatalf("no rock left: %q", r.Common.Message)
+	}
+}

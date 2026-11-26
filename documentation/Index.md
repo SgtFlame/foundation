@@ -36,4 +36,5 @@ What is built. Each document describes a feature as it works now, with what was 
 | [Game.md](Game.md) › *V2* | Asteroids and gravity per body, the walker in any gravity with a thrust pack, the pack kept by the edit blueprint and `game.packs` (forge 360 V2) |
 | [Game.md](Game.md) › *V3* | Ships from a premade design, placed block by block and flown from the cockpit with thrusters, a gyroscope and dampeners (forge 360 V3) |
 | [Game.md](Game.md) › *S5* | A night of hearth defence at one house (forge 375 S5): the Hollowed up through the hearthstone, the hearth-watch's whistles (one, two, three blasts), a barrel on the stone, the night panel |
+| [Game.md](Game.md) › *V4* | The prospector: power from a battery and solar panels, a cargo hold loaded from the pack, a refinery turning rock into iron (forge 360 V4) |
 | [BuildHistory.md](BuildHistory.md) | The plans' dependencies, the seams that broke their cycles, and each tracer-bullet slice with what it decided |

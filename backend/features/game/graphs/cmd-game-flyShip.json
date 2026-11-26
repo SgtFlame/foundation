@@ -40,6 +40,12 @@
         "pilot": {
           "type": "boolean",
           "description": "Whether the sender is in its cockpit"
+        },
+        "charge": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Its battery's charge, 0 to 1, as its pilot's flight drew and its panels gave (V4)"
         }
       },
       "required": [
@@ -97,6 +103,11 @@
             "id": "pilot",
             "type": "bool",
             "description": "Whether the sender is piloting"
+          },
+          {
+            "id": "charge",
+            "type": "number",
+            "description": "The battery's charge"
           }
         ]
       }
@@ -177,7 +188,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{world: ship.world, x: x, y: y, z: z, q: q, v: v ?? [0, 0, 0], pilot: pilot ? user : \"\"}",
+        "expr": "{world: ship.world, x: x, y: y, z: z, q: q, v: v ?? [0, 0, 0], pilot: pilot ? user : \"\", charge: charge}",
         "type": "json"
       }
     },
@@ -364,6 +375,16 @@
       "to": {
         "node": "flown",
         "pin": "pilot"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "charge"
+      },
+      "to": {
+        "node": "flown",
+        "pin": "charge"
       }
     },
     {

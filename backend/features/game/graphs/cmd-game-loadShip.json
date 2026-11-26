@@ -1,0 +1,396 @@
+{
+  "id": "cmd-game-loadShip",
+  "name": "game.loadShip",
+  "description": "Decides moving what the sender's pack carries into a ship's hold.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.loadShip",
+    "title": "Load a ship's hold",
+    "description": "Empties the sender's pack (game.pack) into a ship's cargo hold, dust first, as much as the hold has room for (6 m³ for each cargo block placed); the target is the ship's id. Refused when the ship does not exist, has no cargo block placed, its hold is full or the pack is empty.",
+    "args": {
+      "type": "object",
+      "properties": {}
+    },
+    "area": "game",
+    "targetType": "gameShip",
+    "projection": "game.ships",
+    "action": "game.play",
+    "events": [
+      "loaded"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "shipKey",
+      "type": "data.expression",
+      "title": "Ship key",
+      "position": {
+        "x": 250,
+        "y": 0
+      },
+      "config": {
+        "expr": "\"gameShip.\" + target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ship",
+      "type": "live.readProjection",
+      "title": "Read the ship",
+      "position": {
+        "x": 500,
+        "y": 0
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 400
+      }
+    },
+    {
+      "id": "packKey",
+      "type": "data.expression",
+      "title": "Pack key",
+      "position": {
+        "x": 250,
+        "y": 400
+      },
+      "config": {
+        "expr": "found ? ship.world + \".\" + user : \"none.none\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "pack",
+      "type": "live.readProjection",
+      "title": "Read the sender's pack",
+      "position": {
+        "x": 500,
+        "y": 400
+      },
+      "config": {
+        "projector": "game.packs"
+      }
+    },
+    {
+      "id": "design",
+      "type": "data.expression",
+      "title": "The hold",
+      "position": {
+        "x": 800,
+        "y": 0
+      },
+      "config": {
+        "expr": "let holds = {skiff: [], prospector: [28]}; let mine = found ? (holds[ship.design] ?? []) : []; let placed = filter(mine, # in ship.placed); let room = len(placed) * 6 - (ship?.cargo?.dust ?? 0) - (ship?.cargo?.rock ?? 0) - (ship?.cargo?.iron ?? 0); let have = packed ? pack : {dust: 0, rock: 0}; let d = min(max(have.dust, 0), max(room, 0)); let r = min(max(have.rock, 0), max(room - d, 0)); {holds: len(placed), room: room, d: d, r: r}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why it is refused",
+      "position": {
+        "x": 1050,
+        "y": 150
+      },
+      "config": {
+        "expr": "!found ? \"there is no ship \" + target : hold.holds == 0 ? \"this ship has no cargo hold placed\" : hold.room \u003c= 0.0001 ? \"the hold is full\" : hold.d + hold.r \u003c= 0.0001 ? \"your pack is empty: dig first\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Allowed?",
+      "position": {
+        "x": 1300,
+        "y": 150
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "position": {
+        "x": 1550,
+        "y": 0
+      }
+    },
+    {
+      "id": "loaded",
+      "type": "data.expression",
+      "title": "What moves",
+      "position": {
+        "x": 1550,
+        "y": 350
+      },
+      "config": {
+        "expr": "{world: ship.world, cargo: {dust: hold.d, rock: hold.r}, pack: {dust: -hold.d, rock: -hold.r}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "position": {
+        "x": 1850,
+        "y": -100
+      },
+      "config": {
+        "event": "loaded"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "position": {
+        "x": 1850,
+        "y": 150
+      },
+      "config": {
+        "path": "args",
+        "fix": "place the ship's cargo block, and dig with the pack before loading"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "shipKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "shipKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ship",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "packKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pack",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "design",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "design",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "pack",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "design",
+        "pin": "packed"
+      }
+    },
+    {
+      "from": {
+        "node": "pack",
+        "pin": "value"
+      },
+      "to": {
+        "node": "design",
+        "pin": "pack"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "check",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "design",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "hold"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "loaded",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "design",
+        "pin": "value"
+      },
+      "to": {
+        "node": "loaded",
+        "pin": "hold"
+      }
+    },
+    {
+      "from": {
+        "node": "loaded",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    }
+  ]
+}

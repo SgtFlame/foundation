@@ -7,7 +7,7 @@
   "spec": {
     "command": "game.startShip",
     "title": "Start a ship",
-    "description": "Starts a ship from a premade design (game.shipDesigns: skiff) at a point in a world, its outline showing every block still to place; the target is the new ship's id, made by the sender. Place its blocks with game.placeBlock, then sit in its cockpit and fly it with game.flyShip. Refused when the ship exists, the world does not, the design is unknown or the point is far from the world's bodies.",
+    "description": "Starts a ship from a premade design (game.shipDesigns: skiff, prospector) at a point in a world, its outline showing every block still to place; the target is the new ship's id, made by the sender. Place its blocks with game.placeBlock, then sit in its cockpit and fly it with game.flyShip. Refused when the ship exists, the world does not, the design is unknown or the point is far from the world's bodies.",
     "args": {
       "type": "object",
       "properties": {
@@ -17,7 +17,7 @@
         },
         "design": {
           "type": "string",
-          "description": "The design's id: skiff"
+          "description": "The design's id: skiff or prospector"
         },
         "x": {
           "type": "number",
@@ -158,7 +158,7 @@
         "y": 150
       },
       "config": {
-        "expr": "taken ? \"there is already a ship \" + target : !found || w?.deleted == true ? \"there is no world \" + world : !(design in [\"skiff\"]) ? \"there is no ship design \" + design + \"; game.shipDesigns lists them\" : type(q) != \"array\" || len(q) != 4 ? \"q is a quaternion [x, y, z, w]\" : x * x + y * y + z * z \u003e (w.generator.radius + w.generator.amplitude + 150) ** 2 ? \"the point is too far from the world's moon and asteroids\" : \"\"",
+        "expr": "taken ? \"there is already a ship \" + target : !found || w?.deleted == true ? \"there is no world \" + world : !(design in [\"skiff\", \"prospector\"]) ? \"there is no ship design \" + design + \"; game.shipDesigns lists them\" : type(q) != \"array\" || len(q) != 4 ? \"q is a quaternion [x, y, z, w]\" : x * x + y * y + z * z \u003e (w.generator.radius + w.generator.amplitude + 150) ** 2 ? \"the point is too far from the world's moon and asteroids\" : \"\"",
         "type": "string"
       }
     },
@@ -192,7 +192,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{world: world, design: design, x: x, y: y, z: z, q: q, blocks: {skiff: 27}[design]}",
+        "expr": "{world: world, design: design, x: x, y: y, z: z, q: q, blocks: {skiff: 27, prospector: 32}[design]}",
         "type": "json"
       }
     },
@@ -216,7 +216,7 @@
       },
       "config": {
         "path": "args",
-        "fix": "start a skiff near where you stand in an existing world, with a new ship id"
+        "fix": "start a skiff or a prospector near where you stand in an existing world, with a new ship id"
       }
     }
   ],

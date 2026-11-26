@@ -6,7 +6,17 @@ import { blockWorld, type DesignBlock, type Helm, PUSH, type Quat, rotate, ShipB
 // aim at, and the one ship this window pilots flown locally by ShipBody
 // while the others follow the server, carried on by their velocity.
 
-const COLORS: Record<DesignBlock['type'], number> = { armor: 0x8d949c, cockpit: 0x4fc3f7, gyro: 0xffb300, light: 0xfff59d, thruster: 0x4e5b63 }
+const COLORS: Record<DesignBlock['type'], number> = {
+  armor: 0x8d949c,
+  cockpit: 0x4fc3f7,
+  gyro: 0xffb300,
+  light: 0xfff59d,
+  thruster: 0x4e5b63,
+  battery: 0x66bb6a,
+  cargo: 0xa1887f,
+  refinery: 0xc0583a,
+  solar: 0x1a2a6c,
+}
 
 interface Shown {
   state: ShipState
@@ -71,7 +81,7 @@ export class ShipLayer {
         color: COLORS[type],
         roughness: type === 'cockpit' ? 0.15 : 0.6,
         metalness: 0.1,
-        emissive: type === 'light' ? 0xfff59d : type === 'cockpit' ? 0x0b3c55 : 0x000000,
+        emissive: type === 'light' ? 0xfff59d : type === 'cockpit' ? 0x0b3c55 : type === 'refinery' ? 0x3a0e04 : 0x000000,
       })
       this.mats.set(type, m)
     }
@@ -135,6 +145,14 @@ export class ShipLayer {
 
   private blockMesh(b: DesignBlock): THREE.Object3D {
     const mesh = new THREE.Mesh(this.box, this.material(b.type))
+    // a solar panel is a thin slab on its block's floor
+    if (b.type === 'solar') {
+      mesh.scale.set(1, 0.12, 1)
+      mesh.position.y = -0.42
+      const g = new THREE.Group()
+      g.add(mesh)
+      return g
+    }
     if (b.type !== 'thruster' || !b.push) return mesh
     // The nozzle opens away from where the thruster pushes
     const g = new THREE.Group()
@@ -198,12 +216,32 @@ export class ShipLayer {
     return best
   }
 
+  // The ship with a block nearest a point, within reach
+  shipNear(p: Vec3, reach = 4): ShipState | null {
+    let best: ShipState | null = null
+    let bestD = reach
+    for (const s of this.shown.values()) {
+      const pose = { x: s.at.x, y: s.at.y, z: s.at.z, q: [s.q.x, s.q.y, s.q.z, s.q.w] as Quat }
+      for (const i of s.placed) {
+        const c = blockWorld(pose, s.design.blocks[i], s.design.blockSize)
+        const d = Math.hypot(c.x - p.x, c.y - p.y, c.z - p.z)
+        if (d < bestD) {
+          bestD = d
+          best = s.state
+        }
+      }
+    }
+    return best
+  }
+
   // Takes the seat: the ship is flown from here on by its body
   sit(id: string, terrain: ShipTerrain): ShipBody | null {
     const s = this.shown.get(id)
     if (!s) return null
     const st = s.state
-    this.body = new ShipBody(s.design, st.placed, { x: s.at.x, y: s.at.y, z: s.at.z, q: [s.q.x, s.q.y, s.q.z, s.q.w], v: st.v }, terrain)
+    this.body = new ShipBody(s.design, st.placed, { x: s.at.x, y: s.at.y, z: s.at.z, q: [s.q.x, s.q.y, s.q.z, s.q.w], v: st.v, charge: st.charge }, terrain)
+    // the panels charged it while it stood
+    if (st.updatedAt) this.body.recharge(Math.max(0, (Date.now() - Date.parse(st.updatedAt)) / 1000))
     this.pilotOf = id
     return this.body
   }

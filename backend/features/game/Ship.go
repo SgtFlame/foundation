@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"math"
 	"sort"
 	"time"
 
@@ -28,7 +29,9 @@ const (
 	WorldShipsProjector = "game.worldShips"
 	EventShipStarted    = "started" // {world, design, x, y, z, q, blocks}
 	EventBlockPlaced    = "placed"  // {world, index}
-	EventShipFlown      = "flown"   // {world, x, y, z, q, v, pilot}
+	EventShipFlown      = "flown"   // {world, x, y, z, q, v, pilot, charge?}
+	EventShipLoaded     = "loaded"  // {world, cargo: {dust, rock}, pack: {dust, rock}} (V4: the pack's change, negative)
+	EventShipRefined    = "refined" // {world, rock, iron, charge} (V4: the changes)
 )
 
 // ShipDesign is a premade ship: its blocks in its own grid, x right, y up
@@ -52,20 +55,34 @@ type DesignBlock struct {
 
 // Ship is a ship as game.ships keeps it.
 type Ship struct {
-	ID        string     `json:"id"`
-	World     string     `json:"world"`
-	Design    string     `json:"design"`
-	Blocks    int        `json:"blocks"`
-	Placed    []int      `json:"placed"`
-	X         float64    `json:"x"`
-	Y         float64    `json:"y"`
-	Z         float64    `json:"z"`
-	Q         [4]float64 `json:"q"` // orientation quaternion x, y, z, w
-	V         [3]float64 `json:"v"` // velocity m/s, for others to carry it on between updates
-	Pilot     string     `json:"pilot"`
-	Seq       uint64     `json:"seq"`
-	UpdatedAt time.Time  `json:"updatedAt"`
+	ID     string     `json:"id"`
+	World  string     `json:"world"`
+	Design string     `json:"design"`
+	Blocks int        `json:"blocks"`
+	Placed []int      `json:"placed"`
+	X      float64    `json:"x"`
+	Y      float64    `json:"y"`
+	Z      float64    `json:"z"`
+	Q      [4]float64 `json:"q"` // orientation quaternion x, y, z, w
+	V      [3]float64 `json:"v"` // velocity m/s, for others to carry it on between updates
+	Pilot  string     `json:"pilot"`
+	// V4: what its hold carries (m³) and its battery's charge (0 to 1);
+	// a design without power blocks has no charge to keep
+	Cargo     Cargo     `json:"cargo"`
+	Charge    float64   `json:"charge"`
+	Seq       uint64    `json:"seq"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
+
+// Cargo is what a ship's hold carries, in m³.
+type Cargo struct {
+	Dust float64 `json:"dust"`
+	Rock float64 `json:"rock"`
+	Iron float64 `json:"iron"`
+}
+
+// CargoPerHold is what one cargo block holds, in m³; the loadShip blueprint checks it.
+const CargoPerHold = 6.0
 
 //go:embed designs/*.json
 var designFiles embed.FS
@@ -109,7 +126,7 @@ func (d ShipDesign) Check() string {
 		switch b.Type {
 		case "cockpit":
 			cockpits++
-		case "armor", "gyro", "light":
+		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar":
 		case "thruster":
 			switch b.Push {
 			case "up", "down", "forward", "back", "left", "right":
@@ -144,13 +161,17 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		Q      [4]float64 `json:"q"`
 		V      [3]float64 `json:"v"`
 		Pilot  string     `json:"pilot"`
+		Charge *float64   `json:"charge"`
+		Cargo  Cargo      `json:"cargo"`
+		Rock   float64    `json:"rock"`
+		Iron   float64    `json:"iron"`
 	}
 	if err := json.Unmarshal(f.Event.Data, &d); err != nil {
 		return nil, err
 	}
 	switch f.Event.Type {
 	case EventShipStarted:
-		s = Ship{ID: f.Event.Target.ID, World: d.World, Design: d.Design, Blocks: d.Blocks, Placed: []int{}, X: d.X, Y: d.Y, Z: d.Z, Q: d.Q}
+		s = Ship{ID: f.Event.Target.ID, World: d.World, Design: d.Design, Blocks: d.Blocks, Placed: []int{}, X: d.X, Y: d.Y, Z: d.Z, Q: d.Q, Charge: 1}
 	case EventBlockPlaced:
 		if d.Index != nil {
 			i := sort.SearchInts(s.Placed, *d.Index)
@@ -160,6 +181,18 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		}
 	case EventShipFlown:
 		s.X, s.Y, s.Z, s.Q, s.V, s.Pilot = d.X, d.Y, d.Z, d.Q, d.V, d.Pilot
+		if d.Charge != nil {
+			s.Charge = clamp01(*d.Charge)
+		}
+	case EventShipLoaded:
+		s.Cargo.Dust = round3(s.Cargo.Dust + d.Cargo.Dust)
+		s.Cargo.Rock = round3(s.Cargo.Rock + d.Cargo.Rock)
+	case EventShipRefined:
+		s.Cargo.Rock = round3(s.Cargo.Rock + d.Rock)
+		s.Cargo.Iron = round3(s.Cargo.Iron + d.Iron)
+		if d.Charge != nil {
+			s.Charge = clamp01(s.Charge + *d.Charge)
+		}
 	default:
 		return f.State, nil
 	}
@@ -167,7 +200,11 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	return json.Marshal(s)
 }
 
-const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), seq, updatedAt}"
+const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), cargo {dust, rock, iron} (m³ in its hold), charge (its battery, 0 to 1), seq, updatedAt}"
+
+func round3(v float64) float64 { return math.Max(0, math.Round(v*1000)/1000) }
+
+func clamp01(v float64) float64 { return math.Min(1, math.Max(0, math.Round(v*10000)/10000)) }
 
 func contributeShips(reg *extensions.Registry) {
 	live.Projectors.Register(reg, live.Projector{
