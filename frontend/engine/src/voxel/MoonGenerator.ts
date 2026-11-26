@@ -1,5 +1,5 @@
 import { Simplex3, mulberry32 } from './Noise.ts'
-import { MATERIAL_DUST, MATERIAL_ORE, MATERIAL_ROCK, type MoonParams } from './Types.ts'
+import { MATERIAL_DUST, MATERIAL_SOIL, MATERIAL_ORE, MATERIAL_ROCK, type MoonParams } from './Types.ts'
 
 interface Crater {
   // Unit direction from the moon's centre
@@ -179,7 +179,7 @@ export class MoonGenerator {
     if (-d > this.params.dustDepth) return this.rockOrOre(x, y, z)
     // Rocky outcrops poke through the dust here and there
     const n = this.detail.noise(x * 0.08, y * 0.08, z * 0.08)
-    return n > 0.45 ? this.rockOrOre(x, y, z) : MATERIAL_DUST
+    return n > (this.params.soil ? 0.7 : 0.45) ? this.rockOrOre(x, y, z) : this.params.soil ? MATERIAL_SOIL : MATERIAL_DUST
   }
 
   // Veins of ore run through the rock of a body that has any (V8)

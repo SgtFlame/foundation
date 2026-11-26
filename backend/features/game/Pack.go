@@ -29,6 +29,7 @@ type Pack struct {
 	Dust     float64 `json:"dust"`
 	Rock     float64 `json:"rock"`
 	Ore      float64 `json:"ore"` // V8: from the asteroids
+	Food     float64 `json:"food"` // V9: harvested on the planet with air
 	Capacity float64 `json:"capacity"`
 }
 
@@ -45,7 +46,7 @@ func contributePacks(reg *extensions.Registry) {
 				return ""
 			}
 			switch {
-			case e.Type == EventEdited && e.Target.Type == TerrainType:
+			case (e.Type == EventEdited || e.Type == EventHarvested) && e.Target.Type == TerrainType:
 				return PackKey(e.Target.ID, e.UserID)
 			case e.Type == EventShipLoaded && e.Target.Type == ShipType:
 				// V4: loading a ship's hold empties the loader's pack
@@ -71,6 +72,7 @@ func contributePacks(reg *extensions.Registry) {
 					Dust float64 `json:"dust"`
 					Rock float64 `json:"rock"`
 					Ore  float64 `json:"ore"`
+					Food float64 `json:"food"`
 				} `json:"pack"`
 			}
 			if err := json.Unmarshal(f.Event.Data, &d); err != nil {
@@ -83,13 +85,14 @@ func contributePacks(reg *extensions.Registry) {
 			p.Dust = round(p.Dust + d.Pack.Dust)
 			p.Rock = round(p.Rock + d.Pack.Rock)
 			p.Ore = round(p.Ore + d.Pack.Ore)
+			p.Food = round(p.Food + d.Pack.Food)
 			p.Capacity = PackCapacity
 			return json.Marshal(p)
 		},
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.pack", Source: source}, Title: "My pack",
-		Description: fmt.Sprintf("What the caller carries in a world: {dust, rock, ore, capacity} in m³ (an empty pack holds %g m³), then each change as they dig and fill", PackCapacity),
+		Description: fmt.Sprintf("What the caller carries in a world: {dust, rock, ore, capacity} in m³ and food in rations (an empty pack holds %g m³), then each change as they dig and fill", PackCapacity),
 		Params:      json.RawMessage(`{"type":"object","properties":{"world":{"type":"string","description":"The world's id"}},"required":["world"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"world":"w123"}`)},
 		Action:      "game.read",
@@ -102,7 +105,7 @@ func contributePacks(reg *extensions.Registry) {
 				return "", fmt.Errorf("game.pack needs a world's id")
 			}
 			return PackKey(p.World, f.Args().Principal.UserID), nil
-		}, json.RawMessage(fmt.Sprintf(`{"dust":0,"rock":0,"ore":0,"capacity":%g}`, PackCapacity))),
+		}, json.RawMessage(fmt.Sprintf(`{"dust":0,"rock":0,"ore":0,"food":0,"capacity":%g}`, PackCapacity))),
 	})
 }
 

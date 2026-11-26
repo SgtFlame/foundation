@@ -100,7 +100,7 @@
         "y": 150
       },
       "config": {
-        "expr": "!found || w?.deleted == true ? \"there is no world \" + target : x * x + y * y + z * z \u003e (w.generator.radius + w.generator.amplitude + 400) ** 2 ? \"the point is too far from the world's moon and asteroids\" : \"\"",
+        "expr": "!found || w?.deleted == true ? \"there is no world \" + target : (x * x + y * y + z * z \u003e (w.generator.radius + w.generator.amplitude + 400) ** 2 \u0026\u0026 (x - 1600) ** 2 + y * y + z * z \u003e 550 ** 2) ? \"the point is too far from the world's moon, asteroids and planet\" : \"\"",
         "type": "string"
       }
     },

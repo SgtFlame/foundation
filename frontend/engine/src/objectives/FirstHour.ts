@@ -10,7 +10,7 @@ import type { ShipState } from '../ship/Ship.ts'
 export interface FirstHourInput {
   walked: boolean
   flew: boolean
-  pack: { dust: number; rock: number; ore?: number } | null
+  pack: { dust: number; rock: number; ore?: number; food?: number } | null
   ships: readonly ShipState[]
   // the number of blocks in each design, by id
   blocks: Record<string, number>
@@ -42,6 +42,8 @@ export function firstHour(i: FirstHourInput): Step[] {
     { id: 'ore', title: 'Mine an asteroid', how: 'Fly the prospector to an asteroid, dig its blue-grey ore and load it with L.', done: i.ships.some((s) => (s.cargo?.ore ?? 0) > 0) || (i.pack?.ore ?? 0) > 0 },
     { id: 'cobalt-shipyard', title: 'Cobalt for the shipyard', how: 'Bring 2 m³ of ore to the beacon and hand in Cobalt for the shipyard: it unlocks the hauler.', done: !!done['cobalt-shipyard'] },
     { id: 'hauler', title: 'Build a hauler', how: 'Start a hauler and place its 58 blocks: six holds for the haul the outpost wants next.', done: finished('hauler') },
+    // V9: the planet with air, a short flight away
+    { id: 'food', title: 'Grow food on the green planet', how: 'Fly to the green planet with the blue glow, 1.6 km from the moon. Land, press P to plant barley in its soil, and H to harvest it when it turns gold.', done: (i.pack?.food ?? 0) > 0 },
   ]
   // a later step done means the earlier ones were
   for (let k = steps.length - 1, later = false; k >= 0; k--) {

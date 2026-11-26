@@ -13,6 +13,7 @@ import { firstHour, FirstHourPanel } from '../objectives/FirstHour.ts'
 import { atOutpost, ContractPanel, handInProblem, OutpostModel, thrustFor, type ContractList, type Progress } from '../outpost/Outpost.ts'
 import type { EditKind, MoonParams, VoxelEdit } from './Types.ts'
 import { VoxelWorld } from './VoxelWorld.ts'
+import { PLANET } from './Bodies.ts'
 
 // What the player asks for; the host sends it to the server, which decides
 export interface EditIntent {
@@ -32,8 +33,20 @@ export interface Carried {
   dust: number
   rock: number
   ore?: number // V8: from the asteroids
+  food?: number // V9: rations harvested on the planet
   capacity: number
 }
+
+// V9: a crop in the planet's soil, as game.crops keeps it
+export interface CropState {
+  x: number
+  y: number
+  z: number
+  at: number // planted, Unix ms
+}
+
+// A crop ripens this long after it is planted (the server's RipeSeconds)
+export const RIPE_MS = 90_000
 
 export type ViewMode = 'fly' | 'walk'
 
@@ -48,6 +61,8 @@ export type ShipIntent =
   | { kind: 'handIn'; id: string; contract: string } // V6: a contract at the outpost
   | { kind: 'crew'; id: string; aboard: boolean } // V7: board or leave as crew
   | { kind: 'stand'; x: number; y: number; z: number } // V8: save where the player stands
+  | { kind: 'plant'; x: number; y: number; z: number } // V9: barley in the planet's soil
+  | { kind: 'harvest'; crop: string } // V9: a ripe crop, as food
 
 export interface CameraState {
   x: number
@@ -116,6 +131,9 @@ export interface ViewportStats {
   // V8: the first hour's steps done, and whether the drop pod is coming down
   firstHour: string[]
   landing: boolean
+  // V9: the crops shown, and how deep in the planet's air the camera is (0 out of it, 1 on the ground)
+  crops: number
+  air: number
 }
 
 const MIN_BRUSH = 0.75
@@ -165,6 +183,12 @@ export class VoxelViewport {
   private walked = false
   private flew = false
   private journalAt = 0
+  // V9: the planet with air seen from afar, its glow, the crops and the sky's depth of air
+  private readonly cropsGroup = new THREE.Group()
+  private readonly crops = new Map<string, { state: CropState; group: THREE.Group; ripe: boolean }>()
+  private airDepth = 0
+  private stars: THREE.Points | null = null
+  private nearCrop: { id: string; ripe: boolean; left: number } | null = null
   // V8: the landing and the saved place
   private readonly pod = new DropPod()
   private placed = false // the walker has been put where it belongs this session
@@ -258,6 +282,91 @@ export class VoxelViewport {
     const stars = new THREE.Points(g, new THREE.PointsNodeMaterial({ color: 0xcfd8ff, size: 1.5, sizeAttenuation: false }))
     stars.frustumCulled = false
     this.scene.add(stars)
+    this.stars = stars
+    // V9: the planet with air, a short flight away: a sphere seen from afar
+    // (just under its lowest ground, so its terrain covers it close up) and
+    // a thin glow of air round it
+    const globe = new THREE.Mesh(new THREE.SphereGeometry(PLANET.radius - 4, 48, 32), new THREE.MeshStandardNodeMaterial({ color: 0x4f6b3a, roughness: 1 }))
+    globe.position.set(PLANET.x, PLANET.y, PLANET.z)
+    const glow = new THREE.Mesh(
+      new THREE.SphereGeometry(PLANET.radius + PLANET.air, 48, 32),
+      new THREE.MeshBasicNodeMaterial({ color: 0x7fb0ff, transparent: true, opacity: 0.12, side: THREE.BackSide, depthWrite: false }),
+    )
+    glow.position.copy(globe.position)
+    this.scene.add(globe, glow, this.cropsGroup)
+  }
+
+  // V9: the sky turns blue and the stars fade as the camera goes down into the planet's air
+  private stepSky(): void {
+    const c = this.fly.camera.position
+    const alt = Math.hypot(c.x - PLANET.x, c.y - PLANET.y, c.z - PLANET.z) - PLANET.radius
+    const t = Math.min(1, Math.max(0, 1 - (alt - 15) / PLANET.air))
+    if (Math.abs(t - this.airDepth) < 0.005) return
+    this.airDepth = t
+    ;(this.scene.background as THREE.Color).setRGB(0.02 + t * 0.46, 0.024 + t * 0.64, 0.04 + t * 0.86)
+    if (this.stars) this.stars.visible = t < 0.6
+  }
+
+  // V9: the world's crops, as game.crops keeps them
+  setCrops(crops: Record<string, CropState>): void {
+    for (const [id, c] of this.crops) {
+      if (crops[id]) continue
+      this.cropsGroup.remove(c.group)
+      this.crops.delete(id)
+    }
+    for (const [id, st] of Object.entries(crops)) {
+      if (this.crops.has(id)) continue
+      const group = cropModel()
+      const up = new THREE.Vector3(st.x - PLANET.x, st.y - PLANET.y, st.z - PLANET.z).normalize()
+      group.position.set(st.x, st.y, st.z)
+      group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), up)
+      this.cropsGroup.add(group)
+      this.crops.set(id, { state: st, group, ripe: false })
+    }
+    this.growCrops()
+  }
+
+  // Each crop's size and colour from its age
+  private growCrops(): void {
+    const now = Date.now()
+    for (const c of this.crops.values()) {
+      const f = Math.min(1, Math.max(0, (now - c.state.at) / RIPE_MS))
+      c.group.scale.setScalar(0.3 + 0.7 * f)
+      const ripe = f >= 1
+      if (ripe !== c.ripe) {
+        c.ripe = ripe
+        for (const m of c.group.children) ((m as THREE.Mesh).material as THREE.MeshStandardNodeMaterial).color.set(ripe ? 0xd9b44a : 0x6f9a3c)
+      }
+    }
+  }
+
+  // On the planet's soil?
+  private onPlanet(p: THREE.Vector3): boolean {
+    const r = Math.hypot(p.x - PLANET.x, p.y - PLANET.y, p.z - PLANET.z)
+    return r > PLANET.radius - 15 && r < PLANET.radius + 16
+  }
+
+  // P plants where the player looks, H harvests the ripe crop beside them
+  private stepFarming(): void {
+    const at = this.fly.camera.position
+    let best: { id: string; ripe: boolean; left: number } | null = null
+    let bd = 2.8
+    for (const [id, c] of this.crops) {
+      const d = Math.hypot(c.state.x - at.x, c.state.y - at.y, c.state.z - at.z) - 1.6
+      if (d < bd) {
+        bd = d
+        best = { id, ripe: c.ripe, left: Math.max(0, Math.ceil((c.state.at + RIPE_MS - Date.now()) / 1000)) }
+      }
+    }
+    const changed = (best?.id ?? '') + (best?.ripe ? 'r' : '') !== (this.nearCrop?.id ?? '') + (this.nearCrop?.ripe ? 'r' : '')
+    this.nearCrop = best
+    if (changed) this.updateHint()
+    if (!this.input.locked) return
+    if (this.input.pressed('KeyH') && best?.ripe) this.opts.onShipIntent?.({ kind: 'harvest', crop: best.id })
+    if (this.input.pressed('KeyP') && this.brushHit && this.onPlanet(this.brushHit)) {
+      const h = this.brushHit
+      this.opts.onShipIntent?.({ kind: 'plant', x: round2(h.x), y: round2(h.y), z: round2(h.z) })
+    }
   }
 
   private onCanvasClick = () => {
@@ -268,6 +377,13 @@ export class VoxelViewport {
   private onLockChange = () => {
     this.crosshair.style.display = this.input.locked ? 'block' : 'none'
     this.updateHint()
+  }
+
+  // V9: what P and H do here
+  private farmHint(): string {
+    const c = this.nearCrop
+    if (c) return c.ripe ? 'H: harvest the barley · ' : `Barley: ripe in ${c.left} s · `
+    return this.walker && this.onPlanet(this.fly.camera.position) ? 'P: plant barley where you look · ' : ''
   }
 
   private updateHint(): void {
@@ -290,7 +406,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearShipHint()}Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearShipHint()}${this.farmHint()}Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -373,7 +489,7 @@ export class VoxelViewport {
     if (c) {
       const ore = c.ore ?? 0
       const total = c.dust + c.rock + ore
-      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}`)
+      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}${(c.food ?? 0) > 0 ? ` · food ${c.food}` : ''}`)
     }
     if (w && !this.riding && !this.pod.falling) {
       const g = Math.hypot(w.gravity.x, w.gravity.y, w.gravity.z)
@@ -445,6 +561,7 @@ export class VoxelViewport {
       this.drawJournal()
     }
     if (this.mode === 'walk' && this.walker) this.stepWalker(dt)
+    if (this.mode === 'walk' && this.walker) this.stepFarming()
     else this.fly.step(dt, input)
     this.stepShipsOnFoot()
     const wheel = input.takeWheel()
@@ -956,7 +1073,9 @@ export class VoxelViewport {
     if (now - this.journalAt > 500) {
       this.journalAt = now
       this.drawJournal()
+      this.growCrops()
     }
+    this.stepSky()
     this.outpost.blink(now / 1000)
     this.lastFrame = now
     this.world.update(this.fly.camera.position)
@@ -1131,6 +1250,8 @@ export class VoxelViewport {
       crew: this.riding,
       firstHour: this.journalSteps().filter((x) => x.done).map((x) => x.id),
       landing: this.pod.falling,
+      crops: this.crops.size,
+      air: Math.round(this.airDepth * 100) / 100,
     }
   }
 
@@ -1157,4 +1278,24 @@ export class VoxelViewport {
 function round(v: number, places = 2): number {
   const f = 10 ** places
   return Math.round(v * f) / f
+}
+
+// A barley plant: a few stalks with heads, green until ripe, then gold
+function cropModel(): THREE.Group {
+  const g = new THREE.Group()
+  const mat = new THREE.MeshStandardNodeMaterial({ color: 0x6f9a3c, roughness: 0.9 })
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2
+    const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.9, 5), mat)
+    stalk.position.set(Math.cos(a) * 0.12, 0.45, Math.sin(a) * 0.12)
+    stalk.rotation.set(Math.sin(a) * 0.12, 0, Math.cos(a) * 0.12)
+    const head = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.03, 0.22, 5), mat)
+    head.position.set(Math.cos(a) * 0.17, 0.98, Math.sin(a) * 0.17)
+    g.add(stalk, head)
+  }
+  return g
+}
+
+function round2(v: number): number {
+  return Math.round(v * 100) / 100
 }

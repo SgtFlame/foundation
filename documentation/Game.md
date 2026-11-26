@@ -198,6 +198,15 @@ The story game's sixth tracer bullet: the first hour end to end, with saves (the
 - **The signpost** (farmland piece `signpost`, a door) stands where the north road leaves the farmstead (`Samples.SIGNPOST`) and leads to **Hawk's Rest** (`Samples.hawksRest`), an empty one-room cottage of the kitchen set.
 - **In the viewport**: `playStory(place)` plays the first hour from the area shown, resuming from the saved place: the steps done, and the area and point last stood at (in another area, through `onTravel`). Talking to the farmer brings the first howl; the raid signature (a scorched ring and a dropped lantern by the well) and three furrows to the barn's door appear; standing by the signature reads it, reaching the barn shows the two Hollowed (hidden until then and gone after the fight) and starts the fight; going through the signpost reaches the road, and R by Hawk's Rest's hearth rests and draws the first card. Each step is sent through `onStory`, and the place every 15 s after moving 3 m and on Stop. The steps panel is `FirstHourPanel` below the moons; a caption tells the story at the bottom. Stats add `story`.
 
+## Built in V9 (forge 360)
+
+A thin first step off the moon to a planet with air (the user's progression, 2026-11-26: plant food, fish and hunt, build a cabin).
+
+- **The planet** (`Bodies.PLANET`, `planetOf`): a body of kind `planet` in every world, 1600 m along x from the moon, 140 m in radius with gentle hills and no craters. Its ground is **soil** (`MATERIAL_SOIL`, 3; `MoonParams.soil`), which the mesher passes as a negative attribute, so the terrain material blends a grassy green; dug soil goes into the pack as dust. Its pull is its own (2.27 m/s² at the surface), and the moon's gravity test allows its far, tiny pull.
+- **The sky**: from afar the planet is a sphere just under its lowest ground with a thin glow of air; going down into its air (60 m) turns the background blue and hides the stars (`stats().air`).
+- **Crops**: `game.plant {x, y, z}` (`cmd-game-plant`) plants barley on the planet's surface, refused off it or within 1.5 m of another crop; `game.harvest {crop}` (`cmd-game-harvest`) takes a ripe one (90 s, `RipeSeconds`) as a ration of food, which `game.packs` folds (`Pack.Food`). `game.crops` keeps each world's crops, keyed `terrain.<worldId>`, and the `game.crops {world}` query lists them. `editTerrain`, `standAt` and `startShip` allow points near the planet.
+- **In the viewport**: walking, P plants where the player looks on the planet's soil and H harvests the ripe crop beside them; crops grow from small and green to full and gold. The pack line shows food, and the first-hour guide adds *Grow food on the green planet* (thirteen steps). Stats add `crops`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

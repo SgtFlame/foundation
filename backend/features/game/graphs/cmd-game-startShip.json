@@ -191,7 +191,7 @@
         "y": 150
       },
       "config": {
-        "expr": "taken ? \"there is already a ship \" + target : !found || w?.deleted == true ? \"there is no world \" + world : !(design in [\"skiff\", \"prospector\", \"hauler\"]) ? \"there is no ship design \" + design + \"; game.shipDesigns lists them\" : design == \"hauler\" \u0026\u0026 !(known \u0026\u0026 (me?.unlocked?.hauler ?? false)) ? \"the shipyard builds a hauler's frame once you have brought it cobalt ore from the asteroids (the cobalt-shipyard contract)\" : type(q) != \"array\" || len(q) != 4 ? \"q is a quaternion [x, y, z, w]\" : x * x + y * y + z * z \u003e (w.generator.radius + w.generator.amplitude + 150) ** 2 ? \"the point is too far from the world's moon and asteroids\" : \"\"",
+        "expr": "taken ? \"there is already a ship \" + target : !found || w?.deleted == true ? \"there is no world \" + world : !(design in [\"skiff\", \"prospector\", \"hauler\"]) ? \"there is no ship design \" + design + \"; game.shipDesigns lists them\" : design == \"hauler\" \u0026\u0026 !(known \u0026\u0026 (me?.unlocked?.hauler ?? false)) ? \"the shipyard builds a hauler's frame once you have brought it cobalt ore from the asteroids (the cobalt-shipyard contract)\" : type(q) != \"array\" || len(q) != 4 ? \"q is a quaternion [x, y, z, w]\" : (x * x + y * y + z * z \u003e (w.generator.radius + w.generator.amplitude + 150) ** 2 \u0026\u0026 (x - 1600) ** 2 + y * y + z * z \u003e 300 ** 2) ? \"the point is too far from the world's moon, asteroids and planet\" : \"\"",
         "type": "string"
       }
     },
