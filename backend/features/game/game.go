@@ -83,6 +83,7 @@ type Deps struct {
 func Contribute(reg *extensions.Registry, deps func() Deps) {
 	contributeWorlds(reg)
 	contributeTerrain(reg)
+	contributePacks(reg)
 	contributeAreas(reg)
 	contributeGraphs(reg)
 	contributeTools(reg, deps)

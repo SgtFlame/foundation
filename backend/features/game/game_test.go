@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -197,4 +199,59 @@ func TestTerrainEdits(t *testing.T) {
 		t.Fatalf("description %v", r.Content)
 	}
 	t.Log(r.Summary)
+}
+
+// V2: digging while playing fills the sender's pack; filling spends it;
+// the pack's bounds refuse; an editor's edits (no took or needs) leave it
+func TestPack(t *testing.T) {
+	st := newStack(t)
+	id := st.ok("game.createWorld", "", map[string]any{"name": "Pack moon"}).Target
+	a := st.ok("game.editTerrain", id, map[string]any{"kind": "dig", "x": 0, "y": 100, "z": 0, "radius": 1, "took": map[string]any{"dust": 1.5, "rock": 0.5}})
+	var p game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(id, 1), a.Seq, &p) || p.Dust != 1.5 || p.Rock != 0.5 || p.Capacity != game.PackCapacity {
+		t.Fatalf("after a dig %+v", p)
+	}
+	// A dig can take no more than its sphere holds (4.19 m³ at r = 1)
+	b := st.ok("game.editTerrain", id, map[string]any{"kind": "dig", "x": 0, "y": 100, "z": 3, "radius": 0.5, "took": map[string]any{"dust": 9}})
+	st.read(game.PacksProjector, game.PackKey(id, 1), b.Seq, &p)
+	if math.Abs(p.Dust-(1.5+4.18879*0.125)) > 0.01 {
+		t.Fatalf("a dig's take is bounded by its sphere: %+v", p)
+	}
+	// The pack is nearly full now: a big take is refused
+	res := st.refused("game.editTerrain", id, map[string]any{"kind": "dig", "x": 0, "y": 100, "z": 6, "radius": 2, "took": map[string]any{"rock": 3}})
+	if !strings.Contains(res.Common.Message, "pack is full") {
+		t.Fatalf("refusal %q", res.Common.Message)
+	}
+	// A fill spends dust first, then rock, and says its material
+	c := st.ok("game.editTerrain", id, map[string]any{"kind": "fill", "x": 0, "y": 100, "z": 9, "radius": 1.5, "needs": 2.2})
+	st.read(game.PacksProjector, game.PackKey(id, 1), c.Seq, &p)
+	if p.Dust != 0 || math.Abs(p.Rock-(0.5-(2.2-(1.5+4.18879*0.125)))) > 0.01 {
+		t.Fatalf("after a fill %+v", p)
+	}
+	var cell game.Cell
+	st.read(game.CellsProjector, game.CellKey(id, 0, 100, 9), c.Seq, &cell)
+	if m := cell.Edits[len(cell.Edits)-1].Material; m == nil || *m != 0 {
+		t.Fatalf("a fill mostly of dust is dust: %+v", cell.Edits)
+	}
+	res = st.refused("game.editTerrain", id, map[string]any{"kind": "fill", "x": 0, "y": 100, "z": 12, "radius": 2, "needs": 5})
+	if !strings.Contains(res.Common.Message, "pack holds") {
+		t.Fatalf("refusal %q", res.Common.Message)
+	}
+	// The editor's fill (no needs) leaves the pack alone
+	d := st.ok("game.editTerrain", id, map[string]any{"kind": "fill", "x": 0, "y": 100, "z": 15, "radius": 3})
+	before := p
+	st.read(game.TerrainProjector, game.TerrainType+"."+id, d.Seq, &game.Terrain{})
+	st.read(game.PacksProjector, game.PackKey(id, 1), c.Seq, &p)
+	if p != before {
+		t.Fatalf("an editor's fill changed the pack: %+v", p)
+	}
+	// Another player's pack is their own
+	e := st.send(2, "game.editTerrain", id, map[string]any{"kind": "dig", "x": 5, "y": 100, "z": 0, "radius": 1, "took": map[string]any{"dust": 0.25}})
+	if e.Common.Code >= 300 {
+		t.Fatal(e.Common.Message)
+	}
+	var p2 game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(id, 2), e.Seq, &p2) || p2.Dust != 0.25 {
+		t.Fatalf("user 2's pack %+v", p2)
+	}
 }

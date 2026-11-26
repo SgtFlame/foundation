@@ -27,6 +27,8 @@ export interface MoonParams {
   craterMaxRadius: number
   // Depth below the surface (metres) where dust gives way to rock
   dustDepth: number
+  // Small asteroids floating near the moon (forge 360 V2), 0 to 8
+  asteroids?: number
 }
 
 export const DEFAULT_MOON: MoonParams = {
@@ -39,6 +41,7 @@ export const DEFAULT_MOON: MoonParams = {
   craters: 24,
   craterMaxRadius: 22,
   dustDepth: 1.5,
+  asteroids: 2,
 }
 
 export type EditKind = 'dig' | 'fill'

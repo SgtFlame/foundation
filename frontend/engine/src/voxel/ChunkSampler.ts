@@ -1,4 +1,4 @@
-import type { MoonGenerator } from './MoonGenerator.ts'
+import type { WorldGenerator } from './Bodies.ts'
 import { CHUNK_SIZE, type VoxelEdit } from './Types.ts'
 
 // Samples one chunk: (CHUNK_SIZE + 2)³ points, from local index -1 to
@@ -40,7 +40,7 @@ export function editTouchesChunk(e: VoxelEdit, cx: number, cy: number, cz: numbe
   )
 }
 
-export function sampleChunk(gen: MoonGenerator, cx: number, cy: number, cz: number, edits: readonly VoxelEdit[]): ChunkSamples {
+export function sampleChunk(gen: WorldGenerator, cx: number, cy: number, cz: number, edits: readonly VoxelEdit[]): ChunkSamples {
   const vs = gen.params.voxelSize
   const n = SAMPLES
   const density = new Float32Array(n * n * n)
@@ -59,21 +59,7 @@ export function sampleChunk(gen: MoonGenerator, cx: number, cy: number, cz: numb
         const x = (bx + i) * vs
         let d = gen.density(x, y, z)
         let m = d < 0 ? gen.material(x, y, z, d) : 0
-        for (const e of edits) {
-          const dx = x - e.x
-          const dy = y - e.y
-          const dz = z - e.z
-          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
-          if (dist > e.radius + BLEND * 2) continue
-          const sphere = dist - e.radius
-          if (e.kind === 'dig') {
-            d = smoothMax(d, -sphere, BLEND)
-          } else {
-            const nd = smoothMin(d, sphere, BLEND)
-            if (sphere < 0 && d >= 0) m = e.material ?? 0
-            d = nd
-          }
-        }
+        ;[d, m] = applyEdits(d, m, x, y, z, edits)
         density[idx] = d
         material[idx] = m
         if (d < 0) neg++
@@ -82,4 +68,25 @@ export function sampleChunk(gen: MoonGenerator, cx: number, cy: number, cz: numb
   }
   gen.endRegion()
   return { density, material, uniform: neg === 0 || neg === n * n * n }
+}
+
+// A density sample and its material with edits applied in order: digs
+// remove a smooth sphere, fills add one of their material
+export function applyEdits(d: number, m: number, x: number, y: number, z: number, edits: readonly VoxelEdit[]): [number, number] {
+  for (const e of edits) {
+    const dx = x - e.x
+    const dy = y - e.y
+    const dz = z - e.z
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
+    if (dist > e.radius + BLEND * 2) continue
+    const sphere = dist - e.radius
+    if (e.kind === 'dig') {
+      d = smoothMax(d, -sphere, BLEND)
+    } else {
+      const nd = smoothMin(d, sphere, BLEND)
+      if (sphere < 0 && d >= 0) m = e.material ?? 0
+      d = nd
+    }
+  }
+  return [d, m]
 }

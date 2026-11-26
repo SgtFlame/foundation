@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { sampleChunk } from './ChunkSampler.ts'
-import { MoonGenerator } from './MoonGenerator.ts'
+import { WorldGenerator } from './Bodies.ts'
 import { surfaceNets } from './SurfaceNets.ts'
 import { CHUNK_SIZE, DEFAULT_MOON, type ChunkMesh } from './Types.ts'
 
-const moon = (seed = 1) => new MoonGenerator({ ...DEFAULT_MOON, seed })
+const moon = (seed = 1) => new WorldGenerator({ ...DEFAULT_MOON, seed, asteroids: 0 })
 
 // A chunk on the moon's surface, on the +y axis
-function surfaceChunk(gen: MoonGenerator) {
+function surfaceChunk(gen: WorldGenerator) {
   const size = CHUNK_SIZE * gen.params.voxelSize
   return { cx: 0, cy: Math.floor(gen.params.radius / size), cz: 0 }
 }

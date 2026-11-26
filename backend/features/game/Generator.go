@@ -18,10 +18,12 @@ type Moon struct {
 	Craters         int     `json:"craters"`
 	CraterMaxRadius float64 `json:"craterMaxRadius"`
 	DustDepth       float64 `json:"dustDepth"`
+	// Asteroids is how many small asteroids float near the moon (V2)
+	Asteroids int `json:"asteroids"`
 }
 
 // DefaultMoon is a new world's generator (the engine's DEFAULT_MOON).
-var DefaultMoon = Moon{Seed: 1, VoxelSize: 0.5, Radius: 100, Amplitude: 6, Frequency: 0.02, Octaves: 5, Craters: 24, CraterMaxRadius: 22, DustDepth: 1.5}
+var DefaultMoon = Moon{Seed: 1, VoxelSize: 0.5, Radius: 100, Amplitude: 6, Frequency: 0.02, Octaves: 5, Craters: 24, CraterMaxRadius: 22, DustDepth: 1.5, Asteroids: 2}
 
 const moonSchema = `{"type":"object","description":"The moon generator's parameters; any left out keep their value","properties":{
   "seed":{"type":"integer","description":"The random seed: another seed is another moon"},
@@ -32,7 +34,8 @@ const moonSchema = `{"type":"object","description":"The moon generator's paramet
   "octaves":{"type":"integer","minimum":1,"maximum":8,"description":"Octaves of fractal noise"},
   "craters":{"type":"integer","minimum":0,"maximum":200,"description":"How many craters"},
   "craterMaxRadius":{"type":"number","minimum":1,"maximum":100,"description":"The largest crater's radius in metres"},
-  "dustDepth":{"type":"number","minimum":0,"maximum":20,"description":"Metres of dust over the rock"}}}`
+  "dustDepth":{"type":"number","minimum":0,"maximum":20,"description":"Metres of dust over the rock"},
+  "asteroids":{"type":"integer","minimum":0,"maximum":8,"description":"How many small asteroids float 30 to 70 m above the moon, the first over its north pole"}}}`
 
 // Check reports what is wrong with the parameters, as problems' paths
 // under path.
@@ -50,7 +53,7 @@ func (m Moon) Check(path string) (string, string) {
 	}{
 		{"voxelSize", 0.25, 2, m.VoxelSize}, {"radius", 20, 400, m.Radius}, {"amplitude", 0, 40, m.Amplitude},
 		{"frequency", 0.001, 0.2, m.Frequency}, {"octaves", 1, 8, float64(m.Octaves)}, {"craters", 0, 200, float64(m.Craters)},
-		{"craterMaxRadius", 1, 100, m.CraterMaxRadius}, {"dustDepth", 0, 20, m.DustDepth},
+		{"craterMaxRadius", 1, 100, m.CraterMaxRadius}, {"dustDepth", 0, 20, m.DustDepth}, {"asteroids", 0, 8, float64(m.Asteroids)},
 	} {
 		if p, msg := bad(c.f, c.lo, c.hi, c.v); p != "" {
 			return p, msg

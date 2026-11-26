@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu'
+import { surfaceBelow, Walker, type WalkerTerrain } from '../character/Walker.ts'
 import { FlyCamera } from '../camera/FlyCamera.ts'
 import { Loop } from '../core/Loop.ts'
 import { StatsOverlay } from '../debug/StatsOverlay.ts'
@@ -15,7 +16,20 @@ export interface EditIntent {
   y: number
   z: number
   radius: number
+  // What a dig took (m³ by material) or a fill needs, as this viewport
+  // reckons it from the terrain it has; the server bounds it (V2)
+  took?: { dust: number; rock: number }
+  needs?: number
 }
+
+// What the player carries, as the server keeps it (V2)
+export interface Carried {
+  dust: number
+  rock: number
+  capacity: number
+}
+
+export type ViewMode = 'fly' | 'walk'
 
 export interface CameraState {
   x: number
@@ -40,6 +54,9 @@ export interface VoxelViewportOptions {
   viewDistance?: number
   // Show the frame-time overlay
   stats?: boolean
+  // Start by flying the camera (the editor's view) or walking (V2)
+  mode?: ViewMode
+  onModeChange?: (m: ViewMode) => void
 }
 
 export interface ViewportStats {
@@ -60,11 +77,19 @@ export interface ViewportStats {
   firstLoadMs: number | null
   edits: number
   editRoundTripMs: number | null
+  mode: ViewMode
+  // Walking: on the ground, the thrust pack, the pull (m/s²) and speed (m/s)
+  grounded: boolean
+  thrustPack: boolean
+  gravity: number
+  speed: number
 }
 
 const MIN_BRUSH = 0.75
 const MAX_BRUSH = 6
 const REACH = 80
+// A hand tool reaches this far from the eyes
+const HAND_REACH = 8
 
 // A viewport onto a voxel moon: the renderer, the loop, a fly camera, the
 // terrain, a brush that turns clicks into edit intents, other people's
@@ -89,6 +114,10 @@ export class VoxelViewport {
   private readonly remotes = new Map<string, { mesh: THREE.Mesh; label: HTMLDivElement; state: RemoteCamera }>()
   private editRoundTripMs: number | null = null
   private lastCamera: CameraState | null = null
+  private mode: ViewMode = 'fly'
+  private walker: Walker | null = null
+  private carried: Carried | null = null
+  private readonly pack: HTMLDivElement
 
   private readonly container: HTMLElement
   private readonly renderer: Renderer
@@ -125,6 +154,13 @@ export class VoxelViewport {
       'position:absolute;bottom:10px;left:50%;transform:translateX(-50%);padding:4px 10px;border-radius:4px;z-index:2;' +
       'font:13px system-ui,sans-serif;color:#eee;background:rgba(0,0,0,0.55);pointer-events:none;white-space:nowrap'
     container.appendChild(this.hint)
+    this.pack = document.createElement('div')
+    this.pack.style.cssText =
+      'position:absolute;left:10px;bottom:10px;padding:4px 10px;border-radius:4px;z-index:2;display:none;' +
+      'font:12px system-ui,sans-serif;color:#eee;background:rgba(0,0,0,0.55);pointer-events:none;white-space:pre'
+    this.pack.dataset.pack = ''
+    container.appendChild(this.pack)
+    if (opts.mode === 'walk') this.setMode('walk')
     this.updateHint()
     canvas.addEventListener('click', this.onCanvasClick)
     document.addEventListener('pointerlockchange', this.onLockChange)
@@ -175,14 +211,133 @@ export class VoxelViewport {
   }
 
   private updateHint(): void {
+    if (this.mode === 'walk') {
+      this.hint.textContent = this.input.locked
+        ? `Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        : 'Click to walk · G to fly the camera instead'
+      return
+    }
     this.hint.textContent = this.input.locked
       ? `Left: dig · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD, Space, C, Shift · Esc: release`
-      : 'Click to fly · WASD to move · mouse to look'
+      : 'Click to fly · WASD to move · mouse to look · G to walk'
   }
+
+  // --- Walking (V2) ---
+
+  private terrain(): WalkerTerrain {
+    const w = this.world
+    return { density: (x, y, z) => w.densityAt(x, y, z), gravity: (x, y, z, out) => w.generator.gravity(x, y, z, out) }
+  }
+
+  get viewMode(): ViewMode {
+    return this.mode
+  }
+
+  // Flying the camera, or walking: walking drops the character on the
+  // ground below the camera (or onto the moon's north pole)
+  setMode(m: ViewMode): void {
+    if (m === this.mode) return
+    if (m === 'walk') {
+      const t = this.terrain()
+      const p = this.fly.position
+      const R = this.world.generator.params.radius
+      const at = surfaceBelow(t, { x: p.x, y: p.y, z: p.z }) ?? surfaceBelow(t, { x: 0, y: R * 1.5, z: 0 }) ?? { x: 0, y: R + 2, z: 0 }
+      this.walker = new Walker(t, at)
+      // Face the way the camera faced, along the ground
+      const f = this.fly.forward()
+      const u = this.walker.up
+      const along = f.clone().addScaledVector(new THREE.Vector3(u.x, u.y, u.z), -f.dot(new THREE.Vector3(u.x, u.y, u.z)))
+      if (along.lengthSq() > 1e-6) {
+        along.normalize()
+        this.walker.forward = { x: along.x, y: along.y, z: along.z }
+      }
+      this.fly.camera.near = 0.05
+    } else if (this.walker) {
+      const e = this.walker.eye()
+      const l = this.walker.look()
+      this.fly.lookFrom(new THREE.Vector3(e.x, e.y, e.z), new THREE.Vector3(e.x + l.x, e.y + l.y, e.z + l.z))
+      this.fly.camera.up.set(0, 1, 0)
+      this.fly.camera.near = 0.1
+      this.walker = null
+    }
+    this.fly.camera.updateProjectionMatrix()
+    this.mode = m
+    this.updateHint()
+    this.drawPack()
+    this.opts.onModeChange?.(m)
+  }
+
+  // What the player carries, from the server
+  setCarried(c: Carried | null): void {
+    this.carried = c
+    this.drawPack()
+  }
+
+  // Where the walker stands, for tests and tools
+  walkerState(): { x: number; y: number; z: number; grounded: boolean; thrustPack: boolean; up: { x: number; y: number; z: number } } | null {
+    const w = this.walker
+    return w ? { ...w.pos, grounded: w.grounded, thrustPack: w.thrustPack, up: { ...w.up } } : null
+  }
+
+  private drawPack(): void {
+    const c = this.carried
+    const w = this.walker
+    if (this.mode !== 'walk' && !c) {
+      this.pack.style.display = 'none'
+      return
+    }
+    const lines: string[] = []
+    if (c) {
+      const total = c.dust + c.rock
+      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}`)
+    }
+    if (w) {
+      const g = Math.hypot(w.gravity.x, w.gravity.y, w.gravity.z)
+      lines.push(`Pull ${g.toFixed(2)} m/s² · ${Math.hypot(w.vel.x, w.vel.y, w.vel.z).toFixed(1)} m/s · thrust pack ${w.thrustPack ? 'on' : 'off'}${w.grounded ? '' : ' · in the air'}`)
+    }
+    this.pack.textContent = lines.join('\n')
+    this.pack.style.display = lines.length ? 'block' : 'none'
+  }
+
+  private stepWalker(dt: number): void {
+    const w = this.walker as Walker
+    const input = this.input
+    if (input.locked) {
+      const { dx, dy } = input.takeMouse()
+      w.turn(dx * 0.0022, -dy * 0.0022)
+    }
+    if (input.pressed('KeyX')) {
+      w.thrustPack = !w.thrustPack
+      this.updateHint()
+    }
+    const k = (code: string) => (input.isDown(code) ? 1 : 0)
+    w.step(dt, {
+      forward: k('KeyW') - k('KeyS'),
+      right: k('KeyD') - k('KeyA'),
+      up: k('Space') - (w.thrustPack ? k('KeyC') + k('ControlLeft') : 0),
+      sprint: input.isDown('ShiftLeft') || input.isDown('ShiftRight'),
+    })
+    // The camera at the eyes, its up the walker's
+    const e = w.eye()
+    const l = w.look()
+    const cam = this.fly.camera
+    cam.position.set(e.x, e.y, e.z)
+    cam.up.set(w.up.x, w.up.y, w.up.z)
+    cam.lookAt(e.x + l.x, e.y + l.y, e.z + l.z)
+    this.fly.position.copy(cam.position)
+    this.packTick -= dt
+    if (this.packTick <= 0) {
+      this.packTick = 0.2
+      this.drawPack()
+    }
+  }
+  private packTick = 0
 
   private step(dt: number): void {
     const input = this.input
-    this.fly.step(dt, input)
+    if (input.pressed('KeyG') && input.locked) this.setMode(this.mode === 'fly' ? 'walk' : 'fly')
+    if (this.mode === 'walk' && this.walker) this.stepWalker(dt)
+    else this.fly.step(dt, input)
     const wheel = input.takeWheel()
     if (wheel !== 0) {
       this.brushRadius = Math.max(MIN_BRUSH, Math.min(MAX_BRUSH, this.brushRadius * (wheel < 0 ? 1.15 : 1 / 1.15)))
@@ -190,7 +345,9 @@ export class VoxelViewport {
     }
     // Aim the brush along the view
     if (input.locked) {
-      const hit = this.world.raycast(this.fly.position, this.fly.forward(), REACH)
+      const from = this.walker ? this.fly.camera.position : this.fly.position
+      const dir = this.walker ? (({ x, y, z }) => new THREE.Vector3(x, y, z))(this.walker.look()) : this.fly.forward()
+      const hit = this.world.raycast(from, dir, this.walker ? HAND_REACH : REACH)
       this.brushHit = hit ? hit.point.clone() : null
       const digging = input.isButtonDown(0)
       const filling = input.isButtonDown(2)
@@ -213,15 +370,27 @@ export class VoxelViewport {
   private sendEdit(kind: EditKind, at: THREE.Vector3): void {
     // A fill sits on the surface; a dig is centred a little above it, so a
     // click carves a bowl rather than a buried bubble
-    const n = at.clone().normalize()
+    // Up at that spot: away from the pull of the body it is on
+    const g = this.world.generator.gravity(at.x, at.y, at.z, { x: 0, y: 0, z: 0 })
+    const n = new THREE.Vector3(-g.x, -g.y, -g.z).normalize()
     const c = kind === 'dig' ? at.clone().addScaledVector(n, this.brushRadius * 0.35) : at.clone().addScaledVector(n, -this.brushRadius * 0.2)
+    const radius = Number(this.brushRadius.toFixed(2))
+    const has = this.world.contentsOf(c.x, c.y, c.z, radius)
+    const r2 = (v: number) => Math.round(v * 100) / 100
     this.sentAt.push(performance.now())
     if (this.sentAt.length > 64) this.sentAt.shift()
-    this.opts.onEditIntent?.({ kind, x: c.x, y: c.y, z: c.z, radius: Number(this.brushRadius.toFixed(2)) })
+    this.opts.onEditIntent?.({
+      kind,
+      x: c.x,
+      y: c.y,
+      z: c.z,
+      radius,
+      ...(kind === 'dig' ? { took: { dust: r2(has.dust), rock: r2(has.rock) } } : { needs: r2(has.empty) }),
+    })
   }
 
   private render(alpha: number): void {
-    this.fly.apply(alpha)
+    if (this.mode === 'fly') this.fly.apply(alpha)
     this.world.update(this.fly.camera.position)
     if (this.brushHit) {
       this.brush.visible = true
@@ -242,7 +411,14 @@ export class VoxelViewport {
     const now = performance.now()
     if (!this.opts.onCameraMove || now - this.cameraTick < 100) return
     const p = this.fly.position
-    const c: CameraState = { x: round(p.x), y: round(p.y), z: round(p.z), yaw: round(this.fly.yaw, 3), pitch: round(this.fly.pitch, 3) }
+    let yaw = this.fly.yaw
+    let pitch = this.fly.pitch
+    if (this.walker) {
+      const l = this.walker.look()
+      yaw = Math.atan2(-l.x, -l.z)
+      pitch = Math.asin(Math.max(-1, Math.min(1, l.y)))
+    }
+    const c: CameraState = { x: round(p.x), y: round(p.y), z: round(p.z), yaw: round(yaw, 3), pitch: round(pitch, 3) }
     const l = this.lastCamera
     if (l && l.x === c.x && l.y === c.y && l.z === c.z && l.yaw === c.yaw && l.pitch === c.pitch) return
     this.cameraTick = now
@@ -370,6 +546,11 @@ export class VoxelViewport {
       firstLoadMs: w.firstFullLoadMs,
       edits: w.edits,
       editRoundTripMs: this.editRoundTripMs,
+      mode: this.mode,
+      grounded: this.walker?.grounded ?? false,
+      thrustPack: this.walker?.thrustPack ?? false,
+      gravity: this.walker ? Math.hypot(this.walker.gravity.x, this.walker.gravity.y, this.walker.gravity.z) : 0,
+      speed: this.walker ? Math.hypot(this.walker.vel.x, this.walker.vel.y, this.walker.vel.z) : 0,
     }
   }
 
@@ -383,6 +564,7 @@ export class VoxelViewport {
     this.overlay?.dispose()
     this.crosshair.remove()
     this.hint.remove()
+    this.pack.remove()
     this.renderer.canvas.remove()
     this.renderer.dispose()
   }

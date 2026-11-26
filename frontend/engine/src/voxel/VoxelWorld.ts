@@ -1,9 +1,9 @@
 import * as THREE from 'three/webgpu'
-import { editTouchesChunk } from './ChunkSampler.ts'
+import { WorldGenerator } from './Bodies.ts'
+import { applyEdits, editTouchesChunk } from './ChunkSampler.ts'
 import type { MeshResult } from './MeshProtocol.ts'
-import { MoonGenerator } from './MoonGenerator.ts'
 import { terrainMaterial } from './TerrainMaterial.ts'
-import { CHUNK_SIZE, chunkKey, type ChunkMesh, type MoonParams, type VoxelEdit } from './Types.ts'
+import { CHUNK_SIZE, chunkKey, MATERIAL_ROCK, type ChunkMesh, type MoonParams, type VoxelEdit } from './Types.ts'
 import { WorkerPool } from './WorkerPool.ts'
 
 interface Chunk {
@@ -53,7 +53,7 @@ export interface VoxelWorldStats {
 export class VoxelWorld {
   readonly group = new THREE.Group()
   private params: MoonParams
-  private gen: MoonGenerator
+  private gen: WorldGenerator
   private readonly material = terrainMaterial()
   private readonly pool: WorkerPool
   private readonly chunks = new Map<string, Chunk>()
@@ -70,7 +70,7 @@ export class VoxelWorld {
 
   constructor(opts: VoxelWorldOptions) {
     this.params = opts.params
-    this.gen = new MoonGenerator(opts.params)
+    this.gen = new WorldGenerator(opts.params)
     this.viewDistance = opts.viewDistance ?? 160
     this.pool = new WorkerPool((r) => this.onResult(r), opts.workers)
     this.group.name = 'voxel-world'
@@ -80,7 +80,7 @@ export class VoxelWorld {
     return CHUNK_SIZE * this.params.voxelSize
   }
 
-  get generator(): MoonGenerator {
+  get generator(): WorldGenerator {
     return this.gen
   }
 
@@ -90,7 +90,7 @@ export class VoxelWorld {
     if (JSON.stringify(params) === JSON.stringify(this.params)) return
     const resized = params.voxelSize !== this.params.voxelSize
     this.params = params
-    this.gen = new MoonGenerator(params)
+    this.gen = new WorldGenerator(params)
     if (resized) {
       // Chunk coordinates change meaning: drop everything
       for (const c of this.chunks.values()) this.dropMesh(c)
@@ -177,15 +177,48 @@ export class VoxelWorld {
   // Could this chunk hold part of the surface? (edits aside)
   private mayHaveSurface(cx: number, cy: number, cz: number): boolean {
     const size = this.chunkMetres
-    const x = (cx + 0.5) * size
-    const y = (cy + 0.5) * size
-    const z = (cz + 0.5) * size
-    const rho = Math.sqrt(x * x + y * y + z * z)
-    const half = (size * Math.sqrt(3)) / 2 + this.params.voxelSize * 2
-    const R = this.params.radius
-    if (rho - half > R + this.gen.maxOutward) return false
-    if (rho + half < R - this.gen.maxInward) return false
-    return true
+    const pad = this.params.voxelSize * 2
+    return this.gen.mayHaveSurface(cx * size - pad, cy * size - pad, cz * size - pad, (cx + 1) * size + pad, (cy + 1) * size + pad, (cz + 1) * size + pad)
+  }
+
+  // The terrain's signed distance at a point, with the edits that reach
+  // it (negative inside the ground): what collisions read
+  densityAt(x: number, y: number, z: number): number {
+    return this.sampleAt(x, y, z)[0]
+  }
+
+  // How much solid ground (m³, by material) and empty space a sphere
+  // holds now: what a dig there would take and a fill would need
+  contentsOf(cx: number, cy: number, cz: number, r: number): { dust: number; rock: number; empty: number } {
+    const step = this.params.voxelSize
+    const cell = step * step * step
+    const out = { dust: 0, rock: 0, empty: 0 }
+    this.gen.beginRegion(cx - r, cy - r, cz - r, cx + r, cy + r, cz + r)
+    try {
+      for (let z = cz - r + step / 2; z < cz + r; z += step) {
+        for (let y = cy - r + step / 2; y < cy + r; y += step) {
+          for (let x = cx - r + step / 2; x < cx + r; x += step) {
+            if ((x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2 > r * r) continue
+            const [d, m] = this.sampleAt(x, y, z)
+            if (d >= 0) out.empty += cell
+            else if (m === MATERIAL_ROCK) out.rock += cell
+            else out.dust += cell
+          }
+        }
+      }
+    } finally {
+      this.gen.endRegion()
+    }
+    return out
+  }
+
+  // The density and material at a point, edits applied
+  sampleAt(x: number, y: number, z: number): [number, number] {
+    const size = this.chunkMetres
+    const key = chunkKey(Math.floor(x / size), Math.floor(y / size), Math.floor(z / size))
+    const d = this.gen.density(x, y, z)
+    const m = d < 0 ? this.gen.material(x, y, z, d) : 0
+    return applyEdits(d, m, x, y, z, this.editsByChunk.get(key) ?? [])
   }
 
   // Call each frame with the camera's position

@@ -4,6 +4,77 @@
   "description": "Decides a dig or fill of a world's terrain: checks the brush against the world and emits the edit.",
   "kind": "command",
   "version": 1,
+  "spec": {
+    "command": "game.editTerrain",
+    "title": "Dig or fill terrain",
+    "description": "Digs (removes) or fills (adds) a smooth sphere of a world's terrain; the target is the world's id. Everyone viewing the world sees the edit, in the server's order. A player walking the world sends took (what a dig takes into their pack) or needs (what a fill spends from it); the pack holds 4 m³. Refused when the world does not exist, the radius is outside 0.5 to 6 m, the brush is far from the world's bodies, a dig would overfill the pack or a fill needs more than it holds.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "dig",
+            "fill"
+          ],
+          "description": "dig removes ground, fill adds it"
+        },
+        "x": {
+          "type": "number",
+          "description": "The brush centre in metres, from the moon's centre"
+        },
+        "y": {
+          "type": "number",
+          "description": "The brush centre's y in metres"
+        },
+        "z": {
+          "type": "number",
+          "description": "The brush centre's z in metres"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 6,
+          "description": "The brush radius in metres"
+        },
+        "took": {
+          "type": "object",
+          "description": "Playing: the ground a dig takes into the sender's pack, in m³ by material (bounded by the brush's volume)",
+          "properties": {
+            "dust": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Cubic metres of dust"
+            },
+            "rock": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Cubic metres of rock"
+            }
+          }
+        },
+        "needs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Playing: the cubic metres a fill spends from the sender's pack (bounded by the brush's volume)"
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "y",
+        "z",
+        "radius"
+      ]
+    },
+    "area": "game",
+    "targetType": "terrain",
+    "projection": "game.terrain",
+    "action": "game.play",
+    "events": [
+      "edited"
+    ]
+  },
   "nodes": [
     {
       "id": "event",
@@ -38,6 +109,16 @@
             "id": "radius",
             "type": "number",
             "description": "The brush radius in metres"
+          },
+          {
+            "id": "took",
+            "type": "json",
+            "description": "What a dig takes into the pack, {dust, rock} in m³, when playing"
+          },
+          {
+            "id": "needs",
+            "type": "number",
+            "description": "What a fill spends from the pack in m³, when playing"
           }
         ]
       }
@@ -45,6 +126,7 @@
     {
       "id": "key",
       "type": "data.expression",
+      "title": "World key",
       "position": {
         "x": 250,
         "y": 250
@@ -52,37 +134,83 @@
       "config": {
         "expr": "\"gameWorld.\" + target",
         "type": "string"
-      },
-      "title": "World key"
+      }
     },
     {
       "id": "world",
       "type": "live.readProjection",
+      "title": "Read the world",
       "position": {
         "x": 500,
         "y": 250
       },
       "config": {
         "projector": "game.worlds"
+      }
+    },
+    {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 550
+      }
+    },
+    {
+      "id": "packKey",
+      "type": "data.expression",
+      "title": "Pack key",
+      "position": {
+        "x": 250,
+        "y": 550
       },
-      "title": "Read the world"
+      "config": {
+        "expr": "target + \".\" + user",
+        "type": "string"
+      }
+    },
+    {
+      "id": "pack",
+      "type": "live.readProjection",
+      "title": "Read the sender's pack",
+      "position": {
+        "x": 500,
+        "y": 550
+      },
+      "config": {
+        "projector": "game.packs"
+      }
+    },
+    {
+      "id": "amounts",
+      "type": "data.expression",
+      "title": "What the pack takes or spends",
+      "position": {
+        "x": 750,
+        "y": 550
+      },
+      "config": {
+        "expr": "let V = 4.18879 * radius ** 3; let have = packed ? pack : {dust: 0, rock: 0}; let playing = took != nil || needs != nil; let td = kind == \"dig\" \u0026\u0026 took != nil ? min(max(took?.dust ?? 0, 0), V) : 0; let tr = kind == \"dig\" \u0026\u0026 took != nil ? min(max(took?.rock ?? 0, 0), V - td) : 0; let n = kind == \"fill\" \u0026\u0026 needs != nil ? min(max(needs, 0), V) : 0; let sd = min(have.dust, n); let sr = max(n - sd, 0); {room: 4 - have.dust - have.rock, take: td + tr, have: have.dust + have.rock, need: n, delta: {dust: td - sd, rock: tr - sr}, material: sr \u003e sd ? 1 : 0}",
+        "type": "json"
+      }
     },
     {
       "id": "check",
       "type": "data.expression",
+      "title": "Why it is refused",
       "position": {
         "x": 750,
         "y": 250
       },
       "config": {
-        "expr": "!exists || world?.deleted == true ? \"there is no world \" + target : !(kind in [\"dig\", \"fill\"]) ? \"an edit is dig or fill\" : radius < 0.5 || radius > 6 ? \"an edit's radius is from 0.5 to 6 metres\" : x * x + y * y + z * z > (world.generator.radius * 1.5 + 50) ** 2 ? \"the edit is too far from the world's moon\" : \"\"",
+        "expr": "!exists || world?.deleted == true ? \"there is no world \" + target : !(kind in [\"dig\", \"fill\"]) ? \"an edit is dig or fill\" : radius \u003c 0.5 || radius \u003e 6 ? \"an edit's radius is from 0.5 to 6 metres\" : x * x + y * y + z * z \u003e (world.generator.radius + world.generator.amplitude + 150) ** 2 ? \"the edit is too far from the world's moon and asteroids\" : amounts.take \u003e amounts.room + 0.001 ? \"your pack is full: it has room for \" + string(round(max(amounts.room, 0) * 100) / 100) + \" m³ and this dig takes \" + string(round(amounts.take * 100) / 100) + \" m³; fill somewhere to empty it\" : amounts.need \u003e amounts.have + 0.001 ? \"your pack holds \" + string(round(amounts.have * 100) / 100) + \" m³ and this fill needs \" + string(round(amounts.need * 100) / 100) + \" m³; dig to fill it\" : \"\"",
         "type": "string"
-      },
-      "title": "Why it is refused"
+      }
     },
     {
       "id": "ok",
       "type": "data.expression",
+      "title": "Allowed?",
       "position": {
         "x": 1000,
         "y": 250
@@ -90,8 +218,7 @@
       "config": {
         "expr": "problem == \"\"",
         "type": "bool"
-      },
-      "title": "Allowed?"
+      }
     },
     {
       "id": "branch",
@@ -104,15 +231,15 @@
     {
       "id": "edit",
       "type": "data.expression",
+      "title": "The edit",
       "position": {
         "x": 1250,
         "y": 400
       },
       "config": {
-        "expr": "{kind: kind, x: x, y: y, z: z, radius: radius, material: kind == \"fill\" ? 0 : nil}",
+        "expr": "{kind: kind, x: x, y: y, z: z, radius: radius, material: kind == \"fill\" ? amounts.material : nil, pack: amounts.delta.dust == 0 \u0026\u0026 amounts.delta.rock == 0 ? nil : amounts.delta}",
         "type": "json"
-      },
-      "title": "The edit"
+      }
     },
     {
       "id": "emit",
@@ -134,7 +261,7 @@
       },
       "config": {
         "path": "args",
-        "fix": "dig or fill within 6 m brushes on the world's moon"
+        "fix": "dig or fill within 6 m brushes on the world's bodies; empty a full pack by filling, fill a short one by digging"
       }
     }
   ],
@@ -358,56 +485,116 @@
         "node": "emit",
         "pin": "data"
       }
-    }
-  ],
-  "spec": {
-    "command": "game.editTerrain",
-    "title": "Dig or fill terrain",
-    "description": "Digs (removes) or fills (adds) a smooth sphere of a world's terrain; the target is the world's id. Everyone viewing the world sees the edit, in the server's order. Refused when the world does not exist, the radius is outside 0.5 to 6 m, or the brush is far from the moon.",
-    "args": {
-      "type": "object",
-      "properties": {
-        "kind": {
-          "type": "string",
-          "enum": [
-            "dig",
-            "fill"
-          ],
-          "description": "dig removes ground, fill adds it"
-        },
-        "x": {
-          "type": "number",
-          "description": "The brush centre in metres, from the moon's centre"
-        },
-        "y": {
-          "type": "number",
-          "description": "The brush centre's y in metres"
-        },
-        "z": {
-          "type": "number",
-          "description": "The brush centre's z in metres"
-        },
-        "radius": {
-          "type": "number",
-          "minimum": 0.5,
-          "maximum": 6,
-          "description": "The brush radius in metres"
-        }
-      },
-      "required": [
-        "kind",
-        "x",
-        "y",
-        "z",
-        "radius"
-      ]
     },
-    "area": "game",
-    "targetType": "terrain",
-    "projection": "game.terrain",
-    "action": "game.play",
-    "events": [
-      "edited"
-    ]
-  }
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "packKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pack",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "pack",
+        "pin": "value"
+      },
+      "to": {
+        "node": "amounts",
+        "pin": "pack"
+      }
+    },
+    {
+      "from": {
+        "node": "pack",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "amounts",
+        "pin": "packed"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "kind"
+      },
+      "to": {
+        "node": "amounts",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "radius"
+      },
+      "to": {
+        "node": "amounts",
+        "pin": "radius"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "took"
+      },
+      "to": {
+        "node": "amounts",
+        "pin": "took"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "needs"
+      },
+      "to": {
+        "node": "amounts",
+        "pin": "needs"
+      }
+    },
+    {
+      "from": {
+        "node": "amounts",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "amounts"
+      }
+    },
+    {
+      "from": {
+        "node": "amounts",
+        "pin": "value"
+      },
+      "to": {
+        "node": "edit",
+        "pin": "amounts"
+      }
+    }
+  ]
 }
