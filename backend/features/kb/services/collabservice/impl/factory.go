@@ -56,6 +56,12 @@ func CreateService(opts ...Option) collabservice.Service {
 	return instance
 }
 
+// New returns a service of its own, not the singleton: for a test's
+// stack (forge 18c's Requirements fixture edits drafts through it).
+func New(opts ...Option) collabservice.Service {
+	return newService(opts...)
+}
+
 func newService(opts ...Option) *service {
 	s := &service{
 		root:        defaultRoot(),

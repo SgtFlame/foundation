@@ -265,3 +265,6 @@ Agents search Volumes and memory ([ContextRetrieval.md › Changed in forge 15a]
 ## Changed in forge 15b
 - ***May*** (`authz.can`, `authznodes`): whether the run's principal holds an action on a resource (the tenant by default), as `authz.Check` decides. For a page to show a control only to those who may use it (Forge's agent editor's *Customize*, which needs `cognition.write` and `cognition.publish`); every command is still checked.
 - **`retrieval.vote`** (class write, `Apps`): voting on segments, which a host app's trigger does for a reviewer's outcome ([Tools.md › Changed in forge 15b](Tools.md#changed-in-forge-15b)).
+
+## Changed in forge 18a
+- ***Grants*** (`authz.grants`, `authz/nodes`) lists the role grants on one record, or on every record of an entity type, as `[{grant, user, agent, role, app, record}]`, where `role` is an app role's manifest id. An app's principal reads only its own roles' grants on its own records; anyone else needs `grant.read` there. A graph that keeps grants in step with records (Forge's Requirements app, which turns access rules into per-board grants) uses it to revoke what no rule gives any more, beside *Grant role* and *Revoke role*. It is tested through Forge's `starter/requirements` (`TestAccessRules`).

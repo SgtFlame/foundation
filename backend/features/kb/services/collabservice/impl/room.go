@@ -35,10 +35,16 @@ type client struct {
 	// role from them.
 	readOnly bool
 	args     features.ServiceArgs // who it is, for loading and saving as them
+	// backlog is the room's log sent to a joining client (forge 18a): it
+	// may hold more updates than send does, so it is written apart from
+	// it, never dropping the client; Yjs applies updates in any order
+	backlogMu sync.Mutex
+	backlog   [][]byte
+	wake      chan struct{}
 }
 
 func newClient(conn collabservice.Conn, cancel context.CancelFunc) *client {
-	return &client{conn: conn, send: make(chan []byte, 256), cancel: cancel, clientIDs: map[uint64]bool{}}
+	return &client{conn: conn, send: make(chan []byte, 256), cancel: cancel, clientIDs: map[uint64]bool{}, wake: make(chan struct{}, 1)}
 }
 
 func (c *client) writeLoop(ctx context.Context) {
@@ -46,12 +52,35 @@ func (c *client) writeLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-c.wake:
+			c.backlogMu.Lock()
+			msgs := c.backlog
+			c.backlog = nil
+			c.backlogMu.Unlock()
+			for _, msg := range msgs {
+				if err := c.conn.Write(ctx, msg); err != nil {
+					c.cancel()
+					return
+				}
+			}
 		case msg := <-c.send:
 			if err := c.conn.Write(ctx, msg); err != nil {
 				c.cancel()
 				return
 			}
 		}
+	}
+}
+
+// queueLog sends the room's log however long it is, after what send holds
+// now (forge 18a: a log longer than send's room dropped every joiner).
+func (c *client) queueLog(msgs [][]byte) {
+	c.backlogMu.Lock()
+	c.backlog = append(c.backlog, msgs...)
+	c.backlogMu.Unlock()
+	select {
+	case c.wake <- struct{}{}:
+	default:
 	}
 }
 
@@ -352,10 +381,12 @@ func (r *room) sendLog(c *client) {
 		c.queue(syncMessage(syncStep2, emptyUpdate))
 		return
 	}
-	c.queue(syncMessage(syncStep2, r.log[0]))
+	msgs := make([][]byte, 0, len(r.log))
+	msgs = append(msgs, syncMessage(syncStep2, r.log[0]))
 	for _, update := range r.log[1:] {
-		c.queue(syncMessage(syncUpdate, update))
+		msgs = append(msgs, syncMessage(syncUpdate, update))
 	}
+	c.queueLog(msgs)
 }
 
 func (r *room) addUpdate(from *client, update []byte) {

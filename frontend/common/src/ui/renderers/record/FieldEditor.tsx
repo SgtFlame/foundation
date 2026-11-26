@@ -3,6 +3,7 @@
 // the record's format (records.CheckValue): decimals as strings, enums as
 // option ids, dateTime in UTC, rich text as a ProseMirror document.
 
+import { useUserNames } from '../../../components/undo/UndoButtons.tsx'
 import { lazy, Suspense, useState } from 'react'
 import {
   Autocomplete,
@@ -122,7 +123,12 @@ function RelationInput({ field, value, onChange, label, problem, disabled }: Fie
   const { data: type } = useQuery<{ entity?: { titleField?: string } }>(toUsers ? undefined : 'entity.describe', { id: target, published: true })
   const { data: page } = useQuery<RecordPage>(toUsers ? undefined : 'records.find', { entity: target, limit: 200 })
   const titleField = type?.entity?.titleField
-  const options = (page?.records ?? []).map((r) => ({ id: str(r._id), label: str(titleField ? r[titleField] : '') || titleOf(r) }))
+  // People are the tenant's members by name (forge 18a), when the person
+  // may list them; otherwise their ids are typed
+  const users = useUserNames()
+  const options = toUsers
+    ? [...users].map(([id, name]) => ({ id, label: name })).sort((x, y) => x.label.localeCompare(y.label))
+    : (page?.records ?? []).map((r) => ({ id: str(r._id), label: str(titleField ? r[titleField] : '') || titleOf(r) }))
   const labelOf = (id: string) => options.find((o) => o.id === id)?.label ?? id
   const ids = many ? ((value as string[] | null) ?? []) : value ? [str(value)] : []
   return (
@@ -131,7 +137,7 @@ function RelationInput({ field, value, onChange, label, problem, disabled }: Fie
       value={many ? ids : (ids[0] ?? null)}
       onChange={(_, v) => onChange(many ? ((v as string[]) ?? []) : ((v as string | null) ?? null))}
       renderValue={many ? (vals, getItemProps) => (Array.isArray(vals) ? vals : [vals]).map((id, index) => <Chip size="small" label={labelOf(String(id))} {...getItemProps({ index })} key={String(id)} />) : undefined}
-      renderInput={(params) => <TextField {...params} label={label} error={!!problem} helperText={problem || (toUsers ? 'User ids' : undefined)} />} />
+      renderInput={(params) => <TextField {...params} label={label} error={!!problem} helperText={problem || (toUsers && options.length === 0 ? 'User ids' : undefined)} />} />
   )
 }
 

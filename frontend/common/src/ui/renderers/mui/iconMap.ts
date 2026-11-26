@@ -1,5 +1,15 @@
 // The Material icons server-described trees may name, by name
 import AddIcon from '@mui/icons-material/Add'
+// Requirements (forge 18a)
+import AssignmentIcon from '@mui/icons-material/Assignment'
+import FlagIcon from '@mui/icons-material/Flag'
+import CategoryIcon from '@mui/icons-material/Category'
+import SyncIcon from '@mui/icons-material/Sync'
+import PersonAddIcon from '@mui/icons-material/PersonAdd'
+// Discussions (forge 18c)
+import FormatQuoteIcon from '@mui/icons-material/FormatQuote'
+import DoneAllIcon from '@mui/icons-material/DoneAll'
+import VisibilityIcon from '@mui/icons-material/Visibility'
 // Mail (forge 7o)
 import AllInboxIcon from '@mui/icons-material/AllInbox'
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd'
@@ -131,6 +141,14 @@ export const icons: Record<string, ComponentType<SvgIconProps>> = {
   mark_email_unread: MarkEmailUnreadIcon,
   attach_file: AttachFileIcon,
   edit_note: EditNoteIcon,
+  assignment: AssignmentIcon,
+  flag: FlagIcon,
+  format_quote: FormatQuoteIcon,
+  done_all: DoneAllIcon,
+  visibility: VisibilityIcon,
+  category: CategoryIcon,
+  sync: SyncIcon,
+  person_add: PersonAddIcon,
   unfold_less: UnfoldLessIcon,
   verified_user: VerifiedUserIcon,
   reply: ReplyIcon,

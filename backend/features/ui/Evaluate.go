@@ -126,6 +126,7 @@ func (e *evaluator) nodes(r *Render, sc *scope, n *Node, path []string, key stri
 }
 
 func (e *evaluator) expand(r *Render, sc *scope, n *Node, path []string, key string) []*Node {
+	given := key
 	if key == "" {
 		key = n.Key
 	}
@@ -164,7 +165,9 @@ func (e *evaluator) expand(r *Render, sc *scope, n *Node, path []string, key str
 		if len(branch) == 0 {
 			return nil
 		}
-		return e.nodes(r, sc, branch[0], path, "")
+		// A key given from above (a repeat's row) goes to the branch, so a
+		// when as a row's template keeps rows apart (forge 18a)
+		return e.nodes(r, sc, branch[0], path, given)
 	case strings.HasPrefix(n.Type, PrefabPrefix):
 		return []*Node{e.instance(r, sc, n, path, key)}
 	case Windowed(n.Type):

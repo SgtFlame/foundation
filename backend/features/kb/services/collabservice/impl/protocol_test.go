@@ -208,3 +208,52 @@ func TestASeedLeavesTheRoomClean(t *testing.T) {
 	go s.Collaborate(collabservice.CollaborateArgs{ServiceArgs: args, FileID: id, Conn: b})
 	b.expectControl(t, "a clean, ready writer role", func(c control) bool { return c.Op == "role" && c.Writer && c.Ready && !c.Dirty && c.Seed == nil })
 }
+
+// A client joining a room whose log is longer than its send queue gets the
+// whole log and stays (forge 18a: a log of 257 to 500 updates, before the
+// writer compacts it, dropped every client that joined)
+func TestALongLogReachesAJoiner(t *testing.T) {
+	root := t.TempDir()
+	volume := filepath.Join(root, "vol")
+	if err := os.MkdirAll(volume, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(volume, volumeservice.MarkerFile), []byte("{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(volume, "note.md"), []byte("hello"), 0o644)
+	s := newService(WithRoot(root), WithGracePeriod(time.Hour), WithFileEvents(volumeservice.NewFileEvents()))
+	id := s.OpenFile(collabservice.OpenFileArgs{Path: *kbservice.NewVolumePath().Folder("vol", "note"), Type: "markdown"}).FileID
+	sa := features.ServiceArgs{Ctx: context.Background(), Principal: features.Principal{TenantID: features.LocalTenantID}}
+	a := newFakeConn()
+	go s.Collaborate(collabservice.CollaborateArgs{ServiceArgs: sa, FileID: id, Conn: a})
+	a.expectControl(t, "writer role", func(c control) bool { return c.Op == "role" && c.Writer })
+	a.in <- controlMessage(control{Op: "seeded"})
+	a.expectControl(t, "ready", func(c control) bool { return c.Op == "ready" })
+	const n = 400 // above send's 256, below compactEntries
+	for i := 0; i < n; i++ {
+		a.in <- syncMessage(syncUpdate, []byte{byte(i >> 8), byte(i), 1})
+	}
+
+	b := &fakeConn{in: make(chan []byte, 16), out: make(chan []byte, 1024)}
+	done := make(chan collabservice.CollaborateResponse, 1)
+	go func() { done <- s.Collaborate(collabservice.CollaborateArgs{ServiceArgs: sa, FileID: id, Conn: b}) }()
+	b.expectControl(t, "reader role", func(c control) bool { return c.Op == "role" && !c.Writer })
+	b.in <- syncMessage(syncStep1, emptyStateVector)
+	got := 0
+	timeout := time.After(3 * time.Second)
+	for got < n {
+		select {
+		case msg := <-b.out:
+			if d := (&decoder{buf: msg}); d.uint() == msgSync {
+				if sub := d.uint(); sub == syncStep2 || sub == syncUpdate {
+					got++
+				}
+			}
+		case resp := <-done:
+			t.Fatalf("the joiner was dropped after %d of %d updates: %+v", got, n, resp.Common)
+		case <-timeout:
+			t.Fatalf("the joiner got %d of %d updates", got, n)
+		}
+	}
+	a.in <- syncMessage(syncUpdate, []byte{9, 9})
+	b.expectSync(t, "a later update", syncUpdate, []byte{9, 9})
+}

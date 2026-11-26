@@ -123,10 +123,10 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Descriptor: extensions.Descriptor{ID: "live.reject"}, Title: "Reject", Kinds: []string{KindCommand},
 		Description: "Refuses the command with a problem, in words a model can act on, and ends the run; nothing is committed",
 		Example:     "Reject \"a node cannot be joined to itself\" when source == target",
-		Config:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","title":"Path","description":"What is wrong, e.g. args.target"},"fix":{"type":"string","title":"Fix","description":"How to fix it"}}}`),
+		Config:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","title":"Path","description":"What is wrong, e.g. args.target"},"fix":{"type":"string","title":"Fix","description":"How to fix it"},"code":{"type":"string","title":"Code","description":"An error code a caller can test, such as head_moved; command_rejected when left out (forge 18a)"}}}`),
 		Pins:        cognition.Pins{In: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), cognition.DataPin("message", "Message", "string", "Why the command is refused")}},
 		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
-			var c struct{ Path, Fix string }
+			var c struct{ Path, Fix, Code string }
 			if err := x.Config(&c); err != nil {
 				return nil, "", err
 			}
@@ -135,7 +135,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				return nil, "", fmt.Errorf("Reject runs only in a command graph")
 			}
 			msg, _ := cognition.Get[string](in, "message")
-			h.Problems = append(h.Problems, live.Problem{Path: c.Path, Message: msg, Fix: c.Fix})
+			h.Problems = append(h.Problems, live.Problem{Code: c.Code, Path: c.Path, Message: msg, Fix: c.Fix})
 			return nil, "", nil
 		},
 	})

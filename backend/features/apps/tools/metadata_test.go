@@ -14,6 +14,9 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	kblive "github.com/SgtFlame/foundation/backend/features/kb/live"
+	kbnodes "github.com/SgtFlame/foundation/backend/features/kb/nodes"
+	"github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
+	textnodes "github.com/SgtFlame/foundation/backend/features/text/nodes"
 	"github.com/SgtFlame/foundation/backend/features/workspace"
 	"gorm.io/gorm"
 	"slices"
@@ -83,6 +86,8 @@ func everything(t *testing.T) *extensions.Registry {
 	jobs.Contribute(reg, func() jobs.Deps { return jobs.Deps{} })
 	jobsnodes.Contribute(reg, func() jobsnodes.Deps { return jobsnodes.Deps{} })
 	authznodes.Contribute(reg)
+	textnodes.Contribute(reg)                                            // Text diff, Anchor resolve (forge 18b)
+	kbnodes.Contribute(reg, func() collabservice.Service { return nil }) // Edit text together (forge 18c)
 	authz.ContributeAgents(reg)
 	kblive.Contribute(reg, func() string { return "" })
 	connectors.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })

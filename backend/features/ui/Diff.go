@@ -27,6 +27,12 @@ func Diff(path []string, old, new *Node) []Patch {
 	if old == nil || old.Type != new.Type || old.Key != new.Key || old.Src != new.Src || !equalJSON(old.Bind, new.Bind) || !equalJSON(old.On, new.On) || !equalJSON(old.Slots, new.Slots) {
 		return []Patch{{Op: "replace", Path: path, Node: new}}
 	}
+	if !uniqueKeys(old.Children) || !uniqueKeys(new.Children) {
+		// Children are addressed by key: siblings sharing one cannot be
+		// patched one by one (forge 18a: diffing them overran the list and
+		// the panic stopped the server), so the node is sent whole
+		return []Patch{{Op: "replace", Path: path, Node: new}}
+	}
 	var patches []Patch
 	if changed := propsDiff(old.Props, new.Props); changed != nil {
 		patches = append(patches, Patch{Op: "props", Path: path, Props: changed})
@@ -82,6 +88,18 @@ func propsDiff(old, new map[string]any) map[string]any {
 		}
 	}
 	return out
+}
+
+// uniqueKeys tells whether no two of the children share a key.
+func uniqueKeys(children []*Node) bool {
+	seen := make(map[string]bool, len(children))
+	for _, c := range children {
+		if seen[c.Key] {
+			return false
+		}
+		seen[c.Key] = true
+	}
+	return true
 }
 
 func child(path []string, key string) []string {

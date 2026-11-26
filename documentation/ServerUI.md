@@ -477,3 +477,13 @@ Forge 7p-5 ([forge MailApp.md](../../forge/documentation/MailApp.md#built-in-par
 
   It never hears the payload, nor `window:` events. The activity feature records them ([Activity.md](Activity.md#built-in-forge-15c)).
 - **The graph renderer** (`renderers/graph/GraphCanvas.tsx`) sends `select` only when the selection changes. React Flow reported an empty selection each time the canvas mounted or showed again.
+
+## Changed in forge 18a
+- **`ui.Diff` replaces a node whose children share a key** (in the old tree or the new) instead of patching them one by one. Children are addressed by key, and the move bookkeeping overran its list on duplicates. The panic, in a query's goroutine, stopped the whole server. Test: `ui` `TestDiffDuplicateKeys`.
+- **A *when* hands a key given from above to its branch**: when it is a repeat's row template, its branch now takes the row's key (`rows_<key>`), where it kept its own, the same in every row (the source of the duplicates above). Test: `ui/prefabs` `TestAWhenInARepeatKeepsRowsApart`.
+- **The relation field editor offers people** for a relation to users: the tenant's members by name (`useUserNames`, from `Tenants.members`), still taking a typed id when the person may not list members (the helper text then says *User ids*).
+
+## Changed in forge 18c
+- `doc.markdown` takes `value`, `highlights` and `focus`, raises `selected` and `highlightClicked`, and no longer requires `entity`, `id` and `field` ([MarkdownEditor.md › Changed in forge 18c](MarkdownEditor.md#changed-in-forge-18c)).
+- `mui.textField` takes **`clearOnSubmit`**: once Enter has sent `submit` (its payload read first), the field is emptied, as a message box is. A prefab's `local.*` values are per instance, so a handler cannot empty one.
+- `mui.box` takes **`size`**, its width in a `mui.grid`'s 12 columns (the grid's renderer reads its children's `size`, which only a box may now declare).

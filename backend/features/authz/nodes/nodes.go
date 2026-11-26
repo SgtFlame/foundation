@@ -28,6 +28,8 @@ const (
 	HasRoleID = "authz.hasRole"
 	// CanID tells whether the run's principal holds an action (forge 15b)
 	CanID = "authz.can"
+	// GrantsID lists the grants on an entity type's records (forge 18a)
+	GrantsID = "authz.grants"
 )
 
 var kinds = []string{livenodes.KindAction, livenodes.KindTrigger, uinodes.KindHandler, cognition.KindFunction, cognition.KindAgent}
@@ -132,6 +134,29 @@ func Contribute(reg *extensions.Registry) {
 		},
 	})
 	cognition.Nodes.Register(reg, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: GrantsID, Source: source, Order: 963}, Title: "Grants", Category: "Access",
+		Description: "The role grants on one record, or on every record of an entity type (forge 18a), so a graph that keeps grants in step with records (an app's access rules) can revoke those no rule gives any more. An app's own principal reads the grants of its own roles on its own records; anyone else needs grant.read there. Each grant is {grant, user, agent, role (an app role's id in its manifest, else the role's id), app, record}.",
+		Example:     "Grants on requirements' reqBoard records, to revoke the levels no access rule gives",
+		Examples:    cognition.ConfigExample(GrantsID, `{}`),
+		Tags:        []string{"rbac", "share", "permission", "grants"},
+		Kinds:       kinds, Volatile: true,
+		Sample:      cognition.Values{"grants": []any{}},
+		Pins: cognition.Pins{In: []cognition.Pin{
+			cognition.DataPin("entity", "Entity", "string", "The entity type whose records' grants are listed"),
+			{ID: "record", Name: "Record", Type: "string", Optional: true, Description: "One record's id; every record of the type when empty"},
+		}, Out: []cognition.Pin{
+			cognition.DataPin("grants", "Grants", "json", "[{grant, user, agent, role, app, record}], oldest first"),
+			cognition.DataPin("error", "Error", "string", "Why they cannot be read; empty when they could"),
+		}},
+		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
+			out, err := grantsOn(x, in)
+			if err != "" {
+				return cognition.Values{"grants": []any{}, "error": err}, "", nil
+			}
+			return cognition.Values{"grants": out, "error": ""}, "", nil
+		},
+	})
+	cognition.Nodes.Register(reg, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: HasRoleID, Source: source, Order: 962}, Title: "Has role", Category: "Access",
 		Description: "Whether the run's principal (the command's sender in a command graph) holds an app role on one record, or above it on the app or the tenant, as a row rule's principal.hasRole tells (forge 07o): a command refuses what only a role allows, such as sending from a mail account without Mail sender.",
 		Example:     "Has role mailSender on the draft's account, else Reject",
@@ -157,6 +182,63 @@ func Contribute(reg *extensions.Registry) {
 			return cognition.Values{"has": authz.HasRole(x.Context(), x.Principal, role, record)}, "", nil
 		},
 	})
+}
+
+// grantsOn lists the grants Grants' inputs name, or why it may not.
+func grantsOn(x *cognition.Exec, in cognition.Values) ([]any, string) {
+	pol := authz.Installed()
+	if pol == nil {
+		return nil, "access control is not installed"
+	}
+	entity, _ := cognition.Get[string](in, "entity")
+	record, _ := cognition.Get[string](in, "record")
+	if strings.TrimSpace(entity) == "" {
+		return nil, "give the entity type"
+	}
+	resource := records.Resource(x.Principal, entity)
+	under := record == ""
+	if !under {
+		resource = authz.RecordResource(resource, record)
+	}
+	app := ""
+	if x.Principal.Kind == features.PrincipalApp {
+		path := authz.Split(resource)
+		if x.Principal.App == "" || len(path) < 2 || path[1] != "app:"+x.Principal.App {
+			return nil, "an app reads grants only on its own records"
+		}
+		app = x.Principal.App
+	} else if err := authz.Check(x.Context(), x.Principal, "grant.read", resource).Err("grant.read", resource); err != nil {
+		return nil, err.Error()
+	}
+	grants, err := pol.GrantsOn(nil, resource, under)
+	if err != nil {
+		return nil, "the grants cannot be read"
+	}
+	roles, err := pol.Roles()
+	if err != nil {
+		return nil, "roles cannot be read"
+	}
+	out := []any{}
+	for _, g := range grants {
+		r := roles[g.RoleID]
+		if app != "" && r.App != app {
+			continue
+		}
+		role := strconv.FormatUint(g.RoleID, 10)
+		if r.AppRole != "" {
+			role = r.AppRole
+		}
+		_, id, _ := authz.RecordOf(authz.Split(g.Resource))
+		item := map[string]any{"grant": strconv.FormatUint(g.ID, 10), "user": "", "agent": "", "role": role, "app": r.App, "record": id}
+		if g.UserID != 0 {
+			item["user"] = strconv.FormatUint(g.UserID, 10)
+		}
+		if g.AgentID != 0 {
+			item["agent"] = strconv.FormatUint(g.AgentID, 10)
+		}
+		out = append(out, item)
+	}
+	return out, ""
 }
 
 // grantArgs are a node's inputs, resolved.

@@ -95,6 +95,21 @@ func TestDiffByKey(t *testing.T) {
 	}
 }
 
+// Siblings sharing a key (forge 18a: once ran past the list and panicked)
+// replace their parent whole, as old or new
+func TestDiffDuplicateKeys(t *testing.T) {
+	cases := [][2]*Node{
+		{N("box", "r", N("a", "1"), N("a", "2")), N("box", "r", N("a", "1"), N("a", "1"), N("a", "2"))},
+		{N("box", "r", N("a", "1"), N("a", "1"), N("a", "2")), N("box", "r", N("a", "2"), N("a", "1"))},
+	}
+	for i, c := range cases {
+		patches := Diff([]string{"p"}, c[0], c[1])
+		if len(patches) != 1 || patches[0].Op != "replace" || patches[0].Node != c[1] {
+			t.Errorf("case %d: %+v", i, patches)
+		}
+	}
+}
+
 // A patch at the root has the empty path, which travels as [], never null
 func TestRootPatchesHaveAnEmptyPath(t *testing.T) {
 	old := N("mui.stack", "root", N("mui.text", "a"))

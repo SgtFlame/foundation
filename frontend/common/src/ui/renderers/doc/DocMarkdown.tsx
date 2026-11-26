@@ -27,6 +27,8 @@ import { useCollabSession, useCollabState } from '../../../editors/markdown/coll
 import { livePreview } from '../../../editors/markdown/live/livePreview.ts'
 import { obsidianTheme } from '../../../editors/markdown/live/obsidianTheme.ts'
 import type { RendererProps } from '../../points.ts'
+import { describeSelection, placeHighlights, type Highlight, type Selected } from './highlights.ts'
+import { highlightExtension, highlightRange, setHighlights, type HighlightHandlers } from './highlightField.ts'
 
 const str = (v: unknown) => (v === undefined || v === null ? '' : String(v))
 
@@ -51,14 +53,33 @@ export interface MarkdownFieldProps {
   // few seconds (forge 07o: "Ana is replying" on a mail thread)
   typingIn?: string
   typingState?: Record<string, unknown>
+  // Marks over the text (forge 18c): each placed by its Yjs positions,
+  // its range or its quote found again, and kept in place as people type
+  highlights?: Highlight[]
+  // Scrolls to a highlight whenever it changes: {id, n}
+  focus?: { id?: string; n?: number }
+  onSelected?(s: Selected): void
+  onHighlightClicked?(id: string): void
 }
 
 export function DocMarkdown(p: RendererProps) {
   const emit = useRef(p.emit)
   emit.current = p.emit
   const onChange = useMemo(() => (value: string) => emit.current('change', { value }), [])
+  const onSelected = useMemo(() => (s: Selected) => emit.current('selected', { ...s }), [])
+  const onHighlightClicked = useMemo(() => (id: string) => emit.current('highlightClicked', { id }), [])
+  const marks = {
+    highlights: Array.isArray(p.props.highlights) ? (p.props.highlights as Highlight[]) : undefined,
+    focus: p.props.focus as MarkdownFieldProps['focus'],
+    onSelected: p.handles('selected') ? onSelected : undefined,
+    onHighlightClicked: p.handles('highlightClicked') ? onHighlightClicked : undefined,
+  }
+  // Text given as value, with no record: shown read-only, with highlights and selection
+  if (!str(p.props.entity) && !str(p.props.id) && p.props.value !== undefined) {
+    return <StaticDoc value={str(p.props.value)} minHeight={p.props.minHeight as number | undefined} maxHeight={p.props.maxHeight as number | undefined} {...marks} />
+  }
   return (
-    <MarkdownField entity={str(p.props.entity)} id={str(p.props.id)} field={str(p.props.field)} placeholder={str(p.props.placeholder) || undefined}
+    <MarkdownField {...marks} entity={str(p.props.entity)} id={str(p.props.id)} field={str(p.props.field)} placeholder={str(p.props.placeholder) || undefined}
       toolbar={p.props.toolbar !== false} minHeight={p.props.minHeight as number | undefined} maxHeight={p.props.maxHeight as number | undefined}
       disabled={!!p.props.disabled} onChange={p.handles('change') ? onChange : undefined}
       typingIn={str(p.props.typingIn) || undefined} typingState={p.props.typingState as Record<string, unknown> | undefined} />
@@ -97,6 +118,7 @@ function DocEditor({ fileId, readOnly, p, onClosed }: { fileId: string; readOnly
   const [compartments] = useState(() => ({ theme: new Compartment(), readOnly: new Compartment() }))
   const [view, setView] = useState<EditorView>()
   const placeholder = p.placeholder ?? ''
+  const handlers = useMarkHandlers(p, session.ytext)
 
   useEffect(() => {
     if (!parent.current) return
@@ -110,6 +132,7 @@ function DocEditor({ fileId, readOnly, p, onClosed }: { fileId: string; readOnly
           yCollab(session.ytext, session.awareness, { undoManager: new Y.UndoManager(session.ytext) }),
           livePreview({ onLink: (url) => (window.open(url, '_blank', 'noopener,noreferrer'), true) }),
           EditorView.lineWrapping,
+          highlightExtension(handlers),
           placeholder ? cmPlaceholder(placeholder) : [],
           compartments.theme.of([]),
           compartments.readOnly.of([]),
@@ -142,6 +165,7 @@ function DocEditor({ fileId, readOnly, p, onClosed }: { fileId: string; readOnly
 
   useChange(session, p)
   useTyping(session, p.typingIn, p.typingState)
+  useMarks(view, p.highlights, p.focus, state.loaded, session.ytext.doc ?? undefined)
 
   const toolbar = p.toolbar !== false && !readOnly
   const minHeight = p.minHeight ?? 120
@@ -276,3 +300,83 @@ function Toolbar({ view, disabled }: { view?: EditorView; disabled: boolean }) {
 }
 
 export default DocMarkdown
+
+// The handlers a view's highlight extension calls, current on every render
+function useMarkHandlers(p: Pick<MarkdownFieldProps, 'onSelected' | 'onHighlightClicked'>, ytext?: Y.Text) {
+  const handlers = useRef<HighlightHandlers>({ clicked: () => {}, selected: () => {} })
+  const view = useRef<{ text(): string }>({ text: () => '' })
+  handlers.current = {
+    clicked: (id) => p.onHighlightClicked?.(id),
+    selected: (from, to) => {
+      if (!p.onSelected) return
+      const text = ytext ? ytext.toString() : view.current.text()
+      p.onSelected(from === to ? { quote: '', headingPath: [], context: '', range: { from, to } } : describeSelection(text, from, to, ytext))
+    },
+  }
+  return handlers
+}
+
+// Places the highlights when they change or the text first loads, and
+// scrolls to the focused one
+function useMarks(view: EditorView | undefined, highlights: Highlight[] | undefined, focus: MarkdownFieldProps['focus'], loaded: boolean, doc?: Y.Doc) {
+  const key = JSON.stringify(highlights ?? [])
+  useEffect(() => {
+    if (!view || !loaded) return
+    const list = JSON.parse(key) as Highlight[]
+    view.dispatch({ effects: setHighlights.of({ want: list.length, place: (text) => placeHighlights(text, list, doc) }) })
+  }, [view, key, loaded, doc])
+  const focusKey = focus?.id ? `${focus.id}:${focus.n ?? 0}` : ''
+  useEffect(() => {
+    if (!view || !loaded || !focusKey) return
+    const at = highlightRange(view, focusKey.slice(0, focusKey.lastIndexOf(':')))
+    if (at) view.dispatch({ effects: EditorView.scrollIntoView(at.from, { y: 'center' }) })
+  }, [view, focusKey, loaded, key])
+}
+
+// Text with no room, read-only: a version shown with its threads
+function StaticDoc(p: { value: string; minHeight?: number; maxHeight?: number } & Pick<MarkdownFieldProps, 'highlights' | 'focus' | 'onSelected' | 'onHighlightClicked'>) {
+  const theme = useTheme()
+  const parent = useRef<HTMLDivElement>(null)
+  const [view, setView] = useState<EditorView>()
+  const [themeC] = useState(() => new Compartment())
+  const textRef = useRef(p.value)
+  textRef.current = p.value
+  const handlers = useRef<HighlightHandlers>({ clicked: () => {}, selected: () => {} })
+  handlers.current = {
+    clicked: (id) => p.onHighlightClicked?.(id),
+    selected: (from, to) => {
+      if (!p.onSelected) return
+      const text = view?.state.doc.toString() ?? textRef.current
+      p.onSelected(from === to ? { quote: '', headingPath: [], context: '', range: { from, to } } : describeSelection(text, from, to))
+    },
+  }
+  useEffect(() => {
+    if (!parent.current) return
+    const created = new EditorView({
+      parent: parent.current,
+      state: EditorState.create({
+        doc: textRef.current,
+        extensions: [markdown({ base: markdownLanguage }), livePreview({ revealSelection: false }), EditorView.lineWrapping,
+          EditorState.readOnly.of(true), highlightExtension(handlers), themeC.of([])],
+      }),
+    })
+    setView(created)
+    return () => {
+      created.destroy()
+      setView(undefined)
+    }
+  }, [themeC])
+  useEffect(() => {
+    view?.dispatch({ effects: themeC.reconfigure(obsidianTheme(theme)) })
+  }, [view, theme, themeC])
+  useEffect(() => {
+    if (view && view.state.doc.toString() !== p.value) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: p.value } })
+  }, [view, p.value])
+  useMarks(view, p.highlights, p.focus, true, undefined)
+  const minHeight = p.minHeight ?? 120
+  return (
+    <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper', color: 'text.primary', px: 1 }} data-doc-markdown="static">
+      <Box ref={parent} sx={{ minHeight, maxHeight: p.maxHeight, overflow: 'auto', '& .cm-editor': { minHeight }, '& .cm-editor.cm-focused': { outline: 'none' } }} />
+    </Box>
+  )
+}

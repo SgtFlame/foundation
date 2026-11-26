@@ -209,6 +209,8 @@ export function MuiTextField(p: P) {
         if (e.key === 'Enter' && (!multiline || e.ctrlKey || e.metaKey)) {
           e.preventDefault()
           p.emit('submit', { value })
+          // The payload was read as it was sent (forge 18c: a message box)
+          if (p.props.clearOnSubmit) setValue('')
         }
       }}
     />

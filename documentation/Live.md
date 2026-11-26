@@ -226,3 +226,6 @@ Every committed event carries **`command`**, the command type that committed it 
 
 ## Changed in forge 16b
 - **Presence a person owns**: `presence.Owned(prefix)` makes objects of type `<prefix>_<userId>` private to that user. `Set` (the `presence` frame) and the `live.presence` query refuse anyone else with `forbidden`, an agent too. `presence.Allowed(principal, object)` is the check. Workspaces register `ws`, so which windows show a workspace (`ws_<userId>.<id>`) is that person's alone ([Workspaces.md › Built in forge 16b](Workspaces.md#built-in-forge-16b)).
+
+## Changed in forge 18a
+- ***Reject*** takes an optional `code` config, the rejection's error code in place of `command_rejected` (`live.Problem.Code`), for a caller to test, such as Forge's `requirements.commit` refusing with `head_moved`.

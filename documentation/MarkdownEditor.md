@@ -175,3 +175,23 @@ Forge's part 7l ([forge ContentComponents.md](../../forge/documentation/ContentC
 - **Saves run in order on the room's own goroutine** (`saveLoop`), so a slow save (a command) never holds up the relay. A save overtaken by a later one is skipped.
 - **Fix: a seed no longer marks the room dirty** (`addUpdate`), and **a writer handed a dirty room saves once it has synced** (`CollabSession.saveWhenSynced`). Before, a writer that only seeded and left made the next writer save at once, before the room's log reached its document, which stored an empty text. File rooms had the same race. `TestASeedLeavesTheRoomClean` covers it.
 - **Remote cursors** carry the signed-in user's display name and presence colour (`localUser`), not a guest's.
+
+## Changed in forge 18a
+- **A room sends its log to a joining client however long it is.** The log went through the client's send queue (256 messages), which drops a client that falls behind. The writer is asked to compact only past 500 updates, so in a room whose log held 257 to 500 updates every client that joined, or rejoined, was dropped at once, and its editor stayed offline. That is any shared markdown typed for a while, such as two people in one Requirements draft. The log now goes into the client's own backlog (`client.queueLog`), which its write loop drains apart from the queue. Yjs applies updates in any order. Test: `collabservice/impl` `TestALongLogReachesAJoiner`.
+
+## Changed in forge 18c
+Forge's part 18c ([forge RequirementsApp.md](../../forge/documentation/RequirementsApp.md#built-in-part-18c)): a server graph edits a record's markdown field through its room, and `doc.markdown` reports selections and draws highlights.
+- **`collabservice.EditDoc {kind, ref, edits, each}`** (Go only; `impl/EditDoc.go`) is `EditFile` for a document of a kind:
+  - It needs write access (`Document.Access` not read-only; 403 `read_only`).
+  - While the room is open, its writer applies the edits to the shared text (`Live`); otherwise the document is loaded, changed and saved as the caller, holding the service's lock so no room opens meanwhile.
+  - An edit is `{find, replace}`, or a range `{start, end, find?, replace}` in runes of the saved text. **`collabservice.Prepare`** decides the edits against the saved text in order, turning each range into the shortest find around it that occurs once (`Unique`), and reports per edit whether it applied and why not. With `each`, the edits that can apply still do; without it, one failure fails them all (409 `edit_failed`).
+  - `impl.New` makes a service of its own for a test's stack.
+
+  Tests: `collabservice` `TestPrepare` (a recurring range grown until unique, an insertion, runes, partial application), `impl` `TestEditDoc` (saved when closed, a failed batch changes nothing, `each`, a reader refused, the writer sent a unique find).
+- **`doc.markdown` selections and highlights** (`renderers/doc/highlights.ts`, `highlightField.ts`):
+  - `selected {quote, headingPath, context, range, ypos}` is raised once a selection settles (350 ms), and `{quote: ""}` when it is cleared. `ypos` holds the Yjs relative positions of the range while a room is open.
+  - `highlights` (`[{id, range?, anchor?: {quote, headingPath, context, ypos}, kind, colour}]`) is placed by its positions while they resolve in this room, else by its range while that still holds its quote, else by finding the quote again (under its headings, exactly, then with spaces and case ignored, the context picking among several). The marks then move through every change, local or a peer's.
+  - Clicking a mark raises `highlightClicked {id}`. `focus {id, n}` scrolls to a mark each time it changes.
+  - With `value` and no record it shows that text read-only, with the same selection and highlights (a committed version).
+
+  Test: `highlights.test.ts` (heading paths skipping fenced code, quotes found under headings, by context and loosely, a stale range dropped, and a highlight following two synced documents' concurrent typing). The two-browser check is forge's walk `walks/18c.json`.

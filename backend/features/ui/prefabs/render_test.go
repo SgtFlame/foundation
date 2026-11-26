@@ -580,6 +580,33 @@ func TestStylingAndPreview(t *testing.T) {
 	}
 }
 
+// A when as a repeat's row template takes the row's key (forge 18a: its
+// branch kept its own key, so every row shared it and patching them failed)
+func TestAWhenInARepeatKeepsRowsApart(t *testing.T) {
+	st := newRender(t)
+	st.build()
+	st.do("prefab.create", "rowsWhen", map[string]any{"name": "Rows when"})
+	st.do("prefab.setInterface", "rowsWhen", map[string]any{"props": map[string]any{"items": map[string]any{"type": "json"}}})
+	st.insert("rowsWhen", "", map[string]any{"type": "mui.stack", "key": "root"})
+	st.insert("rowsWhen", "root", map[string]any{"type": "repeat", "key": "rows", "props": map[string]any{"each": "=props.items", "as": "it", "key": "it.id"},
+		"children": []any{map[string]any{"type": "when", "key": "row", "props": map[string]any{"test": "=it.on"},
+			"slots": map[string]any{"then": []any{map[string]any{"type": "mui.text", "key": "on", "bind": map[string]any{"text": "it.name"}}},
+				"else": []any{map[string]any{"type": "mui.chip", "key": "off", "bind": map[string]any{"label": "it.name"}}}}}}})
+	st.rev(prefabs.DraftProjector, "prefab.rowsWhen", "rowsWhen")
+	items := []any{map[string]any{"id": "a", "name": "A", "on": true}, map[string]any{"id": "b", "name": "B", "on": true}, map[string]any{"id": "c", "name": "C", "on": false}}
+	tree, problems, fail := ui.Preview(user(), ui.Options{Catalog: ui.Catalog(st.reg), Subs: st.subs}, "rowsWhen", "", map[string]any{"items": items}, true)
+	if fail != nil || len(problems) > 0 {
+		t.Fatalf("%v %+v", fail, problems)
+	}
+	var keys []string
+	for _, c := range tree.Children {
+		keys = append(keys, c.Key+":"+c.Type)
+	}
+	if strings.Join(keys, ",") != "rows_a:mui.text,rows_b:mui.text,rows_c:mui.chip" {
+		t.Errorf("rows %v", keys)
+	}
+}
+
 func TestTheDesignPageDrawsTheDraftDry(t *testing.T) {
 	st := newRender(t)
 	ids := st.build()

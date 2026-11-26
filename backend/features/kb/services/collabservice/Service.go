@@ -2,6 +2,7 @@ package collabservice
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/kbservice"
@@ -18,6 +19,10 @@ type Service interface {
 	Collaborate(args CollaborateArgs) CollaborateResponse
 	// EditFile is Go-only (the kb.edit tool calls it), so it has no route.
 	EditFile(args EditFileArgs) EditFileResponse
+	// EditDoc applies edits to a document of a kind (forge 18c: a
+	// record's markdown field), through its room's writer while it is
+	// open, else to the document. Go-only (the Edit text together node).
+	EditDoc(args EditDocArgs) EditDocResponse
 }
 
 // Conn is one client's message stream, independent of the transport.
@@ -64,4 +69,24 @@ type EditFileArgs struct {
 type EditFileResponse struct {
 	Common features.ServiceResponse
 	Live   bool // applied to the open document rather than the file
+}
+
+// EditDocArgs applies edits to a document of a kind: find/replace edits,
+// or ranges of its saved text (Prepare). The principal must be able to
+// write it. Each applies the edits that can apply and reports the others;
+// without it one edit that cannot apply fails them all.
+type EditDocArgs struct {
+	features.ServiceArgs
+	Kind  string
+	Ref   json.RawMessage
+	Edits []Edit
+	Each  bool
+}
+
+type EditDocResponse struct {
+	Common features.ServiceResponse
+	Live   bool // applied to the open document rather than saved
+	// Applied and Problems tell, per edit given, whether it applied and why not
+	Applied  []bool
+	Problems []string
 }

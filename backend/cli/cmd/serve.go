@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SgtFlame/foundation/backend/features/activity"
+	kbnodes "github.com/SgtFlame/foundation/backend/features/kb/nodes"
 	"gorm.io/gorm"
 	"net/http"
 	"net/url"
@@ -145,6 +146,7 @@ import (
 	bootstrapimpl "github.com/SgtFlame/foundation/backend/features/secrets/services/bootstrapservice/impl"
 	secretsimpl "github.com/SgtFlame/foundation/backend/features/secrets/services/secretsservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/secrets/vaultstore"
+	textnodes "github.com/SgtFlame/foundation/backend/features/text/nodes"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 	toolsbuiltin "github.com/SgtFlame/foundation/backend/features/tools/builtin"
 	toolscontext "github.com/SgtFlame/foundation/backend/features/tools/context"
@@ -522,7 +524,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// installs whose triggers they run
 		jobs.Contribute(registry, func() jobs.Deps { return jobDeps })
 		jobsnodes.Contribute(registry, func() jobsnodes.Deps { return jobNodeDeps })
-		authznodes.Contribute(registry) // Grant role, Revoke role (forge 07j)
+		authznodes.Contribute(registry)                                                  // Grant role, Revoke role (forge 07j)
+		textnodes.Contribute(registry)                                                   // Text diff, Anchor resolve (forge 18b)
+		kbnodes.Contribute(registry, func() collabservice.Service { return collabLive }) // Edit text together (forge 18c)
 		// Connectors (forge 07b): the registry's queries and the connector
 		// nodes; builtin contracts and types are contributed beside them
 		connectors.Contribute(registry, func() connectors.Deps { return connectorDeps })
