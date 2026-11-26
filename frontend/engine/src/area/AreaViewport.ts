@@ -4,7 +4,9 @@ import { Loop } from '../core/Loop.ts'
 import { StatsOverlay } from '../debug/StatsOverlay.ts'
 import { Input } from '../input/Input.ts'
 import { Renderer } from '../render/Renderer.ts'
-import { buildModel, material } from './Models.ts'
+import { WalkGrid, type Point } from '../nav/WalkGrid.ts'
+import { moonLight, moons, type MoonPhase } from '../sky/Moons.ts'
+import { buildModel, CharacterModel, material } from './Models.ts'
 import { fit, pieceOf, turned, type AreaDef, type PieceSet, type Placement } from './PieceSet.ts'
 
 // What the editor asks for; the host sends it to the server, which decides
@@ -45,6 +47,8 @@ export interface AreaViewportOptions {
   forceWebGL?: boolean
   stats?: boolean
   lighting?: Lighting
+  // The calendar night, which sets the moons' phases (default 11)
+  night?: number
 }
 
 export interface AreaStats {
@@ -57,6 +61,10 @@ export interface AreaStats {
   pieces: number
   lights: number
   heapMB: number | null
+  // Playing: the character on the area (S2)
+  playing: boolean
+  // How long the walk grid took to build from the pieces, last time
+  navMs: number
 }
 
 const GOOD = 0x4caf50
@@ -105,6 +113,20 @@ export class AreaViewport {
   private readonly greaterMoon = new THREE.DirectionalLight(0xe8e2d4, 0.0)
   private readonly lesserMoon = new THREE.DirectionalLight(0xb8c8ff, 0.0)
   private pointLights = 0
+  // the last frame's draw calls and triangles (the renderer resets them each frame)
+  private lastInfo = { drawCalls: 0, triangles: 0 }
+  private night: number
+  private moonHud: HTMLDivElement | null = null
+  // Play: the character, where it may walk and the path it follows
+  private playing = false
+  private walk: WalkGrid | null = null
+  private navMs = 0
+  private character: CharacterModel | null = null
+  private path: Point[] = []
+  private stride = 0
+  private moving = 0
+  private readonly marker: THREE.Mesh
+  private editCamera: { target: THREE.Vector3; yaw: number; pitch: number; distance: number } | null = null
 
   private constructor(container: HTMLElement, renderer: Renderer, opts: AreaViewportOptions) {
     this.container = container
@@ -113,6 +135,7 @@ export class AreaViewport {
     this.set = opts.set
     this.area = opts.area
     this.lighting = opts.lighting ?? 'day'
+    this.night = opts.night ?? 11
     const canvas = renderer.canvas
     canvas.tabIndex = 0
     renderer.three.shadowMap.enabled = true
@@ -136,6 +159,9 @@ export class AreaViewport {
     this.selection = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicNodeMaterial({ color: SELECT }))
     this.selection.visible = false
     this.scene.add(this.selection)
+    this.marker = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.55, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicNodeMaterial({ color: 0xffd54f, transparent: true, opacity: 0.9 }))
+    this.marker.visible = false
+    this.scene.add(this.marker)
 
     this.overlay = opts.stats === false ? null : new StatsOverlay(container)
     this.hint = document.createElement('div')
@@ -183,6 +209,7 @@ export class AreaViewport {
 
   // The piece in hand (null for none: clicking selects)
   setTool(piece: string | null, rot = this.rot): void {
+    if (this.playing && piece) return // no building while playing
     this.tool = piece
     this.rot = ((rot % 4) + 4) % 4
     if (piece) this.select(null)
@@ -194,6 +221,77 @@ export class AreaViewport {
   setLighting(l: Lighting): void {
     this.lighting = l
     this.applyLighting()
+  }
+
+  // The calendar night: the moons' phases follow from it
+  setNight(night: number): void {
+    this.night = night
+    this.applyLighting()
+  }
+
+  get isPlaying(): boolean {
+    return this.playing
+  }
+
+  // Play in editor (S2.4): a character stands on the area and walks where
+  // it is clicked, the camera following; off returns to editing where the
+  // camera was
+  play(on: boolean): void {
+    if (on === this.playing) return
+    this.playing = on
+    const canvas = this.renderer.canvas
+    if (on) {
+      this.setTool(null)
+      this.select(null)
+      this.editCamera = { target: this.orbit.target.clone(), yaw: this.orbit.yaw, pitch: this.orbit.pitch, distance: this.orbit.distance }
+      this.buildWalk()
+      this.character = new CharacterModel(0x5b6f8f)
+      const at = this.spawnPoint()
+      this.character.group.position.set(at.x, 0, at.z)
+      this.scene.add(this.character.group)
+      this.orbit.keyPan = false
+      this.orbit.target.set(at.x, 0, at.z)
+      this.orbit.distance = 32
+      this.grid.visible = false
+    } else {
+      if (this.character) this.scene.remove(this.character.group)
+      this.character = null
+      this.walk = null
+      this.path = []
+      this.marker.visible = false
+      this.orbit.keyPan = true
+      if (this.editCamera) {
+        this.orbit.target.copy(this.editCamera.target)
+        this.orbit.yaw = this.editCamera.yaw
+        this.orbit.pitch = this.editCamera.pitch
+        this.orbit.distance = this.editCamera.distance
+      }
+      this.grid.visible = true
+      canvas.style.cursor = ''
+    }
+    this.previewKey = ''
+    this.updateHint()
+  }
+
+  // Where the character is, while playing
+  player(): { x: number; z: number; heading: number; moving: boolean } | null {
+    const c = this.character
+    if (!c) return null
+    return { x: c.group.position.x, z: c.group.position.z, heading: c.group.rotation.y, moving: this.path.length > 0 }
+  }
+
+  // Walks the character to a point on the ground, as a click does; false
+  // when there is no way there
+  walkTo(x: number, z: number): boolean {
+    if (!this.walk || !this.character) return false
+    const from = { x: this.character.group.position.x, z: this.character.group.position.z }
+    const path = this.walk.findPath(from, { x, z })
+    if (!path) return false
+    this.path = path.slice(1)
+    const end = path[path.length - 1]
+    this.marker.position.set(end.x, 0.08, end.z)
+    this.marker.visible = this.path.length > 0
+    return true
   }
 
   select(id: string | null): void {
@@ -242,7 +340,7 @@ export class AreaViewport {
 
   stats(): AreaStats {
     const l = this.loop.stats()
-    const info = this.renderer.info()
+    const info = this.lastInfo
     const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory
     return {
       backend: this.renderer.backend,
@@ -254,6 +352,8 @@ export class AreaViewport {
       pieces: this.pieces.size,
       lights: this.pointLights,
       heapMB: mem ? mem.usedJSHeapSize / 1048576 : null,
+      playing: this.playing,
+      navMs: this.navMs,
     }
   }
 
@@ -265,6 +365,7 @@ export class AreaViewport {
     this.overlay?.dispose()
     for (const r of this.remotes.values()) r.label.remove()
     this.hint.remove()
+    this.moonHud?.remove()
     this.renderer.dispose()
     this.renderer.canvas.remove()
   }
@@ -317,10 +418,11 @@ export class AreaViewport {
     this.sun.castShadow = !night
     this.sun.position.set(cx + far * 0.5, far, cz + far * 0.3)
     // The greater moon: wide, soft, slightly warm; the lesser: small, cool, hard (375 › art style)
-    this.greaterMoon.intensity = night ? 0.45 : 0
+    const m = moons(this.night)
+    this.greaterMoon.intensity = night ? 0.55 * moonLight(m.greater) : 0
     this.greaterMoon.castShadow = night
     this.greaterMoon.position.set(cx - far * 0.6, far * 0.8, cz - far * 0.2)
-    this.lesserMoon.intensity = night ? 0.3 : 0
+    this.lesserMoon.intensity = night ? 0.4 * moonLight(m.lesser) : 0
     this.lesserMoon.castShadow = night
     this.lesserMoon.position.set(cx + far * 0.3, far * 0.9, cz - far * 0.7)
     this.hemi.color.set(night ? 0x26324d : 0xbcd2ff)
@@ -329,6 +431,41 @@ export class AreaViewport {
     this.scene.background = new THREE.Color(night ? 0x070a14 : 0x9fb6cf)
     this.scene.fog = night ? new THREE.Fog(0x0a0e1a, far * 0.35, far * 1.4) : new THREE.Fog(0x9fb6cf, far * 0.6, far * 2.5)
     this.lightsGroup.visible = night
+    this.drawMoonHud(night ? m : null)
+  }
+
+  // The two moons' phases in a corner at night: the top-down camera never
+  // sees the sky, so the moons are shown here
+  private drawMoonHud(m: { greater: MoonPhase; lesser: MoonPhase } | null): void {
+    if (!m) {
+      this.moonHud?.remove()
+      this.moonHud = null
+      return
+    }
+    if (!this.moonHud) {
+      this.moonHud = document.createElement('div')
+      this.moonHud.style.cssText =
+        'position:absolute;top:10px;right:10px;z-index:2;display:flex;gap:10px;padding:6px 10px;border-radius:4px;' +
+        'background:rgba(0,0,0,0.55);font:11px system-ui,sans-serif;color:#ddd;pointer-events:none'
+      this.moonHud.dataset.moons = ''
+      this.container.appendChild(this.moonHud)
+    }
+    this.moonHud.replaceChildren()
+    for (const [name, phase, size, tint] of [
+      ['Greater moon', m.greater, 34, '#efe6d2'],
+      ['Lesser moon', m.lesser, 22, '#c8d6ff'],
+    ] as const) {
+      const box = document.createElement('div')
+      box.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px'
+      const c = document.createElement('canvas')
+      c.width = c.height = size * 2
+      c.style.cssText = `width:${size}px;height:${size}px`
+      drawPhase(c, phase, tint)
+      const label = document.createElement('div')
+      label.textContent = `${name} · ${phaseName(phase)}`
+      box.append(c, label)
+      this.moonHud.appendChild(box)
+    }
   }
 
   // Adds, replaces and removes piece groups to match the area
@@ -356,6 +493,7 @@ export class AreaViewport {
     if (changed) {
       this.rebuildLights()
       this.drawSelection()
+      if (this.playing) this.buildWalk()
     }
   }
 
@@ -409,6 +547,11 @@ export class AreaViewport {
   private onPointerDown = (e: PointerEvent) => {
     this.renderer.canvas.focus()
     if (e.button !== 0) return
+    if (this.playing) {
+      const hit = this.groundAt(e.offsetX, e.offsetY)
+      if (hit && !this.walkTo(hit.x, hit.z)) this.flash('No way there')
+      return
+    }
     const cell = this.cellAt(e.offsetX, e.offsetY)
     if (!cell) return
     if (this.tool) {
@@ -422,6 +565,10 @@ export class AreaViewport {
   }
 
   private onKey = (e: KeyboardEvent) => {
+    if (this.playing) {
+      if (e.key === 'Escape') this.path = []
+      return
+    }
     if (e.key === 'r' || e.key === 'R') {
       if (this.tool) {
         this.setTool(this.tool, this.rot + (e.shiftKey ? 3 : 1))
@@ -449,12 +596,18 @@ export class AreaViewport {
     }
   }
 
-  private cellAt(px: number, py: number): { x: number; z: number } | null {
+  // The point on the ground under a pixel
+  private groundAt(px: number, py: number): THREE.Vector3 | null {
     const canvas = this.renderer.canvas
     const ndc = new THREE.Vector2((px / canvas.clientWidth) * 2 - 1, -(py / canvas.clientHeight) * 2 + 1)
     this.raycaster.setFromCamera(ndc, this.orbit.camera)
     const hit = new THREE.Vector3()
-    if (!this.raycaster.ray.intersectPlane(this.plane, hit)) return null
+    return this.raycaster.ray.intersectPlane(this.plane, hit)
+  }
+
+  private cellAt(px: number, py: number): { x: number; z: number } | null {
+    const hit = this.groundAt(px, py)
+    if (!hit) return null
     const x = Math.floor(hit.x / this.set.cell)
     const z = Math.floor(hit.z / this.set.cell)
     if (x < 0 || z < 0 || x >= this.area.width || z >= this.area.depth) return null
@@ -471,8 +624,123 @@ export class AreaViewport {
     return null
   }
 
+  // The walk grid from the placed pieces' blockers, each turned and moved
+  // with its piece (S2.2)
+  private buildWalk(): void {
+    const t0 = performance.now()
+    const c = this.set.cell
+    const grid = new WalkGrid(this.area.width * c, this.area.depth * c, 1)
+    const v = new THREE.Vector3()
+    for (const { group } of this.pieces.values()) {
+      const model = group.children[0]
+      const rects = model?.userData.blockers as [number, number, number, number][] | undefined
+      if (!rects) continue
+      group.updateMatrixWorld(true)
+      for (const [x0, z0, x1, z1] of rects) {
+        let minX = Infinity
+        let minZ = Infinity
+        let maxX = -Infinity
+        let maxZ = -Infinity
+        for (const [x, z] of [
+          [x0, z0],
+          [x1, z0],
+          [x0, z1],
+          [x1, z1],
+        ]) {
+          v.set(x, 0, z)
+          model.localToWorld(v)
+          minX = Math.min(minX, v.x)
+          minZ = Math.min(minZ, v.z)
+          maxX = Math.max(maxX, v.x)
+          maxZ = Math.max(maxZ, v.z)
+        }
+        grid.block(minX, minZ, maxX - minX, maxZ - minZ)
+      }
+    }
+    this.walk = grid
+    this.navMs = performance.now() - t0
+    // A piece laid on the character, or on its way, moves it aside or finds another way
+    const ch = this.character
+    if (ch) {
+      const at = { x: ch.group.position.x, z: ch.group.position.z }
+      const [col, row] = grid.cellOf(at)
+      if (!grid.walkable(col, row)) {
+        const near = grid.nearestWalkable(at)
+        if (near) {
+          const p = grid.centre(near[0], near[1])
+          ch.group.position.set(p.x, 0, p.z)
+        }
+      }
+      const end = this.path[this.path.length - 1]
+      if (end) this.walkTo(end.x, end.z)
+    }
+  }
+
+  // Where the character starts: the middle of a yard if there is one, else the area's
+  private spawnPoint(): Point {
+    const c = this.set.cell
+    let at: Point = { x: (this.area.width * c) / 2, z: (this.area.depth * c) / 2 }
+    for (const pl of Object.values(this.area.pieces)) {
+      const p = pieceOf(this.set, pl.piece)
+      if (p?.model !== 'yard') continue
+      const t = turned(p, pl.rot)
+      at = { x: (pl.x + t.w / 2) * c + 2, z: (pl.z + t.d / 2) * c + 2 }
+      break
+    }
+    const near = this.walk?.nearestWalkable(at, 40)
+    return near && this.walk ? this.walk.centre(near[0], near[1]) : at
+  }
+
+  // Moves the character along its path at walking pace, facing its way
+  private stepCharacter(dt: number): void {
+    const ch = this.character
+    if (!ch) return
+    const speed = 4
+    let budget = speed * dt
+    const pos = ch.group.position
+    while (budget > 0 && this.path.length) {
+      const next = this.path[0]
+      const dx = next.x - pos.x
+      const dz = next.z - pos.z
+      const d = Math.hypot(dx, dz)
+      if (d > 1e-4) ch.group.rotation.y = Math.atan2(dx, dz)
+      if (d <= budget) {
+        pos.x = next.x
+        pos.z = next.z
+        budget -= d
+        this.path.shift()
+      } else {
+        pos.x += (dx / d) * budget
+        pos.z += (dz / d) * budget
+        budget = 0
+      }
+    }
+    if (!this.path.length) this.marker.visible = false
+    const target = this.path.length ? 1 : 0
+    this.moving += (target - this.moving) * Math.min(1, dt * 10)
+    this.stride += dt * speed * 2.4 * (this.path.length ? 1 : 0)
+    ch.walk(this.stride, this.moving)
+    // The camera follows
+    const k = Math.min(1, dt * 4)
+    this.orbit.target.x += (pos.x - this.orbit.target.x) * k
+    this.orbit.target.z += (pos.z - this.orbit.target.z) * k
+  }
+
+  // A short message in place of the hint
+  private flash(text: string): void {
+    this.hint.textContent = text
+    setTimeout(() => this.updateHint(), 1500)
+  }
+
   private step(dt: number): void {
+    if (this.playing) this.stepCharacter(dt)
     this.orbit.step(dt, this.input)
+    if (this.playing && this.walk) {
+      // The context cursor: a hand where the ground may be walked to
+      const g = this.groundAt(this.input.pointerX, this.input.pointerY)
+      const ok = g && this.walk.walkable(...this.walk.cellOf({ x: g.x, z: g.z }))
+      this.renderer.canvas.style.cursor = ok ? 'pointer' : 'not-allowed'
+    }
     this.hover = this.cellAt(this.input.pointerX, this.input.pointerY)
     this.updatePreview()
     this.reportCursor()
@@ -593,7 +861,9 @@ export class AreaViewport {
   }
 
   private updateHint(): void {
-    this.hint.textContent = this.tool
+    this.hint.textContent = this.playing
+      ? 'Playing · click the ground to walk there · right-drag to turn the view · wheel to zoom · Esc to stop walking'
+      : this.tool
       ? `Placing ${pieceOf(this.set, this.tool)?.title ?? this.tool} · click to place · R to turn · Esc to stop`
       : this.selected
         ? 'R to turn · Alt+arrows to move · Delete to remove · Esc to deselect'
@@ -602,6 +872,7 @@ export class AreaViewport {
 
   private render(): void {
     this.renderer.render(this.scene, this.orbit.camera)
+    this.lastInfo = this.renderer.info()
     this.placeLabels()
     if (this.overlay) {
       const s = this.stats()
@@ -628,4 +899,38 @@ function hash(s: string): number {
   let h = 2166136261
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
   return h >>> 0
+}
+
+// A moon's disc with its lit part, drawn on a canvas: the dark disc, then
+// the lit half on its side, then the terminator's ellipse adding to it
+// (gibbous) or taking from it (crescent)
+function drawPhase(c: HTMLCanvasElement, m: MoonPhase, tint: string): void {
+  const g = c.getContext('2d')
+  if (!g) return
+  const r = c.width / 2 - 1
+  const cx = c.width / 2
+  g.clearRect(0, 0, c.width, c.height)
+  g.fillStyle = 'rgba(255,255,255,0.10)'
+  g.beginPath()
+  g.arc(cx, cx, r, 0, Math.PI * 2)
+  g.fill()
+  if (m.lit < 0.01) return
+  const right = m.waxing
+  const k = Math.abs(1 - 2 * m.lit) * r // the terminator ellipse's half width
+  g.fillStyle = tint
+  g.beginPath()
+  // the lit half: from top to bottom round the lit side
+  g.arc(cx, cx, r, -Math.PI / 2, Math.PI / 2, !right)
+  // back up along the terminator: bulging into the dark side when more than half is lit
+  const gibbous = m.lit > 0.5
+  g.ellipse(cx, cx, k, r, 0, Math.PI / 2, -Math.PI / 2, gibbous ? !right : right)
+  g.fill()
+}
+
+function phaseName(m: MoonPhase): string {
+  if (m.lit < 0.04) return 'new'
+  if (m.lit > 0.96) return 'full'
+  const way = m.waxing ? 'waxing' : 'waning'
+  if (Math.abs(m.lit - 0.5) < 0.08) return m.waxing ? 'first quarter' : 'last quarter'
+  return `${way} ${m.lit > 0.5 ? 'gibbous' : 'crescent'}`
 }

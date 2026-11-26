@@ -14,6 +14,8 @@ export class OrbitCamera {
   minDistance = 12
   maxDistance = 400
   panSpeed = 1.1 // distance-relative units per second
+  // W A S D and the arrows pan (off while the camera follows a character)
+  keyPan = true
   private lastX = 0
   private lastY = 0
   private dragging = -1
@@ -43,7 +45,7 @@ export class OrbitCamera {
     const k = (code: string) => (input.isDown(code) ? 1 : 0)
     const right = k('KeyD') + k('ArrowRight') - k('KeyA') - k('ArrowLeft')
     const fwd = k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown')
-    if (right || fwd) {
+    if (this.keyPan && (right || fwd)) {
       const s = this.distance * this.panSpeed * dt * (input.isDown('ShiftLeft') ? 2.5 : 1)
       this.pan(right * s, fwd * s)
     }
