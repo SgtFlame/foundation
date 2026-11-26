@@ -88,6 +88,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	contributeOutpost(reg)
 	contributeStories(reg)
 	contributeCrops(reg)
+	contributeWildlife(reg)
 	contributeDialogues(reg)
 	contributeAreas(reg)
 	contributeGraphs(reg)

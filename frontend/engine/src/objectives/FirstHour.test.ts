@@ -23,3 +23,8 @@ test('a later step done counts the earlier ones', () => {
   assert.deepEqual(done({ ...none, progress: p }), ['walk', 'dig', 'skiff', 'build', 'fly', 'first-flight'])
   assert.equal(done({ ...none, ships: [ship('prospector', 32, { dust: 0, rock: 0, iron: 0.5 })] }).at(-1), 'iron')
 })
+
+test('food from a fish or a hunt does not finish the first hour', () => {
+  assert.deepEqual(done({ ...none, walked: true, pack: { dust: 0, rock: 0, food: 3 } as FirstHourInput['pack'] }), ['walk'])
+  assert.equal(done({ ...none, pack: { dust: 0, rock: 0, food: 1 } as FirstHourInput['pack'], ships: [ship('hauler', 58)] }).length, 13)
+})

@@ -249,6 +249,16 @@ The story game's ninth tracer bullet: the moon clock and the day and night loop 
 - **In the viewport**: the story's clock runs while playing; the light follows dawn and dusk, and the calendar night (and so the moons and the Hum pool) follows the clock. M opens the almanac (once cooking is done it reaches `almanac`); R by a hearth from 18:00 sleeps until seven, draws the day's card and, after the almanac, reaches `sleep`. The clock shows above the Hum and goes with every save (`onStory` `clock`).
 - **Server**: `game.reachStory` takes `clock {day, hour}` (the hour kept within a day), `StorySteps` gains `almanac` and `sleep`, and `game.story` gives `clock`.
 
+## Built in V12 (forge 360)
+
+The voxel game's twelfth tracer bullet: fishing and hunting on the planet with air (the user's progression: plant food, fish, hunt).
+
+- **The sea**: a sphere of water at `SEA_RADIUS` (the planet's radius less 2.5 m) fills its hollows (`wildlife/Wildlife.ts`, `seaMesh`).
+- **Fishing**: N while looking at the water within 14 m casts a float (`Fishing`, a small state machine: a bite comes after 3 to 8 s and lasts 1.6 s); N again strikes. A strike in the bite catches a fish (one ration), too early comes up empty, too late the fish gets away.
+- **The herd**: twelve grazers in three groups from the world's seed (`herdOf`, ids `g00` to `g23`), each walking a slow circle round its home (`grazerDir`); they show where the ground is above the sea, and run along their circle when the player comes within 9 m. V within 2.6 m hunts one (three rations).
+- **`game.forage`** (`cmd-game-forage`, area `game`, target the world's terrain) takes `{kind: fish|hunt, animal, x, y, z}`: refused away from the planet (120 to 160 m from its centre), for an unknown grazer, or one taken less than 300 s ago; it emits `foraged` with `pack: {food}`, which `game.packs` adds to the sender's pack. The `game.wildlife` projector (keyed `terrain.<world>`, folding **every** terrain event so the command's expected sequence holds) keeps `{taken, fish, hunted}`; the live `game.wildlife {world}` query sends it to every player, so a grazer one person hunts is gone for everyone until it comes back.
+- The first hour's *Grow food* step counts only once the hauler is built, so a fish never finishes the guide.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

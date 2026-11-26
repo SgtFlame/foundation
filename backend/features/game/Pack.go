@@ -46,7 +46,7 @@ func contributePacks(reg *extensions.Registry) {
 				return ""
 			}
 			switch {
-			case (e.Type == EventEdited || e.Type == EventHarvested || e.Type == EventAte) && e.Target.Type == TerrainType:
+			case (e.Type == EventEdited || e.Type == EventHarvested || e.Type == EventAte || e.Type == EventForaged) && e.Target.Type == TerrainType:
 				return PackKey(e.Target.ID, e.UserID)
 			case e.Type == EventShipLoaded && e.Target.Type == ShipType:
 				// V4: loading a ship's hold empties the loader's pack

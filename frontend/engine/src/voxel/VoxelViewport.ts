@@ -14,6 +14,7 @@ import { atOutpost, ContractPanel, handInProblem, OutpostModel, thrustFor, type 
 import type { EditKind, MoonParams, VoxelEdit } from './Types.ts'
 import { VoxelWorld } from './VoxelWorld.ts'
 import { PLANET } from './Bodies.ts'
+import { available, Fishing, FLEE_RANGE, floatModel, grazerDir, grazerModel, herdOf, HUNT_REACH, SEA_RADIUS, seaMesh, type Grazer } from '../wildlife/Wildlife.ts'
 import { eat, FRESH, hungry, NeedsHud, rounded, stepNeeds, type Needs } from '../survival/Needs.ts'
 
 // What the player asks for; the host sends it to the server, which decides
@@ -63,6 +64,7 @@ export type ShipIntent =
   | { kind: 'crew'; id: string; aboard: boolean } // V7: board or leave as crew
   | { kind: 'stand'; x: number; y: number; z: number; needs?: Needs } // V8: save where the player stands (V10: and their needs)
   | { kind: 'eat' } // V10: one ration from the pack
+  | { kind: 'forage'; what: 'fish' | 'hunt'; animal?: string; x: number; y: number; z: number } // V12: a fish caught, a grazer hunted
   | { kind: 'plant'; x: number; y: number; z: number } // V9: barley in the planet's soil
   | { kind: 'harvest'; crop: string } // V9: a ripe crop, as food
 
@@ -140,6 +142,9 @@ export interface ViewportStats {
   needs: Needs | null
   breathable: boolean
   blackouts: number
+  // V12: the grazers shown near the player, and the fishing line
+  grazers: number
+  fishing: 'idle' | 'waiting' | 'bite'
 }
 
 const MIN_BRUSH = 0.75
@@ -209,6 +214,15 @@ export class VoxelViewport {
   private readonly needsHud: NeedsHud
   private breathable = true
   private blackouts = 0
+  // V12: the sea, the herd and the fishing line
+  private readonly wildGroup = new THREE.Group()
+  private herd: { g: Grazer; model: THREE.Group; shown: boolean; run: number; at: THREE.Vector3 }[] = []
+  private taken: Record<string, number> = {}
+  private readonly fishing = new Fishing(7)
+  private readonly float = floatModel()
+  private wildTick = 0
+  private nearGrazer: string | null = null
+  private facingWater: THREE.Vector3 | null = null
 
   private readonly container: HTMLElement
   private readonly renderer: Renderer
@@ -307,6 +321,9 @@ export class VoxelViewport {
     )
     glow.position.copy(globe.position)
     this.scene.add(globe, glow, this.cropsGroup)
+    // V12: the sea in the planet's hollows, its herd and a fishing float
+    this.float.visible = false
+    this.scene.add(seaMesh(), this.wildGroup, this.float)
   }
 
   // V9: the sky turns blue and the stars fade as the camera goes down into the planet's air
@@ -382,6 +399,142 @@ export class VoxelViewport {
     }
   }
 
+  // --- Fishing and hunting (V12) ---
+
+  // The grazers taken lately, as game.wildlife keeps them
+  setWildlife(w: { taken: Record<string, number> } | null): void {
+    this.taken = { ...(w?.taken ?? {}) }
+  }
+
+  private buildHerd(): void {
+    for (const h of this.herd) this.wildGroup.remove(h.model)
+    this.herd = herdOf(this.world.generator.params.seed).map((g) => {
+      const model = grazerModel()
+      model.visible = false
+      this.wildGroup.add(model)
+      return { g, model, shown: false, run: 0, at: new THREE.Vector3() }
+    })
+  }
+
+  // The ground's radius along a direction from the planet's centre (the generator's, so far ones show too)
+  private groundRadius(d: { x: number; y: number; z: number }): number {
+    const gen = this.world.generator
+    let lo = PLANET.radius - 15
+    let hi = PLANET.radius + 15
+    for (let i = 0; i < 14; i++) {
+      const mid = (lo + hi) / 2
+      if (gen.density(PLANET.x + d.x * mid, PLANET.y + d.y * mid, PLANET.z + d.z * mid) < 0) lo = mid
+      else hi = mid
+    }
+    return lo
+  }
+
+  private stepWild(dt: number): void {
+    const w = this.walker as Walker
+    const me = new THREE.Vector3(w.pos.x, w.pos.y, w.pos.z)
+    const near = Math.hypot(w.pos.x - PLANET.x, w.pos.y - PLANET.y, w.pos.z - PLANET.z) < PLANET.radius + 80
+    if (!this.herd.length) this.buildHerd()
+    this.wildTick -= dt
+    const t = Date.now() / 1000
+    let nearest: string | null = null
+    let nd = HUNT_REACH
+    for (const h of this.herd) {
+      const free = near && available(this.taken[h.g.id], Date.now())
+      if (!free) {
+        h.model.visible = false
+        h.shown = false
+        continue
+      }
+      // a grazer runs along its round when the player comes close
+      if (h.shown && h.at.distanceTo(me) < FLEE_RANGE) h.run += dt * 6
+      if (this.wildTick <= 0 || h.run > 0) {
+        const d = grazerDir(h.g, t + h.run)
+        const r = this.groundRadius(d)
+        h.shown = r > SEA_RADIUS + 0.3
+        h.at.set(PLANET.x + d.x * r, PLANET.y + d.y * r, PLANET.z + d.z * r)
+        const up = new THREE.Vector3(d.x, d.y, d.z)
+        const ahead = new THREE.Vector3().copy(h.at).sub(h.model.position)
+        h.model.position.copy(h.at)
+        h.model.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), up)
+        if (ahead.lengthSq() > 1e-6) {
+          // face the way it moves
+          const fwd = ahead.sub(up.clone().multiplyScalar(ahead.dot(up))).normalize()
+          const local = fwd.applyQuaternion(h.model.quaternion.clone().invert())
+          h.model.rotateY(Math.atan2(local.x, local.z))
+        }
+      }
+      h.model.visible = h.shown
+      const dist = h.at.distanceTo(me)
+      if (h.shown && dist < nd) {
+        nd = dist
+        nearest = h.g.id
+      }
+    }
+    if (this.wildTick <= 0) this.wildTick = 0.25
+    // the water the player looks at, within a cast
+    const eye = this.fly.camera.position
+    const look = w.look()
+    const water = this.waterHit(eye, look, 14)
+    const ground = this.brushHit ? this.brushHit.distanceTo(eye) : Infinity
+    const facing = water && water.distanceTo(eye) < ground ? water : null
+    const changed = nearest !== this.nearGrazer || !!facing !== !!this.facingWater
+    this.nearGrazer = nearest
+    this.facingWater = facing
+    if (changed) this.updateHint()
+    const ev = this.fishing.step(dt)
+    if (ev === 'bite') this.flashHint('A bite! Press N to strike')
+    if (ev === 'escaped') {
+      this.float.visible = false
+      this.flashHint('It got away')
+    }
+    if (this.fishing.state === 'bite') this.float.position.addScaledVector(this.float.up, Math.sin(t * 30) * 0.02)
+    if (!this.input.locked) return
+    if (this.input.pressed('KeyV') && nearest) {
+      const h = this.herd.find((x) => x.g.id === nearest)!
+      this.taken[nearest] = Date.now()
+      this.opts.onShipIntent?.({ kind: 'forage', what: 'hunt', animal: nearest, x: round2(w.pos.x), y: round2(w.pos.y), z: round2(w.pos.z) })
+      h.model.visible = false
+      this.flashHint('You bring the grazer down: three rations')
+    }
+    if (this.input.pressed('KeyN')) this.fish(facing)
+  }
+
+  // N: cast toward the water, strike on a bite, or reel in
+  private fish(at: THREE.Vector3 | null): void {
+    const w = this.walker as Walker
+    if (this.fishing.state === 'idle') {
+      if (!at) return this.flashHint('Look at the water within 14 m to cast')
+      this.fishing.cast()
+      const up = new THREE.Vector3(at.x - PLANET.x, at.y - PLANET.y, at.z - PLANET.z).normalize()
+      this.float.position.copy(at)
+      this.float.up.copy(up)
+      this.float.visible = true
+      this.flashHint('The float settles on the water. Wait for a bite…')
+      return
+    }
+    const ev = this.fishing.strike()
+    this.float.visible = false
+    if (ev === 'caught') {
+      this.opts.onShipIntent?.({ kind: 'forage', what: 'fish', x: round2(w.pos.x), y: round2(w.pos.y), z: round2(w.pos.z) })
+      this.flashHint('A fish! One ration')
+    } else this.flashHint('Too soon: the line comes up empty')
+  }
+
+  // Where a ray meets the sea's surface from above, within a distance
+  private waterHit(o: THREE.Vector3, d: { x: number; y: number; z: number }, max: number): THREE.Vector3 | null {
+    const ox = o.x - PLANET.x
+    const oy = o.y - PLANET.y
+    const oz = o.z - PLANET.z
+    const b = ox * d.x + oy * d.y + oz * d.z
+    const c = ox * ox + oy * oy + oz * oz - SEA_RADIUS * SEA_RADIUS
+    if (c < 0) return null // under the water
+    const disc = b * b - c
+    if (disc < 0) return null
+    const t = -b - Math.sqrt(disc)
+    if (t < 0 || t > max) return null
+    return new THREE.Vector3(o.x + d.x * t, o.y + d.y * t, o.z + d.z * t)
+  }
+
   private onCanvasClick = () => {
     this.renderer.canvas.focus()
     if (!this.input.locked) this.input.lock()
@@ -396,7 +549,8 @@ export class VoxelViewport {
   private farmHint(): string {
     const c = this.nearCrop
     if (c) return c.ripe ? 'H: harvest the barley · ' : `Barley: ripe in ${c.left} s · `
-    return this.walker && this.onPlanet(this.fly.camera.position) ? 'P: plant barley where you look · ' : ''
+    const wild = `${this.nearGrazer ? 'V: hunt the grazer · ' : ''}${this.fishing.state !== 'idle' ? 'N: strike · ' : this.facingWater ? 'N: cast a line · ' : ''}`
+    return wild + (this.walker && this.onPlanet(this.fly.camera.position) ? 'P: plant barley where you look · ' : '')
   }
 
   private updateHint(): void {
@@ -576,6 +730,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk' && this.walker) this.stepWalker(dt)
     if (this.mode === 'walk' && this.walker) this.stepFarming()
+    if (this.mode === 'walk' && this.walker) this.stepWild(dt)
     if (this.mode === 'walk' && this.walker && input.locked && input.pressed('KeyE')) this.eatRation()
     else this.fly.step(dt, input)
     this.stepShipsOnFoot()
@@ -1345,6 +1500,8 @@ export class VoxelViewport {
       needs: this.placed && this.walker ? rounded(this.needs) : null,
       breathable: this.breathable,
       blackouts: this.blackouts,
+      grazers: this.herd.filter((h) => h.model.visible).length,
+      fishing: this.fishing.state,
     }
   }
 

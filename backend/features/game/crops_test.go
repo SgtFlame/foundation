@@ -51,3 +51,30 @@ func TestNeeds(t *testing.T) {
 		t.Fatalf("kept %+v", p.Needs)
 	}
 }
+
+// V12: fish from the planet's shore, grazers hunted and gone a while, food in the pack
+func TestForage(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Wild moon"}).Target
+	st.refused("game.forage", world, map[string]any{"kind": "fish", "x": 0, "y": 101, "z": 0})
+	// another event on the terrain first: the wildlife's expected sequence must follow it
+	planted := st.ok("game.plant", world, map[string]any{"x": 1600, "y": 141, "z": 0})
+	var cr game.Crops
+	st.read(game.CropsProjector, game.TerrainType+"."+world, planted.Seq, &cr)
+	var w0 game.Wildlife
+	st.read(game.WildlifeProjector, game.TerrainType+"."+world, planted.Seq, &w0)
+	st.ok("game.forage", world, map[string]any{"kind": "fish", "x": 1600, "y": 139, "z": 0})
+	res := st.ok("game.forage", world, map[string]any{"kind": "hunt", "animal": "g12", "x": 1600, "y": 141, "z": 0})
+	if r := st.refused("game.forage", world, map[string]any{"kind": "hunt", "animal": "g12", "x": 1600, "y": 141, "z": 0}); !strings.Contains(r.Common.Message, "taken") {
+		t.Fatalf("taken twice: %q", r.Common.Message)
+	}
+	st.refused("game.forage", world, map[string]any{"kind": "hunt", "animal": "g99", "x": 1600, "y": 141, "z": 0})
+	var w game.Wildlife
+	if !st.read(game.WildlifeProjector, game.TerrainType+"."+world, res.Seq, &w) || w.Fish != 1 || w.Hunted != 1 || w.Taken["g12"] == 0 {
+		t.Fatalf("wildlife %+v", w)
+	}
+	var pk game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pk) || pk.Food != 4 {
+		t.Fatalf("pack %+v", pk)
+	}
+}

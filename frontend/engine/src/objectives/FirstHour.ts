@@ -45,7 +45,10 @@ export function firstHour(i: FirstHourInput): Step[] {
     // V9: the planet with air, a short flight away
     { id: 'food', title: 'Grow food on the green planet', how: 'Fly to the green planet with the blue glow, 1.6 km from the moon. Land, press P to plant barley in its soil, and H to harvest it when it turns gold.', done: (i.pack?.food ?? 0) > 0 },
   ]
-  // a later step done means the earlier ones were
+  // a later step done means the earlier ones were; food alone does not (V12: a fish or a hunt
+  // gives food too), so the food step counts only once the hauler is built
+  const food = steps[steps.length - 1]
+  food.done &&= steps[steps.length - 2].done
   for (let k = steps.length - 1, later = false; k >= 0; k--) {
     if (later) steps[k].done = true
     later ||= steps[k].done
