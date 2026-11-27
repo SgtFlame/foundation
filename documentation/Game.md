@@ -699,6 +699,21 @@ The spaceport tower, the first part of the spaceport (the user's industry plan: 
 
 The road to Aldermere: the capital, never named in the books, is named Aldermere (the user, 2026-11-27: days on foot from Hawk's Rest, several towns on the way). With the reeve's letter (`reeve`), arriving in an area named *Aldermere* (`story/Journey.ts`, `isAldermere`) plays the journey a day at a time through Fallowford, Harrow Cross and Wexley (placeholder towns and lines), moves the clock on four days to noon (`afterJourney`) and reaches step `aldermere` at the gate. An area named *Aldermere* must exist (made in the Areas editor).
 
+## Built in V40 (forge 360)
+
+Docking bays and launches (the user's industry plan: a new ship needs an empty docking bay; the larger ships launch only from a spaceport).
+
+- A chip ship (cutter, hauler, freighter, barge) started on a bay floor is held by its docking clamp: `started` carries `bay` (`Ship.Bay`), and `game.startShip` also emits `docked {ship}` on the bay floor (`Ship.Holds`) in the same batch. A bay floor that holds a ship refuses another (*already holds*).
+- `game.launchShip {tower?}` lets a finished ship go: `launched` on the ship (clears `Bay`) and `undocked {ship}` on its bay floor (clears `Holds`). A cutter or hauler launches anywhere; a freighter or barge only through a spaceport tower within 40 m whose port is open (V39).
+- `game.flyShip` refuses a pilot in a ship still clamped (*launch it first*).
+- Engine: `ship/Dock.ts` (`docked`, `launchPlan`, `launchTower`, `bayFree`). F at a clamped ship's cockpit launches it (through the nearest open tower for a freighter or barge) and sits; the hint says why when it cannot.
+- Not built: the shipyard's own bay launching the hauler, parking back on a bay, fuel burned by launches.
+- Tests: `TestDocking`, `Dock.test.ts`.
+
+## Built in S35 (forge 375)
+
+The letter is read: in Aldermere a palace gate stands in the middle of the area's north edge (`story/Palace.ts`, `gateSpot`, drawn as two towers, an arch and the king's banners). Walking up to it after `aldermere` plays the scene a caption at a time (the gate guard, a clerk, the King's Steward, who has two more letters like it: Millbrook and Carrow Fell) and reaches step `steward`: the king's council sits at the new moon. Placeholder people and lines; the king is not named.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
