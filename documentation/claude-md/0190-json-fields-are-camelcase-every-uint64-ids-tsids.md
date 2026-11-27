@@ -1,0 +1,1 @@
+- JSON fields are camelCase. Every `uint64` (IDs, TSIDs) is tagged `,string` so it travels as a JSON string. New IDs come from `features.NewTSID()`.

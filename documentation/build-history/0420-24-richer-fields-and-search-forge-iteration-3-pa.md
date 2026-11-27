@@ -1,0 +1,13 @@
+24. **Richer fields and search** (Forge iteration 3, part 3j, [forge 003j-RicherFields.md](../../forge/documentation/plans/003j-RicherFields.md)). *Built.* ★ the Data Designer's new settings, rollups and search on real data ([Records.md](Records.md#built-in-slice-24)).
+    - **Built**:
+      - rich text as ProseMirror JSON, checked, with `record.setRichText` and plain text for search;
+      - `file` fields over a JetStream object store per tenant (upload, served only to the record's readers), and checked `volumeFile` references;
+      - formulas type checked as they are defined, rollups kept current by a follower, autoNumber from a counter committed in the create's batch, and createdAt/updatedAt/createdBy, all written by events, with `record.recompute`;
+      - search: a LanceDB table per tenant kept by a follower, `records.search` (live), `recordservice.Search`, the *Search records* node, the `records.search` tool and the optional `records` retrieval source;
+      - the *Upload file* and *File URL* nodes;
+      - in `live`, `Command.Holds` and the busy-batch retry;
+      - the Data Designer's rollup and searchable settings, and its records browser's computed, rich text and file cells (Forge);
+      - the wiring, in Foundation's `serve.go` and Forge's.
+    - **Blockers**: none. Forge 003-DataModel question 3 was answered (LanceDB); 9 (computed values written by events), 10 (records as an optional retrieval source) and forge 035-Docs 1 (ProseMirror JSON) were asked before building.
+    - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it-7).
+    - **Pending, carried forward**: serving Volume files from records; opening a record cited in chat; numbering records made before an autoNumber field; purging uploads no record holds (forge 003-DataModel question 6).

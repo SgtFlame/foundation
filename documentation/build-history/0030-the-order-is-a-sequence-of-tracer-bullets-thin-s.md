@@ -1,0 +1,1 @@
+The order is a sequence of **tracer bullets**: thin slices that run end to end through the backend, the REST layer and the UI. Each slice gives the user something real to look at before more is built on it. A slice builds only the part of a plan it needs, and later slices come back to finish it.

@@ -1,0 +1,1 @@
+- read a `damaged` event's `blocks` as indices, apart from the `started` event's block count of the same name;

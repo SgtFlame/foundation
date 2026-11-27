@@ -1,0 +1,1 @@
+- `register.go` - `Register(router gin.IRouter, service <s>service.Service)` stores the service on the handler struct and maps routes under `/<f>` (a secondary service under `/<f>/<resource>`, e.g. `/kb/volumes`); `router` is the `/api/v1` group, so routes are served at `/api/v1/<f>/...`.

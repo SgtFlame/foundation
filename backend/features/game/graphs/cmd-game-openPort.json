@@ -1,0 +1,536 @@
+{
+  "id": "cmd-game-openPort",
+  "name": "game.openPort",
+  "description": "Decides a spaceport tower opening a port over two landing pads.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.openPort",
+    "title": "Open a spaceport",
+    "description": "Opens a spaceport at a finished spaceport tower (forge 360 V39, design tower); the target is the tower's id. A port needs a finished landing pad within 40 m of the tower (pad; pad2 names a second) and 10 m³ of ice for fuel in a finished storage building within 30 m (from); the ice stays in storage. An open port's pads (Ship.port on the tower) charge a resting ship three times as fast. Refused for anything but a finished tower, a port already open, a pad that is not finished or too far, or too little ice.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "pad": {
+          "type": "string",
+          "description": "A finished landing pad within 40 m of the tower"
+        },
+        "pad2": {
+          "type": "string",
+          "description": "Optionally a second finished landing pad within 40 m of the tower"
+        },
+        "from": {
+          "type": "string",
+          "description": "A finished storage building within 30 m holding at least 10 m³ of ice"
+        }
+      },
+      "required": [
+        "pad",
+        "from"
+      ]
+    },
+    "area": "game",
+    "targetType": "gameShip",
+    "projection": "game.ships",
+    "action": "game.play",
+    "events": [
+      "portOpened"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "title": "On game.openPort",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "pad",
+            "type": "string",
+            "description": "The first landing pad"
+          },
+          {
+            "id": "pad2",
+            "type": "string",
+            "description": "A second landing pad, if any"
+          },
+          {
+            "id": "from",
+            "type": "string",
+            "description": "The storage holding fuel ice"
+          }
+        ]
+      }
+    },
+    {
+      "id": "towerKey",
+      "type": "data.expression",
+      "title": "The tower's key",
+      "position": {
+        "x": 250,
+        "y": 0
+      },
+      "config": {
+        "expr": "\"gameShip.\" + target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "tower",
+      "type": "live.readProjection",
+      "title": "Read the tower",
+      "position": {
+        "x": 500,
+        "y": 0
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "aKey",
+      "type": "data.expression",
+      "title": "The first pad's key",
+      "position": {
+        "x": 250,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"gameShip.\" + ((pad ?? \"\") == \"\" ? \"none\" : pad)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "a",
+      "type": "live.readProjection",
+      "title": "Read the first pad",
+      "position": {
+        "x": 500,
+        "y": 200
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "bKey",
+      "type": "data.expression",
+      "title": "The second pad's key",
+      "position": {
+        "x": 250,
+        "y": 400
+      },
+      "config": {
+        "expr": "\"gameShip.\" + ((pad2 ?? \"\") == \"\" ? \"none\" : pad2)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "b",
+      "type": "live.readProjection",
+      "title": "Read the second pad",
+      "position": {
+        "x": 500,
+        "y": 400
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "depKey",
+      "type": "data.expression",
+      "title": "The storage's key",
+      "position": {
+        "x": 250,
+        "y": 600
+      },
+      "config": {
+        "expr": "\"gameShip.\" + ((from ?? \"\") == \"\" ? \"none\" : from)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "dep",
+      "type": "live.readProjection",
+      "title": "Read the storage",
+      "position": {
+        "x": 500,
+        "y": 600
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why the port cannot open, or nothing",
+      "position": {
+        "x": 900,
+        "y": 300
+      },
+      "config": {
+        "expr": "let why2 = (pad2 ?? \"\") == \"\" ? \"\" : (pad ?? \"\") == pad2 ? \"name two different landing pads, or leave pad2 out\" : !bFound || pb.design != \"pad\" || len(pb.placed) < pb.blocks || pb.world != tw.world ? \"the second pad is not a finished landing pad\" : (pb.x - tw.x) * (pb.x - tw.x) + (pb.y - tw.y) * (pb.y - tw.y) + (pb.z - tw.z) * (pb.z - tw.z) > 1600 ? \"the second pad is more than 40 m from the tower\" : \"\"; !found ? \"there is no spaceport tower \" + target : tw.design != \"tower\" ? \"only a spaceport tower opens a port\" : len(tw.placed) < tw.blocks ? \"the tower is not finished\" : len(tw.port ?? []) > 0 ? \"the port is open already\" : !aFound || pa.design != \"pad\" || len(pa.placed) < pa.blocks || pa.world != tw.world ? \"the pad is not a finished landing pad\" : (pa.x - tw.x) * (pa.x - tw.x) + (pa.y - tw.y) * (pa.y - tw.y) + (pa.z - tw.z) * (pa.z - tw.z) > 1600 ? \"the pad is more than 40 m from the tower\" : why2 != \"\" ? why2 : !hasDep || store.design != \"depot\" || len(store.placed) < store.blocks ? \"the port's fuel is kept in a finished storage building: name it as from\" : (store.x - tw.x) * (store.x - tw.x) + (store.y - tw.y) * (store.y - tw.y) + (store.z - tw.z) * (store.z - tw.z) > 900 ? \"that storage is more than 30 m from the tower\" : (store.stock?.ice ?? 0) < 10 ? \"the port needs 10 m³ of ice in storage for fuel; it holds \" + string(store.stock?.ice ?? 0) : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Nothing in the way",
+      "position": {
+        "x": 1150,
+        "y": 300
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "title": "Can it open?",
+      "position": {
+        "x": 1350,
+        "y": 0
+      },
+      "config": {}
+    },
+    {
+      "id": "opened",
+      "type": "data.expression",
+      "title": "The port's pads",
+      "position": {
+        "x": 1150,
+        "y": -200
+      },
+      "config": {
+        "expr": "{world: tw.world, pads: (pad2 ?? \"\") == \"\" ? [pad] : [pad, pad2]}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "title": "Open the port",
+      "position": {
+        "x": 1600,
+        "y": -200
+      },
+      "config": {
+        "event": "portOpened"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "title": "Refuse",
+      "position": {
+        "x": 1600,
+        "y": 150
+      },
+      "config": {
+        "path": "args",
+        "fix": "finish the tower, finish a landing pad within 40 m of it (a second one may be named too), and keep 10 m³ of ice in a finished storage building within 30 m (game.store)"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "towerKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "towerKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "tower",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "pad"
+      },
+      "to": {
+        "node": "aKey",
+        "pin": "pad"
+      }
+    },
+    {
+      "from": {
+        "node": "aKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "a",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "pad2"
+      },
+      "to": {
+        "node": "bKey",
+        "pin": "pad2"
+      }
+    },
+    {
+      "from": {
+        "node": "bKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "b",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "from"
+      },
+      "to": {
+        "node": "depKey",
+        "pin": "from"
+      }
+    },
+    {
+      "from": {
+        "node": "depKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "dep",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "tower",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "tw"
+      }
+    },
+    {
+      "from": {
+        "node": "tower",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "check",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "a",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "pa"
+      }
+    },
+    {
+      "from": {
+        "node": "a",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "aFound"
+      }
+    },
+    {
+      "from": {
+        "node": "b",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "pb"
+      }
+    },
+    {
+      "from": {
+        "node": "b",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "bFound"
+      }
+    },
+    {
+      "from": {
+        "node": "dep",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "store"
+      }
+    },
+    {
+      "from": {
+        "node": "dep",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "hasDep"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "pad"
+      },
+      "to": {
+        "node": "check",
+        "pin": "pad"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "pad2"
+      },
+      "to": {
+        "node": "check",
+        "pin": "pad2"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "tower",
+        "pin": "value"
+      },
+      "to": {
+        "node": "opened",
+        "pin": "tw"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "pad"
+      },
+      "to": {
+        "node": "opened",
+        "pin": "pad"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "pad2"
+      },
+      "to": {
+        "node": "opened",
+        "pin": "pad2"
+      }
+    },
+    {
+      "from": {
+        "node": "opened",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    }
+  ]
+}

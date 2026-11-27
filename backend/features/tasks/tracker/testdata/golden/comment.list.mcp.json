@@ -1,0 +1,72 @@
+{
+  "name": "tasks_tracker_comment_list",
+  "title": "List comments",
+  "description": "Lists a card's comments, oldest first.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "card": {
+        "type": "string",
+        "description": "The card's id"
+      }
+    },
+    "required": [
+      "card"
+    ]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "comments": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "description": "A comment on a card",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The comment's outside id"
+            },
+            "key": {
+              "type": "string",
+              "description": "Our id it was created with (comment.create's key), when we made it"
+            },
+            "card": {
+              "type": "string",
+              "description": "The card's id"
+            },
+            "author": {
+              "type": "string",
+              "description": "The member id of who wrote it"
+            },
+            "text": {
+              "type": "string",
+              "description": "Its text, in Markdown"
+            },
+            "createdAt": {
+              "type": "string",
+              "description": "When it was written, RFC 3339"
+            }
+          },
+          "required": [
+            "id",
+            "card",
+            "text",
+            "createdAt"
+          ]
+        },
+        "description": "The comments, oldest first"
+      }
+    },
+    "required": [
+      "comments"
+    ]
+  },
+  "annotations": {
+    "title": "List comments",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

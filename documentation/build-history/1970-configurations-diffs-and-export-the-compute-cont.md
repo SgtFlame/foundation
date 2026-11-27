@@ -1,0 +1,1 @@
+Configurations, diffs and export, the compute contract and test server, plans, the infrastructure nodes and applies ([Infrastructure.md](Infrastructure.md) › *Built in forge 22a to 22f*). Later parts must:

@@ -1,0 +1,1 @@
+- **Dark preference**: under a dark browser preference the page body turns dark but the MUI theme stays light, so side-bar headings (*COGNITION* and others) are hard to read. No MUI theme follows the preference yet (`ui.appearance`, [Configuration.md](Configuration.md)). Seen since slice 7.

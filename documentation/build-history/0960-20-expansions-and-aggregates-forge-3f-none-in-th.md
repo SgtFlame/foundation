@@ -1,0 +1,1 @@
+| 20. Expansions and aggregates (Forge 3f) | none in the plan; gaps 03f 1 (users read from identity) and 2 (`expand` and `records.aggregate`), answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-4), to review after seeing |

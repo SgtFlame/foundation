@@ -17,7 +17,30 @@ export function padUnder(at: V, speed: number, ships: readonly ShipState[]): Shi
   return ships.find((s) => s.design === 'pad' && s.placed.length >= s.blocks && Math.hypot(at.x - s.x, at.y - s.y, at.z - s.z) <= PAD_REACH) ?? null
 }
 
-// The battery after dt seconds on a pad
-export function padCharge(charge: number, dt: number): number {
-  return Math.min(1, charge + PAD_RATE * dt)
+// The battery after dt seconds on a pad (V39: `rate` times faster on an
+// open spaceport's pad)
+export function padCharge(charge: number, dt: number, rate = 1): number {
+  return Math.min(1, charge + PAD_RATE * rate * dt)
+}
+
+// V39: the spaceport (forge 360 V39): a finished tower opens a port over its
+// landing pads within PORT_REACH once storage within 30 m holds PORT_ICE m³
+// of ice for fuel (game.openPort); an open port's pads charge PORT_RATE times
+// as fast
+export const PORT_REACH = 40
+export const PORT_ICE = 10
+export const PORT_RATE = 3
+
+// The open tower a pad belongs to, if any
+export function portOf(pad: ShipState, ships: readonly ShipState[]): ShipState | null {
+  return ships.find((s) => s.design === 'tower' && (s.port ?? []).includes(pad.id)) ?? null
+}
+
+// The pads a tower would open over: up to two finished pads within reach, nearest first
+export function portPads(tower: V, ships: readonly ShipState[]): ShipState[] {
+  const d = (s: V) => Math.hypot(s.x - tower.x, s.y - tower.y, s.z - tower.z)
+  return ships
+    .filter((s) => s.design === 'pad' && s.placed.length >= s.blocks && d(s) <= PORT_REACH)
+    .sort((a, b) => d(a) - d(b))
+    .slice(0, 2)
 }

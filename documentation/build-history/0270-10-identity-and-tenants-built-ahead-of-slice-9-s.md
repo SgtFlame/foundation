@@ -1,0 +1,39 @@
+10. **Identity and tenants.** *Built*, ahead of slice 9. ★ sign-in, setup, the account menu and the admin editors.
+   - Local login, the JWT, the application and tenant databases, and the per-tenant LanceDB directories; *built* (`features/identity`; `--app-db`; `db.TenantDir` with a one-time move into `lancedb/1`; `entrystore.Tenants`). Login is opt-in: single-user mode lasts until `/setup`. The tenant database is the existing `foundation.db`, with no `db.ForTenant` resolver yet. Volumes stay the default tenant's.
+   - The Tenant and User editors, and the account page with the tenant switcher; *built*, as Administration › Tenants and Users (administrators only), an Account editor, and an account menu at the foot of the side bar.
+   - Full logging for one user ([Logging.md](Logging.md)); *built*, as the *Full logging* switch in the Users editor. Setting it from the Log Explorer waits.
+   - Then OIDC. *Not built*: deferred until the local flow has been seen (MultiTenant 4).
+   - What slice 10 decided is recorded in [MultiTenant.md](MultiTenant.md#built-in-slice-10), [Logging.md](Logging.md#built-in-slice-10) and [RBAC.md](RBAC.md#built-in-slice-10).
+   - **Blockers**: none left. Its **Before** question was answered before building, together with three questions found while reading the plan:
+     - MultiTenant 2: a 15-minute access JWT and a rotating, server-side refresh token;
+     - MultiTenant 3: auth is opt-in, and `/setup` makes the first user and tenant with the reserved IDs;
+     - MultiTenant 4: OIDC is deferred;
+     - MultiTenant 5: an `Admin` flag guards administration until RBAC.
+   - **★ review pending**: sign-in, setup, the account menu and the editors need review by a person.
+     - Seen in headless Chromium, light theme only: setup from the account menu, the Tenants and Users editors, full logging switched on, a second user signing in (a wrong password first) and seeing neither admin commands nor Volumes, the Account page, and signing out. Every route was also tried with curl.
+     - Not seen in the browser: switching tenants (tried through the API only), refreshing after the 15 minutes, a disabled user's session ending, and records actually stored at debug (no VictoriaLogs was running; covered by a test).
+     - To review: run `serve` on a copy of your data directory (`--data-dir`), open the workbench, choose *Set up accounts…* in the account menu, then make a second tenant and user. Check that what you made before setup is still yours. See [MultiTenant.md › Built in slice 10](MultiTenant.md#built-in-slice-10).
+   - **Decisions to review after seeing it** (each in [MultiTenant.md](MultiTenant.md#decisions-to-review-after-seeing-it), [Logging.md](Logging.md#built-in-slice-10) and [RBAC.md](RBAC.md#built-in-slice-10)):
+     - **Tokens**: a 15-minute access token and a 30-day refresh token, with a 30-second grace for concurrent refreshes.
+     - **Databases**: the tenant database is today's `foundation.db`, and app-scope settings stay in it.
+     - **Volumes** are only the default tenant's.
+     - **Switching tenants** reloads the page.
+     - **The Account page** is an editor, not a route.
+     - **Users** are disabled, not deleted. A deleted tenant's content is kept, unreachable.
+     - **Account rules**: passwords need 8 characters or more, and usernames are 3 to 64 of `a-z 0-9 . _ -`.
+     - **Admin-only, beyond the answer**: `logs.readAll` and app-scope `config.write` are admin-only too.
+     - **Browser log level**: the browser polls for its own level every 5 minutes.
+   - **Pending, carried forward**
+     - **From MultiTenant.md**:
+       - OIDC;
+       - per-tenant knowledge base roots, so other tenants get Volumes;
+       - the `db.ForTenant` resolver, and app-scope settings in the application database;
+       - purging a deleted tenant's data;
+       - the global tenant and Chronicle sharing (slice 11);
+       - rate limiting sign-in;
+       - invitations and password reset by email;
+       - refreshing from the `fetch` streaming clients on a 401;
+       - checking `PolicyVersion` per request.
+     - **From Logging.md**: setting full logging from the Log Explorer.
+     - **Seen while verifying**: the rename dialog's button says *Create* (it reuses `NameDialog`). The dark-preference contrast issue from slice 7 still applies, since no MUI theme follows the preference.
+     - **Carried from slice 8 and earlier**: unchanged; see slice 8's list.

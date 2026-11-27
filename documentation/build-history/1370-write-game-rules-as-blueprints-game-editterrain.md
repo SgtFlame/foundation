@@ -1,0 +1,1 @@
+- write game rules as blueprints (`game.editTerrain` is the model), never as Go handlers;

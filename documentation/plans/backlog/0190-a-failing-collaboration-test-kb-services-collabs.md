@@ -1,0 +1,1 @@
+- **A failing collaboration test**: `kb/services/collabservice/impl`'s `TestRoomSeedRelaySaveHandover` fails every run on its temp directory's cleanup (*unlinkat …/vol: directory not empty*): a save still writes into the volume as the test ends. Seen in slice 35's full run; code that slice did not touch.

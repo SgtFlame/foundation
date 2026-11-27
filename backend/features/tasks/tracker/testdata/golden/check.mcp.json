@@ -1,0 +1,25 @@
+{
+  "name": "tasks_tracker_check",
+  "title": "Check",
+  "description": "Signs in and changes nothing: whether the connection's credentials work.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean",
+        "description": "Always true: a failure is an error"
+      }
+    }
+  },
+  "annotations": {
+    "title": "Check",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

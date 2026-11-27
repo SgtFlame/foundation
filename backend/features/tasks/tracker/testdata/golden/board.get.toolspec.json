@@ -1,0 +1,19 @@
+{
+  "name": "tasks.tracker.board.get",
+  "title": "Get a board",
+  "description": "Reads one board with its lists (or statuses) in order, its labels and its members, to map them to a project's statuses, labels and people.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The board's outside id"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  },
+  "effect": "read",
+  "source": "connector"
+}

@@ -1,0 +1,1 @@
+| [Cognition.md](Cognition.md) | The Nexus slice (slice 9, skipped: needs question 1, Nexus storage, answered first); the Prompt Editor; debugging, `Parallel` and Replay; the version picker; run token and cost limits; background runs (question 3) |

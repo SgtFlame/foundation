@@ -1,0 +1,1 @@
+- add a step to `firstHour` when a slice adds play a new player must learn, derived from server state where it can be;

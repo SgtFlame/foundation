@@ -1,0 +1,1 @@
+| [ChatCompletion.md](ChatCompletion.md) | AgentOS › Chat: conversations and rounds, levels, context providers (and the modes they put a round in), citations, feedback, Chronicle memory and the tool loop; the pre-mode choosing each round's mode (forge 15f) |

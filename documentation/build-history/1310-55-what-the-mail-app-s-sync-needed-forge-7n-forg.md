@@ -1,0 +1,1 @@
+| 55. What the Mail app's sync needed (Forge 7n) | forge 07n 3 (files held by a record the caller may read) and 4 (connections held by the app's own records, a gap found while reading), the user's answers | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-5) |

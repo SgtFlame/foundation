@@ -1,0 +1,1 @@
+| 14. Cognition's editing pass (Forge 2) | forge 002-Blueprints 5 (drafts by commands, revising Cognition 2), 1, 7 and 9 (all answered) | the decisions in [Cognition.md](Cognition.md#decisions-to-review-after-seeing-it-1), to review after seeing |

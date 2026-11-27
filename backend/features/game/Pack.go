@@ -39,7 +39,10 @@ type Pack struct {
 	Minerals map[string]float64 `json:"minerals,omitempty"`
 	// V30: components refined at a forge, a count by name (plate, wire,
 	// solarCell, nozzle, cell, cement); they take no room
-	Parts    map[string]float64 `json:"parts,omitempty"`
+	Parts map[string]float64 `json:"parts,omitempty"`
+	// V37: finished blocks from the block works, a count by block type; a
+	// chip design's block takes one in place of its components
+	Blocks   map[string]float64 `json:"blocks,omitempty"`
 	Capacity float64            `json:"capacity"`
 }
 
@@ -90,6 +93,7 @@ func contributePacks(reg *extensions.Registry) {
 					Driv float64            `json:"drives"`
 					Mins map[string]float64 `json:"minerals"`
 					Prts map[string]float64 `json:"parts"`
+					Blks map[string]float64 `json:"blocks"`
 				} `json:"pack"`
 			}
 			if err := json.Unmarshal(f.Event.Data, &d); err != nil {
@@ -122,6 +126,14 @@ func contributePacks(reg *extensions.Registry) {
 				}
 				if p.Parts[k] = round(p.Parts[k] + v); p.Parts[k] == 0 {
 					delete(p.Parts, k)
+				}
+			}
+			for k, v := range d.Pack.Blks {
+				if p.Blocks == nil {
+					p.Blocks = map[string]float64{}
+				}
+				if p.Blocks[k] = round(p.Blocks[k] + v); p.Blocks[k] == 0 {
+					delete(p.Blocks, k)
 				}
 			}
 			p.Capacity = PackCapacity

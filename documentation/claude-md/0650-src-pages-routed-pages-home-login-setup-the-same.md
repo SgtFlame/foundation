@@ -1,0 +1,1 @@
+- `src/pages/` - routed pages (`/home`, `/login`, `/setup` (the same page: sign-in, or setup while there are no accounts; success loads `next` afresh), `/workbench`), wired up with `react-router` in the app's `src/App.tsx` (`frontend/example/src/App.tsx`). A page with multiple one-use components gets its own subdirectory (e.g. `pages/workbench/`).

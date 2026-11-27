@@ -1,0 +1,1 @@
+- read a piece's footprint and edges only through `Turned`/`turned`, never by hand;

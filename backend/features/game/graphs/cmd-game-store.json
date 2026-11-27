@@ -7,7 +7,7 @@
   "spec": {
     "command": "game.store",
     "title": "Put stock into storage",
-    "description": "Moves components and materials from the sender's pack into a finished storage building (forge 360 V36, design depot); the target is the storage's id. Storage holds any amount, shared by everyone, and a refinery within 30 m feeds its kilns from it (game.smelt from) and puts what it makes into it (game.takeIngots into). Refused for a ship that is not a finished storage building, or more than the pack holds.",
+    "description": "Moves components and materials from the sender's pack into a finished storage building (forge 360 V36, design depot); the target is the storage's id. Storage holds any amount, shared by everyone, and a refinery within 30 m feeds its kilns from it (game.smelt from) and puts what it makes into it (game.takeIngots into). Refused for a ship that is not a finished storage building, or more than the pack holds. V37: finished blocks are block:<type> (block:armor), a count.",
     "args": {
       "type": "object",
       "properties": {
@@ -114,7 +114,7 @@
         "y": 150
       },
       "config": {
-        "expr": "let parts = [\"plate\", \"wire\", \"solarCell\", \"nozzle\", \"cell\", \"cement\", \"lime\"]; let top = [\"ore\", \"rock\", \"iron\", \"dust\"]; let names = type(stock) == \"map\" ? keys(stock) : []; let packOf = {}; let inPack = fromPairs(map(names, [#, # in top ? ((pack ?? {})[#] ?? 0) : # in parts ? ((pack?.parts ?? {})[#] ?? 0) : ((pack?.minerals ?? {})[#] ?? 0)])); !found ? \"there is no storage \" + target : ship.design != \"depot\" ? \"only a storage building holds stock\" : len(ship.placed) < ship.blocks ? \"the storage is not finished: place its last \" + string(ship.blocks - len(ship.placed)) + \" blocks first\" : len(names) == 0 ? \"stock names what moves and how much, e.g. {\\\"plate\\\": 10}\" : len(filter(names, type(stock[#]) not in [\"int\", \"float\"] || stock[#] <= 0)) > 0 ? \"each amount in stock is a number above 0\" : len(filter(names, inPack[#] < stock[#] - 0.0005)) > 0 ? \"your pack holds only \" + join(map(sort(filter(names, inPack[#] < stock[#] - 0.0005)), string(inPack[#]) + \" \" + #), \" and \") : \"\"",
+        "expr": "let parts = [\"plate\", \"wire\", \"solarCell\", \"nozzle\", \"cell\", \"cement\", \"lime\"]; let top = [\"ore\", \"rock\", \"iron\", \"dust\"]; let names = type(stock) == \"map\" ? keys(stock) : []; let packOf = {}; let inPack = fromPairs(map(names, [#, # in top ? ((pack ?? {})[#] ?? 0) : # in parts ? ((pack?.parts ?? {})[#] ?? 0) : # startsWith \"block:\" ? ((pack?.blocks ?? {})[#[6:]] ?? 0) : ((pack?.minerals ?? {})[#] ?? 0)])); !found ? \"there is no storage \" + target : ship.design != \"depot\" ? \"only a storage building holds stock\" : len(ship.placed) < ship.blocks ? \"the storage is not finished: place its last \" + string(ship.blocks - len(ship.placed)) + \" blocks first\" : len(names) == 0 ? \"stock names what moves and how much, e.g. {\\\"plate\\\": 10}\" : len(filter(names, type(stock[#]) not in [\"int\", \"float\"] || stock[#] <= 0)) > 0 ? \"each amount in stock is a number above 0\" : len(filter(names, inPack[#] < stock[#] - 0.0005)) > 0 ? \"your pack holds only \" + join(map(sort(filter(names, inPack[#] < stock[#] - 0.0005)), string(inPack[#]) + \" \" + #), \" and \") : \"\"",
         "type": "string"
       }
     },
@@ -147,7 +147,7 @@
         "y": 300
       },
       "config": {
-        "expr": "let parts = [\"plate\", \"wire\", \"solarCell\", \"nozzle\", \"cell\", \"cement\", \"lime\"]; let top = [\"ore\", \"rock\", \"iron\", \"dust\"]; let names = keys(stock); let mins = filter(names, !(# in top) && !(# in parts)); let prts = filter(names, # in parts); let tops = fromPairs(map(filter(names, # in top), [#, -stock[#]])); let pk = {ore: tops?.ore ?? 0, rock: tops?.rock ?? 0, iron: tops?.iron ?? 0, dust: tops?.dust ?? 0, minerals: fromPairs(map(mins, [#, -stock[#]])), parts: fromPairs(map(prts, [#, -stock[#]]))}; {world: ship.world, stock: stock, pack: pk}",
+        "expr": "let parts = [\"plate\", \"wire\", \"solarCell\", \"nozzle\", \"cell\", \"cement\", \"lime\"]; let top = [\"ore\", \"rock\", \"iron\", \"dust\"]; let names = keys(stock); let mins = filter(names, !(# in top) && !(# in parts) && !(# startsWith \"block:\")); let blks = filter(names, # startsWith \"block:\"); let prts = filter(names, # in parts); let tops = fromPairs(map(filter(names, # in top), [#, -stock[#]])); let pk = {ore: tops?.ore ?? 0, rock: tops?.rock ?? 0, iron: tops?.iron ?? 0, dust: tops?.dust ?? 0, minerals: fromPairs(map(mins, [#, -stock[#]])), parts: fromPairs(map(prts, [#, -stock[#]])), blocks: fromPairs(map(blks, [#[6:], -stock[#]]))}; {world: ship.world, stock: stock, pack: pk}",
         "type": "json"
       }
     },

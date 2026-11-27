@@ -1,0 +1,1 @@
+- give every area op its inverse and its items in `apps/ops` (`Items.go`), as the piece ops do;

@@ -1,0 +1,1 @@
+- keep pack rules in the `cmd-game-editTerrain` blueprint and mirror them in `LocalEdits.ts` for the demo;

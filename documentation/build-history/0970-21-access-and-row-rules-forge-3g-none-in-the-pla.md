@@ -1,0 +1,1 @@
+| 21. Access and row rules (Forge 3g) | none in the plan; gap 03g 1 (expr rules for every user, service principals skip them), answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-5), to review after seeing |

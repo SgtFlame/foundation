@@ -1,0 +1,1 @@
+- A client may resolve a failure status it expects callers to handle inline: `Config.set` resolves a 400 that carries field `errors` (`validateStatus`), and throws `ServiceError` otherwise. The `Logs` query methods throw `QueryServiceError`, a `ServiceError` with the `queryError` of a 400.

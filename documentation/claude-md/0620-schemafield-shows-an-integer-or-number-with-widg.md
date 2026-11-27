@@ -1,0 +1,1 @@
+- `SchemaField` shows an integer or number with `widget: "slider"` (also on the server's `config.Schema`) and `min`/`max` as a slider (forge 15b). `src/retrieval/` - the RAG Search `chat.contextSettings` control (`RagControl`: on/off, preset chips from `chat.context.presets`, the two 11-step dials, Top-K, source switches); moving a dial sets `preset: ''` (Custom).

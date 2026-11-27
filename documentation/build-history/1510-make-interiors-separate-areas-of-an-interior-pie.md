@@ -1,0 +1,1 @@
+- make interiors separate areas of an `interior` piece set, joined by doors linked with `game.linkDoor`;

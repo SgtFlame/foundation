@@ -1,0 +1,154 @@
+{
+  "id": "tower",
+  "title": "Spaceport tower",
+  "description": "The spaceport's control tower (forge 360 V39, the fifth industry building): a concrete footing with a control desk, two fuel tanks, two solar generators and four lamps, laid out from its blueprint chip (the spaceport-chip contract). Each concrete block costs 2 bags of cement, the control desk 2 steel plates and 3 copper wire, each tank 5 plates and a wire, each solar generator 2 solar cells and a wire, each lamp a wire. Finished, it opens a spaceport (game.openPort) over its finished landing pads within 40 m (one or two) once a storage building within 30 m holds 10 m³ of ice for fuel; an open port's pads charge a resting ship three times as fast.",
+  "blockSize": 1,
+  "static": true,
+  "chip": true,
+  "blocks": [
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "control",
+      "at": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "type": "tank",
+      "at": [
+        -2,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "tank",
+      "at": [
+        -2,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "solar",
+      "at": [
+        2,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "solar",
+      "at": [
+        2,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        -1,
+        1,
+        -1
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        1,
+        1,
+        -1
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        -1,
+        1,
+        1
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        1,
+        1,
+        1
+      ]
+    }
+  ]
+}

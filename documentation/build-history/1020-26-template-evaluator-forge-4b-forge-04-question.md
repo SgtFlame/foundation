@@ -1,0 +1,1 @@
+| 26. Template evaluator (Forge 4b) | forge 04 question 2 (answered before) and 04b 1 (`ui.PrefabPage`), 2 (`@n` pins), 3 (*Raise event*), 4 (200 queries per session), 5 (`=` expressions), 6 (local state per instance) and 7 (what logic runs can do), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-2), to review after seeing |

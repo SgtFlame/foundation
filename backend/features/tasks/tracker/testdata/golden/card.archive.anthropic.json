@@ -1,0 +1,16 @@
+{
+  "name": "tasks_tracker_card_archive",
+  "description": "Archives (closes) a card; archiving an archived card gives it unchanged.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The card's outside id"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  }
+}

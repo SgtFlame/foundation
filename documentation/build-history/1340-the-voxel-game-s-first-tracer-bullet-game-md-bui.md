@@ -1,0 +1,1 @@
+The voxel game's first tracer bullet ([Game.md](Game.md) › *Built in V1*), built beside the slices above rather than numbered among them. It added the `frontend/engine` workspace (`@foundation/engine`) and `backend/features/game`. Later game work must:
