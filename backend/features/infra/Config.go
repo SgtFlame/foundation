@@ -314,14 +314,16 @@ func contributeConfig(reg *extensions.Registry) {
 		Description: "Commits the draft as a new immutable configuration version with a message, which can then be planned and applied. expect is the draft's rev the committer saw (infra.config's rev): if the draft changed since, the commit is refused with head_moved.",
 		Args: json.RawMessage(`{"type":"object","properties":{
   "message":{"type":"string","description":"What the version changes, e.g. Add an Azure site of three hosts"},
-  "expect":{"type":"integer","minimum":0,"description":"The draft's rev the committer saw"}},"required":["message","expect"]}`),
+  "expect":{"type":"integer","minimum":0,"description":"The draft's rev the committer saw"},
+  "applied":{"type":"boolean","description":"Also mark the new version applied, for a draft that describes what exists already (the seed's first version, forge 22o)"}},"required":["message","expect"]}`),
 		Examples: []json.RawMessage{json.RawMessage(`{"message":"Add the west site","expect":4}`)},
-		Events:   []string{EventCommitted, EventVersion},
+		Events:   []string{EventCommitted, EventVersion, EventApplied},
 		NoBranch: true,
 	}, func(d live.Decision, cfg Config) ([]live.NewEvent, []live.Problem) {
 		var a struct {
 			Message string `json:"message"`
 			Expect  uint64 `json:"expect"`
+			Applied bool   `json:"applied"`
 		}
 		if err := json.Unmarshal(d.Args, &a); err != nil {
 			return nil, problem("", "args", err.Error(), "")
@@ -345,10 +347,14 @@ func contributeConfig(reg *extensions.Registry) {
 		}
 		d.NoUndo("", "a committed version is permanent")
 		v := Version{Config: d.Target.ID, Number: n, Parent: cfg.Head, Author: authorOf(d.Principal), Message: strings.TrimSpace(a.Message), Document: cfg.Draft.Normalized()}
-		return []live.NewEvent{
+		evs := []live.NewEvent{
 			{Type: EventCommitted, Data: configEvent{Number: n}},
 			{Type: EventVersion, Data: configEvent{Version: &v}, Target: &vt},
-		}, nil
+		}
+		if a.Applied {
+			evs = append(evs, live.NewEvent{Type: EventApplied, Data: configEvent{Number: n}})
+		}
+		return evs, nil
 	})
 
 	register(live.Command{

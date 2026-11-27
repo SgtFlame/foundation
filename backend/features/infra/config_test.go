@@ -2,6 +2,7 @@ package infra_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/infra"
@@ -49,7 +50,14 @@ func TestDraftAndCommit(t *testing.T) {
 		t.Fatalf("stale commit = %+v", r.Common)
 	}
 	c = st.config()
-	st.must("infra.config.commit", m{"message": "Five hosts", "expect": c.Rev})
+	st.must("infra.config.commit", m{"message": "Five hosts", "expect": c.Rev, "applied": true})
+	deadline := time.Now().Add(5 * time.Second)
+	for c := st.config(); c.Head != 2 || c.Applied != 2; c = st.config() {
+		if time.Now().After(deadline) {
+			t.Fatalf("a commit marked applied = %+v", c)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	var v2 infra.Version
 	st.get(infra.VersionProjector, infra.VersionType+"."+infra.VersionID("main", 2), &v2)
 	if v2.Parent != 1 || v2.Document.HostPools[0].Count != 5 {

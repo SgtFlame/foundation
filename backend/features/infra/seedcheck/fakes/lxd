@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+echo "lxd $*" >>"$FAKE_ARGS"
+cat >/dev/null
+mkdir -p "$FAKE_STATE"
+touch "$FAKE_STATE/lxd-init"
+echo "+ lxd $*" >>"$FAKE_LOG"
