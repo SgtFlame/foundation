@@ -169,6 +169,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ui/prefabs"
 	"github.com/SgtFlame/foundation/backend/features/ui/rest/prefabhandlers"
 	"github.com/SgtFlame/foundation/backend/features/ui/rest/uihandlers"
+	"github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice"
 	prefabimpl "github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/ui/services/uiservice"
 	uiimpl "github.com/SgtFlame/foundation/backend/features/ui/services/uiservice/impl"
@@ -914,7 +915,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		recordService = recordimpl.CreateService(recordimpl.WithRecords(liveBus, subscriptions, recordDeps), recordimpl.WithFiles(recordFiles))
 		entityService := entityimpl.CreateService(entityimpl.WithEntities(entityDeps))
 		prefabDeps = prefabs.Deps{Projections: projections, DB: gdb}
-		appDeps = manifests.Deps{Projections: projections, DB: gdb}
+		var prefabService prefabservice.Service
+		appDeps = manifests.Deps{Projections: projections, DB: gdb, Prefabs: func() prefabservice.Service { return prefabService }}
 		branchDeps = branches.Deps{Projections: projections}
 		installDeps = installs.Deps{Projections: projections, DB: gdb, Nodes: liveNodeDeps, Roles: policy, Config: configService}
 		opsDeps = ops.Deps{Bus: liveBus, Store: projections}
@@ -1029,7 +1031,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		go scripted.Serve(ctx, nats.Conn(), func() scripted.Deps { return scriptedDeps }, tenantIDs, scripted.Options{})
 		uiSessions := ui.NewKVSessions(nats.JS())
 		uiSessions.SetAccounts(natsAccounts)
-		prefabService := prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
+		prefabService = prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
 		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(uiSessions), uiimpl.WithRecorder(activityRecorder),
 			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))
 		liveService := liveimpl.CreateService(liveimpl.WithBus(liveBus), liveimpl.WithSubscriptions(subscriptions), liveimpl.WithPresence(livePresence), liveimpl.WithRegistry(registry),

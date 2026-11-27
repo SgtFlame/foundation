@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice"
 	"slices"
 	"strconv"
 	"strings"
@@ -41,6 +42,26 @@ type Projections interface {
 type Deps struct {
 	Projections Projections
 	DB          *gorm.DB // the tenant database, which holds the apps
+	// Prefabs reads published prefab versions (forge 21d-3): the prefab
+	// data service, a proxy where the tenant database is elsewhere. When
+	// nil, they are read from DB.
+	Prefabs func() prefabservice.Service
+}
+
+// PrefabVersion is a published version of a prefab, through deps.Prefabs
+// when set, else from the tenant database.
+func PrefabVersion(args features.ServiceArgs, deps Deps, id string, version int) (ui.Prefab, bool) {
+	if deps.Prefabs != nil {
+		if svc := deps.Prefabs(); svc != nil {
+			r := svc.GetPrefab(prefabservice.GetPrefabArgs{ServiceArgs: args, ID: id, Version: version})
+			return r.Prefab, r.Common.Code == 200
+		}
+	}
+	if deps.DB == nil {
+		return ui.Prefab{}, false
+	}
+	p, _, err := prefabs.Version(args, prefabs.Deps{Projections: deps.Projections, DB: deps.DB}, id, version)
+	return p, err == nil
 }
 
 // decision is one command's view of its app.

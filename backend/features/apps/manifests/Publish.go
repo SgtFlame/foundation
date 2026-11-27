@@ -302,11 +302,7 @@ func (c *decision) prefabEnv(m apps.Manifest) ui.PrefabEnv {
 			return ui.PrefabsUsed(p.Template)
 		},
 		Version: func(id string, version int) (ui.Prefab, bool) {
-			if c.deps.DB == nil {
-				return ui.Prefab{}, false
-			}
-			p, _, err := prefabs.Version(c.ServiceArgs, prefabs.Deps{Projections: c.deps.Projections, DB: c.deps.DB}, id, version)
-			return p, err == nil
+			return PrefabVersion(c.ServiceArgs, c.deps, id, version)
 		},
 		Entity: func(id string) bool { _, ok := c.publishedEntity(id); return ok },
 		Query: func(name string) bool {

@@ -21,6 +21,14 @@ The tenant database's runtime tables are reached only through their data service
 - **Settings** were already read through `configservice` (`config.Read`), so nothing moved.
 - The guard lost the rows of `tools`, `tools/nodes`, `retrieval/tools`, `chronicle/steps` and `cognition/engine` (`cognition/traces` is the owner's), and Forge's allow list is now empty.
 
+## Built in forge 21d-3
+
+- **Followers by database instance**: a follower that copies into the tenant database is named after the database instance, `db.Named(name, gdb)` (`<name>.<instance>`, the instance an id kept in the database's own `records_db_instance` row, `db.Instance`), as the large tables' `records.sql.<instance>.<entity>` already were: `records.entityVersions`, `ui.prefabVersions`, `apps.apps`, `apps.versions` and `apps.installs`. Each database file therefore gets every event, whichever processes run; a database placed on a new instance rebuilds its copies from the stream's beginning (21d-3 question 1: the stream is the truth).
+- **Prefab versions through `prefabservice`**: `app.publish` reads the prefab versions it pins through `manifests.Deps.Prefabs` (`prefabservice.GetPrefab`, `manifests.PrefabVersion`), falling back to the copy when no service is wired (tests).
+- The converter and the rollups follower send commands and keep no database, so they did not move.
+- The guard's 21d-3 rows became owner rows (no `Until`): `records/entities`, `ui/prefabs`, `apps/manifests`, `apps/installs` and `records/data` are the followers and stores of their data services.
+- Not yet: `appservice`'s export and import still read the copies in process (they run in the `app` service's own process); the two-process test of one database per tenant waits for 21g-1's harness; running each follower only where its data service is real waits for the locator (21f-1).
+
 ## The inventory
 
 | Storage | Owner (data service) | Packages allowed a handle | Removed by |
@@ -35,7 +43,7 @@ The tenant database's runtime tables are reached only through their data service
 | Tenant DB: Chronicle entries, links, rounds, shares; LanceDB `entries` | `chronicle` | `chronicle`, `chronicleservice/impl` | stays |
 | Tenant DB: segment feedback and votes | `retrieval` | `retrieval`, `retrievalservice/impl`, `retrievaltest` | stays |
 | Tenant DB: Cognition runs and steps | `cognition` | `cognitionservice/impl`, `cognition/traces` | stays |
-| Tenant DB: entity versions, prefab copies, app rows, installs, versions; large tables `rec_*` | `entity`, `prefab`, `app`, `record` | the services' `impl`; `records/entities`, `ui/prefabs`, `apps/manifests`, `apps/installs`, `records/data` | 21d-3 |
+| Tenant DB: entity versions, prefab copies, app rows, installs, versions; large tables `rec_*` | `entity`, `prefab`, `app`, `record` | the services' `impl`; `records/entities`, `ui/prefabs`, `apps/manifests`, `apps/installs`, `records/data` | stays (followers named per database, 21d-3) |
 | Tenant streams, projections, side buckets | `live` | `live/project`, `live/bus`; `live/presence`, `live/nodes`, `activity`, `ui`, `apps/branches` | 21d-4 |
 | Record files' object stores | `files` | `records/files` | 21d-4 |
 | Job work queues and schedules | `jobs` | `jobs` | stays |

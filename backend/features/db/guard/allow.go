@@ -39,13 +39,14 @@ var Allow = []Row{
 	{Package: "features/cognition/traces", Owner: "cognition", Storage: "tenant DB: Cognition runs and steps", Imports: []string{gormImp}},
 	{Package: "features/cognition/services/cognitionservice/impl", Owner: "cognition", Storage: "tenant DB", Imports: []string{gormImp}},
 
-	// Definition copies and large tables (21d-3).
-	{Package: "features/records/entities", Owner: "entity", Storage: "tenant DB: entity versions", Until: "21d-3", Imports: []string{gormImp}},
+	// Definition copies and large tables (21d-3): the followers that write
+	// them are the owner's, named per database instance (db.Named).
+	{Package: "features/records/entities", Owner: "entity", Storage: "tenant DB: entity versions", Imports: []string{gormImp}},
 	{Package: "features/records/services/entityservice/impl", Owner: "entity", Storage: "tenant DB", Imports: []string{gormImp}},
-	{Package: "features/ui/prefabs", Owner: "prefab", Storage: "tenant DB: prefab copies", Until: "21d-3", Imports: []string{gormImp}},
+	{Package: "features/ui/prefabs", Owner: "prefab", Storage: "tenant DB: prefab copies", Imports: []string{gormImp}},
 	{Package: "features/ui/services/prefabservice/impl", Owner: "prefab", Storage: "tenant DB", Imports: []string{gormImp}},
-	{Package: "features/apps/manifests", Owner: "app", Storage: "tenant DB: app rows, versions", Until: "21d-3", Imports: []string{gormImp}},
-	{Package: "features/apps/installs", Owner: "app", Storage: "tenant DB: installs", Until: "21d-3", Imports: []string{gormImp}},
+	{Package: "features/apps/manifests", Owner: "app", Storage: "tenant DB: app rows, versions", Imports: []string{gormImp}},
+	{Package: "features/apps/installs", Owner: "app", Storage: "tenant DB: installs", Imports: []string{gormImp}},
 	{Package: "features/apps/services/appservice/impl", Owner: "app", Storage: "tenant DB", Imports: []string{gormImp}},
 	{Package: "features/records/data", Owner: "record", Storage: "tenant DB: large tables rec_*; record projections", Until: "21d-3"},
 
