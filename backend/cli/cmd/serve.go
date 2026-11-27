@@ -100,6 +100,11 @@ import (
 	authznodes "github.com/SgtFlame/foundation/backend/features/authz/nodes"
 	"github.com/SgtFlame/foundation/backend/features/authz/rest/authzhandlers"
 	authzimpl "github.com/SgtFlame/foundation/backend/features/authz/services/authzservice/impl"
+	"github.com/SgtFlame/foundation/backend/features/calendar"
+	"github.com/SgtFlame/foundation/backend/features/calendar/caltest"
+	"github.com/SgtFlame/foundation/backend/features/calendar/ical"
+	calendarnodes "github.com/SgtFlame/foundation/backend/features/calendar/nodes"
+	calendarsettings "github.com/SgtFlame/foundation/backend/features/calendar/settings"
 	"github.com/SgtFlame/foundation/backend/features/chronicle"
 	chroniclecontext "github.com/SgtFlame/foundation/backend/features/chronicle/context"
 	chroniclenodes "github.com/SgtFlame/foundation/backend/features/chronicle/nodes"
@@ -760,6 +765,24 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		infra.Contribute(registry, func() infra.Deps { return infraDeps })             // infra.config.* configurations and versions (forge 22a)
 		infraproviders.Contribute(registry)                                            // the provider types: infra.lxd (forge 22g)
 		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
+		// Calendar (forge 28): the calendar section, the time and iCalendar
+		// nodes (.ics parsed in a limited child process), calendar.events@1
+		// and the Calendar test server
+		calendarsettings.Contribute(registry)
+		calendarnodes.Contribute(registry)
+		calendarnodes.ContributeIcal(registry, func() calendarnodes.IcalDeps {
+			d := calendarnodes.IcalDeps{}
+			if exe, err := os.Executable(); err == nil {
+				d.Read = ical.Child(exe)
+			}
+			if transcriptFiles != nil {
+				d.Open = transcriptFiles.Open
+			}
+			return d
+		})
+		calendar.Contribute(registry)
+		caltest.Contribute(registry)
+		caltest.ContributeLive(registry, func() connections.Deps { return connectionDeps }) // caltest.call, for forge caltest
 		var infraNodeDeps infranodes.Deps
 		infranodes.Contribute(registry, func() infranodes.Deps { return infraNodeDeps }) // Ensure host, instance, unit, packages, Wait healthy, Remove (forge 22e)
 		var infraOutbox func(features.ServiceArgs, live.Area) error
@@ -1499,8 +1522,13 @@ func targetFrom(raw string) (logging.Target, error) {
 // serves, with their metadata (forge 07b); an external adapter binary
 // serves its own with adapter.Serve.
 func connectorImpls() adapter.Options {
-	return adapter.Options{Name: "server", Types: append(infraproviders.Types(), infratest.Type()), Contracts: []connectors.Contract{infra.ComputeContract(), infratest.ControlContract()},
+	o := adapter.Options{Name: "server", Types: append(infraproviders.Types(), infratest.Type()), Contracts: []connectors.Contract{infra.ComputeContract(), infratest.ControlContract()},
 		Impls: append(infraproviders.Impls(), infratest.Default.Impl())} // the Infrastructure test server (forge 22c)
+	// The Calendar test server (forge 28c)
+	o.Types = append(o.Types, caltest.Type())
+	o.Contracts = append(o.Contracts, calendar.EventsContract(), caltest.ControlContract())
+	o.Impls = append(o.Impls, caltest.Default.Impl())
+	return o
 }
 
 // knownServices are every service's wire name (forge 21g-1).
