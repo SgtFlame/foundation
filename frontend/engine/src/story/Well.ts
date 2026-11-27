@@ -1,8 +1,9 @@
 // The well (forge 375 S26): with both hearths warded, the Hollowed cannot
 // come up through Hawk's Rest's or Wenlan's hearthstone. The morning after
 // Wenlan's ward is laid, the well in the yard is frost-cold at noon and
-// breathes cold air up its shaft: whatever lies below the village runs
-// under all of it, and the well is the threshold nobody warded.
+// breathes cold air up its shaft, with fingernail grooves on the inner
+// stones: the Hollowed use wells and drains as roads (the play design's
+// lairs and routes), and the well is the threshold nobody warded.
 
 export const WELL_REACH = 2.6 // metres from the well's middle
 
@@ -19,7 +20,7 @@ export function wellReady(done: Readonly<Record<string, boolean>>): boolean {
 }
 
 export const WELL_SENSE = 'Frost, at noon, and a breath of cold air'
-export const WELL_LINE = 'Frost furs the well\'s stones though the sun is high. You lean over the rim: the water is skinned with ice, and up the shaft comes a slow breath of cold, in and out, like something asleep. The hearths are shut to them now. This is the way they will come.'
+export const WELL_LINE = 'Frost furs the well\'s stones though the sun is high. You lean over the rim: the water is skinned with ice, a cold breath comes up the shaft, and on the inner stones, just below the lip, four parallel grooves are scored into the frost. The hearths are shut to them now. This is the road they will take.'
 
 // S27: the well warded as the hearths were, five stones and sage round its rim
-export const WELL_WARD_LINE = 'You lay the sage round the well\'s rim and set the five stones on it, one at each quarter and the last on the windlass beam over the shaft. The cold breath stops mid-draw. Below, very far down, something turns over and is still.'
+export const WELL_WARD_LINE = 'You lay the sage round the well\'s rim and set the five stones on it, one at each quarter and the last on the windlass beam over the shaft. The cold breath stops mid-draw. Far down, something scrapes against the stones, waits, and goes back the way it came.'
