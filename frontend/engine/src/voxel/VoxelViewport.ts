@@ -1,4 +1,5 @@
 import { padCharge, padUnder } from '../ship/Pad.ts'
+import { BAY_TOP, bayNear, clamped, needsBay } from '../ship/Bay.ts'
 import { blockCost, costLine, pay, shortOf, type Cost } from '../ship/Blueprint.ts'
 import { forgeAction, FUEL_COAL, FUEL_RATE, limeFor, msPer, PART_NAMES, type ForgeKind, type ForgeState, type Part } from '../craft/Forge.ts'
 import { DRIVE_CIRCUITS, DRIVE_IRON, DRIVE_MS, DRIVE_ORE, FAB_IRON, FAB_MS, FAB_ORE, fabAction, JUMP_CHARGE, KIT_CIRCUITS, KIT_IRON, KIT_MS, MAX_BOOST, type FabItem, type FabState } from '../craft/Fabricator.ts'
@@ -72,7 +73,7 @@ export type ViewMode = 'fly' | 'walk'
 
 // What the player asks of a ship (V3); the host sends each as a command
 export type ShipIntent =
-  | { kind: 'start'; id: string; design: string; x: number; y: number; z: number; q: Quat }
+  | { kind: 'start'; id: string; design: string; x: number; y: number; z: number; q: Quat; bay?: string } // V34: a chip ship names its bay floor
   | { kind: 'place'; id: string; index: number }
   | { kind: 'fly'; id: string; x: number; y: number; z: number; q: Quat; v: [number, number, number]; pilot: boolean; charge?: number }
   | { kind: 'load'; id: string } // V4: empty the pack into its hold
@@ -789,6 +790,7 @@ export class VoxelViewport {
     if (this.shipLayer.pilotOf && this.shipLayer.body) {
       this.stepPilot(dt)
       this.stepPad(dt)
+      this.stepClamp()
       input.endStep()
       return
     }
@@ -1558,6 +1560,23 @@ export class VoxelViewport {
     this.opts.onShipIntent?.({ kind: 'place', id: g.ship, index: g.index })
   }
 
+  // V34: a ship resting on a finished bay floor, its helm idle, is held by
+  // the docking clamp: no drift, no wheels needed
+  private lastHelm: Helm = IDLE_HELM
+  private clampedOn = ''
+  private stepClamp(): void {
+    const b = this.shipLayer.body
+    if (!b) return
+    const bay = clamped(b, Math.hypot(b.v.x, b.v.y, b.v.z), this.lastHelm, this.shipLayer.ships())
+    if (!bay) {
+      this.clampedOn = ''
+      return
+    }
+    if (this.clampedOn !== bay.id) this.flashHint('The docking clamp takes hold: thrust to lift off')
+    this.clampedOn = bay.id
+    b.v = { x: 0, y: 0, z: 0 }
+  }
+
   // V33: a ship resting on a finished landing pad charges from its mains
   private onPadSince = 0
   private stepPad(dt: number): void {
@@ -2071,7 +2090,8 @@ export class VoxelViewport {
       return
     }
     if (input.locked && input.pressed('KeyM')) this.jump()
-    this.shipLayer.step(dt, this.helm())
+    this.lastHelm = this.helm()
+    this.shipLayer.step(dt, this.lastHelm)
     if (this.crashed()) return
     this.packTick -= dt
     if (this.packTick <= 0) {
@@ -2122,13 +2142,24 @@ export class VoxelViewport {
     const gl = Math.hypot(g.x, g.y, g.z) || 1
     const up = { x: -g.x / gl, y: -g.y / gl, z: -g.z / gl }
     const lift = { x: ahead.x + up.x * 20, y: ahead.y + up.y * 20, z: ahead.z + up.z * 20 }
-    const ground = surfaceBelow(t, lift, 80) ?? ahead
-    // its lowest blocks are one below block 0 0 0: stand them on the ground
-    const at = { x: ground.x + up.x * 2.05, y: ground.y + up.y * 2.05, z: ground.z + up.z * 2.05 }
+    // V34: a chip ship is laid out on a finished bay floor near, standing on its deck
+    let bay: ShipState | null = null
+    if (needsBay(design)) {
+      bay = bayNear(ahead, this.shipLayer.ships()) ?? bayNear(from, this.shipLayer.ships())
+      if (!bay) {
+        this.flashHint('A ship from a design chip is hand-built on a finished bay floor: lay one out and stand by it')
+        return null
+      }
+    }
+    const ground = bay ? { x: bay.x + up.x * BAY_TOP, y: bay.y + up.y * BAY_TOP, z: bay.z + up.z * BAY_TOP } : (surfaceBelow(t, lift, 80) ?? ahead)
+    // its lowest blocks are one below block 0 0 0: stand them on the ground;
+    // the pad's and the bay floor's lowest blocks are block 0 0 0's
+    const lift0 = design === 'pad' || design === 'bay' ? 0.55 : 2.05
+    const at = { x: ground.x + up.x * lift0, y: ground.y + up.y * lift0, z: ground.z + up.z * lift0 }
     const q = lookQuat(f, up)
     const id = 's' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36)
     const r = (v: number) => Math.round(v * 1000) / 1000
-    this.opts.onShipIntent?.({ kind: 'start', id, design, x: r(at.x), y: r(at.y), z: r(at.z), q: q.map((c) => Math.round(c * 1e5) / 1e5) as Quat })
+    this.opts.onShipIntent?.({ kind: 'start', id, design, x: r(at.x), y: r(at.y), z: r(at.z), q: q.map((c) => Math.round(c * 1e5) / 1e5) as Quat, ...(bay ? { bay: bay.id } : {}) })
     return id
   }
 

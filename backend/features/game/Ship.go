@@ -76,6 +76,8 @@ var BlockCosts = map[string]map[string]float64{
 	"cargo":    {"plate": 4},
 	"refinery": {"plate": 6, "wire": 4}, // V32
 	"concrete": {"cement": 2},           // V33
+	"deck":     {"plate": 1},            // V34: the bay floor's
+	"clamp":    {"plate": 4, "wire": 2}, // V34
 }
 
 // DesignBlock is one block of a design: armor, cockpit, gyro, light,
@@ -223,7 +225,7 @@ func (d ShipDesign) Check() string {
 		switch b.Type {
 		case "cockpit":
 			cockpits++
-		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar", "log", "door", "bed", "bench", "forge", "fabricator", "concrete":
+		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar", "log", "door", "bed", "bench", "forge", "fabricator", "concrete", "deck", "clamp":
 		case "thruster":
 			switch b.Push {
 			case "up", "down", "forward", "back", "left", "right":

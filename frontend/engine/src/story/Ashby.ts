@@ -59,7 +59,7 @@ export const REMNANTS: readonly Remnant[] = [
   { id: 'door', dx: -8, dz: -6, title: 'A door left open', text: 'A cottage door hangs open on one hinge. Frost-black handprints climb the frame from the outside, and the bar that should have held it lies in the snow, not broken: lifted.' },
   { id: 'table', dx: 7, dz: -5, title: 'A meal left cold', text: 'A table dragged outside, a pot of stew frozen solid on the ashes beside it, four bowls set out and never filled. Nobody finished this meal, and nobody came back to clear it.' },
   { id: 'shoe', dx: -6, dz: 7, title: 'A child\'s shoe', text: 'One small shoe in the lane, laced. You look for the other, and for the child, and for the blood you were afraid of finding. There is none.' },
-  { id: 'furrows', dx: 8, dz: 6, title: 'Furrows to the well', text: 'Many furrows in the frozen mud, side by side, all running the same way: to Ashby\'s well, whose cover has been pushed aside from below. People were walked here. Not carried. Walked.' },
+  { id: 'furrows', dx: 8, dz: 6, title: 'Furrows down the north road', text: 'Many furrows in the frozen mud, side by side, all running the same way: out of Ashby along the north road, past the last fence and into the trees. People were walked out of here. Not carried. Walked.' },
 ]
 
 // Where each remnant lies in an area of the given size (cells of `cell` m)
@@ -76,7 +76,7 @@ export function remnantAt(spots: readonly (Remnant & P)[], p: P): (Remnant & P) 
 
 export const ASHBY_SENSE = 'Cold hearths, and no smoke anywhere'
 export const ASHBY_LINE =
-  'No graves. No bodies. No blood in the snow. Ashby was not burned or slaughtered: it was emptied, every soul in it walked to the well and taken down. Taken, not killed. You think of Wenlan\'s hearthstone, and of what climbed out of it, and of whose faces those might once have been.'
+  'No graves. No bodies. No blood in the snow. Ashby was not burned or slaughtered: it was emptied, every soul in it walked out along the north road and away. Taken, not killed. You think of Wenlan\'s hearthstone, and of what climbed out of it, and of whose faces those might once have been.'
 
 // The area the road leads to is Ashby when its name says so (an author
 // makes an area named Ashby and links a signpost to it)

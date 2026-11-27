@@ -23,6 +23,8 @@ const COLORS: Record<DesignBlock['type'], number> = {
   forge: 0x5a5a60,
   fabricator: 0x7c8794,
   concrete: 0xb8b4aa, // V33
+  deck: 0x6e7884, // V34: the bay floor's
+  clamp: 0xd9a33a,
 }
 
 interface Shown {

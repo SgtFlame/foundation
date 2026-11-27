@@ -1,0 +1,322 @@
+{
+  "id": "bay",
+  "title": "Bay floor",
+  "description": "A bay floor (forge 360 V34): a static deck of 34 steel plates round a docking clamp, with a lamp at each corner, laid out from its blueprint anywhere solid. Each deck block costs a steel plate, the clamp 4 plates and 2 copper wire, each lamp a copper wire. Ships laid out from a design chip (the cutter, hauler, freighter and barge) are hand-built only on a finished bay floor, and a ship resting on one is held by its clamp, so ships need no wheels.",
+  "blockSize": 1,
+  "static": true,
+  "chip": true,
+  "blocks": [
+    {
+      "type": "clamp",
+      "at": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        -2,
+        0,
+        -3
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        -1,
+        0,
+        -3
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        0,
+        0,
+        -3
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        1,
+        0,
+        -3
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        2,
+        0,
+        -3
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        -2,
+        0,
+        -2
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        -1,
+        0,
+        -2
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        0,
+        0,
+        -2
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        1,
+        0,
+        -2
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        2,
+        0,
+        -2
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        -2,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        -1,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        0,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        1,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        2,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        -2,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        -1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        2,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        -2,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        -1,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        1,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        2,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        -2,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        -1,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        1,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        2,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        -2,
+        0,
+        3
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        -1,
+        0,
+        3
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        0,
+        0,
+        3
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        1,
+        0,
+        3
+      ]
+    },
+    {
+      "type": "deck",
+      "at": [
+        2,
+        0,
+        3
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        -2,
+        1,
+        -3
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        2,
+        1,
+        -3
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        -2,
+        1,
+        3
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        2,
+        1,
+        3
+      ]
+    }
+  ]
+}
