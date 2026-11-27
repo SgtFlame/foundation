@@ -1,0 +1,44 @@
+# Infrastructure as Code
+
+Forge iteration 22 (`../forge/documentation/plans/022-InfrastructureAsCode.md`): the deployment as versioned configurations in the root tenant, planned against what exists and applied by durable jobs through the Control Plane ([ControlPlane.md](ControlPlane.md)). The backend is here, in `features/infra`; the Infrastructure app's pages are Forge's.
+
+## Built in forge 22a to 22f
+
+### Configurations (22a, `features/infra`)
+
+- A configuration is a definition family on the `def` stream, target type `infraConfig`, one configuration `main` (`infra.DefaultConfig`); only the root tenant may hold one (`not_root_tenant`). Its `Document` holds keyed lists, each sorted by id: `accounts` (a provider and a connection id, never a credential), `sites` (an account and region, or `onPremise`), `clusters` (one per site), `hostPools` (size and count at a site), `profiles` (container or VM, image, packages, units, files), `stacks`, `placements` (a stack or a profile, a count per site), `overrides` (a tenant's spec) and `settings` (`onDrift`: `report` or `correct`). `Document.Check` refuses bad references, duplicate ids and bad values with problems at `document.<kind>[<id>].<field>`.
+- Ops (each with its inverse, in `infra`'s own `TestEveryOpUndoes`): `infra.config.put {kind, item}`, `infra.config.remove {kind, id}` (refused while something refers to the item), `infra.config.settings`, `infra.config.import {document | files, force?}` (`draft_dirty` unless `force`). `infra.config.commit {message, expect}` freezes the draft as an immutable `infraVersion` (`<config>-<n>`, projection `infra.version`) in the same batch (`head_moved` when the draft moved, `nothing_to_commit`; not undoable, `NoBranch`); the internal `infra.config.markApplied {number}` records what an apply reached. Queries: `infra.config`, `infra.versions`, `infra.version {number}`.
+
+### Diffs, export and import (22b)
+
+- `text.DataDiff(a, b, keys)` (`features/text/Data.go`) compares JSON values as things: `added`, `removed`, `changed`, and `moved` for a keyed item that changed place, at paths like `hostPools[general].count`; keys name the lists matched by a field (`{"sites": "id", "profiles[].units": "name"}`). The *Data diff* node (`data.diff`, `textnodes`) gives it to graphs.
+- `infra.Diff(a, b)` adds the list, the item and a summary (*host pool general on west: count 3 → 5*); the `infra.diff {from?, to?}` query follows the draft (`{}` is what the draft changes since its head).
+- `infra.Export` writes a version as YAML files: `config.yaml` (accounts, profiles, overrides, settings), `sites/<id>.yaml` (a site with its cluster and host pools), `stacks/<id>.yaml`, `placements.yaml`; `infra.Import` reads them back, refusing unknown files and fields. Both refuse, by path, anything that is or looks like a secret (`secret_in_config`: a `$secret`, `$ref` or `$vault` placeholder, a JWT, a NATS seed, a PEM private key). The `infra.config.export {version?}` query gives `{files}`; `infra.config.import {files}` reads them.
+
+### The compute contract and the Infrastructure test server (22c)
+
+- `infra.compute@1` (`infra.ComputeContract`, a Go builtin passing `CheckContract`; golden tool shapes in `features/infra/testdata/golden`, rewritten with `go test ./features/infra -update`): `host.create` (keyed by `id`, our name for the host: a second create makes nothing), `host.get`, `host.list`, `host.start`, `host.stop`, `host.delete` (destructive, idempotent), `size.list` (`vms` when a size can run VMs), `image.list`, `region.list`, `check`, and the `host.changed` event (delivery `watch`). A type makes whatever a host needs inside `host.create` and removes it in `host.delete`.
+- `features/infra/infratest` is the Infrastructure test server: the builtin type `infratest` implementing `infra.compute@1` over hosts kept **in the serving process's memory** (sizes `s`, `m`, `l`, `xl`, the last two with `vms`; regions `r1`, `r2`), a host `creating` until the connection's `delayMs` passes, `host.changed` from its `Watch`, and failure injection through its own contract `infratest.control@1` (`fail {operation, times, kind}`, `slow {operation, ms}`, `vanish {host}`, `state`). `serve.go` serves it in-process (`infratest.Default.Impl()`).
+- `features/infra/contracttest.Run(t, call, Options)` is the suite every compute type passes: keyed create, list finds it, it becomes running, delete is idempotent and leaves it gone.
+
+### Resources and plans (22d)
+
+- A document expands into resources (`infra.Resource`: id, kind, site, account, props, dependencies, `needsVms`, `holdsData`) by the kinds on the `infra.resourceKind` point (`infra.ResourceKinds`, declared in `serve.go`): `host` (`host:<site>/<pool>/<n>`, made at the provider as `<site>-<pool>-<n>`, compared on size, region and image), `cluster` (`cluster:<site>`, after its hosts) and `instance` (`instance:<site>/<placement>/<profile>/<n>`, after the site's cluster). Later parts add kinds there.
+- `infra.ReadActual` lists each account's hosts and sizes through `infra.compute` (over `Deps.Compute`, `infra.DispatcherCompute` in `serve.go`) and asks `Deps.Actual` for the rest (`infraapply.RecordsActual`: instances by their desired-state records, a cluster once one of its hosts is recorded).
+- `infra.Plan` (pure) gives steps `{id, op: create | change | remove, kind, site, account, before, desired, after, holdsData, summary}`: removals first, dependents before what they depend on, then creations and changes in dependency order; **refusals** for a VM where no host of the site can run VMs (*no host on west can run VMs*) or a host size without `vms` that must have it; **notes** for a cluster of fewer than three hosts.
+- The `infra.plan {config?, version?}` tool (`infra.MakePlan`) stores the plan as an `infraPlan` on the live area `infra` (internal `infra.plan.record`; status `ready`, or `refused` with refusals), read by `infra.plans` and `infra.planOf {id}`.
+
+### The infrastructure nodes (22e, `features/infra/nodes`)
+
+*Ensure host* (`infra.ensureHost`), *Ensure instance*, *Ensure unit*, *Ensure packages*, *Wait healthy* and *Remove*, each External, for function, server action and trigger graphs. They write the Control Plane's desired state, the infrastructure app's records (`infraHost`, `infraProfile`, `infraInstance`, `infraUnit`, `infraPackagePin`), under ids derived from resource ids (`infranodes.RecordID`: `host:west/general/1` → `host_west_general_1`), changing only what differs, with command ids derived from the record (`Nats-Msg-Id` drops a repeat): run twice, they change nothing. A host is made through `infra.compute` first. The same logic is Go (`infranodes.EnsureHost`, `EnsureInstance`, `EnsureUnit`, `EnsurePackages`, `WaitHealthy`, `RemoveStep`) for the apply.
+
+### Apply, drift and rollback (22f, `features/infra/apply`)
+
+- `infra.apply {plan}` (`infra.admin`) refuses a plan with refusals (`plan_refused`), one older than 15 minutes (`plan_stale`, `infraapply.PlanMaxAge`) or one applied already (`already_applied`), and makes an `infraApply` (id: the plan's) on the `infra` area. Each step whose steps are done is enqueued as a job of the built-in graph `infra-apply-step` (*Run apply step*, `infra.applyStep`), id `apply-<apply>-<record id>-<attempt>`, queue `infra`, keyed by site; a removal of what holds data becomes **proposed** instead and waits for `infra.apply.approve {step}` (`infra.approve`).
+- A step's job runs `infraapply.RunStep`: a retryable provider error fails the run so the job retries; otherwise the outcome is recorded by the internal `infra.apply.step`, whose decision enqueues the steps it unblocks **in the same commit**, so whichever runner finishes the last dependency enqueues the next, and no leader is needed. A step not ready does nothing. The last step marks the version applied.
+- `infra.apply.resume` runs failed (and stuck) steps again as new attempts. `infra.applies` and `infra.applyOf {id}` read applies.
+- `infra.drift` (`infraapply.CheckDrift`) plans the applied version against what exists; with `onDrift: correct` it applies that plan. Rollback is planning and applying an earlier version.
+
+## Not built yet
+
+Parts 22g to 22q (the HTTP request node and LXD, cluster formation, service units and credentials, stacks, tenant overrides, the Azure, DigitalOcean and Fly types, the seed, the topology view, the chat), the drift job on a schedule, *Run script*, *Mint join token* and *Ensure NATS account*, the Infrastructure app's pages for configurations, plans and applies, the test server's page and `forge infratest`, and comparing an instance's profile with what is applied (an existing instance is taken as matching). See the part plans in Forge.
