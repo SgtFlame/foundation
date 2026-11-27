@@ -15,4 +15,5 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	contributePlans(reg, deps)
 	contributeDescribe(reg, deps)
 	contributeStacks(reg)
+	contributeChange(reg, deps)
 }

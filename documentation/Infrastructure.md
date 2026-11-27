@@ -69,6 +69,11 @@ Forge iteration 22 (`../forge/documentation/plans/022-InfrastructureAsCode.md`):
 - An override's `spec` now has its first switch, `runners {profile | stack, sites, vm}` (`Override.Switches`, checked: a tenant other than the root, a stack or a profile, known sites; unknown switches are refused): the tenant's own instances `instance:<site>/tenant-<t>-<override>/<profile>/<n>` with the `tenant` property, each `kind: vm` and needing a host that runs VMs when `vm` (so the plan refuses *no host on west can run VMs*). Tested by `TestTenantRunners`.
 - Not built: the instance record carrying its tenant and its units' NATS users holding only that tenant's account; own clusters, own databases with their routing entries and migrations, and stream placement (iteration question 7 and 22k's question 1 are open); stack graphs with parameters; placement constraints beyond `requiresVms`; the Stacks and Placements pages.
 
+## Built in forge 22q (in part): the chat's change
+- `infra.config.change {config?, ops: [{op: put | remove, kind, item | id}], plan?}` (`infra.ChangeDraft`; a tool, effect write so it asks in the chat, and a call) makes the edits as one atomic batch of `infra.config.put`/`remove` (`bus.Transact`, in the round's request, so `ops.undo` takes them back together; a refused op refuses the batch and changes nothing), then gives the draft's changes since its head and the plan of the draft (`MakePlan` of version 0). It never commits or applies. Tested by `TestChangeDraft`.
+- Question 1 as proposed (Tony to confirm): the main chat with these tools, no mode of its own yet.
+- Not built: the golden test (it needs a model key), the plan link through a subject opener, `infra.config.diff` as a tool of its own.
+
 ## Not built yet
 
 Parts 22g to 22q (the HTTP request node and LXD, cluster formation, service units and credentials, stacks, tenant overrides, the Azure, DigitalOcean and Fly types, the seed, the topology view, the chat), the drift job on a schedule, *Run script*, *Mint join token* and *Ensure NATS account*, the Infrastructure app's pages for configurations, plans and applies, the test server's page and `forge infratest`, and comparing an instance's profile with what is applied (an existing instance is taken as matching). See the part plans in Forge.
