@@ -11,7 +11,7 @@ export type Vec3 = { x: number; y: number; z: number }
 export type Quat = [number, number, number, number] // x, y, z, w
 
 export interface DesignBlock {
-  type: 'armor' | 'cockpit' | 'gyro' | 'light' | 'thruster' | 'battery' | 'cargo' | 'refinery' | 'solar' | 'log' | 'door' | 'bed' | 'bench' | 'forge' | 'fabricator' // V13: a building's (V14: the bench, V20: the forge, V23: the fabricator)
+  type: 'armor' | 'cockpit' | 'gyro' | 'light' | 'thruster' | 'battery' | 'cargo' | 'refinery' | 'solar' | 'log' | 'door' | 'bed' | 'bench' | 'forge' | 'fabricator' | 'concrete' // V33: the landing pad's; V13: a building's (V14: the bench, V20: the forge, V23: the fabricator)
   at: [number, number, number]
   push?: 'up' | 'down' | 'forward' | 'back' | 'left' | 'right'
 }
@@ -24,6 +24,7 @@ export interface ShipDesign {
   blocks: DesignBlock[]
   static?: boolean // V13: a building, never flown; the walker cannot pass its blocks but for doors
   lift?: number // V25: the share of its holds its stock thrusters lift (kits add their boost), up to full
+  chip?: boolean // V31: laid out from an earned design chip; each block costs components (ship/Blueprint.ts)
 }
 
 // A ship as the server keeps it (game.worldShips)
@@ -42,15 +43,16 @@ export interface ShipState {
   crew?: string[] // V7: the users riding as its crew
   cargo?: { dust: number; rock: number; iron: number; ore?: number } // V4: its hold, m³ (V8: ore)
   charge?: number // V4: its battery, 0 to 1
-  forge?: { ore: number; at: number } // V20: the ore smelting in a cabin's forge
+  forge?: { ore: number; at: number; kind?: 'ore' | 'rock' | 'ferrite' | 'malachite' | 'silica' | 'wolframite' | 'spodumene' } // V20: the ore smelting in a cabin's forge (V30: kind, a mineral or rock refining)
   fab?: { item: string; at: number } // V23: the circuit board a cabin's fabricator is making
   boost?: number // V24: what ion thruster kits add to its thrust
   jump?: boolean // V27: a jump drive is fitted
+  types?: string[] // V31: a chip design's block types by index; each block costs components
   seq: number
   updatedAt?: string
 }
 
-export const BLOCK_MASS: Record<DesignBlock['type'], number> = { armor: 120, cockpit: 200, gyro: 150, light: 20, thruster: 80, battery: 150, cargo: 100, refinery: 300, solar: 30, log: 200, door: 60, bed: 80, bench: 90, forge: 400, fabricator: 250 }
+export const BLOCK_MASS: Record<DesignBlock['type'], number> = { armor: 120, cockpit: 200, gyro: 150, light: 20, thruster: 80, battery: 150, cargo: 100, refinery: 300, solar: 30, log: 200, door: 60, bed: 80, bench: 90, forge: 400, fabricator: 250, concrete: 300 }
 
 // Power (V4, a thin 367): a design with a battery or solar panels runs on
 // power. Thrusters draw by how hard they push, the gyroscope while turning;

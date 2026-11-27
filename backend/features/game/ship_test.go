@@ -1,11 +1,15 @@
 package game_test
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/game"
+	"github.com/SgtFlame/foundation/backend/features/live/bus"
 )
 
 // V3: a ship is started from a design, its blocks placed, then flown by one pilot at a time
@@ -157,7 +161,7 @@ func TestShipDamage(t *testing.T) {
 
 // V6: contracts handed in with a ship at the outpost pay a skill once
 func TestOutpost(t *testing.T) {
-	if c := game.ContractsOf(); len(c.Contracts) != 10 || c.Giver.Name == "" {
+	if c := game.ContractsOf(); len(c.Contracts) != 11 || c.Giver.Name == "" {
 		t.Fatalf("contracts %+v", c)
 	}
 	st := newStack(t)
@@ -589,6 +593,7 @@ func TestBarge(t *testing.T) {
 		t.Fatalf("refinery ore from a prospector: %q", r.Common.Message)
 	}
 	st.ok("game.startShip", "b1", map[string]any{"world": world, "design": "barge", "x": 0, "y": 104, "z": -8, "q": q})
+	refineParts(t, st, world, map[string]int{"plate": 12}) // V32: three holds' plates
 	// two holds placed: 12 m³, of which the stock thrusters lift 6
 	st.ok("game.placeBlock", "b1", map[string]any{"index": 27})
 	st.ok("game.placeBlock", "b1", map[string]any{"index": 97})
@@ -702,10 +707,214 @@ func TestRefine(t *testing.T) {
 	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Parts["wire"] != 1 || pack.Iron != 0 {
 		t.Fatalf("pack %+v", pack)
 	}
-	if r := st.refused("game.smelt", "c1", map[string]any{"what": "rock"}); !strings.Contains(r.Common.Message, "too little rock") {
-		t.Fatalf("too little rock: %q", r.Common.Message)
+	if r := st.refused("game.smelt", "c1", map[string]any{"what": "rock"}); !strings.Contains(r.Common.Message, "needs lime") { // V33
+		t.Fatalf("rock without lime: %q", r.Common.Message)
 	}
 	if game.Refines["rock"].Part != "cement" || game.Refines["silica"].Part != "solarCell" {
 		t.Fatalf("refines %+v", game.Refines)
+	}
+}
+
+// V31: the cutter, a chip design: the cutter-chip contract takes components
+// from the pack and unlocks it, and each of its blocks costs components
+func TestCutter(t *testing.T) {
+	d, ok := game.DesignOf("cutter")
+	if !ok || !d.Chip || d.Check() != "" {
+		t.Fatalf("cutter %+v", d)
+	}
+	for _, b := range d.Blocks {
+		if _, ok := game.BlockCosts[b.Type]; !ok {
+			t.Fatalf("no cost for a %s", b.Type)
+		}
+	}
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Cutter moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	if r := st.refused("game.startShip", "k1", map[string]any{"world": world, "design": "cutter", "x": 0, "y": 110, "z": 0, "q": q}); !strings.Contains(r.Common.Message, "design chip") {
+		t.Fatalf("a cutter without its chip: %q", r.Common.Message)
+	}
+	// refine one component in each of seven cabins at once: 4 plates, 3 wire
+	loads := []string{"ferrite", "ferrite", "ferrite", "ferrite", "malachite", "malachite", "malachite"}
+	for i, m := range loads {
+		id := fmt.Sprintf("c%d", i)
+		st.ok("game.startShip", id, map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": float64(i * 6), "q": q})
+		st.ok("game.placeBlock", id, map[string]any{"index": 75})
+		amount := map[string]float64{"ferrite": 0.125, "malachite": 0.1}[m]
+		st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": float64(i * 4), "y": 100, "z": 0, "radius": 1, "took": map[string]any{"dust": 0, "rock": 0, "minerals": map[string]any{m: amount}}})
+		st.ok("game.smelt", id, map[string]any{"what": m})
+	}
+	time.Sleep(7600 * time.Millisecond)
+	var last bus.Result
+	for i := range loads {
+		last = st.ok("game.takeIngots", fmt.Sprintf("c%d", i), map[string]any{})
+	}
+	var pack game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), last.Seq, &pack) || pack.Parts["plate"] != 4 || pack.Parts["wire"] != 3 {
+		t.Fatalf("pack %+v", pack)
+	}
+	// the contract, with a ship parked at the beacon
+	st.ok("game.startShip", "s1", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 110, "z": 0, "q": q})
+	res := st.ok("game.handIn", "s1", map[string]any{"contract": "cutter-chip"})
+	pack = game.Pack{} // a fresh value: unmarshalling keeps map keys the fold deleted
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Parts["plate"] != 0 || pack.Parts["wire"] != 1 {
+		t.Fatalf("pack after the contract %+v", pack)
+	}
+	res = st.ok("game.startShip", "k1", map[string]any{"world": world, "design": "cutter", "x": 0, "y": 110, "z": 8, "q": q})
+	var k game.Ship
+	if !st.read(game.ShipsProjector, game.ShipType+".k1", res.Seq, &k) || k.Blocks != len(d.Blocks) || len(k.Types) != len(d.Blocks) {
+		t.Fatalf("cutter %+v", k)
+	}
+	for i, b := range d.Blocks {
+		if k.Types[i] != b.Type {
+			t.Fatalf("block %d is a %s in the blueprint graph and a %s in designs/cutter.json", i, k.Types[i], b.Type)
+		}
+	}
+	index := func(typ string) int {
+		for i, b := range d.Blocks {
+			if b.Type == typ {
+				return i
+			}
+		}
+		return -1
+	}
+	if r := st.refused("game.placeBlock", "k1", map[string]any{"index": index("armor")}); !strings.Contains(r.Common.Message, "short of plate") {
+		t.Fatalf("armour without plates: %q", r.Common.Message)
+	}
+	if r := st.refused("game.placeBlock", "k1", map[string]any{"index": index("battery")}); !strings.Contains(r.Common.Message, "short of cell") {
+		t.Fatalf("a battery without cells: %q", r.Common.Message)
+	}
+	// the wire left over buys a light
+	res = st.ok("game.placeBlock", "k1", map[string]any{"index": index("light")})
+	pack = game.Pack{}
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Parts["wire"] != 0 {
+		t.Fatalf("a light's wire: %+v", pack)
+	}
+	if r := st.refused("game.placeBlock", "k1", map[string]any{"index": index("light") + 1}); !strings.Contains(r.Common.Message, "short of wire") {
+		t.Fatalf("a second light: %q", r.Common.Message)
+	}
+	// the stock skiff's blocks stay free
+	st.ok("game.placeBlock", "s1", map[string]any{"index": 1})
+}
+
+// V32: every chip design's block types in cmd-game-startShip match its file,
+// and every block type it uses has a cost
+func TestChipDesigns(t *testing.T) {
+	raw, err := os.ReadFile("graphs/cmd-game-startShip.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var g struct {
+		Nodes []struct {
+			ID     string `json:"id"`
+			Config struct {
+				Expr string `json:"expr"`
+			} `json:"config"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(raw, &g); err != nil {
+		t.Fatal(err)
+	}
+	expr := ""
+	for _, n := range g.Nodes {
+		if n.ID == "started" {
+			expr = n.Config.Expr
+		}
+	}
+	for _, id := range []string{"cutter", "hauler", "freighter", "barge", "pad"} {
+		d, ok := game.DesignOf(id)
+		if !ok || !d.Chip {
+			t.Fatalf("%s is not a chip design", id)
+		}
+		want := []string{}
+		for _, b := range d.Blocks {
+			if _, ok := game.BlockCosts[b.Type]; !ok {
+				t.Fatalf("%s: no cost for a %s", id, b.Type)
+			}
+			want = append(want, b.Type)
+		}
+		list, _ := json.Marshal(want)
+		if !strings.Contains(strings.ReplaceAll(expr, " ", ""), id+":"+string(list)) {
+			t.Fatalf("%s: the blueprint's types differ from designs/%s.json", id, id)
+		}
+	}
+}
+
+// refineParts refines components into user 1's pack in a world, one in each
+// of as many cabins at once (V32: chip designs' blocks cost them)
+func refineParts(t *testing.T, st *stack, world string, parts map[string]int) {
+	t.Helper()
+	ore := map[string]struct {
+		mineral string
+		amount  float64
+	}{"plate": {"ferrite", 0.125}, "wire": {"malachite", 0.1}, "solarCell": {"silica", 0.25}, "nozzle": {"wolframite", 0.334}, "cell": {"spodumene", 0.25}}
+	ids := []string{}
+	for part, n := range parts {
+		for i := 0; i < n; i++ {
+			m := ore[part]
+			id := fmt.Sprintf("rf%d", st.n)
+			st.n++
+			st.ok("game.startShip", id, map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": float64(len(ids) * 6), "q": []float64{0, 0, 0, 1}})
+			st.ok("game.placeBlock", id, map[string]any{"index": 75})
+			st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": float64(len(ids)%20) * 3, "y": 100, "z": 30, "radius": 1, "took": map[string]any{"dust": 0, "rock": 0, "minerals": map[string]any{m.mineral: m.amount}}})
+			st.ok("game.smelt", id, map[string]any{"what": m.mineral})
+			ids = append(ids, id)
+		}
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for _, id := range ids {
+		for {
+			r := st.send(1, "game.takeIngots", id, map[string]any{})
+			if r.Common.Code < 300 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("refining in %s: %q", id, r.Common.Message)
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+}
+
+// V33: limestone burns into lime, cement takes lime, coal fuels the forge,
+// and the landing pad's concrete costs cement
+func TestLimeAndPad(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Kiln planet"}).Target
+	q := []float64{0, 0, 0, 1}
+	st.ok("game.startShip", "c1", map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": 0, "q": q})
+	st.ok("game.placeBlock", "c1", map[string]any{"index": 75})
+	st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 1600, "y": 135, "z": 0, "radius": 1, "took": map[string]any{"dust": 0, "rock": 0.5, "minerals": map[string]any{"limestone": 0.2, "coal": 0.15}}})
+	if r := st.refused("game.smelt", "c1", map[string]any{"what": "rock"}); !strings.Contains(r.Common.Message, "needs lime") {
+		t.Fatalf("cement without lime: %q", r.Common.Message)
+	}
+	if r := st.refused("game.smelt", "c1", map[string]any{"what": "coal"}); !strings.Contains(r.Common.Message, "fuel") {
+		t.Fatalf("coal as a load: %q", r.Common.Message)
+	}
+	res := st.ok("game.smelt", "c1", map[string]any{"what": "limestone"})
+	var s game.Ship
+	if !st.read(game.ShipsProjector, game.ShipType+".c1", res.Seq, &s) || s.Forge == nil || s.Forge.Kind != "limestone" || s.Forge.Rate != 2 {
+		t.Fatalf("a fuelled kiln %+v", s.Forge)
+	}
+	var pack game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Minerals["coal"] != 0.05 || pack.Minerals["limestone"] != 0 {
+		t.Fatalf("pack %+v", pack)
+	}
+	time.Sleep(3100 * time.Millisecond) // 0.2 m³ at 30 s a m³, twice as fast
+	res = st.ok("game.takeIngots", "c1", map[string]any{})
+	pack = game.Pack{}
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Parts["lime"] != 1 {
+		t.Fatalf("lime %+v", pack)
+	}
+	// one sack of lime makes cement of half a m³ of rock
+	res = st.ok("game.smelt", "c1", map[string]any{"what": "rock"})
+	s = game.Ship{}
+	pack = game.Pack{}
+	if !st.read(game.ShipsProjector, game.ShipType+".c1", res.Seq, &s) || s.Forge.Ore != 0.5 || s.Forge.Rate != 0 || !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Parts["lime"] != 0 || pack.Rock != 0 {
+		t.Fatalf("cement load %+v, pack %+v", s.Forge, pack)
+	}
+	// the landing pad: anyone may lay it out; its concrete costs cement
+	st.ok("game.startShip", "pad1", map[string]any{"world": world, "design": "pad", "x": 1610, "y": 142, "z": 0, "q": q})
+	if r := st.refused("game.placeBlock", "pad1", map[string]any{"index": 0}); !strings.Contains(r.Common.Message, "short of cement") {
+		t.Fatalf("concrete without cement: %q", r.Common.Message)
 	}
 }

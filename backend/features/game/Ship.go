@@ -57,6 +57,25 @@ type ShipDesign struct {
 	// V25: the share of its holds its stock thrusters lift; ion thruster
 	// kits (Ship.Boost) add to it, up to a full hold (the ore barge's 0.5)
 	Lift float64 `json:"lift,omitempty"`
+	// V31: laid out from an earned design chip (ships from blocks, the
+	// user, 2026-11-27): each block costs the components BlockCosts names,
+	// taken from the placer's pack
+	Chip bool `json:"chip,omitempty"`
+}
+
+// BlockCosts is what each block of a chip design costs in components
+// (V31; the engine's ship/Blueprint.ts and cmd-game-placeBlock agree).
+var BlockCosts = map[string]map[string]float64{
+	"armor":    {"plate": 2},
+	"cockpit":  {"plate": 3, "wire": 2},
+	"thruster": {"nozzle": 1, "plate": 1, "wire": 1},
+	"gyro":     {"plate": 2, "wire": 3},
+	"battery":  {"cell": 2, "wire": 1},
+	"solar":    {"solarCell": 2, "wire": 1},
+	"light":    {"wire": 1},
+	"cargo":    {"plate": 4},
+	"refinery": {"plate": 6, "wire": 4}, // V32
+	"concrete": {"cement": 2},           // V33
 }
 
 // DesignBlock is one block of a design: armor, cockpit, gyro, light,
@@ -95,7 +114,9 @@ type Ship struct {
 	// V24: what ion thruster kits add to its thrust (0.25 each, at most 0.5)
 	Boost float64 `json:"boost,omitempty"`
 	// V27: a jump drive is fitted: it jumps between the moon and the planet
-	Jump      bool      `json:"jump,omitempty"`
+	Jump bool `json:"jump,omitempty"`
+	// V31: a chip design's block types by index, so placing one knows its cost
+	Types     []string  `json:"types,omitempty"`
 	Seq       uint64    `json:"seq"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -119,6 +140,8 @@ type Forge struct {
 	// malachite, silica, wolframite, spodumene) or rock, refined into
 	// components (Refines)
 	Kind string `json:"kind,omitempty"`
+	// V33: 2 when 0.1 m³ of coal from the pack fuels it: done twice as fast
+	Rate float64 `json:"rate,omitempty"`
 }
 
 // Refine is what a forge makes of a m³ of a kind other than ore (V30).
@@ -137,6 +160,7 @@ var Refines = map[string]Refine{
 	"wolframite": {"nozzle", 3, 60_000},
 	"spodumene":  {"cell", 4, 60_000},
 	"rock":       {"cement", 6, 30_000},
+	"limestone":  {"lime", 6, 30_000}, // V33
 }
 
 const (
@@ -199,7 +223,7 @@ func (d ShipDesign) Check() string {
 		switch b.Type {
 		case "cockpit":
 			cockpits++
-		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar", "log", "door", "bed", "bench", "forge", "fabricator":
+		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar", "log", "door", "bed", "bench", "forge", "fabricator", "concrete":
 		case "thruster":
 			switch b.Push {
 			case "up", "down", "forward", "back", "left", "right":
@@ -250,6 +274,8 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		At     int64      `json:"at"`
 		Item   string     `json:"item"`
 		Kind   string     `json:"kind"`
+		Rate   float64    `json:"rate"`
+		Types  []string   `json:"types"`
 		Boost  float64    `json:"boost"`
 	}
 	// a damaged event's blocks are indices, read on their own below
@@ -258,7 +284,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	}
 	switch f.Event.Type {
 	case EventShipStarted:
-		s = Ship{ID: f.Event.Target.ID, World: d.World, Design: d.Design, Blocks: d.Blocks, Placed: []int{}, Crew: []string{}, X: d.X, Y: d.Y, Z: d.Z, Q: d.Q, Charge: 1}
+		s = Ship{ID: f.Event.Target.ID, World: d.World, Design: d.Design, Blocks: d.Blocks, Placed: []int{}, Crew: []string{}, X: d.X, Y: d.Y, Z: d.Z, Q: d.Q, Charge: 1, Types: d.Types}
 	case EventBlockPlaced:
 		if d.Index != nil {
 			i := sort.SearchInts(s.Placed, *d.Index)
@@ -303,7 +329,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 			s.Pilot = ""
 		}
 	case EventSmelting:
-		s.Forge = &Forge{Ore: d.Ore, At: d.At, Kind: d.Kind}
+		s.Forge = &Forge{Ore: d.Ore, At: d.At, Kind: d.Kind, Rate: d.Rate}
 	case EventIngots:
 		s.Forge = nil
 	case EventFabricating:
@@ -336,7 +362,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	return json.Marshal(s)
 }
 
-const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron, ore} (m³ in its hold), charge (its battery, 0 to 1), forge {ore, at, kind} (V20: a cabin's forge smelting ore since Unix ms at; V30: kind, when set, the mineral or rock it refines into components), fab {item, at} (V23: a cabin's fabricator making a circuit board, or V24 an ion thruster kit, since Unix ms at), boost (V24: what ion thruster kits add to its thrust), jump (V27: a jump drive is fitted), seq, updatedAt}"
+const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron, ore} (m³ in its hold), charge (its battery, 0 to 1), forge {ore, at, kind} (V20: a cabin's forge smelting ore since Unix ms at; V30: kind, when set, the mineral or rock it refines into components), fab {item, at} (V23: a cabin's fabricator making a circuit board, or V24 an ion thruster kit, since Unix ms at), boost (V24: what ion thruster kits add to its thrust), jump (V27: a jump drive is fitted), types (V31: a chip design's block types by index), seq, updatedAt}"
 
 func without(list []string, v string) []string {
 	out := []string{}

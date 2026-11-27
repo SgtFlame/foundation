@@ -20,6 +20,7 @@ import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../sto
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
+import { ASHBY_LINE, ASHBY_SENSE, ashbyReady, isAshby, remnantAt, remnantSpots, TRACK_LINE, TRACK_REACH, TRACK_SENSE, trackPrints, trackReady } from '../story/Ashby.ts'
 import { WELL_LINE, WELL_REACH, WELL_SENSE, WELL_WARD_LINE, wellReady, wellSpot } from '../story/Well.ts'
 import { bankSageReady, bankSageSpot, FARM_WARD_LINE, FARM_WARDED_NIGHT, HEARTH_REACH, HEARTH_WARD_LINE, hearthStonesReady, hearthWarded, hearthWardMissing, hearthWardReady, nextHearthWard, SAGE_LINE, SAGE_REACH, wardSpots } from '../story/HearthWard.ts'
 import { TRIED_DOOR_LINE, TRIED_LINE, TRIED_LOST, TRIED_NIGHT, triedReady } from '../story/Tried.ts'
@@ -1822,6 +1823,7 @@ export class AreaViewport {
         this.marks.add(m)
       }
     }
+    this.drawRoad()
     if (!st || this.area.id !== st.area || !st.done.howl) return
     const c = this.set.cell
     const yard = Object.values(this.area.pieces).find((p) => p.piece === 'yard')
@@ -2040,6 +2042,7 @@ export class AreaViewport {
     this.stepBundles(p)
     this.stepFarmWard(p)
     this.stepWell(p)
+    this.stepRoad(p)
     this.stepSenses(p)
     this.savePlace()
   }
@@ -2185,6 +2188,100 @@ export class AreaViewport {
     this.atWell = at
   }
 
+  // S28: the signpost's door, where the road leaves the farmstead
+  private signDoor(): { x: number; z: number } | null {
+    const sign = Object.values(this.area.pieces).find((p) => p.piece === 'signpost')
+    if (!sign) return null
+    return this.doors().find((d) => d.id === sign.id)?.at ?? { x: (sign.x + 0.5) * this.set.cell, z: (sign.z + 0.5) * this.set.cell }
+  }
+
+  // S28: frost prints from the warded well to the signpost; S29: what the
+  // raid left in Ashby
+  private ashbySeen = new Set<string>()
+  private drawRoad(): void {
+    const st = this.story
+    if (!st || this.set.interior) return
+    if (this.area.id === st.area && trackReady(st.done)) {
+      const well = wellSpot(Object.values(this.area.pieces), this.set.cell)
+      const sign = this.signDoor()
+      if (!well || !sign) return
+      const frost = new THREE.MeshBasicNodeMaterial({ color: 0xe4eef5, transparent: true, opacity: 0.75 })
+      for (const [i, p] of trackPrints(well, sign).entries()) {
+        const m = new THREE.Mesh(new THREE.CircleGeometry(0.22, 10).rotateX(-Math.PI / 2), frost)
+        m.scale.set(0.7, 1, 1.4)
+        m.rotation.y = i % 2 ? 0.2 : -0.2
+        m.position.set(p.x, 0.05, p.z)
+        this.marks.add(m)
+      }
+    }
+    if (this.area.id !== st.area && isAshby(this.area.name) && st.done.track) {
+      const wood = new THREE.MeshStandardNodeMaterial({ color: 0x5b4330, roughness: 1 })
+      const dark = new THREE.MeshBasicNodeMaterial({ color: 0x15171c })
+      const iron = new THREE.MeshStandardNodeMaterial({ color: 0x3a3a3e, roughness: 0.7 })
+      for (const r of remnantSpots(this.area.width, this.area.depth, this.set.cell)) {
+        const g = new THREE.Group()
+        if (r.id === 'door') {
+          const door = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.08), wood)
+          door.position.set(0.4, 1, 0.3)
+          door.rotation.y = 1.1
+          g.add(door)
+          for (let k = 0; k < 3; k++) {
+            const hand = new THREE.Mesh(new THREE.CircleGeometry(0.09, 6), dark)
+            hand.position.set(0.05, 0.6 + k * 0.45, 0.35 + (k % 2) * 0.1)
+            hand.rotation.y = 1.1 - Math.PI / 2
+            g.add(hand)
+          }
+        } else if (r.id === 'table') {
+          const top = new THREE.Mesh(new THREE.BoxGeometry(2, 0.08, 0.9), wood)
+          top.position.y = 0.75
+          g.add(top)
+          const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.3, 10), iron)
+          pot.position.set(1.6, 0.15, 0.4)
+          g.add(pot, ashPile().translateX(1.6).translateZ(0.4))
+        } else if (r.id === 'shoe') {
+          const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.22), wood)
+          shoe.position.y = 0.04
+          g.add(shoe)
+        } else {
+          for (let k = -3; k <= 3; k++) {
+            const f = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 6).rotateX(-Math.PI / 2), dark)
+            f.position.set(k * 0.35, 0.04, -3)
+            g.add(f)
+          }
+        }
+        g.position.set(r.x, 0, r.z)
+        this.marks.add(g)
+      }
+    }
+  }
+
+  private atSign = false
+  private stepRoad(p: { x: number; z: number }): void {
+    const st = this.story!
+    if (this.set.interior) return
+    if (this.area.id === st.area && trackReady(st.done)) {
+      const sign = this.signDoor()
+      const at = !!sign && Math.hypot(p.x - sign.x, p.z - sign.z) <= TRACK_REACH
+      if (at && !this.atSign) {
+        this.reach('track')
+        this.drawMarks()
+        this.say(TRACK_LINE)
+      }
+      this.atSign = at
+      return
+    }
+    if (this.area.id !== st.area && isAshby(this.area.name) && ashbyReady(st.done)) {
+      const r = remnantAt(remnantSpots(this.area.width, this.area.depth, this.set.cell), p)
+      if (!r || this.ashbySeen.has(r.id)) return
+      this.ashbySeen.add(r.id)
+      if (this.ashbySeen.size >= 4) {
+        st.items.ashbylore = 1
+        this.reach('ashby')
+        this.say(`${r.text} ${ASHBY_LINE}`)
+      } else this.say(r.text)
+    }
+  }
+
   // S20: walking up to a bundle takes it into the herbal; the sill tells the moons
   private stepBundles(p: { x: number; z: number }): void {
     const st = this.story!
@@ -2323,11 +2420,20 @@ export class AreaViewport {
       if (bundlesReady(st.done)) for (const b of bundleSpots(pieces, this.set.cell)) if (!st.picked[b.spot]) out.push({ id: b.spot, x: b.x, z: b.z, sense: 'smell', text: `${b.herb.title}, dry and sweet`, from: 'over the shelves', range: 12 })
       return out
     }
+    if (st && this.area.id !== st.area && isAshby(this.area.name) && ashbyReady(st.done) && !this.set.interior) {
+      // S29: what the raid left, sensed from across the village
+      return remnantSpots(this.area.width, this.area.depth, this.set.cell)
+        .filter((r) => !this.ashbySeen.has(r.id))
+        .map((r): Source => (r.id === 'door' ? { id: `ashby-${r.id}`, x: r.x, z: r.z, sense: 'sound', text: 'A door knocking on one hinge', from: 'in the lane', range: 26 } : { id: `ashby-${r.id}`, x: r.x, z: r.z, sense: 'smell', text: r.id === 'table' ? 'Cold ash and old stew' : ASHBY_SENSE, from: 'in the lane', range: 26 }))
+    }
     if (!st || this.area.id !== st.area) return []
     const out: Source[] = []
     // S26: the well, frost-cold once both hearths are shut
     const well = wellReady(st.done) ? wellSpot(Object.values(this.area.pieces), this.set.cell) : null
     if (well) out.push({ id: 'well', ...well, sense: 'smell', text: WELL_SENSE, from: 'from the well', range: 30 })
+    // S28: the frost prints, seen from the yard
+    const sign = trackReady(st.done) ? this.signDoor() : null
+    if (sign) out.push({ id: 'track', ...sign, sense: 'smell', text: TRACK_SENSE, from: 'toward the signpost', range: 40 })
     if (st.done.howl && !st.done.signature && this.signature) {
       out.push({ id: 'signature', ...this.signature, sense: 'smell', text: 'Old pennies, and scorched snow', from: 'out by the well', range: 30 })
     }

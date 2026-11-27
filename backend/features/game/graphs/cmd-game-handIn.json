@@ -7,7 +7,7 @@
   "spec": {
     "command": "game.handIn",
     "title": "Hand in a contract",
-    "description": "Hands in one of the outpost's contracts (game.contracts) with a ship parked within 40 m of the beacon at the moon's north pole; the target is the ship's id. first-flight needs every block of the ship's design placed; beacon-iron takes 1 m³ of iron from its hold; cobalt-shipyard takes 2 m³ of ore and unlocks the hauler design; ore-haul takes 12 m³ of ore and needs a hauler. Each pays its skill's experience to the sender (game.player) once. The job board's jobs (V11: pad-rock 3 m³ of rock, ore-run 8 m³ of ore, bulk-ore 30 at Trade 2, station-ore 50 at Trade 3) may be done again and again and alone teach Trade; reaching Trade 3 unlocks the freighter. Refused when the ship does not exist, is not at the outpost, does not meet the contract, or the sender has done it already. V25: refinery-ore (100 m³ of ore, Trade 4) needs an ore barge, which Trade 4 unlocks. V28: jump-trial needs a ship with a jump drive fitted (Ship.jump) and 2 m³ of iron in its hold.",
+    "description": "Hands in one of the outpost's contracts (game.contracts) with a ship parked within 40 m of the beacon at the moon's north pole; the target is the ship's id. first-flight needs every block of the ship's design placed; beacon-iron takes 1 m³ of iron from its hold; cobalt-shipyard (asteroid ore for the shipyard) takes 2 m³ of ore and unlocks the hauler design; ore-haul takes 12 m³ of ore and needs a hauler. Each pays its skill's experience to the sender (game.player) once. The job board's jobs (V11: pad-rock 3 m³ of rock, ore-run 8 m³ of ore, bulk-ore 30 at Trade 2, station-ore 50 at Trade 3) may be done again and again and alone teach Trade; reaching Trade 3 unlocks the freighter. Refused when the ship does not exist, is not at the outpost, does not meet the contract, or the sender has done it already. V25: refinery-ore (100 m³ of ore, Trade 4) needs an ore barge, which Trade 4 unlocks. V28: jump-trial needs a ship with a jump drive fitted (Ship.jump) and 2 m³ of iron in its hold. V31: cutter-chip takes 4 steel plates and 2 copper wire from the sender's pack (parts) and unlocks the cutter, a chip design.",
     "args": {
       "type": "object",
       "properties": {
@@ -41,7 +41,7 @@
           {
             "id": "contract",
             "type": "string",
-            "description": "The contract's id"
+            "description": "The contract's id, cutter-chip (V31)"
           }
         ]
       }
@@ -138,7 +138,7 @@
         "y": 200
       },
       "config": {
-        "expr": "let jobs = {\"first-flight\": {skill: \"piloting\", xp: 100, complete: true}, \"beacon-iron\": {skill: \"prospecting\", xp: 100, iron: 1}, \"cobalt-shipyard\": {skill: \"mining\", xp: 100, ore: 2, unlock: \"hauler\"}, \"ore-haul\": {skill: \"mining\", xp: 150, ore: 12, design: \"hauler\"}, \"pad-rock\": {skill: \"trade\", xp: 40, rock: 3, job: true}, \"ore-run\": {skill: \"trade\", xp: 70, ore: 8, job: true}, \"bulk-ore\": {skill: \"trade\", xp: 100, ore: 30, job: true, level: 2}, \"station-ore\": {skill: \"trade\", xp: 150, ore: 50, job: true, level: 3}, \"refinery-ore\": {skill: \"trade\", xp: 200, ore: 100, job: true, level: 4, design: \"barge\"}, \"jump-trial\": {skill: \"piloting\", xp: 150, iron: 2, jump: true}}; let job = jobs[contract] ?? {}; let beacon = (w?.generator?.radius ?? 100) + (w?.generator?.amplitude ?? 0); let far = found ? (ship.x ** 2 + (ship.y - beacon) ** 2 + ship.z ** 2) ** 0.5 : 0; let done = known ? (me.done ?? {}) : {}; !found ? \"there is no ship \" + target : !(contract in jobs) ? \"there is no contract \" + contract + \"; game.contracts lists them\" : far > 40 ? \"park the ship within 40 m of the beacon at the north pole (it is \" + string(int(far)) + \" m away)\" : !(job.job ?? false) && contract in done ? \"you have done that contract already\" : known && (me.levels?.trade ?? 1) < (job.level ?? 0) || !known && (job.level ?? 0) > 1 ? \"this job needs Trade level \" + string(job.level) + \"; take smaller jobs first\" : (job.design ?? ship.design) != ship.design ? \"this job needs a \" + job.design : (job.jump ?? false) && !(ship?.jump ?? false) ? \"this job needs a ship with a jump drive fitted\" : (job.complete ?? false) && len(ship.placed) < ship.blocks ? \"the ship still has \" + string(ship.blocks - len(ship.placed)) + \" blocks to place\" : (ship.cargo?.rock ?? 0) < (job.rock ?? 0) ? \"the ship's hold has less than \" + string(job.rock) + \" m³ of rock\" : (ship.cargo?.iron ?? 0) < (job.iron ?? 0) ? \"the ship's hold has less than \" + string(job.iron) + \" m³ of iron\" : (ship.cargo?.ore ?? 0) < (job.ore ?? 0) ? \"the ship's hold has less than \" + string(job.ore) + \" m³ of ore\" : \"\"",
+        "expr": "let jobs = {\"first-flight\": {skill: \"piloting\", xp: 100, complete: true}, \"beacon-iron\": {skill: \"prospecting\", xp: 100, iron: 1}, \"cobalt-shipyard\": {skill: \"mining\", xp: 100, ore: 2, unlock: \"hauler\"}, \"ore-haul\": {skill: \"mining\", xp: 150, ore: 12, design: \"hauler\"}, \"pad-rock\": {skill: \"trade\", xp: 40, rock: 3, job: true}, \"ore-run\": {skill: \"trade\", xp: 70, ore: 8, job: true}, \"bulk-ore\": {skill: \"trade\", xp: 100, ore: 30, job: true, level: 2}, \"station-ore\": {skill: \"trade\", xp: 150, ore: 50, job: true, level: 3}, \"refinery-ore\": {skill: \"trade\", xp: 200, ore: 100, job: true, level: 4, design: \"barge\"}, \"jump-trial\": {skill: \"piloting\", xp: 150, iron: 2, jump: true}, \"cutter-chip\": {skill: \"prospecting\", xp: 80, parts: {plate: 4, wire: 2}, unlock: \"cutter\"}}; let job = jobs[contract] ?? {}; let beacon = (w?.generator?.radius ?? 100) + (w?.generator?.amplitude ?? 0); let far = found ? (ship.x ** 2 + (ship.y - beacon) ** 2 + ship.z ** 2) ** 0.5 : 0; let done = known ? (me.done ?? {}) : {}; !found ? \"there is no ship \" + target : !(contract in jobs) ? \"there is no contract \" + contract + \"; game.contracts lists them\" : far > 40 ? \"park the ship within 40 m of the beacon at the north pole (it is \" + string(int(far)) + \" m away)\" : !(job.job ?? false) && contract in done ? \"you have done that contract already\" : known && (me.levels?.trade ?? 1) < (job.level ?? 0) || !known && (job.level ?? 0) > 1 ? \"this job needs Trade level \" + string(job.level) + \"; take smaller jobs first\" : (job.design ?? ship.design) != ship.design ? \"this job needs a \" + job.design : (job.jump ?? false) && !(ship?.jump ?? false) ? \"this job needs a ship with a jump drive fitted\" : (job.complete ?? false) && len(ship.placed) < ship.blocks ? \"the ship still has \" + string(ship.blocks - len(ship.placed)) + \" blocks to place\" : (ship.cargo?.rock ?? 0) < (job.rock ?? 0) ? \"the ship's hold has less than \" + string(job.rock) + \" m³ of rock\" : (ship.cargo?.iron ?? 0) < (job.iron ?? 0) ? \"the ship's hold has less than \" + string(job.iron) + \" m³ of iron\" : (ship.cargo?.ore ?? 0) < (job.ore ?? 0) ? \"the ship's hold has less than \" + string(job.ore) + \" m³ of ore\" : len(filter(keys(job.parts ?? {}), ((pack?.parts ?? {})[#] ?? 0) < job.parts[#])) > 0 ? \"your pack needs \" + join(map(sort(keys(job.parts)), string(int(job.parts[#])) + \" \" + #), \" and \") + \" (refine them at a forge)\" : \"\"",
         "type": "string"
       }
     },
@@ -172,7 +172,7 @@
         "y": 400
       },
       "config": {
-        "expr": "let jobs = {\"first-flight\": {skill: \"piloting\", xp: 100, complete: true}, \"beacon-iron\": {skill: \"prospecting\", xp: 100, iron: 1}, \"cobalt-shipyard\": {skill: \"mining\", xp: 100, ore: 2, unlock: \"hauler\"}, \"ore-haul\": {skill: \"mining\", xp: 150, ore: 12, design: \"hauler\"}, \"pad-rock\": {skill: \"trade\", xp: 40, rock: 3, job: true}, \"ore-run\": {skill: \"trade\", xp: 70, ore: 8, job: true}, \"bulk-ore\": {skill: \"trade\", xp: 100, ore: 30, job: true, level: 2}, \"station-ore\": {skill: \"trade\", xp: 150, ore: 50, job: true, level: 3}, \"refinery-ore\": {skill: \"trade\", xp: 200, ore: 100, job: true, level: 4, design: \"barge\"}, \"jump-trial\": {skill: \"piloting\", xp: 150, iron: 2, jump: true}}; let job = jobs[contract]; {world: ship.world, contract: contract, rock: -(job.rock ?? 0), iron: -(job.iron ?? 0), ore: -(job.ore ?? 0), skill: job.skill, xp: job.xp, job: job.job ?? false, unlock: job.unlock ?? (job.skill == \"trade\" && ((known ? me.xp?.trade : 0) ?? 0) + job.xp >= 200 && !((known ? me.unlocked?.freighter : false) ?? false) ? \"freighter\" : job.skill == \"trade\" && ((known ? me.xp?.trade : 0) ?? 0) + job.xp >= 300 && !((known ? me.unlocked?.barge : false) ?? false) ? \"barge\" : \"\")}",
+        "expr": "let jobs = {\"first-flight\": {skill: \"piloting\", xp: 100, complete: true}, \"beacon-iron\": {skill: \"prospecting\", xp: 100, iron: 1}, \"cobalt-shipyard\": {skill: \"mining\", xp: 100, ore: 2, unlock: \"hauler\"}, \"ore-haul\": {skill: \"mining\", xp: 150, ore: 12, design: \"hauler\"}, \"pad-rock\": {skill: \"trade\", xp: 40, rock: 3, job: true}, \"ore-run\": {skill: \"trade\", xp: 70, ore: 8, job: true}, \"bulk-ore\": {skill: \"trade\", xp: 100, ore: 30, job: true, level: 2}, \"station-ore\": {skill: \"trade\", xp: 150, ore: 50, job: true, level: 3}, \"refinery-ore\": {skill: \"trade\", xp: 200, ore: 100, job: true, level: 4, design: \"barge\"}, \"jump-trial\": {skill: \"piloting\", xp: 150, iron: 2, jump: true}, \"cutter-chip\": {skill: \"prospecting\", xp: 80, parts: {plate: 4, wire: 2}, unlock: \"cutter\"}}; let job = jobs[contract]; {world: ship.world, contract: contract, rock: -(job.rock ?? 0), iron: -(job.iron ?? 0), ore: -(job.ore ?? 0), skill: job.skill, xp: job.xp, job: job.job ?? false, unlock: job.unlock ?? (job.skill == \"trade\" && ((known ? me.xp?.trade : 0) ?? 0) + job.xp >= 200 && !((known ? me.unlocked?.freighter : false) ?? false) ? \"freighter\" : job.skill == \"trade\" && ((known ? me.xp?.trade : 0) ?? 0) + job.xp >= 300 && !((known ? me.unlocked?.barge : false) ?? false) ? \"barge\" : \"\"), pack: job.parts == nil ? nil : {parts: fromPairs(map(keys(job.parts), [#, -job.parts[#]]))}}",
         "type": "json"
       }
     },
@@ -197,6 +197,31 @@
       "config": {
         "path": "args.contract",
         "fix": "park a ship that meets the contract at the outpost and hand in each contract once (jobs of the job board again and again)"
+      }
+    },
+    {
+      "id": "packKey",
+      "type": "data.expression",
+      "title": "Pack key",
+      "position": {
+        "x": 300,
+        "y": 400
+      },
+      "config": {
+        "expr": "(ship?.world ?? \"\") + \".\" + user",
+        "type": "string"
+      }
+    },
+    {
+      "id": "pack",
+      "type": "live.readProjection",
+      "title": "Read the sender's pack",
+      "position": {
+        "x": 600,
+        "y": 400
+      },
+      "config": {
+        "projector": "game.packs"
       }
     }
   ],
@@ -469,6 +494,46 @@
       "to": {
         "node": "emit",
         "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "packKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pack",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "pack",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "pack"
       }
     }
   ]

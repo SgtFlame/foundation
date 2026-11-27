@@ -66,6 +66,10 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'well', title: 'The way they will come', how: 'With both hearths warded, follow the cold in the yard by day: something is wrong with the well.' },
   // S27: the well ward
   { id: 'wellward', title: 'Ward the well', how: 'Take five more river stones from the culvert and sage from the ditch bank, then go to the frost-cold well in the yard and stand at its rim.' },
+  // S28: the Hollowed's road
+  { id: 'track', title: 'The road they took', how: 'The morning after the well is warded, follow the frost prints from the well to the signpost where the road leaves the farmstead.' },
+  // S29: the emptied village
+  { id: 'ashby', title: 'What is left of Ashby', how: 'Take the road at the signpost to Ashby and look at what the raid left: a door, a table, a shoe, and the furrows in the lane.' },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

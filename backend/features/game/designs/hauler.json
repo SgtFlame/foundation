@@ -1,8 +1,9 @@
 {
   "id": "hauler",
   "title": "Hauler",
-  "description": "A bigger ship for the ore the moon lacks (forge 360 V8): the prospector lengthened by two rows, with six cargo holds (36 m³), more thrusters to lift them, a second battery and a second gyroscope. The shipyard builds its frame only once a player has brought it cobalt ore from the asteroids (the cobalt-shipyard contract).",
+  "description": "V32: now an earned design chip, each block costing components. A bigger ship for the ore the moon lacks (forge 360 V8): the prospector lengthened by two rows, with six cargo holds (36 m³), more thrusters to lift them, a second battery and a second gyroscope. The shipyard builds its frame only once a player has brought it ore from the asteroids (the cobalt-shipyard contract).",
   "blockSize": 1,
+  "chip": true,
   "blocks": [
     {"type": "cockpit", "at": [0, 1, -1]},
     {"type": "armor", "at": [-1, 0, -1]},
