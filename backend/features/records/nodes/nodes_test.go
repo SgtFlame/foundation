@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/cognition/drafts"
 	"github.com/SgtFlame/foundation/backend/features/cognition/engine"
@@ -306,6 +307,29 @@ func TestReadNodesInAHandler(t *testing.T) {
 	groups, _ := json.Marshal(h.state["groups"])
 	if string(groups) != `[{"key":false,"values":{"count":2}},{"key":true,"values":{"count":1}}]` {
 		t.Errorf("Aggregate: %s", groups)
+	}
+
+	// Without record.read on the type, every read node refuses, as the
+	// records.get, records.find and records.aggregate queries do
+	denied := args()
+	denied.Ctx = authz.WithAs(denied.Ctx, authz.As{Name: "no reader", Covers: func(action, _ string) (bool, bool) {
+		return action == "record.read", false
+	}})
+	for _, n := range []cognition.Node{
+		node("read", "records.get", map[string]any{"entity": "task"}),
+		node("read", "records.query", map[string]any{"entity": "task"}),
+		node("read", "records.aggregate", map[string]any{"entity": "task"}),
+	} {
+		r := cognition.Graph{ID: "on-denied", Kind: uinodes.KindHandler,
+			Nodes: []cognition.Node{node("event", uinodes.OnEvent, nil), node("id", "data.expression", map[string]any{"expr": "\"r1\"", "type": "string"}), n,
+				node("s", "ui.setState", map[string]any{"path": "denied"})},
+			Edges: edges("event.then -> s.then", "read."+map[string]string{"records.get": "record", "records.query": "records", "records.aggregate": "groups"}[n.Type]+" -> s.value")}
+		if n.Type == "records.get" {
+			r.Edges = append(r.Edges, edges("id.value -> read.id")...)
+		}
+		if _, err := f.eng.Run(engine.RunArgs{ServiceArgs: denied, Graph: &r, Event: uinodes.OnEvent, Host: &host{state: map[string]any{}}}); err == nil || !strings.Contains(err.Error(), "record.read") {
+			t.Errorf("%s without record.read: %v", n.Type, err)
+		}
 	}
 
 	// Write nodes run only in a command graph
