@@ -8,7 +8,7 @@ import { WalkGrid, type Point } from '../nav/WalkGrid.ts'
 import { moonLight, moons, type MoonPhase } from '../sky/Moons.ts'
 import { Combat, HERO_HP, isHostile, WEAPONS, type CombatEvent, type Skills, type Stance } from '../combat/Combat.ts'
 import { CombatHud } from '../combat/CombatHud.ts'
-import { HearthNight, WATCHER_HP } from '../defence/HearthNight.ts'
+import { HearthNight, hearthOf, WATCHER_HP } from '../defence/HearthNight.ts'
 import { NightHud } from '../defence/NightHud.ts'
 import { whistle } from '../defence/Whistle.ts'
 import { DialoguePanel } from './DialoguePanel.ts'
@@ -20,6 +20,7 @@ import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../sto
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
+import { bankSageReady, bankSageSpot, HEARTH_REACH, HEARTH_WARD_LINE, hearthStonesReady, hearthWardMissing, hearthWardReady, SAGE_LINE, SAGE_REACH } from '../story/HearthWard.ts'
 import { TRIED_DOOR_LINE, TRIED_LINE, TRIED_LOST, TRIED_NIGHT, triedReady } from '../story/Tried.ts'
 import { riverStonesReady, STONES_LINE, STONES_REACH, thresholdSpot, WARD_LINE, WARD_REACH, wardedNight, wardMissing, wardReady } from '../story/Ward.ts'
 import { TINCTURE, TINCTURE_ALSO, tinctureReady, TRUE_DREAM, TRUE_DREAM_LINE } from '../story/Tincture.ts'
@@ -252,6 +253,7 @@ export class AreaViewport {
   private atSill = false // S20: standing by the moon calendar
   private tincture = false // S21: the dream tincture drunk, for the next sleep
   private atThreshold = false // S22: standing at Hawk's Rest's door
+  private atHearthStone = false // S24: standing on Hawk's Rest's hearthstone
   private signature: Point | null = null
   private barnDoor: Point | null = null
   private resumeAt: { area: string; at: Point } | null = null
@@ -1843,7 +1845,8 @@ export class AreaViewport {
       if (this.dayEffect().reveal) this.herbs.add(this.glowAt(h.x, h.z))
     }
     // S22: the river stones in the cleared culvert, once the true dream has taught the ward
-    const rs = riverStonesReady(st.done, st.items) ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
+    // S24: and again for the hearth ward, once the tried night taught it
+    const rs = riverStonesReady(st.done, st.items) || hearthStonesReady(st.done, st.items) ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
     if (rs) {
       const pale = new THREE.MeshStandardNodeMaterial({ color: 0xe6e1d3, roughness: 0.6 })
       for (let i = 0; i < 5; i++) {
@@ -1853,6 +1856,15 @@ export class AreaViewport {
         this.herbs.add(m)
       }
       if (this.dayEffect().reveal) this.herbs.add(this.glowAt(rs.x, rs.z))
+    }
+    // S24: the sage seeded on the ditch bank
+    const bank = bankSageReady(st.done, st.items, st.picked) ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
+    if (bank) {
+      const at = bankSageSpot(bank)
+      const clump = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.45, 7), new THREE.MeshStandardNodeMaterial({ color: 0x8fa38a, roughness: 1 }))
+      clump.position.set(at.x, 0.22, at.z)
+      this.herbs.add(clump)
+      if (this.dayEffect().reveal) this.herbs.add(this.glowAt(at.x, at.z))
     }
     // S10: the willow bough in the culvert and the water backed up into the wheat, until cleared
     const ditch = st.done.reading && !st.done.ditch ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
@@ -1954,13 +1966,26 @@ export class AreaViewport {
       }
     }
     // S22: the river stones, taken by walking up to the culvert
-    if (this.area.id === st.area && riverStonesReady(st.done, st.items)) {
+    const again = hearthStonesReady(st.done, st.items)
+    if (this.area.id === st.area && (riverStonesReady(st.done, st.items) || again)) {
       const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
       if (d && Math.hypot(p.x - d.x, p.z - d.z) < STONES_REACH) {
         st.items.riverstones = 1
-        this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: 'riverstones', spot: 'culvert-stones' })
+        this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: 'riverstones', spot: again ? 'culvert-stones-2' : 'culvert-stones' })
         this.drawHerbs()
         this.say(STONES_LINE)
+      }
+    }
+    // S24: the sage on the ditch bank, taken by walking up to it
+    if (this.area.id === st.area && bankSageReady(st.done, st.items, st.picked)) {
+      const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
+      const at = d ? bankSageSpot(d) : null
+      if (at && Math.hypot(p.x - at.x, p.z - at.z) < SAGE_REACH) {
+        st.items.sage = (st.items.sage ?? 0) + 1
+        st.picked['ditch-sage'] = true
+        this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: 'sage', spot: 'ditch-sage' })
+        this.drawHerbs()
+        this.say(SAGE_LINE)
       }
     }
     // S10: the willow bough the cards showed, hauled out by walking up to it
@@ -2038,6 +2063,23 @@ export class AreaViewport {
         this.herbs.add(m)
       }
     }
+    // S24: the hearth ward: sage round the hearthstone and a stone at each corner and the heart
+    const hs = st.done.hearthward ? hearthOf(this.area, this.set.cell)?.stone : null
+    if (hs) {
+      const sageMat = new THREE.MeshStandardNodeMaterial({ color: 0x8fa38a, roughness: 1 })
+      const pale = new THREE.MeshStandardNodeMaterial({ color: 0xe6e1d3, roughness: 0.6 })
+      for (const [dx, dz, w, d] of [[0, -0.85, 1.8, 0.07], [0, 0.85, 1.8, 0.07], [-0.9, 0, 0.07, 1.7], [0.9, 0, 0.07, 1.7]]) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.04, d), sageMat)
+        m.position.set(hs.x + dx, 0.03, hs.z + dz)
+        this.herbs.add(m)
+      }
+      for (const [dx, dz] of [[-0.75, -0.7], [0.75, -0.7], [-0.75, 0.7], [0.75, 0.7], [0, 0]]) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), pale)
+        m.scale.y = 0.6
+        m.position.set(hs.x + dx, 0.05, hs.z + dz)
+        this.herbs.add(m)
+      }
+    }
     if (!st.done.cache) return
     const string = new THREE.MeshBasicNodeMaterial({ color: 0x6b5236 })
     for (const b of bundleSpots(pieces, this.set.cell)) {
@@ -2077,6 +2119,20 @@ export class AreaViewport {
       } else this.say(wardMissing(st.items))
     }
     this.atThreshold = atTh
+    // S24: the hearthstone: lay the hearth ward when the stones and a sage are in hand
+    const hs = st.done.tried && !st.done.hearthward ? hearthOf(this.area, this.set.cell)?.stone : null
+    const atHs = !!hs && Math.hypot(p.x - hs.x, p.z - hs.z) < HEARTH_REACH
+    if (atHs && !this.atHearthStone) {
+      if (hearthWardReady(st.done, st.items)) {
+        st.items.sage--
+        st.items.riverstones = 0
+        st.items.hearthward = 1
+        this.reach('hearthward')
+        this.drawHerbs()
+        this.say(HEARTH_WARD_LINE)
+      } else this.say(hearthWardMissing(st.items))
+    }
+    this.atHearthStone = atHs
     if (!bundlesReady(st.done)) return
     const spots = bundleSpots(pieces, this.set.cell)
     for (const b of spots) {
@@ -2195,9 +2251,13 @@ export class AreaViewport {
     if (this.ringHeart && this.stonesAwake && !st.done.stones) {
       out.push({ id: 'stones', ...this.ringHeart, sense: 'sound', text: 'A low hum, like a held note', from: 'from the stones by the signpost', range: 45 })
     }
-    if (riverStonesReady(st.done, st.items)) {
+    if (riverStonesReady(st.done, st.items) || hearthStonesReady(st.done, st.items)) {
       const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
       if (d) out.push({ id: 'riverstones', x: d.x, z: d.z, sense: 'sound', text: 'Clean water running over stones', from: 'at the culvert by the east field', range: 35 })
+    }
+    if (bankSageReady(st.done, st.items, st.picked)) {
+      const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
+      if (d) out.push({ id: 'banksage', ...bankSageSpot(d), sense: 'smell', text: 'Sage, sharp and green', from: 'on the ditch bank by the culvert', range: 25 })
     }
     if (st.done.reading && !st.done.ditch) {
       const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())

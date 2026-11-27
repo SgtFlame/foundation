@@ -139,4 +139,11 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "tried" || p.Items["hearthlore"] != 1 || p.Items["ward"] != 1 {
 		t.Fatalf("tried %+v", p)
 	}
+	// S24: stones from the culvert again, a sage from the ditch bank, and the hearth ward
+	st.ok("game.reachStory", farm, map[string]any{"area": farm, "x": 9, "z": 3, "item": "riverstones", "spot": "culvert-stones-2"})
+	st.ok("game.reachStory", farm, map[string]any{"area": farm, "x": 9, "z": 3, "item": "sage", "spot": "ditch-sage"})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "hearthward", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "hearthward" || p.Items["hearthward"] != 1 || p.Items["riverstones"] != 0 || p.Items["sage"] != 0 {
+		t.Fatalf("hearthward %+v", p)
+	}
 }

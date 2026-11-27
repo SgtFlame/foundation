@@ -500,6 +500,15 @@ What the ward keeps out: the night the threshold ward is tried.
 - Once the ward is laid, R by Hawk's Rest's hearth waits for the next night with no moon (`wardNight`, 23:00 that night): the ward holds the door (*the scratching stops dead at the ward*), and a night of hearth defence (S5's `HearthNight`) starts at Hawk's Rest itself, with nobody keeping the watch but the character: one Hollowed comes up through the hearthstone. Held until dawn, the step is reached (*A hearthstone is a threshold too*); left alone, the cottage is lost and R waits for the next dark night.
 - `story_test` checks `tried` and the hearth lore; `Tried.test.ts` when the night is ready.
 
+## Built in S24 (forge 375)
+
+The hearth ward: the hearth lore (S23) put to use.
+
+- Step `hearthward`; the fold spends a sage and the river stones and gives `items.hearthward`.
+- `story/HearthWard.ts`: `hearthStonesReady` (the culvert gives five more stones once `tried` is reached, spot `culvert-stones-2`), `bankSageReady` and `bankSageSpot` (sage seeded on the ditch bank beside the culvert, spot `ditch-sage`), `hearthWardReady`, `hearthWardMissing` and the lines. Both show in the senses layer (*Clean water running over stones*, *Sage, sharp and green*).
+- Standing on Hawk's Rest's hearthstone (`hearthOf(area).stone`, S5's) with both lays the ward: a frame of sage round the stone and five stones at its corners and heart.
+- `story_test` checks the two pickings and the step; `HearthWard.test.ts` the conditions.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
