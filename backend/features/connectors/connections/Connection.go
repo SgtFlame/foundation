@@ -64,6 +64,8 @@ type Connection struct {
 	LastError string    `json:"lastError,omitempty"`
 	CheckedAt time.Time `json:"checkedAt,omitzero"`
 	Options   Options   `json:"options"`
+	// Account is who signed it in, for a type with OAuth (forge 26a-1).
+	Account   string    `json:"account,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	CreatedBy uint64    `json:"createdBy,string,omitempty"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -211,6 +213,28 @@ func (f Fields) Validate(settings map[string]any, secrets map[string]string) []F
 		out = append(out, FieldProblem{Path: path, Message: e.Message})
 	}
 	return out
+}
+
+// OAuthSecret is the secret a type with OAuth keeps its tokens in
+// (forge 26a-1): set by connection.setTokens, never shown, and given to
+// the adapter as accessToken and expiresAt.
+const OAuthSecret = "oauth"
+
+// WithOAuth adds the oauth secret field to a type's fields.
+func (f Fields) WithOAuth() Fields {
+	if slices.Contains(f.Secrets, OAuthSecret) {
+		return f
+	}
+	props := map[string]*config.Schema{}
+	for k, v := range f.Schema.Properties {
+		props[k] = v
+	}
+	props[OAuthSecret] = &config.Schema{Type: "secret", Title: "Sign-in"}
+	schema := *f.Schema
+	schema.Properties = props
+	secrets := append(slices.Clone(f.Secrets), OAuthSecret)
+	slices.Sort(secrets)
+	return Fields{Schema: &schema, Secrets: secrets}
 }
 
 // FieldProblem is a settings problem at a path.

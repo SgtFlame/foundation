@@ -167,9 +167,9 @@ var specs = []spec{
 		example: `{"type":"record.form","key":"form","props":{"fields":[{"id":"title","name":"Title","type":"text"}]},"bind":{"record":"query:record"}}`},
 	// Connectors (forge 07c)
 	{id: "connection.form", title: "Connection form", category: "Connectors", tags: []string{"form", "connector", "connection", "settings"},
-		description: "Makes or edits a connection: picks a connector type implementing contract (an offline one shown as such), draws its settings from the type's settings schema, shows its secrets as write-only fields (a stored one only as set; empty keeps it), and has Test (connection.test) and Save (connection.create or connection.update). Generic over every connector type.",
+		description: "Makes or edits a connection: picks a connector type implementing contract (an offline one shown as such), draws its settings from the type's settings schema, shows its secrets as write-only fields (a stored one only as set; empty keeps it), and has Test (connection.test) and Save (connection.create or connection.update). A type with OAuth shows who signed it in and Sign in with … (connection.signIn in a popup). Generic over every connector type.",
 		props:       `"connection":{"type":"string","description":"The connection to edit; a new one when empty"},"contract":{"type":"string","description":"Only connector types implementing this contract, id@version"},"owner":{"type":"string","enum":["me","tenant"],"description":"Who owns a new connection: me (the default) or the tenant"},"saveLabel":{"type":"string"},` + disabled,
-		events:      ev("saved", "The connection was saved: payload {id}", "tested", "Test finished: payload {ok, error {code, message}}"),
+		events:      ev("saved", "The connection was saved: payload {id}", "tested", "Test finished: payload {ok, error {code, message}}", "signedIn", "An OAuth sign-in finished: payload {ok, account, error}"),
 		example:     `{"type":"connection.form","key":"inbound","props":{"contract":"mail.mailbox@1"}}`},
 	// flexlayout
 	{id: "layout.flex", title: "Docked sub-tabs", category: "Layout", tags: []string{"flexlayout", "tabs"},

@@ -33,6 +33,9 @@ type Deps struct {
 	// sent as its key.
 	Config     config.Reader
 	Extensions *extensions.Registry
+	// Tokens refresh an OAuth connection's access token before cx.resolve
+	// gives it (forge 26a-1); without it the stored token is given as it is.
+	Tokens TokenSource
 }
 
 // Events.
@@ -54,6 +57,7 @@ type updated struct {
 	Secrets  map[string]*string `json:"secrets,omitempty"`
 	Options  *Options           `json:"options,omitempty"`
 	Reset    bool               `json:"reset,omitempty"`
+	Account  *string            `json:"account,omitempty"` // forge 26a-1
 }
 
 type statusChanged struct {
@@ -121,6 +125,9 @@ func fold(f live.Fold) (json.RawMessage, error) {
 		}
 		if u.Options != nil {
 			c.Options = *u.Options
+		}
+		if u.Account != nil {
+			c.Account = *u.Account
 		}
 		if u.Reset && c.Status == StatusError {
 			c.Status, c.LastError = StatusOK, ""
@@ -245,6 +252,38 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		},
 	})
 	command(live.Command{
+		Descriptor: extensions.Descriptor{ID: "connection.setTokens"}, Title: "Keep a connection's sign-in", Internal: true, NoTool: true,
+		Description: "Keeps the tokens an OAuth sign-in or refresh gave a connection, as its oauth secret, and the account that signed in; clears an error status. Committed by the server only, as the person signing in or the service refreshing.",
+		Args: json.RawMessage(`{"type":"object","properties":{
+  "secrets":{"type":"object","description":"{oauth: the tokens as JSON}, sealed before it is decided","properties":{"oauth":{"type":"string","description":"The tokens as JSON"}}},
+  "account":{"type":"string","description":"Who signed in, as the provider names them"}},"required":["secrets"]}`),
+		Examples: []json.RawMessage{json.RawMessage(`{"secrets":{"oauth":"{…}"},"account":"ann@example.com"}`)},
+		Events:   []string{EventUpdated},
+		Seal:     seal(deps, false),
+		Decide: func(d live.Decision) ([]live.NewEvent, []live.Problem) {
+			c, p := managed(d)
+			if p != nil {
+				return nil, p
+			}
+			var a argsOf
+			var acc struct{ Account *string }
+			_ = json.Unmarshal(d.Args, &a)
+			_ = json.Unmarshal(d.Args, &acc)
+			secrets, p := sealedSecrets(a.Secrets)
+			if p != nil {
+				return nil, p
+			}
+			if len(secrets) != 1 || secrets[OAuthSecret] == nil {
+				return nil, []live.Problem{{Path: "secrets", Message: "connection.setTokens keeps only the oauth secret"}}
+			}
+			if !hasSecret(d.Context(), deps(), d.Principal.TenantID, c.ID, OAuthSecret, *secrets[OAuthSecret]) {
+				return nil, []live.Problem{{Path: "secrets.oauth", Message: "the tokens were not stored"}}
+			}
+			d.NoUndo("", "a sign-in's tokens are the provider's")
+			return []live.NewEvent{{Type: EventUpdated, Data: updated{Secrets: secrets, Account: acc.Account, Reset: true}}}, nil
+		},
+	})
+	command(live.Command{
 		Descriptor: extensions.Descriptor{ID: "connection.setStatus"}, Title: "Set a connection's status", Internal: true,
 		Description: "Records a connection's status from a call or its event source: error stops it until it is updated; ok with an error records the last error. Committed by the server only.",
 		Args: json.RawMessage(`{"type":"object","properties":{
@@ -337,6 +376,9 @@ func fieldsFor(d Deps, args features.ServiceArgs, typ string) (connectors.Type, 
 	f, err := FieldsOf(t.Type.Settings)
 	if err != nil {
 		return connectors.Type{}, Fields{}, []live.Problem{{Path: "type", Message: fmt.Sprintf("the settings schema of %s cannot be read: %v", typ, err)}}
+	}
+	if t.Type.OAuth != nil {
+		f = f.WithOAuth()
 	}
 	return t.Type, f, nil
 }

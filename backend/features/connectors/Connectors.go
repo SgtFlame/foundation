@@ -225,6 +225,10 @@ type Type struct {
 	// AdapterServices; with svc.connectors they are all NATS lets it
 	// reach (AdapterPermissions).
 	Services []string `json:"services,omitempty"`
+	// OAuth signs a connection in with a provider (forge 26a-1): its
+	// tokens are the connection's oauth secret, and the adapter is given
+	// accessToken and expiresAt in its settings.
+	OAuth *OAuth `json:"oauth,omitempty"`
 }
 
 // AdapterServices are the services a type may declare its adapter calls.
