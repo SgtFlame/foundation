@@ -19,10 +19,14 @@ import { dragMarks, drawCard, herbSpots, howl, nextStep, showCard, showHerbal, S
 import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../story/DayCard.ts'
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
+import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
+import { riverStonesReady, STONES_LINE, STONES_REACH, thresholdSpot, WARD_LINE, WARD_REACH, wardedNight, wardMissing, wardReady } from '../story/Ward.ts'
+import { TINCTURE, TINCTURE_ALSO, tinctureReady, TRUE_DREAM, TRUE_DREAM_LINE } from '../story/Tincture.ts'
+import { BUNDLE_HERBS, BUNDLE_REACH, bundleSpots, bundlesReady, HEDGE_DISHES, SILL_REACH, sillLine, sillSpot } from '../story/Bundles.ts'
 import { HEART, nextWaking, ringSpot, STARLORE_LINE, starlorePool, stonePoints, STONES_MEMORY, stonesWake } from '../story/Stones.ts'
 import { clarity, ditchSpot, ReadingScene, wenlanAnswer, type Told } from '../story/Reading.ts'
 import { canSleep, CLOCK_START, clockText, FIRST_NIGHT, isDay, nightOf, showAlmanac, sleep, stepClock, type Clock } from '../story/Clock.ts'
-import { BODY_START, BodyHud, breathe, BreathPrompt, humPool, rounded as roundBody, showCooking, stepBody, type Body } from '../story/Hum.ts'
+import { BODY_START, BodyHud, breathe, BreathPrompt, DISHES, humPool, rounded as roundBody, showCooking, stepBody, type Body } from '../story/Hum.ts'
 import { ashPile, buildModel, CharacterModel, interiorShell, material } from './Models.ts'
 import { fit, pieceOf, turned, type AreaDef, type Dialogue, type Npc, type PieceSet, type Placement } from './PieceSet.ts'
 
@@ -243,6 +247,10 @@ export class AreaViewport {
   private stonesAwake: boolean | null = null
   private ringHeart: { x: number; z: number } | null = null
   private ringVisited = false
+  private cacheOpen = false // S19: the cache's notes are being read
+  private atSill = false // S20: standing by the moon calendar
+  private tincture = false // S21: the dream tincture drunk, for the next sleep
+  private atThreshold = false // S22: standing at Hawk's Rest's door
   private signature: Point | null = null
   private barnDoor: Point | null = null
   private resumeAt: { area: string; at: Point } | null = null
@@ -1694,13 +1702,24 @@ export class AreaViewport {
       if ((st.items[d.herb] ?? 0) < 1) return
       st.items[d.herb]--
       st.body = cookWith(st.body, d, this.dayEffect())
+      // S19: the yarrow poultice closes the dream's wound at once
+      const closes = d.id === POULTICE.id && !!st.items.wound
+      if (closes) st.items.wound = 0
+      // S21: the tincture takes lavender too, and waits for the night's sleep
+      const tincture = d.id === TINCTURE.id && (st.items[TINCTURE_ALSO] ?? 0) >= 1
+      if (tincture) {
+        st.items[TINCTURE_ALSO]--
+        this.tincture = true
+      }
       const p = this.player()
       st.done.cook = true
       this.ateHot = true
       this.opts.onStory?.({ step: 'cook', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: d.herb, ...this.stateToSave() })
+      if (closes) this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: 'wound', ...this.stateToSave() })
+      if (tincture) this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: TINCTURE_ALSO, ...this.stateToSave() })
       this.showStory()
-      this.say(`${d.title}. ${d.line}`)
-    })
+      this.say(`${d.title}. ${d.line}${closes ? ' The ache in your side is gone.' : ''}`)
+    }, st.items.hedgecraft ? [...DISHES, POULTICE, ...HEDGE_DISHES, ...(tinctureReady(nightOf(st.clock), st.items, st.done) ? [TINCTURE] : [])] : DISHES)
   }
 
   // A fight's cadence spends a Hum, once stillness has been learned
@@ -1798,6 +1817,7 @@ export class AreaViewport {
   // S7: the herbs by the trees, in the story's area, from the first morning until gathered
   private drawHerbs(): void {
     this.herbs.clear()
+    this.drawBundles()
     const st = this.story
     if (!st || this.area.id !== st.area || !st.done.morning) return
     for (const h of herbSpots(this.area.pieces, this.set.cell)) {
@@ -1814,6 +1834,18 @@ export class AreaViewport {
       g.userData.spot = h.spot
       this.herbs.add(g)
       if (this.dayEffect().reveal) this.herbs.add(this.glowAt(h.x, h.z))
+    }
+    // S22: the river stones in the cleared culvert, once the true dream has taught the ward
+    const rs = riverStonesReady(st.done, st.items) ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
+    if (rs) {
+      const pale = new THREE.MeshStandardNodeMaterial({ color: 0xe6e1d3, roughness: 0.6 })
+      for (let i = 0; i < 5; i++) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), pale)
+        m.scale.y = 0.55
+        m.position.set(rs.x - 0.5 + i * 0.25, 0.06, rs.z + ((i * 7) % 3) * 0.12 - 0.12)
+        this.herbs.add(m)
+      }
+      if (this.dayEffect().reveal) this.herbs.add(this.glowAt(rs.x, rs.z))
     }
     // S10: the willow bough in the culvert and the water backed up into the wheat, until cleared
     const ditch = st.done.reading && !st.done.ditch ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
@@ -1881,7 +1913,7 @@ export class AreaViewport {
       this.herbal = null
       return
     }
-    this.herbal = showHerbal(this.container, st.items)
+    this.herbal = showHerbal(this.container, st.items, st.done.cache ? BUNDLE_HERBS : [])
     if (st.done.forage) this.reach('herbal')
   }
 
@@ -1915,6 +1947,16 @@ export class AreaViewport {
         }
       }
     }
+    // S22: the river stones, taken by walking up to the culvert
+    if (this.area.id === st.area && riverStonesReady(st.done, st.items)) {
+      const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
+      if (d && Math.hypot(p.x - d.x, p.z - d.z) < STONES_REACH) {
+        st.items.riverstones = 1
+        this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: 'riverstones', spot: 'culvert-stones' })
+        this.drawHerbs()
+        this.say(STONES_LINE)
+      }
+    }
     // S10: the willow bough the cards showed, hauled out by walking up to it
     if (this.area.id === st.area && st.done.reading && !st.done.ditch) {
       const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
@@ -1937,8 +1979,112 @@ export class AreaViewport {
       }
     }
     this.stepStones(p)
+    this.stepCache(p)
+    this.stepBundles(p)
     this.stepSenses(p)
     this.savePlace()
+  }
+
+  // S19: the hedge-witch's cache by the box bed at Hawk's Rest, once the stones have remembered
+  private stepCache(p: { x: number; z: number }): void {
+    const st = this.story!
+    if (!this.blessed() || !cacheReady(st.done) || this.cacheOpen) return
+    const c = cacheSpot(Object.values(this.area.pieces), this.set.cell)
+    if (!c || Math.hypot(p.x - c.x, p.z - c.z) > CACHE_REACH) return
+    this.cacheOpen = true
+    this.path = []
+    showDream(this.container, CACHE_NOTES, () => {
+      this.cacheOpen = false
+      st.items.hedgecraft = 1
+      this.reach('cache')
+      this.drawHerbs()
+      this.say(CACHE_LINE)
+    })
+  }
+
+  // S20: the hedge-witch's bundles over the shelves, once her notes are
+  // found, and her moon calendar on the sill
+  private drawBundles(): void {
+    const st = this.story
+    if (!st || !this.blessed()) return
+    const pieces = Object.values(this.area.pieces)
+    const sill = sillSpot(pieces, this.set.cell)
+    if (sill) {
+      const pebble = (c: number) => new THREE.MeshStandardNodeMaterial({ color: c, roughness: 0.8 })
+      for (let i = 0; i < 7; i++) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 4), pebble(i % 3 ? 0x9a9a92 : 0xeeeae0))
+        m.scale.y = 0.6
+        m.position.set(sill.x - 0.36 + i * 0.12, 1.05, sill.z - 0.3)
+        this.herbs.add(m)
+      }
+    }
+    // S22: the ward laid on the threshold: a line of sage and five stones
+    const th = st.done.ward ? thresholdSpot(pieces, this.set.cell) : null
+    if (th) {
+      const sage = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.04, 0.08), new THREE.MeshStandardNodeMaterial({ color: 0x8fa38a, roughness: 1 }))
+      sage.position.set(th.x, 0.03, th.z + 0.6)
+      this.herbs.add(sage)
+      const pale = new THREE.MeshStandardNodeMaterial({ color: 0xe6e1d3, roughness: 0.6 })
+      for (const dx of [-0.7, -0.3, 0, 0.3, 0.7]) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), pale)
+        m.scale.y = 0.6
+        m.position.set(th.x + dx, 0.05, th.z + 0.75)
+        this.herbs.add(m)
+      }
+    }
+    if (!st.done.cache) return
+    const string = new THREE.MeshBasicNodeMaterial({ color: 0x6b5236 })
+    for (const b of bundleSpots(pieces, this.set.cell)) {
+      if (st.picked[b.spot]) continue
+      const g = new THREE.Group()
+      const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.4, 4), string)
+      cord.position.y = 2.2
+      const bunch = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.5, 7), new THREE.MeshStandardNodeMaterial({ color: b.herb.color, roughness: 1 }))
+      bunch.position.y = 1.75
+      g.add(cord, bunch)
+      g.position.set(b.x, 0, b.z)
+      g.userData.spot = b.spot
+      this.herbs.add(g)
+    }
+  }
+
+  // S20: walking up to a bundle takes it into the herbal; the sill tells the moons
+  private stepBundles(p: { x: number; z: number }): void {
+    const st = this.story!
+    if (!this.blessed()) return
+    const pieces = Object.values(this.area.pieces)
+    const sill = sillSpot(pieces, this.set.cell)
+    const near = !!sill && Math.hypot(p.x - sill.x, p.z - sill.z) < SILL_REACH
+    if (near && !this.atSill) this.say(sillLine(nightOf(st.clock)))
+    this.atSill = near
+    // S22: the threshold: lay the ward when the stones and a sage are in hand
+    const th = st.done.truedream && !st.done.ward ? thresholdSpot(pieces, this.set.cell) : null
+    const atTh = !!th && Math.hypot(p.x - th.x, p.z - th.z) < WARD_REACH
+    if (atTh && !this.atThreshold) {
+      if (wardReady(st.done, st.items)) {
+        st.items.sage--
+        st.items.riverstones = 0
+        st.items.ward = 1
+        this.reach('ward')
+        this.drawHerbs()
+        this.say(WARD_LINE)
+      } else this.say(wardMissing(st.items))
+    }
+    this.atThreshold = atTh
+    if (!bundlesReady(st.done)) return
+    const spots = bundleSpots(pieces, this.set.cell)
+    for (const b of spots) {
+      if (st.picked[b.spot] || Math.hypot(p.x - b.x, p.z - b.z) > BUNDLE_REACH) continue
+      st.picked[b.spot] = true
+      st.items[b.herb.id] = (st.items[b.herb.id] ?? 0) + 1
+      this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: b.herb.id, spot: b.spot })
+      this.say(`${b.herb.title}, dried and tied with red thread. ${b.herb.note}`)
+      this.drawHerbs()
+      if (spots.every((x) => st.picked[x.spot])) {
+        this.reach('bundles')
+        this.say('Four of her herbs in your herbal now (K). Her notes teach valerian and lavender tea and sage broth: press C at the hearth.')
+      }
+    }
   }
 
   // S18: the Nine Sisters, on the open ground nearest the signpost, once
@@ -2018,6 +2164,14 @@ export class AreaViewport {
   // S12: what there is to smell and hear in the story's area now
   senseSources(): Source[] {
     const st = this.story
+    if (st && this.blessed()) {
+      const pieces = Object.values(this.area.pieces)
+      const c = cacheReady(st.done) ? cacheSpot(pieces, this.set.cell) : null
+      const out: Source[] = c ? [{ id: 'cache', ...c, sense: 'sound', text: 'A draught, and a board that knocks hollow', from: 'by the box bed', range: 14 }] : []
+      // S20: the bundles drying over the shelves
+      if (bundlesReady(st.done)) for (const b of bundleSpots(pieces, this.set.cell)) if (!st.picked[b.spot]) out.push({ id: b.spot, x: b.x, z: b.z, sense: 'smell', text: `${b.herb.title}, dry and sweet`, from: 'over the shelves', range: 12 })
+      return out
+    }
     if (!st || this.area.id !== st.area) return []
     const out: Source[] = []
     if (st.done.howl && !st.done.signature && this.signature) {
@@ -2034,6 +2188,10 @@ export class AreaViewport {
     }
     if (this.ringHeart && this.stonesAwake && !st.done.stones) {
       out.push({ id: 'stones', ...this.ringHeart, sense: 'sound', text: 'A low hum, like a held note', from: 'from the stones by the signpost', range: 45 })
+    }
+    if (riverStonesReady(st.done, st.items)) {
+      const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
+      if (d) out.push({ id: 'riverstones', x: d.x, z: d.z, sense: 'sound', text: 'Clean water running over stones', from: 'at the culvert by the east field', range: 35 })
     }
     if (st.done.reading && !st.done.ditch) {
       const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
@@ -2129,6 +2287,18 @@ export class AreaViewport {
     const morning = `Day ${st.clock.day + 1}; the day's card: ${card.title}${e?.line ? `: ${e.line}` : ''}.`
     const warm = this.ateHot
     this.ateHot = false
+    // S21: the dream tincture brings a true dream, wherever the night is slept
+    if (this.tincture && !st.done.truedream) {
+      this.tincture = false
+      showDream(this.container, TRUE_DREAM, () => {
+        st.items.wardlore = 1
+        this.reach('truedream')
+        showCard(this.container, card)
+        this.drawMarks()
+        this.say(`${TRUE_DREAM_LINE} ${morning}`)
+      })
+      return
+    }
     // S16: a blessed place's dream, or a warm night that heals its wound
     if (dreams(st.done, this.blessed())) {
       showDream(this.container, FORD_DREAM, () => {
@@ -2145,6 +2315,17 @@ export class AreaViewport {
     if (st.done.dream && !st.done.companion && this.blessed()) this.knock()
     showCard(this.container, card)
     this.drawMarks() // S11: the new day's card may light what is hidden
+    // S22: a warded place's night is dreamless and healing
+    if (st.done.ward && this.blessed()) {
+      st.body = wardedNight(st.body)
+      const healed = !!st.items.wound
+      st.items.wound = 0
+      const p = this.player()
+      if (healed) this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: 'wound', ...this.stateToSave() })
+      else this.savePlace(true)
+      this.say(`A dreamless, healing night behind the ward: you wake warm through${healed ? ', and the ache in your side is gone' : ''}. ${morning}`)
+      return
+    }
     if (st.items.wound && warm) {
       st.items.wound = 0
       const p = this.player()

@@ -51,7 +51,7 @@ const (
 	EventCreated   = "created"   // branch: Record; commit: Commit
 	EventCommitted = "committed" // branch: {commit}
 	EventAbandoned = "abandoned" // branch: {}
-	EventMerged    = "merged"    // branch: {into, commit}
+	EventMerged    = "merged"    // branch: {app, branch, into, commit}
 	EventReopened  = "reopened"  // branch: {}
 	// On a commit (forge 19d): its diffs, set once, and approvals.
 	EventDiffed    = "diffed"    // {structured}

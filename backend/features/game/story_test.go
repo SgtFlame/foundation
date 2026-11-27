@@ -104,4 +104,34 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "stones" || p.Items["starlore"] != 1 {
 		t.Fatalf("stones %+v", p)
 	}
+	// S19: the hedge-witch's cache teaches the yarrow poultice
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "cache", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "cache" || p.Items["hedgecraft"] != 1 {
+		t.Fatalf("cache %+v", p)
+	}
+	// S20: her dried bundles are gathered like herbs, then cooked
+	st.ok("game.reachStory", farm, map[string]any{"item": "valerian", "spot": "bundle-valerian", "area": farm, "x": 9, "z": 3})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "bundles", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "bundles" || p.Items["valerian"] != 1 || !p.Picked["bundle-valerian"] {
+		t.Fatalf("bundles %+v", p)
+	}
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "cook", "use": "valerian", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Items["valerian"] != 0 {
+		t.Fatalf("valerian tea %+v", p)
+	}
+	if r := st.refused("game.reachStory", farm, map[string]any{"item": "hemlock", "area": farm, "x": 9, "z": 3}); !strings.Contains(r.Common.Message, "no herb") {
+		t.Fatalf("hemlock: %q", r.Common.Message)
+	}
+	// S21: the true dream after the dream tincture leaves the ward's lore
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "truedream", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "truedream" || p.Items["wardlore"] != 1 {
+		t.Fatalf("true dream %+v", p)
+	}
+	// S22: the river stones and a sage lay the ward
+	st.ok("game.reachStory", farm, map[string]any{"item": "riverstones", "spot": "culvert-stones", "area": farm, "x": 9, "z": 3})
+	st.ok("game.reachStory", farm, map[string]any{"item": "sage", "spot": "bundle-sage", "area": farm, "x": 9, "z": 3})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "ward", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "ward" || p.Items["ward"] != 1 || p.Items["riverstones"] != 0 || p.Items["sage"] != 0 {
+		t.Fatalf("ward %+v", p)
+	}
 }

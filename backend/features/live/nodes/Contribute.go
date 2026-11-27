@@ -74,7 +74,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				h := &QueryHost{Pos: live.Position{}}
 				return h, func() any { return h }
 			}},
-		{Descriptor: extensions.Descriptor{ID: KindTrigger}, Title: "Trigger", Events: []string{OnEvent, OnSchedule, OnWebhook, "records.onChanged", "connector.on"},
+		{Descriptor: extensions.Descriptor{ID: KindTrigger}, Title: "Trigger", Events: []string{OnEvent, OnSchedule, OnWebhook, "records.onChanged", "connector.on", "apps.onBranchMerged"},
 			Description: "Runs in the background, as its app's own principal, when an event is committed or on a schedule (webhooks come with forge 050-Workflows). Named by the app's manifest as a trigger, it runs only while the app is installed, each event or tick once, as a durable job (forge 07a).", Returns: "nothing"},
 	} {
 		k.Order, k.Source = 100+i*10, source

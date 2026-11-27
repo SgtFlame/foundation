@@ -74,6 +74,10 @@ type Tool struct {
 	// stays in its process: a tool sent to another (a chat's client tools,
 	// forge 21c) travels as metadata.
 	Asks func(args json.RawMessage) bool `json:"-"`
+	// Checks marks a tool forge.check calls for every app it checks, with
+	// {appId, branch}, joining its warnings output to the check's (an
+	// installed app's manifest tool with checks, forge 19f).
+	Checks bool
 	// Run runs a server tool. An error's text goes to the model and the
 	// user, so it names nothing private (a service's Common.Message is safe).
 	Run func(call Call) (Result, error) `json:"-"`
