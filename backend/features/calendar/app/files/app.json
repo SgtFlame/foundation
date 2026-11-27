@@ -1,0 +1,163 @@
+{
+  "id": "calendar",
+  "name": "Calendar",
+  "icon": "calendar_month",
+  "description": "The calendar library app (forge 28e): calendars, events with recurring series and their exceptions, the occurrences views and tools read, sharing at freeBusy, read or write, and the tools chat and agents use. Forge's Calendar app requires it for its pages.",
+  "entities": [
+    "calCalendar",
+    "calEvent",
+    "calOccurrence",
+    "calHold",
+    "calAvailability"
+  ],
+  "commands": [
+    {
+      "type": "occurrences.sync",
+      "graph": "cmd-calendar-occurrences-sync",
+      "action": "entity:calOccurrence.create",
+      "title": "Sync an event's occurrences",
+      "description": "Keeps the occurrence rows of the target event (a one-off or a series' master) in step with it inside its calendar's window; sent by the app's triggers"
+    },
+    {
+      "type": "calendar.share",
+      "graph": "cmd-calendar-calendar-share",
+      "action": "entity:calCalendar.update",
+      "title": "Share a calendar",
+      "description": "Shares the target calendar with a person: args {user, level freeBusy|read|write|none}"
+    },
+    {
+      "type": "event.respond",
+      "graph": "cmd-calendar-event-respond",
+      "action": "entity:calEvent.read",
+      "title": "Answer an invitation",
+      "description": "Sets the caller's own attendee response on the target event: args {answer accepted|tentative|declined, comment?}"
+    },
+    {
+      "type": "event.updateOccurrence",
+      "graph": "cmd-calendar-event-updateOccurrence",
+      "action": "entity:calEvent.update",
+      "title": "Change an occurrence of a series",
+      "description": "Changes an occurrence of the target series: args {recurrenceId, scope this|following|all, set}"
+    }
+  ],
+  "roles": [
+    {
+      "id": "admin",
+      "title": "Calendar admin",
+      "installer": true,
+      "description": "Uses Calendar, sees every calendar (though not its events unless shared), and makes team calendars and rooms",
+      "actions": [
+        "entity:calCalendar.*",
+        "entity:calEvent.*",
+        "entity:calOccurrence.*",
+        "entity:calHold.*",
+        "entity:calAvailability.*"
+      ],
+      "rowRules": {
+        "calCalendar": "true"
+      }
+    },
+    {
+      "id": "user",
+      "title": "Calendar user",
+      "description": "Uses Calendar: makes their own calendars and sees and changes others' as they are shared with them",
+      "actions": [
+        "entity:calCalendar.*",
+        "entity:calEvent.*",
+        "entity:calOccurrence.read",
+        "entity:calHold.*",
+        "entity:calAvailability.*"
+      ]
+    },
+    {
+      "id": "calWriter",
+      "title": "Calendar writer",
+      "description": "Granted on one calendar (by the app, to its maker and those it is shared with for write): reads and changes its events",
+      "actions": [
+        "entity:calCalendar.read",
+        "entity:calCalendar.update",
+        "entity:calEvent.*",
+        "entity:calOccurrence.read"
+      ],
+      "rowRules": {
+        "calEvent": "principal.hasRole('calWriter', record.calendar)",
+        "calOccurrence": "principal.hasRole('calWriter', record.calendar)"
+      }
+    },
+    {
+      "id": "calReader",
+      "title": "Calendar reader",
+      "description": "Granted on one calendar shared for read: reads its events",
+      "actions": [
+        "entity:calCalendar.read",
+        "entity:calEvent.read",
+        "entity:calOccurrence.read"
+      ],
+      "rowRules": {
+        "calEvent": "principal.hasRole('calReader', record.calendar)",
+        "calOccurrence": "principal.hasRole('calReader', record.calendar)"
+      }
+    },
+    {
+      "id": "calFreeBusy",
+      "title": "Free/busy viewer",
+      "description": "Granted on one calendar shared for freeBusy: sees when its events are, never what they are",
+      "actions": [
+        "entity:calCalendar.read",
+        "entity:calOccurrence.read"
+      ],
+      "rowRules": {
+        "calOccurrence": "principal.hasRole('calFreeBusy', record.calendar)"
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "id": "onEventChanged",
+      "title": "An event changed",
+      "description": "Enqueues the sync of the event's series (the calendar-syncEvent job, keyed by the series) whenever an event is made, changed or deleted",
+      "graph": "calendar-onEventChanged"
+    },
+    {
+      "id": "onCalendarShared",
+      "title": "A calendar was made or shared",
+      "description": "Grants the maker writer and each person in sharedWith their level's role, revoking what was removed",
+      "graph": "calendar-onCalendarShared"
+    },
+    {
+      "id": "onWindow",
+      "title": "The window slides",
+      "description": "Once a day, enqueues the sync of every one-off and series master, one job per event and day, so the window keeps its next year",
+      "graph": "calendar-onWindow"
+    }
+  ],
+  "tools": [
+    {
+      "name": "listEvents",
+      "graph": "fn-calendar-listEvents",
+      "title": "List events",
+      "effect": "read",
+      "description": "The occurrences between from and to on the given calendars (every calendar the caller can see when left out), oldest first, with title, location and times; a calendar shared for free/busy shows Busy with no details"
+    },
+    {
+      "name": "createEvent",
+      "graph": "fn-calendar-createEvent",
+      "title": "Create an event",
+      "effect": "write",
+      "description": "Makes an event on a calendar: title, start and end (RFC 3339), zone, allDay, rrule for a series, location, description, attendees"
+    },
+    {
+      "name": "updateEvent",
+      "graph": "fn-calendar-updateEvent",
+      "title": "Update an event",
+      "effect": "write",
+      "description": "Changes an event's fields; for an occurrence of a series give recurrenceId and scope this, following or all"
+    }
+  ],
+  "requires": {
+    "primitives": [
+      "mui",
+      "record"
+    ]
+  }
+}
