@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -130,4 +131,21 @@ func ScriptKeyPath(keysDir, dataDir string) string {
 		return filepath.Join(keysDir, "script-signing.key")
 	}
 	return filepath.Join(dataDir, "script-signing.key")
+}
+
+// RepoKeyFile reads the first-party repository's armored public key
+// (forge 20f-1), repo-signing.asc with the deployment's keys, each time it
+// is asked, so a new key reaches desired state at the next change; "" when
+// there is none.
+func RepoKeyFile(keysDir string) func() string {
+	return func() string {
+		if keysDir == "" {
+			return ""
+		}
+		raw, err := os.ReadFile(filepath.Join(keysDir, "repo-signing.asc"))
+		if err != nil {
+			return ""
+		}
+		return string(raw)
+	}
 }

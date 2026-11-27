@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/natsauth"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/natsd"
@@ -168,4 +169,41 @@ func ApplyNatsAccounts(ctx context.Context, d Deps) error {
 		}
 	}
 	return nil
+}
+
+// firstParty is the first-party repository as an approved apt source
+// (forge 20f-1): served by `axiomd repo-serve` on every NATS node's
+// instance, signed by the repository key, on the profile's channel.
+func firstParty(read map[string]map[string]map[string]json.RawMessage, d Deps, profile map[string]json.RawMessage) map[string]json.RawMessage {
+	if d.RepoKey == nil {
+		return nil
+	}
+	key := d.RepoKey()
+	if key == "" {
+		return nil
+	}
+	seen := map[string]bool{}
+	var uris []string
+	for _, u := range read[EntityUnit] {
+		if str(u, "kind") != "nats" || str(u, "status") == "stopped" {
+			continue
+		}
+		if h := nodeHost(read, u); !seen[h] {
+			seen[h] = true
+			uris = append(uris, "http://"+h+":"+strconv.Itoa(ctl.RepoPort))
+		}
+	}
+	if len(uris) == 0 {
+		return nil
+	}
+	sort.Strings(uris)
+	channel := "stable"
+	if c := str(profile, "channel"); c != "" {
+		channel = c
+	}
+	m := func(v any) json.RawMessage { raw, _ := json.Marshal(v); return raw }
+	return map[string]json.RawMessage{
+		"id": m("firstParty"), "name": m("first-party"), "uris": m(strings.Join(uris, " ")), "suites": m(channel),
+		"components": m("main"), "key": m(key), "approved": m(true),
+	}
 }

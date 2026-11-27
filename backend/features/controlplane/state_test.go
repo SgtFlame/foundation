@@ -133,7 +133,7 @@ func newStack(t *testing.T) *stack {
 		t.Fatal(err)
 	}
 	deps := controlplane.Deps{Projections: p, Data: dataDeps, Bus: b, Control: s.ctl, Sweep: 200 * time.Millisecond, ScriptKey: s.key,
-		NatsKeys: s.keys, NatsTrust: nd.Trust}
+		NatsKeys: s.keys, NatsTrust: nd.Trust, RepoKey: func() string { return "REPO KEY" }}
 	if err := controlplane.Start(ctx, func() controlplane.Deps { return deps }); err != nil {
 		t.Fatal(err)
 	}
@@ -339,6 +339,7 @@ func TestNatsDesiredState(t *testing.T) {
 				Trust      map[string]any `json:"trust"`
 			} `json:"nats"`
 		} `json:"units"`
+		Sources []map[string]any `json:"sources"`
 	}
 	until(t, "the first node's configuration is resolved", func() bool {
 		raw, ok, _ := s.ctl.Desired(ctx, ctl.Target{Kind: ctl.KindInstance, ID: insts[0]})
@@ -348,6 +349,11 @@ func TestNatsDesiredState(t *testing.T) {
 	if n.Cluster != "east" || n.ServerName != "nats1-nats" || fmt.Sprint(n.Routes) != "[nats-route://nats2:6333 nats-route://nats3:6333]" ||
 		n.Ports["client"] != 4222 || len(n.Gateways) != 1 || n.Trust["operator"] == nil {
 		t.Fatalf("node %+v", n)
+	}
+	// The first-party repository its NATS nodes serve, as an approved source
+	if len(doc.Sources) != 1 || doc.Sources[0]["uris"] != "http://nats1:8090 http://nats2:8090 http://nats3:8090" ||
+		doc.Sources[0]["approved"] != true || doc.Sources[0]["key"] != "REPO KEY" || doc.Sources[0]["suites"] != "stable" {
+		t.Fatalf("sources %+v", doc.Sources)
 	}
 
 	s.create(controlplane.EntityNatsAcct, map[string]any{"tenant": "7", "limits": map[string]any{"streams": 5, "storage": 1 << 20}})

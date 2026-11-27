@@ -15,8 +15,8 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/natsauth"
 	"github.com/nats-io/nats-server/v2/server"
-	"github.com/samber/oops"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/samber/oops"
 )
 
 // TestNatsRollout: three agents run a cluster's three NATS nodes; a
@@ -113,6 +113,9 @@ func TestNatsRollout(t *testing.T) {
 	ok(all(func(i int) NatsNode { return node(i, "east", nil, nil, false) }))
 	if c := counts("systemctl enable --now axiom-nats@nats"); fmt.Sprint(c) != "[1 1 1]" || most.Load() != 0 {
 		t.Fatalf("enabled %v, rolled %d", c, most.Load())
+	}
+	if c := counts("systemctl enable --now axiom-repo"); fmt.Sprint(c) != "[1 1 1]" {
+		t.Fatalf("the repository is not served: %v", c)
 	}
 	c0 := conf(0)
 	for _, want := range []string{`server_name: "n1-nats"`, `name: "east"`, `"nats-route://n2:6222"`, `"nats-route://n3:6222"`, "resolver_preload", `http: "127.0.0.1:8222"`} {

@@ -71,6 +71,23 @@
       "type": "bool",
       "description": "Whether the Ubuntu archive's security updates install by themselves",
       "default": true
+    },
+    {
+      "id": "channel",
+      "name": "Channel",
+      "type": "enum",
+      "description": "The first-party repository channel its instances follow (forge 20f-1)",
+      "options": [
+        {
+          "id": "stable",
+          "name": "Stable"
+        },
+        {
+          "id": "candidate",
+          "name": "Candidate"
+        }
+      ],
+      "default": "stable"
     }
   ],
   "indexes": []

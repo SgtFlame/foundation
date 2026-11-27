@@ -24,12 +24,17 @@ const (
 	FactsBucket   = "ctl_facts"        // host.<id>, inst.<id>: facts, written on start and on change
 	HealthBucket  = "ctl_health"       // host.<id>, inst.<id>: heartbeats, gone after HealthTTL
 	RolloutBucket = "ctl_nats_rollout" // <cluster>: the NATS node changing now, gone after RolloutTTL
+	RepoBucket    = "ctl_repo"         // object store: the first-party apt repository (forge 20f-1)
 	StreamName    = "CTL"              // ctl.evt.<host|inst>.<id>.<event>
 )
 
 // HealthTTL is how long a heartbeat counts: a daemon beats more often.
 // Tests shorten it before anything is made.
 var HealthTTL = 30 * time.Second
+
+// RepoPort is where `axiomd repo-serve` serves the first-party apt
+// repository on every NATS node's instance (forge 20f-1).
+const RepoPort = 8090
 
 // RolloutTTL is how long a NATS cluster's rollout lease lives unrefreshed
 // (forge 20e): a crashed agent's lease frees itself.

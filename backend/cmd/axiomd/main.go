@@ -6,16 +6,22 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/controlplane/agent"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/daemon"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/hostd"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/packages"
 )
 
 const defaultConfig = "/etc/axiomd/axiomd.json"
@@ -31,6 +37,8 @@ func main() {
 		err = enroll(os.Args[2:])
 	case "host", "agent":
 		err = run(os.Args[1], os.Args[2:])
+	case "repo-serve":
+		err = repoServe(os.Args[2:])
 	case "unit-credentials":
 		if len(os.Args) != 3 {
 			usage()
@@ -56,6 +64,7 @@ func usage() {
   axiomd host [--config f] [--lxd-socket path]
   axiomd agent [--config f]
   axiomd unit-credentials <unit>
+  axiomd repo-serve [--config f] [--listen addr]
   axiomd version`)
 }
 
@@ -117,4 +126,35 @@ func run(mode string, args []string) error {
 		return err
 	}
 	return d.Run(ctx)
+}
+
+// repoServe serves the first-party apt repository from the control
+// account's object store over HTTP (forge 20f-1), with the daemon's own
+// credentials; the agent runs it on every NATS node's instance.
+func repoServe(args []string) error {
+	fs := flag.NewFlagSet("repo-serve", flag.ExitOnError)
+	config := fs.String("config", defaultConfig, "the config file")
+	listen := fs.String("listen", ":"+strconv.Itoa(ctl.RepoPort), "the address to serve on")
+	_ = fs.Parse(args)
+	c, err := daemon.LoadConfig(*config)
+	if err != nil {
+		return err
+	}
+	d := &daemon.Daemon{Config: c}
+	if err := d.Connect(nil); err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	srv := &http.Server{Addr: *listen, Handler: &packages.Server{JS: d.Control().JS}, ReadHeaderTimeout: 10 * time.Second}
+	go func() {
+		<-ctx.Done()
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(sctx)
+	}()
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }

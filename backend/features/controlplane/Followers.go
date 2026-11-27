@@ -38,6 +38,10 @@ type Deps struct {
 	// accounts. Nil applies none.
 	NatsKeys natsauth.Keys
 	NatsSys  *nats.Conn
+	// RepoKey is the first-party repository's armored public key (forge
+	// 20f-1): with it, every instance gets the repository its NATS nodes
+	// serve as an approved apt source. Nil or empty gives none.
+	RepoKey func() string
 	// ScriptKey signs infraScript records' content (forge 20c-3); its
 	// public half is every target's trusted scriptKeys. Nil signs nothing.
 	ScriptKey ed25519.PrivateKey
@@ -200,6 +204,9 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 		sortByID(units)
 		sortByID(pins)
 		sortByID(sources)
+		if src := firstParty(read, d, profile); src != nil {
+			sources = append(sources, src)
+		}
 		docs[ctl.Target{Kind: ctl.KindInstance, ID: id}] = map[string]any{"instance": doc, "profile": profile, "units": units, "pins": pins, "sources": sources}
 	}
 	for t, doc := range docs {

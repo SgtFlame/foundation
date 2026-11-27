@@ -81,7 +81,13 @@ func DaemonPermissions(t Target) natsauth.Permissions {
 			// NATS nodes' rollout lease (forge 20e)
 			"$KV."+RolloutBucket+".>",
 			"$JS.API.STREAM.INFO.KV_"+RolloutBucket,
-			"$JS.API.DIRECT.GET.KV_"+RolloutBucket+".$KV."+RolloutBucket+".>")
+			"$JS.API.DIRECT.GET.KV_"+RolloutBucket+".$KV."+RolloutBucket+".>",
+			// reading the first-party repository, to serve it (forge 20f-1)
+			"$JS.API.STREAM.INFO.OBJ_"+RepoBucket,
+			"$JS.API.DIRECT.GET.OBJ_"+RepoBucket+".>",
+			"$JS.API.STREAM.MSG.GET.OBJ_"+RepoBucket,
+			"$JS.API.CONSUMER.CREATE.OBJ_"+RepoBucket+".>",
+			"$JS.API.CONSUMER.DELETE.OBJ_"+RepoBucket+".>")
 	}
 	return p
 }

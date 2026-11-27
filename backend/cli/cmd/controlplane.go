@@ -11,6 +11,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/controlplane"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/natsauth"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/packages"
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/identity"
@@ -123,6 +124,40 @@ control account with --keys (serve --nats-keys).`,
 
 var cpRotate bool
 
+var controlplaneRepoCmd = &cobra.Command{
+	Use:   "repo",
+	Short: "The first-party apt repository",
+}
+
+var controlplaneRepoPublishCmd = &cobra.Command{
+	Use:   "publish <dir>",
+	Short: "Publish a repository built by scripts/repo.sh",
+	Long: `Upload a repository directory (pool/ and dists/, as scripts/repo.sh builds
+and signs it; forge 20f-1) into the control account's object store ctl_repo:
+new pool files first, then the index as a new generation, then the pointer
+to it, so a client never sees an index naming a file not yet there. Every
+NATS node's instance serves it (axiomd repo-serve). It connects to the
+control account with --keys (serve --nats-keys).`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		o := natsd.Options{URL: cpNatsURL, CA: cpNatsCA}.WithEnv()
+		conn, err := natsauth.AccountConn(o, cpKeys, natsauth.Control, "cli controlplane repo publish")
+		if err != nil {
+			return err
+		}
+		if conn == nil {
+			return fmt.Errorf("--keys (or $%s) and --nats-url (or $%s) are needed", natsauth.EnvKeys, natsd.EnvURL)
+		}
+		defer conn.Close()
+		p, err := packages.Publish(cmd.Context(), conn.JS(), args[0])
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "published generation %s: %d files uploaded, %d already there\n", p.Generation, len(p.Uploaded), p.Kept)
+		return nil
+	},
+}
+
 var controlplaneScriptKeyCmd = &cobra.Command{
 	Use:   "script-key",
 	Short: "Print, or rotate, the root tenant's script signing key",
@@ -156,6 +191,11 @@ record is saved).`,
 }
 
 func init() {
+	controlplaneRepoPublishCmd.Flags().StringVar(&cpKeys, "keys", "", "the deployment's keys (default $FOUNDATION_NATS_KEYS)")
+	controlplaneRepoPublishCmd.Flags().StringVar(&cpNatsURL, "nats-url", "", "the cluster's URLs (default $FOUNDATION_NATS_URL)")
+	controlplaneRepoPublishCmd.Flags().StringVar(&cpNatsCA, "nats-ca", "", "the deployment's CA certificate (default $FOUNDATION_NATS_CA)")
+	controlplaneRepoCmd.AddCommand(controlplaneRepoPublishCmd)
+	controlplaneCmd.AddCommand(controlplaneRepoCmd)
 	controlplaneScriptKeyCmd.Flags().StringVar(&cpKeys, "keys", "", "the deployment's keys (default $FOUNDATION_NATS_KEYS)")
 	controlplaneScriptKeyCmd.Flags().StringVar(&cpDataDir, "data-dir", "", "serve's data directory, when there are no keys (default ~/.foundation)")
 	controlplaneScriptKeyCmd.Flags().BoolVar(&cpRotate, "rotate", false, "make a new key in place of the old")

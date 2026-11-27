@@ -1011,7 +1011,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 				return err
 			}
 			controlDeps := controlplane.Deps{Projections: projections, Data: recordDeps, Bus: liveBus, Control: control, ScriptKey: scriptKey,
-				NatsKeys: natsDesired.NatsKeys, NatsSys: natsDesired.NatsSys, NatsTrust: natsDesired.NatsTrust}
+				NatsKeys: natsDesired.NatsKeys, NatsSys: natsDesired.NatsSys, NatsTrust: natsDesired.NatsTrust,
+				RepoKey: controlplane.RepoKeyFile(natsauth.KeysDir(serveNatsKeys))}
 			if err := controlplane.Start(ctx, func() controlplane.Deps { return controlDeps }); err != nil {
 				return err
 			}

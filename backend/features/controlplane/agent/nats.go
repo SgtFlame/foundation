@@ -75,6 +75,24 @@ RestartSec=5
 WantedBy=multi-user.target
 `
 
+// RepoUnit and RepoTemplate serve the first-party apt repository from
+// the control account's object store (forge 20f-1).
+const RepoUnit = "axiom-repo"
+
+const RepoTemplate = `[Unit]
+Description=Axiom first-party apt repository
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/axiomd repo-serve
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+`
+
 // NatsSystemdName is a nats unit's systemd unit.
 func NatsSystemdName(unit string) string { return "axiom-nats@" + unit }
 
@@ -125,6 +143,9 @@ func (a *Agent) natsUnits(units []Unit) ([]Unit, []natsChange, []error) {
 	}
 	if len(changes) > 0 {
 		out = append(out, Unit{Kind: "template", Files: []File{{Path: "/etc/systemd/system/axiom-nats@.service", Content: NatsTemplate, Raw: true}}})
+		// Every NATS node's instance serves the first-party repository (forge 20f-1)
+		out = append(out, Unit{Name: RepoUnit, Kind: "other", Files: []File{{Path: "/etc/systemd/system/" + RepoUnit + ".service", Content: RepoTemplate, Raw: true}},
+			Health: []Check{{Kind: "http", URL: "http://127.0.0.1:" + strconv.Itoa(ctl.RepoPort) + "/healthz"}}})
 	}
 	return out, changes, errs
 }
