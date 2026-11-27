@@ -70,6 +70,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
+	"github.com/SgtFlame/foundation/backend/features/controlplane"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/natsauth"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
 	"github.com/SgtFlame/foundation/backend/features/conversation/made"
@@ -180,27 +181,28 @@ import (
 )
 
 var (
-	serveAddr       string
-	serveKBRoot     string
-	serveDataDir    string
-	serveDB         string
-	serveAppDB      string
-	serveGeminiKey  string
-	serveEmbedModel string
-	serveEmbedDims  int
-	serveChatModel  string
-	serveLogFormat  string
-	serveLogLevel   string
-	serveVLogsURL   string
-	serveVaultAddr  string
-	serveVaultMount string
-	serveVaultRole  string
-	serveNatsURL    string
-	serveNatsCreds  string
-	serveNatsCA     string
-	serveNatsReps   int
-	serveNatsKeys   string
-	serveNatsPlaces string
+	serveAddr         string
+	serveKBRoot       string
+	serveDataDir      string
+	serveDB           string
+	serveAppDB        string
+	serveGeminiKey    string
+	serveEmbedModel   string
+	serveEmbedDims    int
+	serveChatModel    string
+	serveLogFormat    string
+	serveLogLevel     string
+	serveVLogsURL     string
+	serveVaultAddr    string
+	serveVaultMount   string
+	serveVaultRole    string
+	serveNatsURL      string
+	serveNatsCreds    string
+	serveNatsCA       string
+	serveNatsReps     int
+	serveNatsKeys     string
+	serveNatsPlaces   string
+	serveControlPlane bool
 )
 
 // serveCmd represents the serve command
@@ -472,6 +474,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		authz.Contribute(registry)
 		authz.ContributeAgents(registry) // agent (forge 07j)
 		identity.ContributeAccess(registry)
+		controlplane.ContributeAccess(registry) // infra, pinned to the root tenant (forge 20b-1)
 		config.ContributeAccess(registry)
 		logs.ContributeAccess(registry)
 		usage.ContributeAccess(registry)
@@ -610,6 +613,20 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			return err
 		}
 		authz.Install(policy)
+		if serveControlPlane {
+			// forge 20b-1: the root tenant, its Owner user 1 when it exists
+			owner := uint64(0)
+			var firsts int64
+			if err := appDB.Model(&identity.User{}).Where("id = ?", features.LocalUserID).Count(&firsts).Error; err != nil {
+				return err
+			}
+			if firsts > 0 {
+				owner = features.LocalUserID
+			}
+			if _, err := controlplane.EnsureRootTenant(ctx, appDB, owner); err != nil {
+				return err
+			}
+		}
 		authzService := authzimpl.CreateService(authzimpl.WithPolicy(policy), authzimpl.WithMembers(func(tenant, user uint64) (bool, error) {
 			var n int64
 			err := appDB.Model(&identity.Membership{}).Where("tenant_id = ? AND user_id = ?", tenant, user).Count(&n).Error
@@ -1094,6 +1111,7 @@ func init() {
 	serveCmd.Flags().StringVar(&serveNatsCreds, "nats-creds", "", "a NATS credentials file for --nats-url (default $FOUNDATION_NATS_CREDS)")
 	serveCmd.Flags().StringVar(&serveNatsCA, "nats-ca", "", "the deployment's CA certificate for TLS to --nats-url (default $FOUNDATION_NATS_CA)")
 	serveCmd.Flags().StringVar(&serveNatsKeys, "nats-keys", "", "the deployment's NATS keys (cli nats init): each tenant's streams and buckets then live in its own account, made with cli nats tenant add (default $FOUNDATION_NATS_KEYS)")
+	serveCmd.Flags().BoolVar(&serveControlPlane, "control-plane", false, "make the root tenant (id 3, Infrastructure), the only tenant that holds infrastructure, with user 1 its Owner")
 	serveCmd.Flags().StringVar(&serveNatsPlaces, "nats-placements", "", "tenants placed in clusters of the supercluster, as <tenant>=<cluster>,… (default $FOUNDATION_NATS_PLACEMENTS)")
 	serveCmd.Flags().IntVar(&serveNatsReps, "nats-replicas", 0, "replicas of every stream, bucket and object store this server makes: 3 on a cluster (default $FOUNDATION_NATS_REPLICAS, else 1)")
 	serveCmd.Flags().StringVar(&serveVLogsURL, "vlogs-url", "", "VictoriaLogs to store logs in, e.g. http://localhost:9428 (default $FOUNDATION_VLOGS_URL); wins over Settings")

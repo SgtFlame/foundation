@@ -69,7 +69,12 @@ type ResourceType struct {
 	// Super Administrator, the tenant's Owner and Administrator, and the
 	// roles of the app the segment names. An Editor of the tenant does not
 	// reach an installed app's records.
-	Fence   string
+	Fence string
+	// Tenant pins the type to one tenant (forge 20b-1: infrastructure to
+	// the root tenant): its actions hold only on resources in that tenant,
+	// and only through grants made in it, so neither a role granted in
+	// another tenant nor the Super Administrator's grant on app reaches.
+	Tenant  uint64
 	Actions []Action
 }
 
