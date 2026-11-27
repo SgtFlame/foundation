@@ -262,7 +262,7 @@ func specs() []spec {
 				after = append(after, live.NewEvent{Type: EventMergeDone, Target: &mt, Data: map[string]string{"commit": id}})
 				if m.Source != live.Main {
 					st := branchTarget(a.App, m.Source)
-					after = append(after, live.NewEvent{Type: EventMerged, Target: &st, Data: map[string]string{"into": name, "commit": id}})
+					after = append(after, live.NewEvent{Type: EventMerged, Target: &st, Data: map[string]string{"app": a.App, "branch": m.Source, "into": name, "commit": id}})
 				}
 			}
 			// Its semantic diff is a job, enqueued if the commit is stored

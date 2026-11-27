@@ -71,7 +71,7 @@ func appTool(d Deps, app string, t apps.Tool, g cognition.Graph, types []cogniti
 	}
 	return tools.Tool{
 		Descriptor: extensions.Descriptor{ID: id, Source: "app:" + app}, Title: title, Description: t.Description,
-		Input: InputSchema(in), Effect: effect,
+		Input: InputSchema(in), Effect: effect, Checks: t.Checks,
 		Run: func(call tools.Call) (tools.Result, error) {
 			inputs := cognition.Values{}
 			if len(call.Args) > 0 {
