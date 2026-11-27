@@ -574,6 +574,15 @@ Minerals in the ground: the first step of the user's *Ships from blocks* (forge 
 - Mining: `HARDNESS.mineral` (4), and the work ring and label name the main mineral in its colour (`mineralsIn`, `workFor`). The scanner (K) finds minerals as well as ore, in pockets per kind, marked in each mineral's colour.
 - Tests: `TestMinerals`, `Bodies.test.ts` (which minerals each body holds), `Mining.test.ts`, `Scanner.test.ts`.
 
+## Built in V30 (forge 360)
+
+Refining: the second step of *Ships from blocks*. The cabin's forge refines V29's minerals into components, the parts ship blocks will cost (V31).
+
+- `game.smelt` takes `what`: `ore` (the default, into iron as in V20), a mineral or `rock`. A load is one kind, up to 2 m³, kept on the forge as `{ore, at, kind}`. `game.takeIngots` gives iron for ore, otherwise `parts` (counts that take no room, kept in `Pack.Parts`).
+- Yields (`game.Refines`, the engine's `REFINES` and both blueprints agree): ferrite → 8 steel plates a m³, malachite → 10 copper wire, silica → 4 solar cells, wolframite → 3 tungsten nozzles, spodumene → 4 battery cells, all at 60 s a m³; rock → 6 bags of cement at 30 s a m³. Ice is not refined yet. A load too small to make one component is refused.
+- Engine: `craft/Forge.ts` (`nextLoad`: ore first, then the mineral the pack holds most of, then rock of at least `CEMENT_MIN`; `forgeAction` gives `takeParts`; `partsFrom`, `msPer`, `PART_NAMES`). U at the forge loads and takes; the pack line lists the components.
+- Tests: `TestRefine`, `Forge.test.ts`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

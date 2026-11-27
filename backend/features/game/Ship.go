@@ -36,8 +36,8 @@ const (
 	EventShipCrewed     = "crewed"      // {world, user, aboard} (V7: who boards or leaves the crew seat)
 	EventSlept          = "slept"       // {world} (V13: the sender slept in this cabin's bed: their home)
 	EventCrafted        = "crafted"     // {world, item, pack} (V14: the sender crafted a tool at this cabin's bench from their pack)
-	EventSmelting       = "smelting"    // {world, ore, at, pack} (V20: ore from the sender's pack put in this cabin's forge at Unix ms at)
-	EventIngots         = "ingots"      // {world, iron, pack} (V20: the forge's iron taken into the sender's pack; the forge is empty again)
+	EventSmelting       = "smelting"    // {world, ore, at, kind, pack} (V20: ore from the sender's pack put in this cabin's forge at Unix ms at; V30: kind a mineral or rock to refine)
+	EventIngots         = "ingots"      // {world, iron, parts, pack} (V20: the forge's iron taken into the sender's pack; V30: or its components; the forge is empty again)
 	EventFabricating    = "fabricating" // {world, item, at, pack} (V23: iron and ore from the sender's pack put in this cabin's fabricator at Unix ms at)
 	EventFabricated     = "fabricated"  // {world, item, pack} (V23: the fabricator's work taken into the sender's pack)
 	EventKitFitted      = "kitFitted"   // {world, boost, pack} (V24: an ion thruster kit from the sender's pack fitted to this ship)
@@ -115,6 +115,28 @@ const FabMs = 30_000
 type Forge struct {
 	Ore float64 `json:"ore"`
 	At  int64   `json:"at"`
+	// V30: what the load is: empty for ore, else a mineral (ferrite,
+	// malachite, silica, wolframite, spodumene) or rock, refined into
+	// components (Refines)
+	Kind string `json:"kind,omitempty"`
+}
+
+// Refine is what a forge makes of a m³ of a kind other than ore (V30).
+type Refine struct {
+	Part string  // the component: plate, wire, solarCell, nozzle, cell, cement
+	Per  float64 // how many a m³ gives
+	Ms   int64   // how long a m³ takes
+}
+
+// Refines is what the forge refines each kind into (V30; the engine's
+// craft/Forge.ts REFINES and the smelt and takeIngots blueprints agree).
+var Refines = map[string]Refine{
+	"ferrite":    {"plate", 8, 60_000},
+	"malachite":  {"wire", 10, 60_000},
+	"silica":     {"solarCell", 4, 60_000},
+	"wolframite": {"nozzle", 3, 60_000},
+	"spodumene":  {"cell", 4, 60_000},
+	"rock":       {"cement", 6, 30_000},
 }
 
 const (
@@ -227,6 +249,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		Aboard bool       `json:"aboard"`
 		At     int64      `json:"at"`
 		Item   string     `json:"item"`
+		Kind   string     `json:"kind"`
 		Boost  float64    `json:"boost"`
 	}
 	// a damaged event's blocks are indices, read on their own below
@@ -280,7 +303,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 			s.Pilot = ""
 		}
 	case EventSmelting:
-		s.Forge = &Forge{Ore: d.Ore, At: d.At}
+		s.Forge = &Forge{Ore: d.Ore, At: d.At, Kind: d.Kind}
 	case EventIngots:
 		s.Forge = nil
 	case EventFabricating:
@@ -313,7 +336,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	return json.Marshal(s)
 }
 
-const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron, ore} (m³ in its hold), charge (its battery, 0 to 1), forge {ore, at} (V20: a cabin's forge smelting ore since Unix ms at), fab {item, at} (V23: a cabin's fabricator making a circuit board, or V24 an ion thruster kit, since Unix ms at), boost (V24: what ion thruster kits add to its thrust), jump (V27: a jump drive is fitted), seq, updatedAt}"
+const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron, ore} (m³ in its hold), charge (its battery, 0 to 1), forge {ore, at, kind} (V20: a cabin's forge smelting ore since Unix ms at; V30: kind, when set, the mineral or rock it refines into components), fab {item, at} (V23: a cabin's fabricator making a circuit board, or V24 an ion thruster kit, since Unix ms at), boost (V24: what ion thruster kits add to its thrust), jump (V27: a jump drive is fitted), seq, updatedAt}"
 
 func without(list []string, v string) []string {
 	out := []string{}

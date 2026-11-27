@@ -37,6 +37,9 @@ type Pack struct {
 	Drives   float64 `json:"drives"`   // V27: jump drives from the fabricator, a count
 	// V29: minerals dug, m³ by name (ferrite, silica, ice, malachite, wolframite, spodumene)
 	Minerals map[string]float64 `json:"minerals,omitempty"`
+	// V30: components refined at a forge, a count by name (plate, wire,
+	// solarCell, nozzle, cell, cement); they take no room
+	Parts    map[string]float64 `json:"parts,omitempty"`
 	Capacity float64            `json:"capacity"`
 }
 
@@ -86,6 +89,7 @@ func contributePacks(reg *extensions.Registry) {
 					Coil float64            `json:"coils"`
 					Driv float64            `json:"drives"`
 					Mins map[string]float64 `json:"minerals"`
+					Prts map[string]float64 `json:"parts"`
 				} `json:"pack"`
 			}
 			if err := json.Unmarshal(f.Event.Data, &d); err != nil {
@@ -112,13 +116,21 @@ func contributePacks(reg *extensions.Registry) {
 					delete(p.Minerals, k)
 				}
 			}
+			for k, v := range d.Pack.Prts {
+				if p.Parts == nil {
+					p.Parts = map[string]float64{}
+				}
+				if p.Parts[k] = round(p.Parts[k] + v); p.Parts[k] == 0 {
+					delete(p.Parts, k)
+				}
+			}
 			p.Capacity = PackCapacity
 			return json.Marshal(p)
 		},
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.pack", Source: source}, Title: "My pack",
-		Description: fmt.Sprintf("What the caller carries in a world: {dust, rock, ore, iron (V20: smelted at a forge), capacity} in m³, food in rations circuits (V23: circuit boards from a fabricator, a count) kits (V24: ion thruster kits), coils (V27: jump coils from the wrecks) and drives (V27: jump drives), minerals (V29: m³ by name) (an empty pack holds %g m³), then each change as they dig and fill", PackCapacity),
+		Description: fmt.Sprintf("What the caller carries in a world: {dust, rock, ore, iron (V20: smelted at a forge), capacity} in m³, food in rations circuits (V23: circuit boards from a fabricator, a count) kits (V24: ion thruster kits), coils (V27: jump coils from the wrecks) and drives (V27: jump drives), minerals (V29: m³ by name), parts (V30: components refined at a forge, a count by name) (an empty pack holds %g m³), then each change as they dig and fill", PackCapacity),
 		Params:      json.RawMessage(`{"type":"object","properties":{"world":{"type":"string","description":"The world's id"}},"required":["world"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"world":"w123"}`)},
 		Action:      "game.read",

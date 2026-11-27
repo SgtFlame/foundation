@@ -668,3 +668,44 @@ func TestMinerals(t *testing.T) {
 		t.Fatalf("minerals past the pack's room: %q", r.Common.Message)
 	}
 }
+
+// V30: the forge refines minerals into components and rock into cement
+func TestRefine(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Refinery moon"}).Target
+	st.ok("game.startShip", "c1", map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": 0, "q": []float64{0, 0, 0, 1}})
+	st.ok("game.placeBlock", "c1", map[string]any{"index": 75})
+	st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 100, "z": 0, "radius": 1, "took": map[string]any{"dust": 0, "rock": 0.05, "minerals": map[string]any{"malachite": 0.1, "ferrite": 0.05}}})
+	if r := st.refused("game.smelt", "c1", map[string]any{"what": "gold"}); !strings.Contains(r.Common.Message, "cannot refine gold") {
+		t.Fatalf("an unknown kind: %q", r.Common.Message)
+	}
+	if r := st.refused("game.smelt", "c1", map[string]any{"what": "ferrite"}); !strings.Contains(r.Common.Message, "too little ferrite") {
+		t.Fatalf("too little to make a plate: %q", r.Common.Message)
+	}
+	if r := st.refused("game.smelt", "c1", map[string]any{"what": "silica"}); !strings.Contains(r.Common.Message, "no silica") {
+		t.Fatalf("a mineral not carried: %q", r.Common.Message)
+	}
+	res := st.ok("game.smelt", "c1", map[string]any{"what": "malachite"})
+	var s game.Ship
+	if !st.read(game.ShipsProjector, game.ShipType+".c1", res.Seq, &s) || s.Forge == nil || s.Forge.Kind != "malachite" || s.Forge.Ore != 0.1 {
+		t.Fatalf("ship %+v", s)
+	}
+	var pack game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Minerals["malachite"] != 0 || pack.Minerals["ferrite"] != 0.05 {
+		t.Fatalf("pack %+v", pack)
+	}
+	if r := st.refused("game.takeIngots", "c1", map[string]any{}); !strings.Contains(r.Common.Message, "still smelting") {
+		t.Fatalf("take while refining: %q", r.Common.Message)
+	}
+	time.Sleep(6100 * time.Millisecond) // 0.1 m³ at 60 s a m³
+	res = st.ok("game.takeIngots", "c1", map[string]any{})
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Parts["wire"] != 1 || pack.Iron != 0 {
+		t.Fatalf("pack %+v", pack)
+	}
+	if r := st.refused("game.smelt", "c1", map[string]any{"what": "rock"}); !strings.Contains(r.Common.Message, "too little rock") {
+		t.Fatalf("too little rock: %q", r.Common.Message)
+	}
+	if game.Refines["rock"].Part != "cement" || game.Refines["silica"].Part != "solarCell" {
+		t.Fatalf("refines %+v", game.Refines)
+	}
+}
