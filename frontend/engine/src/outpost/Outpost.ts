@@ -16,7 +16,7 @@ export interface ContractList {
     skill: string
     xp: number
     // V8: what the ship must bring, the design the job needs, the design it unlocks
-    needs?: { complete?: boolean; iron?: number; ore?: number; rock?: number }
+    needs?: { complete?: boolean; iron?: number; ore?: number; rock?: number; jump?: boolean } // V28: jump, a jump drive fitted
     design?: string
     unlocks?: string
     // V11: a job of the job board, done again and again, and the Trade level it needs
@@ -65,6 +65,7 @@ export function handInProblem(id: string, s: ShipState | null, p: Progress | nul
   if (!s) return `park a ship within ${OUTPOST_REACH} m of the beacon`
   const needs = c?.needs ?? NEEDS[id] ?? {}
   if (c?.design && s.design !== c.design) return `needs a ${c.design}`
+  if (needs.jump && !s.jump) return 'needs a ship with a jump drive fitted'
   if (needs.complete && s.placed.length < blocks) return `${blocks - s.placed.length} blocks still to place`
   if ((s.cargo?.rock ?? 0) < (needs.rock ?? 0)) return `needs ${needs.rock} m³ of rock in the hold`
   if ((s.cargo?.iron ?? 0) < (needs.iron ?? 0)) return `needs ${needs.iron} m³ of iron in the hold`

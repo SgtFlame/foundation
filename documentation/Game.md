@@ -547,6 +547,14 @@ The well: with both hearths warded, the Hollowed's next way in.
 - Once Wenlan's hearth is warded, frost rings the well's stones (drawn in `drawMarks`) and the senses layer smells *frost, at noon* from it; walking to the well reaches the step.
 - Tests: `story_test` (`well`), `Well.test.ts`, and the step order in `FirstHourStory.test.ts`.
 
+## Built in V28 (forge 360)
+
+The jump trial: the outpost's first contract that needs a jump drive.
+
+- `contracts.json` gains `jump-trial` (Piloting, 150 xp, once): a ship with a jump drive fitted and 2 m³ of iron in its hold; a contract's `needs.jump` asks for `Ship.jump`.
+- `cmd-game-handIn` refuses it with *this job needs a ship with a jump drive fitted*; `handInProblem` in `outpost/Outpost.ts` says the same on the contract board.
+- Tests: `TestJumpDrive` (the refusal), `Outpost.test.ts` (the board's reasons), the contract count in `TestOutpost`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

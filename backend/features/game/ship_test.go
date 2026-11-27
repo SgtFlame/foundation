@@ -157,7 +157,7 @@ func TestShipDamage(t *testing.T) {
 
 // V6: contracts handed in with a ship at the outpost pay a skill once
 func TestOutpost(t *testing.T) {
-	if c := game.ContractsOf(); len(c.Contracts) != 9 || c.Giver.Name == "" {
+	if c := game.ContractsOf(); len(c.Contracts) != 10 || c.Giver.Name == "" {
 		t.Fatalf("contracts %+v", c)
 	}
 	st := newStack(t)
@@ -647,5 +647,9 @@ func TestJumpDrive(t *testing.T) {
 	st.ok("game.startShip", "p1", map[string]any{"world": world, "design": "prospector", "x": 0, "y": 110, "z": 8, "q": q})
 	if r := st.refused("game.fitDrive", "p1", map[string]any{}); !strings.Contains(r.Common.Message, "no jump drive") {
 		t.Fatalf("a drive from an empty pack: %q", r.Common.Message)
+	}
+	// V28: the jump trial needs the drive fitted (the prospector stands by the beacon)
+	if r := st.refused("game.handIn", "p1", map[string]any{"contract": "jump-trial"}); !strings.Contains(r.Common.Message, "jump drive fitted") {
+		t.Fatalf("the jump trial without a drive: %q", r.Common.Message)
 	}
 }
