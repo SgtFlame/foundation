@@ -35,6 +35,11 @@ type Account struct {
 	Name       string `json:"name"`
 	Provider   string `json:"provider"`             // lxd, azure, digitalocean, fly, infratest
 	Connection string `json:"connection,omitempty"` // the connection's id
+	// Tenant, when set, makes this account a tenant's own organization
+	// (its own subscription, team or organization, billed apart): only
+	// that tenant's dedicated sites use it. Left out, the account is the
+	// primary organization's.
+	Tenant uint64 `json:"tenant,omitempty,string"`
 }
 
 // Site is where a cluster is: an account and region, or an on-premise
@@ -505,6 +510,23 @@ func (d Document) Check() []live.Problem {
 					add(fmt.Sprintf("%s.spec.runners.sites.%d.count", path, i), "count is 0 to 1000", "")
 				}
 			}
+		}
+	}
+	ownerOf := map[string]uint64{}
+	for _, a := range d.Accounts {
+		if a.Tenant == features.RootTenantID {
+			add(fmt.Sprintf("accounts[%s].tenant", a.ID), "the root tenant's accounts are the primary organization's", "leave tenant out")
+		} else if a.Tenant != 0 {
+			ownerOf[a.ID] = a.Tenant
+		}
+	}
+	for _, s := range d.Sites {
+		t, own := ownerOf[s.Account]
+		if !own {
+			continue
+		}
+		if got, ok := dedicated[s.ID]; !ok || got != t {
+			add(fmt.Sprintf("sites[%s].account", s.ID), fmt.Sprintf("account %s is tenant %d's own organization: only that tenant's dedicated sites use it", s.Account, t), fmt.Sprintf("make %s's cluster tenant %d's own with an override's cluster switch, or use a primary account", s.ID, t))
 		}
 	}
 	if d.Settings.OnDrift != "" && d.Settings.OnDrift != "report" && d.Settings.OnDrift != "correct" {

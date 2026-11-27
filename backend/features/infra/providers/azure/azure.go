@@ -1,9 +1,15 @@
 // Package azure is the infra.azure connector type (forge 22l):
 // infra.compute@1 on the Azure Resource Manager REST API, signed in as a
 // service principal with a client secret (OAuth2 client credentials). A
-// host is a resource group of its own, <prefix>-<host>, tagged
+// host is a resource group of its own, <prefix>-host-<host>, tagged
 // axiom-host=<id>, holding the VM, its network, public address and
 // interface, so deleting the group removes everything the host made.
+//
+// Resource groups follow one naming standard, <prefix>-<kind>-<name>
+// (GroupName): the prefix is axiom in the primary organization's
+// subscription and axiom-<tenant short name> in a tenant's own; the kinds
+// are host (one per host) and net (networking shared by a location's
+// hosts, such as a cluster's network).
 package azure
 
 import (
@@ -49,7 +55,7 @@ const SettingsSchema = `{"type":"object","properties":{
   "clientSecret":{"type":"secret","title":"Client secret","description":"The service principal's client secret"},
   "subscriptionId":{"type":"string","title":"Subscription","description":"The subscription hosts are made in; the service principal needs Contributor on it"},
   "location":{"type":"string","title":"Default location","description":"The location size.list uses when no region is given, e.g. westeurope"},
-  "resourceGroupPrefix":{"type":"string","title":"Resource group prefix","description":"Each host's resource group is <prefix>-<host>; axiom when empty"},
+  "resourceGroupPrefix":{"type":"string","title":"Resource group prefix","description":"Resource groups are named <prefix>-<kind>-<name>, a host's <prefix>-host-<host>: axiom in the primary organization's subscription (the default), axiom-<tenant short name> in a tenant's own"},
   "adminUsername":{"type":"string","title":"Admin user","description":"The VM's admin user; axiom when empty"},
   "sshPublicKey":{"type":"string","title":"SSH public key","description":"The admin user's SSH public key (password sign-in is off)"},
   "waitSeconds":{"type":"integer","title":"Wait","description":"How long host.create waits for Azure's operations before answering creating; 120 seconds when empty","unit":"s","min":1,"max":1800}},
@@ -59,7 +65,7 @@ const SettingsSchema = `{"type":"object","properties":{
 func Type() connectors.Type {
 	return connectors.Type{
 		ID: TypeID, Contracts: []string{infra.ComputeRef}, Source: connectors.SourceBuiltin, Settings: json.RawMessage(SettingsSchema),
-		Meta: connectors.Meta{Title: "Azure", Description: "Makes hosts as Azure virtual machines through Azure Resource Manager, signed in as a service principal: implements infra.compute@1 with the subscription's VM sizes (vms on the families that run nested virtualization, Dv3 and Ev3 and later) and locations. Each host is a resource group of its own holding its VM, network and public address, tagged with its resource id.", Tags: []string{"infrastructure", "compute", "azure"}},
+		Meta: connectors.Meta{Title: "Azure", Description: "Makes hosts as Azure virtual machines through Azure Resource Manager, signed in as a service principal: implements infra.compute@1 with the subscription's VM sizes (vms on the families that run nested virtualization, Dv3 and Ev3 and later) and locations. Each host is a resource group of its own, <prefix>-host-<host>, holding its VM, network and public address, tagged with its resource id; groups follow the naming standard <prefix>-<kind>-<name>.", Tags: []string{"infrastructure", "compute", "azure"}},
 	}
 }
 
@@ -123,6 +129,9 @@ func New(st Settings, o Options) (*Backend, error) {
 	}
 	if st.ResourceGroupPrefix == "" {
 		st.ResourceGroupPrefix = "axiom"
+	}
+	if !prefixRE.MatchString(st.ResourceGroupPrefix) {
+		return nil, connectors.Errorf(connectors.CodeInvalid, "resourceGroupPrefix %q is lower case letters, digits and dashes, at most 40, starting with a letter", st.ResourceGroupPrefix)
 	}
 	if st.AdminUsername == "" {
 		st.AdminUsername = "axiom"
@@ -238,9 +247,30 @@ func (b *Backend) do(ctx context.Context, method, path, version string, q url.Va
 
 func (b *Backend) sub() string { return "/subscriptions/" + url.PathEscape(b.st.SubscriptionID) }
 
-// Group is a host's resource group.
+// The kinds of resource group in the naming standard.
+const (
+	// GroupHost is a host's own group: its VM, interface, address and,
+	// until hosts share one, its network.
+	GroupHost = "host"
+	// GroupNetwork is networking a location's hosts share.
+	GroupNetwork = "net"
+)
+
+var prefixRE = regexp.MustCompile(`^[a-z][a-z0-9-]{0,39}$`)
+
+// GroupName is the naming standard's resource group name,
+// <prefix>-<kind>-<name>, cut to Azure's 90 characters.
+func GroupName(prefix, kind, name string) string {
+	n := prefix + "-" + kind + "-" + providers.Hostname(name)
+	if len(n) > 90 {
+		n = strings.TrimRight(n[:90], "-")
+	}
+	return n
+}
+
+// Group is a host's resource group, <prefix>-host-<host>.
 func (b *Backend) Group(id string) string {
-	return b.st.ResourceGroupPrefix + "-" + providers.Hostname(id)
+	return GroupName(b.st.ResourceGroupPrefix, GroupHost, id)
 }
 
 func (b *Backend) groupPath(id string) string {
