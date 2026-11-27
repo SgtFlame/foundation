@@ -8,6 +8,8 @@ import (
 // Later parts add the diff, the contract, plan and apply here.
 func Contribute(reg *extensions.Registry, deps func() Deps) {
 	contributeConfig(reg)
+	contributeDiff(reg)
+	contributeExport(reg)
 }
 
 // Deps are what infra needs at run time, made after the registry.

@@ -263,23 +263,41 @@ func contributeConfig(reg *extensions.Registry) {
 
 	register(live.Command{
 		Descriptor: extensions.Descriptor{ID: "infra.config.import"}, Title: "Replace the configuration's draft",
-		Description: "Replaces the whole draft with a document, such as an exported version read back (infra.config.export) or what the seed made. Refused while the draft has changes not committed, unless force.",
+		Description: "Replaces the whole draft with a document (or an export's files), such as an exported version read back (infra.config.export) or what the seed made. Refused while the draft has changes not committed, unless force.",
 		Args: json.RawMessage(`{"type":"object","properties":{
   "document":{"type":"object","description":"The whole configuration: {accounts, sites, clusters, hostPools, profiles, stacks, placements, overrides, settings}"},
-  "force":{"type":"boolean","description":"Replace the draft even though it has changes not committed"}},"required":["document"]}`),
+  "files":{"type":"object","additionalProperties":{"type":"string"},"description":"In place of document: an export's YAML files by path (infra.config.export's files)"},
+  "force":{"type":"boolean","description":"Replace the draft even though it has changes not committed"}}}`),
 		Examples: []json.RawMessage{json.RawMessage(`{"document":{"accounts":[{"id":"test","name":"Test","provider":"infratest"}],"sites":[{"id":"west","name":"West","account":"test","region":"r1"}]}}`)},
 		Events:   []string{EventImported},
 	}, func(d live.Decision, cfg Config) ([]live.NewEvent, []live.Problem) {
 		var a struct {
-			Document json.RawMessage `json:"document"`
-			Force    bool            `json:"force"`
+			Document json.RawMessage   `json:"document"`
+			Files    map[string]string `json:"files"`
+			Force    bool              `json:"force"`
 		}
 		if err := json.Unmarshal(d.Args, &a); err != nil {
 			return nil, problem("", "args", err.Error(), "")
 		}
-		doc, err := DecodeDocument(a.Document)
-		if err != nil {
-			return nil, problem("bad_config", "args.document", err.Error(), "")
+		var doc Document
+		switch {
+		case len(a.Files) > 0 && len(a.Document) > 0:
+			return nil, problem("", "args.files", "send document or files, not both", "")
+		case len(a.Files) > 0:
+			var ps []live.Problem
+			if doc, ps = Import(a.Files); len(ps) > 0 {
+				return nil, ps
+			}
+		case len(a.Document) > 0:
+			var err error
+			if doc, err = DecodeDocument(a.Document); err != nil {
+				return nil, problem("bad_config", "args.document", err.Error(), "")
+			}
+			if ps := SecretProblems(doc); len(ps) > 0 {
+				return nil, ps
+			}
+		default:
+			return nil, problem("", "args.document", "send the document, or an export's files", "")
 		}
 		if ps := doc.Check(); len(ps) > 0 {
 			return nil, ps
