@@ -166,6 +166,12 @@
       "title": "An event was edited here",
       "description": "Enqueues the push of a person's edit of an event on a connected calendar to the outside calendar, keyed by the event",
       "graph": "calendar-onEventEdited"
+    },
+    {
+      "id": "onHoldsExpire",
+      "title": "Release expired holds",
+      "description": "Every hour, releases the open holds whose expiry has passed",
+      "graph": "calendar-onHoldsExpire"
     }
   ],
   "tools": [
@@ -196,6 +202,48 @@
       "title": "Connect outside calendars",
       "effect": "write",
       "description": "Makes a calendar, owned by the caller, for each calendar of an outside calendar connection the caller picks (every one when none are named), then mirrors each; give connection and optionally calendars, the outside ids from calendar.list"
+    },
+    {
+      "name": "findFreeTime",
+      "graph": "fn-calendar-findFreeTime",
+      "title": "Find free time",
+      "effect": "read",
+      "description": "Times when the caller and the given people (user ids) are all free for durationMinutes between from and to, inside their working hours, ranked and spread over days, each with its time in every person's zone; people whose calendars the caller cannot see are listed in unknown"
+    },
+    {
+      "name": "proposeMeeting",
+      "graph": "fn-calendar-proposeMeeting",
+      "title": "Propose a meeting",
+      "effect": "write",
+      "description": "Finds free times for the caller and the given people and holds them as tentative events while the proposal is open, returning the slots (each with its held event) for a draft; sends nothing. An agent with suggest autonomy gets the slots only"
+    },
+    {
+      "name": "hold",
+      "graph": "fn-calendar-hold",
+      "title": "Hold times",
+      "effect": "write",
+      "description": "Holds given slots [{start, end}] as tentative events on the caller's own calendar, grouped in a Hold that is released after a few days unless one is chosen; give purpose and optionally subject {entity, id}"
+    },
+    {
+      "name": "choose",
+      "graph": "fn-calendar-choose",
+      "title": "Choose a held time",
+      "effect": "write",
+      "description": "Confirms one held slot (its event id) of a Hold and deletes the others"
+    },
+    {
+      "name": "release",
+      "graph": "fn-calendar-release",
+      "title": "Release held times",
+      "effect": "write",
+      "description": "Deletes every tentative event of a Hold, giving the time back"
+    },
+    {
+      "name": "respond",
+      "graph": "fn-calendar-respond",
+      "title": "Answer an invitation",
+      "effect": "write",
+      "description": "Sets the caller's own answer to an event they are invited to: accepted, declined or tentative, with an optional comment"
     }
   ],
   "requires": {
