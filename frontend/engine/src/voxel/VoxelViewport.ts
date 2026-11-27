@@ -1,4 +1,5 @@
 import { forgeAction, SMELT_MS, type ForgeState } from '../craft/Forge.ts'
+import { FAB_IRON, FAB_MS, FAB_ORE, fabAction, type FabState } from '../craft/Fabricator.ts'
 import * as THREE from 'three/webgpu'
 import { surfaceBelow, Walker, type WalkerTerrain } from '../character/Walker.ts'
 import { FlyCamera } from '../camera/FlyCamera.ts'
@@ -44,6 +45,7 @@ export interface Carried {
   ore?: number // V8: from the asteroids
   food?: number // V9: rations harvested on the planet
   iron?: number // V20: smelted at a cabin's forge
+  circuits?: number // V23: circuit boards from a cabin's fabricator, a count
   capacity: number
 }
 
@@ -80,6 +82,8 @@ export type ShipIntent =
   | { kind: 'craft'; id: string; item: string } // V14: a tool made at a cabin's bench
   | { kind: 'smelt'; id: string } // V20: ore from the pack put in a cabin's forge
   | { kind: 'takeIngots'; id: string } // V20: the forge's iron taken into the pack
+  | { kind: 'fabricate'; id: string } // V23: a circuit board started at a cabin's fabricator
+  | { kind: 'takeFabricated'; id: string } // V23: the fabricator's board taken into the pack
   | { kind: 'plant'; x: number; y: number; z: number } // V9: barley in the planet's soil
   | { kind: 'harvest'; crop: string } // V9: a ripe crop, as food
 
@@ -632,7 +636,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.forgeHint()}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.progress?.tools?.scanner ? 'K: scan for ore · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.forgeHint()}${this.fabHint()}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.progress?.tools?.scanner ? 'K: scan for ore · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -719,7 +723,7 @@ export class VoxelViewport {
       const ore = c.ore ?? 0
       const iron = c.iron ?? 0
       const total = c.dust + c.rock + ore + iron
-      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}${iron > 0 ? ` · iron ${iron.toFixed(2)}` : ''}${(c.food ?? 0) > 0 ? ` · food ${c.food}` : ''}`)
+      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}${iron > 0 ? ` · iron ${iron.toFixed(2)}` : ''}${(c.circuits ?? 0) > 0 ? ` · circuits ${c.circuits}` : ''}${(c.food ?? 0) > 0 ? ` · food ${c.food}` : ''}`)
     }
     if (w && !this.riding && !this.pod.falling) {
       const g = Math.hypot(w.gravity.x, w.gravity.y, w.gravity.z)
@@ -953,6 +957,8 @@ export class VoxelViewport {
   private nearBed: string | null = null
   private nearBench: string | null = null
   private nearForge: string | null = null
+  private nearFab: string | null = null
+  private fabShown = ''
   private forgeShown = ''
 
   // What a ship within reach offers: its hold and its refinery (V4)
@@ -1357,7 +1363,16 @@ export class VoxelViewport {
       this.updateHint()
     }
     if (forge && input.locked && input.pressed('KeyU')) this.forgeAt(forge)
-    const bench = this.walker && !seat && !forge ? this.shipLayer.benchNear(this.walker.pos) : null
+    // V23: U at the fabricator, when the forge is not nearer
+    const fab = this.walker && !seat && !forge ? this.shipLayer.fabricatorNear(this.walker.pos) : null
+    const fabLine = fab ? this.fabHint() : ''
+    if (fab !== this.nearFab || fabLine !== this.fabShown) {
+      this.nearFab = fab
+      this.fabShown = fabLine
+      this.updateHint()
+    }
+    if (fab && input.locked && input.pressed('KeyU')) this.fabAt(fab)
+    const bench = this.walker && !seat && !forge && !fab ? this.shipLayer.benchNear(this.walker.pos) : null
     if (bench !== this.nearBench) {
       this.nearBench = bench
       this.updateHint()
@@ -1479,6 +1494,36 @@ export class VoxelViewport {
     if (a.kind === 'wait') return `The forge is smelting: ${a.seconds} s left · `
     if (a.kind === 'take') return `U: take ${a.iron.toFixed(2)} m³ of iron from the forge · `
     return `The forge: ${a.why} · `
+  }
+
+  private fabOf(id: string): FabState | null {
+    return this.shipLayer.ships().find((s) => s.id === id)?.fab ?? null
+  }
+
+  private fabHint(): string {
+    if (!this.nearFab) return ''
+    const a = fabAction(this.fabOf(this.nearFab), this.carried, this.shipLayer.hasPlaced(this.nearFab, 'solar'), Date.now())
+    if (a.kind === 'make') return `U: make a circuit board (${FAB_IRON} m³ iron, ${FAB_ORE} m³ ore) · `
+    if (a.kind === 'wait') return `The fabricator is at work: ${a.seconds} s left · `
+    if (a.kind === 'take') return 'U: take the circuit board · '
+    return `The fabricator: ${a.why} · `
+  }
+
+  // V23: U at the fabricator starts a circuit board, or takes it once done
+  fabAt(id: string): void {
+    const a = fabAction(this.fabOf(id), this.carried, this.shipLayer.hasPlaced(id, 'solar'), Date.now())
+    if (a.kind === 'make') {
+      if (this.carried) this.carried = { ...this.carried, iron: (this.carried.iron ?? 0) - FAB_IRON, ore: (this.carried.ore ?? 0) - FAB_ORE }
+      this.opts.onShipIntent?.({ kind: 'fabricate', id })
+      this.flashHint(`You feed iron and ore into the fabricator. Its arm starts to etch a circuit board: ${FAB_MS / 1000} s`)
+    } else if (a.kind === 'take') {
+      if (this.carried) this.carried = { ...this.carried, circuits: (this.carried.circuits ?? 0) + 1 }
+      this.opts.onShipIntent?.({ kind: 'takeFabricated', id })
+      this.flashHint('You lift a finished circuit board out of the fabricator, its traces still bright')
+    } else if (a.kind === 'wait') this.flashHint(`The fabricator's arm is still etching: ${a.seconds} s left`)
+    else this.flashHint(a.why[0].toUpperCase() + a.why.slice(1))
+    this.drawPack()
+    this.updateHint()
   }
 
   // V20: U at the forge puts ore in, or takes the iron once it is smelted

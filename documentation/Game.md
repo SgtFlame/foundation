@@ -452,6 +452,16 @@ The dream tincture, from the design's recipes ("Dream tincture. Made only at the
 - **The true dream**: the next sleep (R), wherever it is slept, plays `TRUE_DREAM` and reaches the new last step **`truedream`**; `game.story` then gives `items.wardlore` 1, the lore of the design's threshold ward (sage along the sill and five stones in their order), for a later step to lay. The dream's scene is a placeholder until the past lives are written, as the user asked (2026-11-27).
 - `TestStory` reaches `truedream`; `Tincture.test.ts` checks when it can be made.
 
+## Built in V23 (forge 360)
+
+The fabricator: the third rung of the crafting ladder ("fabricator (powered; electronics, thrusters, advanced blocks)"), thin: power from a solar panel and one product, the circuit board.
+
+- The cabin gains a **fabricator** (block 76, type `fabricator`, across from the forge) and a **solar panel** on the roof (block 77, `solar`); 78 blocks now. `game.placeBlock` lets a cabin place up to 78, so cabins started before can add them.
+- `game.fabricate` (`cmd-game-fabricate`, target the cabin): refused until both are placed ("the fabricator has no power: place the solar panel on the roof"), while it is at work, or without 0.5 m³ of iron and 0.25 m³ of ore in the pack; otherwise event `fabricating {world, item: "circuit", at, pack}`, kept as `fab {item, at}` on the ship.
+- `game.takeFabricated` (`cmd-game-takeFabricated`): after 30 s (`FabMs`), event `fabricated {world, item, pack: {circuits: 1}}`. The pack gains `circuits`, a count that takes no room (at most 20).
+- Engine: `craft/Fabricator.ts` (`fabAction`, `fabLeft`), the fabricator's mesh (a grey cabinet with a green screen and a tool arm), `ShipLayer.fabricatorNear` and `hasPlaced`, and U at the fabricator in `VoxelViewport` (`fabAt`, `fabHint`), the forge taking U when nearer. Circuit boards are for what the fabricator builds next (thrusters, bigger ships).
+- `TestFabricator` checks the refusals and `TestCabin` the design; `Fabricator.test.ts` the engine's view.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

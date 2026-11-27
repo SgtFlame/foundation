@@ -329,7 +329,7 @@ func TestJobBoard(t *testing.T) {
 // V13: a cabin is a building on the planet; sleeping in its bed heals and makes it home
 func TestCabin(t *testing.T) {
 	d, ok := game.DesignOf("cabin")
-	if !ok || !d.Static || d.Check() != "" || d.Blocks[73].Type != "bed" || d.Blocks[74].Type != "bench" || len(d.Blocks) != 76 {
+	if !ok || !d.Static || d.Check() != "" || d.Blocks[73].Type != "bed" || d.Blocks[74].Type != "bench" || d.Blocks[76].Type != "fabricator" || d.Blocks[77].Type != "solar" || len(d.Blocks) != 78 {
 		t.Fatalf("cabin %+v", d)
 	}
 	st := newStack(t)
@@ -501,5 +501,36 @@ func TestForge(t *testing.T) {
 	// V22: the suit's iron air tank
 	if r := st.refused("game.craft", "c1", map[string]any{"item": "airTank"}); !strings.Contains(r.Common.Message, "1.5 m³ of iron and 0.5 m³ of rock") {
 		t.Fatalf("an air tank from too little: %q", r.Common.Message)
+	}
+}
+
+// V23: the fabricator, powered by the cabin's solar panel, makes circuit boards from iron and ore
+func TestFabricator(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Fab moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	st.ok("game.startShip", "c1", map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": 0, "q": q})
+	if r := st.refused("game.fabricate", "c1", map[string]any{}); !strings.Contains(r.Common.Message, "not built") {
+		t.Fatalf("before the fabricator: %q", r.Common.Message)
+	}
+	st.ok("game.placeBlock", "c1", map[string]any{"index": 76})
+	if r := st.refused("game.fabricate", "c1", map[string]any{}); !strings.Contains(r.Common.Message, "solar panel") {
+		t.Fatalf("without power: %q", r.Common.Message)
+	}
+	st.ok("game.placeBlock", "c1", map[string]any{"index": 77})
+	if r := st.refused("game.fabricate", "c1", map[string]any{}); !strings.Contains(r.Common.Message, "0.5 m³ of iron") {
+		t.Fatalf("with an empty pack: %q", r.Common.Message)
+	}
+	// iron by the forge, quickly: a little ore smelts in a moment
+	st.ok("game.placeBlock", "c1", map[string]any{"index": 75})
+	dug := st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 200, "z": 0, "radius": 1.5, "took": map[string]any{"dust": 0, "rock": 0, "ore": 0.02}})
+	var pack game.Pack
+	st.read(game.PacksProjector, game.PackKey(world, 1), dug.Seq, &pack)
+	st.ok("game.smelt", "c1", map[string]any{})
+	if r := st.refused("game.fabricate", "c1", map[string]any{}); !strings.Contains(r.Common.Message, "0.5 m³ of iron and 0.25 m³ of ore") {
+		t.Fatalf("with too little iron: %q", r.Common.Message)
+	}
+	if r := st.refused("game.takeFabricated", "c1", map[string]any{}); !strings.Contains(r.Common.Message, "empty") {
+		t.Fatalf("take from an empty fabricator: %q", r.Common.Message)
 	}
 }
