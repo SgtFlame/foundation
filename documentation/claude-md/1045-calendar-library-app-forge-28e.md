@@ -1,0 +1,1 @@
+Since forge 28e the `calendar` library app is `features/calendar/app` (`calendarapp.Files`, seeded by Forge's starter, or `calendarapp.Document()`): views and tools read `calOccurrence` rows, edits go to `calEvent`, and occurrences are written only by `calendar.occurrences.sync` in slices (`Calendar.md` › *Built in forge 28e*).

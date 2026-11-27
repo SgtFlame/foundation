@@ -1,0 +1,42 @@
+{
+  "id": "calAvailability",
+  "name": "Availability",
+  "owner": "app:calendar",
+  "description": "A person's working hours and scheduling preferences (forge 28h); declared in 28e, used from 28h.",
+  "titleField": "zone",
+  "fields": [
+    {
+      "id": "user",
+      "name": "Person",
+      "type": "relation",
+      "description": "Whose",
+      "relation": {
+        "entity": "user"
+      }
+    },
+    {
+      "id": "zone",
+      "name": "Time zone",
+      "type": "text",
+      "description": "Their IANA zone"
+    },
+    {
+      "id": "workingHours",
+      "name": "Working hours",
+      "type": "json",
+      "description": "{days: {mon: [{start, end}], \u2026}}"
+    },
+    {
+      "id": "bufferMinutes",
+      "name": "Buffer",
+      "type": "number",
+      "description": "Minutes kept free before and after meetings"
+    }
+  ],
+  "access": {
+    "read": "true",
+    "create": "principal.kind == 'app' || string(record.user) == string(principal.user)",
+    "update": "principal.kind == 'app' || string(record.user) == string(principal.user)",
+    "delete": "principal.kind == 'app' || string(record.user) == string(principal.user)"
+  }
+}
