@@ -38,6 +38,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
 	recordsfiles "github.com/SgtFlame/foundation/backend/features/records/files"
 )
 
@@ -64,6 +65,9 @@ type Env struct {
 	// Files is the record files store, set once it is made (files a node
 	// reads, such as an uploaded .ics or transcript).
 	Files *recordsfiles.Files
+	// Records is the records' deps, set once the projections and bus are
+	// made (features that read or write records as the service principal).
+	Records *recordsdata.Deps
 }
 
 // Connectors is the connectors' deps, or empty ones.
@@ -88,6 +92,14 @@ func (e *Env) RecordFiles() recordsfiles.Files {
 		return nil
 	}
 	return *e.Files
+}
+
+// RecordDeps is the records' deps, or empty ones.
+func (e *Env) RecordDeps() recordsdata.Deps {
+	if e == nil || e.Records == nil {
+		return recordsdata.Deps{}
+	}
+	return *e.Records
 }
 
 // Executable is this binary's path, for features that parse in a child

@@ -763,7 +763,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
 		// Features wired from their own files in features/wiring (calendar,
 		// tasks, …): a new feature adds a file there, not lines here
-		if err := wiring.ContributeAll(registry, &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles}); err != nil {
+		if err := wiring.ContributeAll(registry, &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Records: &recordDeps}); err != nil {
 			return err
 		}
 		var infraNodeDeps infranodes.Deps
