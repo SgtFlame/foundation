@@ -671,6 +671,34 @@ The block works, the third industry building.
 
 The north road: once the hearth-watch has met (`council`), Ashby's furrows run on north out of the village (`story/NorthRoad.ts`, `waymarkSpots` from the furrows' end to the area's north edge) past four waymarks: a night camp with no tents, rope cut from a post, a second village's furrows joining, and the ford, where new snow has covered everything. Reaching the ford after the other three reaches step `northroad` (Corran Vey: two villages walked north, *the snow did the rest*); reaching it first sends the player back. The trail goes cold on purpose: per the user's lore the captives were walked away by road, taken not killed, and where they are turned stays off the map. Placeholder lines.
 
+## Built in V38 (forge 360)
+
+The shipyard, the fourth industry building (the user, 2026-11-27: arms build only a ship laid out on a bay in the yard).
+
+- `designs/shipyard.json` (*Shipyard*): a static chip of 12 concrete, two `crane` pillars (6 plates, 2 wire each), four robot `arm`s and two lamps, laid out from the `shipyard-chip` contract (12 plates, 8 wire, 4 cells, 2 nozzles).
+- `game.armBuild {ship, from}` at a finished shipyard places up to 8 blocks of a cutter, hauler, freighter or barge (the designs only laid out on a bay) within 25 m of it, in block order, each taking one `block:<type>` from a finished storage building within 30 m. Events: `armsWorked` on the shipyard, `armPlaced {indices}` on the ship, `stored` on the storage, in one batch.
+- Engine: `yardShip` and `armPicks` (`ship/BlockWorks.ts`, agreeing with the server), `ShipLayer.craneNear`. In the viewport, U at a crane sets the arms to the nearest unfinished ship the yard builds.
+- Not built: arms that move, arms working on their own over time, and the spaceport.
+- Tests: `TestShipyard`, `BlockWorks.test.ts`. The refining helpers of the game tests retry a smelt whose dig the pack does not hold yet (`smeltSettled`), seen once under load.
+
+## Built in S33 (forge 375)
+
+Two villages, not one: once the ford is reached (`northroad`), R by Hawk's Rest's hearth (`reeveReady`, `story/Council.ts`) plays the reeve's answer: his market tallies show Ashby and Thornwick both missed the autumn market, a hearth-watch cannot follow a road through other men's country, and he writes to the capital for the player to carry. Step `reeve`. Placeholder lines; the road to the capital is not built.
+
+## Built in V39 (forge 360)
+
+The spaceport tower, the first part of the spaceport (the user's industry plan: pads from blueprints, lights, generators and refuelling before it is operational).
+
+- `designs/tower.json` (*Spaceport tower*): a static chip of 9 concrete, a control desk, two fuel `tank`s (5 plates, a wire each), two solar generators and four lamps, laid out from the `spaceport-chip` contract (10 plates, 6 wire, 4 solar cells).
+- `game.openPort {pad, pad2?, from}` at a finished tower opens a port over one or two finished landing pads within 40 m once a finished storage building within 30 m holds 10 m³ of ice for fuel (the ice stays). Event `portOpened {pads}`, folded into `Ship.Port`.
+- Engine: `portOf`, `portPads`, `padCharge(charge, dt, rate)` (`ship/Pad.ts`), `ShipLayer.towerNear`. U at a tank opens the port over the nearest finished pads; a ship resting on an open port's pad charges three times as fast.
+- Not built: launching the larger ships from the port, docking bays, fuel burned by flights.
+- Tests: `TestSpaceport`, `Pad.test.ts`.
+
+## Built in S34 (forge 375)
+
+The road to Aldermere: the capital, never named in the books, is named Aldermere (the user, 2026-11-27: days on foot from Hawk's Rest, several towns on the way). With the reeve's letter (`reeve`), arriving in an area named *Aldermere* (`story/Journey.ts`, `isAldermere`) plays the journey a day at a time through Fallowford, Harrow Cross and Wexley (placeholder towns and lines), moves the clock on four days to noon (`afterJourney`) and reaches step `aldermere` at the gate. An area named *Aldermere* must exist (made in the Areas editor).
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

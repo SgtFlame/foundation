@@ -161,7 +161,7 @@ func TestShipDamage(t *testing.T) {
 
 // V6: contracts handed in with a ship at the outpost pay a skill once
 func TestOutpost(t *testing.T) {
-	if c := game.ContractsOf(); len(c.Contracts) != 13 || c.Giver.Name == "" {
+	if c := game.ContractsOf(); len(c.Contracts) != 15 || c.Giver.Name == "" {
 		t.Fatalf("contracts %+v", c)
 	}
 	st := newStack(t)
@@ -864,7 +864,7 @@ func refineParts(t *testing.T, st *stack, world string, parts map[string]int) {
 			st.ok("game.startShip", id, map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": float64(st.n%20-10) * 6, "q": []float64{0, 0, 0, 1}})
 			st.ok("game.placeBlock", id, map[string]any{"index": 75})
 			st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": float64(len(ids)%20) * 3, "y": 100, "z": 30, "radius": 1, "took": map[string]any{"dust": 0, "rock": 0, "minerals": map[string]any{m.mineral: m.amount * float64(k), "coal": 0.1}}})
-			st.ok("game.smelt", id, map[string]any{"what": m.mineral})
+			smeltSettled(t, st, id, m.mineral)
 			ids = append(ids, id)
 		}
 	}
@@ -978,7 +978,7 @@ func refineCement(t *testing.T, st *stack, world string, n int) {
 		st.ok("game.startShip", id, map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": float64(st.n%20-10) * 6, "q": []float64{0, 0, 0, 1}})
 		st.ok("game.placeBlock", id, map[string]any{"index": 75})
 		st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": float64(len(ids)%20) * 3, "y": 100, "z": 40, "radius": 1, "took": map[string]any{"dust": 0, "rock": float64(k)/6 + 0.001, "minerals": map[string]any{"coal": 0.1}}})
-		st.ok("game.smelt", id, map[string]any{"what": "rock"})
+		smeltSettled(t, st, id, "rock")
 		ids = append(ids, id)
 	}
 	deadline := time.Now().Add(30 * time.Second)
@@ -1143,5 +1143,128 @@ func TestBlockWorks(t *testing.T) {
 	pack = game.Pack{}
 	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Blocks["armor"] != 1 || pack.Parts["plate"] != plates {
 		t.Fatalf("placed from a block: blocks %+v, plates %v → %v", pack.Blocks, plates, pack.Parts["plate"])
+	}
+}
+
+// V38: the shipyard's robot arms place a ship's blocks on a bay in the yard
+// from finished blocks in storage
+func TestShipyard(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Yard moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	refineParts(t, st, world, map[string]int{"plate": 6 + 12 + 4, "wire": 4 + 2 + 2})
+	refineCement(t, st, world, 2+24)
+	st.ok("game.startShip", "s0", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 110, "z": 0, "q": q})
+	st.ok("game.handIn", "s0", map[string]any{"contract": "refinery-chip"})
+	st.ok("game.handIn", "s0", map[string]any{"contract": "cutter-chip"})
+	st.ok("game.startShip", "d1", map[string]any{"world": world, "design": "depot", "x": 10, "y": 102, "z": 20, "q": q})
+	for i := 0; i < 18; i++ {
+		st.ok("game.placeBlock", "d1", map[string]any{"index": i})
+	}
+	refineParts(t, st, world, map[string]int{"plate": 10 + 14, "wire": 6 + 9, "cell": 2 + 2, "nozzle": 1})
+	refineCement(t, st, world, 26)
+	st.ok("game.handIn", "s0", map[string]any{"contract": "blockworks-chip"})
+	st.ok("game.startShip", "b1", map[string]any{"world": world, "design": "blockworks", "x": -10, "y": 102, "z": 30, "q": q})
+	for i := 0; i < 18; i++ {
+		st.ok("game.placeBlock", "b1", map[string]any{"index": i})
+	}
+	if r := st.refused("game.startShip", "y1", map[string]any{"world": world, "design": "shipyard", "x": 0, "y": 102, "z": 30, "q": q}); !strings.Contains(r.Common.Message, "shipyard-chip") {
+		t.Fatalf("shipyard without its blueprint: %q", r.Common.Message)
+	}
+	refineParts(t, st, world, map[string]int{"plate": 12 + 20, "wire": 8 + 14, "cell": 4 + 4, "nozzle": 2})
+	refineCement(t, st, world, 24)
+	st.ok("game.handIn", "s0", map[string]any{"contract": "shipyard-chip"})
+	st.ok("game.startShip", "y1", map[string]any{"world": world, "design": "shipyard", "x": 0, "y": 102, "z": 30, "q": q})
+	layBay(t, st, world, "bay1", 0, 108, 20)
+	st.ok("game.startShip", "k1", map[string]any{"world": world, "design": "cutter", "x": 0, "y": 110, "z": 20, "q": q, "bay": "bay1"})
+	if r := st.refused("game.armBuild", "y1", map[string]any{"ship": "k1", "from": "d1"}); !strings.Contains(r.Common.Message, "not finished") {
+		t.Fatalf("an unfinished shipyard: %q", r.Common.Message)
+	}
+	for i := 0; i < 20; i++ {
+		st.ok("game.placeBlock", "y1", map[string]any{"index": i})
+	}
+	if r := st.refused("game.armBuild", "y1", map[string]any{"ship": "k1", "from": "d1"}); !strings.Contains(r.Common.Message, "no finished blocks") {
+		t.Fatalf("storage without blocks: %q", r.Common.Message)
+	}
+	if r := st.refused("game.armBuild", "y1", map[string]any{"ship": "s0", "from": "d1"}); !strings.Contains(r.Common.Message, "cutter, hauler") {
+		t.Fatalf("arms on a skiff: %q", r.Common.Message)
+	}
+	// ten plates make five armor; the cutter's six armor are 3 to 8
+	refineParts(t, st, world, map[string]int{"plate": 10})
+	st.ok("game.store", "d1", map[string]any{"stock": map[string]any{"plate": 10}})
+	st.ok("game.assemble", "b1", map[string]any{"block": "armor", "count": 5, "from": "d1"})
+	res := st.ok("game.armBuild", "y1", map[string]any{"ship": "k1", "from": "d1"})
+	var k, d game.Ship
+	if !st.read(game.ShipsProjector, game.ShipType+".k1", res.Seq, &k) || fmt.Sprint(k.Placed) != "[3 4 5 6 7]" || !st.read(game.ShipsProjector, game.ShipType+".d1", res.Seq, &d) || d.Stock["block:armor"] != 0 {
+		t.Fatalf("arms placed %v, storage %+v", k.Placed, d.Stock)
+	}
+	if r := st.refused("game.armBuild", "y1", map[string]any{"ship": "k1", "from": "d1"}); !strings.Contains(r.Common.Message, "no finished blocks") {
+		t.Fatalf("arms with nothing left: %q", r.Common.Message)
+	}
+}
+
+// smeltSettled smelts once the dig before it reads in the pack: under load
+// the pack's projection may not hold the dig yet when the smelt decides
+func smeltSettled(t *testing.T, st *stack, id, what string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		r := st.send(1, "game.smelt", id, map[string]any{"what": what})
+		if r.Common.Code < 300 {
+			return
+		}
+		if !strings.Contains(r.Common.Message, "holds no") || time.Now().After(deadline) {
+			t.Fatalf("game.smelt %s: %s", id, r.Common.Message)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// V39: the spaceport tower opens a port over a finished landing pad once
+// storage holds ice for fuel
+func TestSpaceport(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Port moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	refineParts(t, st, world, map[string]int{"plate": 6 + 12 + 10 + 12, "wire": 4 + 2 + 6 + 11 + 4, "solarCell": 4 + 4})
+	refineCement(t, st, world, 2+24+18+50)
+	st.ok("game.startShip", "s0", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 110, "z": 0, "q": q})
+	st.ok("game.handIn", "s0", map[string]any{"contract": "refinery-chip"})
+	st.ok("game.startShip", "d1", map[string]any{"world": world, "design": "depot", "x": 10, "y": 102, "z": 20, "q": q})
+	for i := 0; i < 18; i++ {
+		st.ok("game.placeBlock", "d1", map[string]any{"index": i})
+	}
+	if r := st.refused("game.startShip", "t1", map[string]any{"world": world, "design": "tower", "x": 0, "y": 102, "z": 30, "q": q}); !strings.Contains(r.Common.Message, "spaceport-chip") {
+		t.Fatalf("tower without its blueprint: %q", r.Common.Message)
+	}
+	st.ok("game.handIn", "s0", map[string]any{"contract": "spaceport-chip"})
+	st.ok("game.startShip", "t1", map[string]any{"world": world, "design": "tower", "x": 0, "y": 102, "z": 30, "q": q})
+	for i := 0; i < 18; i++ {
+		st.ok("game.placeBlock", "t1", map[string]any{"index": i})
+	}
+	st.ok("game.startShip", "p1", map[string]any{"world": world, "design": "pad", "x": -10, "y": 102, "z": 40, "q": q})
+	if r := st.refused("game.openPort", "t1", map[string]any{"pad": "p1", "from": "d1"}); !strings.Contains(r.Common.Message, "not a finished landing pad") {
+		t.Fatalf("an unfinished pad: %q", r.Common.Message)
+	}
+	for i := 0; i < 29; i++ {
+		st.ok("game.placeBlock", "p1", map[string]any{"index": i})
+	}
+	if r := st.refused("game.openPort", "t1", map[string]any{"pad": "p1", "from": "d1"}); !strings.Contains(r.Common.Message, "ice") {
+		t.Fatalf("no fuel: %q", r.Common.Message)
+	}
+	for _, x := range []float64{0, 3, 6, 9} {
+		st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": x, "y": 100, "z": 50, "radius": 1, "took": map[string]any{"dust": 0, "rock": 0, "minerals": map[string]any{"ice": 2.5}}})
+		st.ok("game.store", "d1", map[string]any{"stock": map[string]any{"ice": 2.5}})
+	}
+	if r := st.refused("game.openPort", "t1", map[string]any{"pad": "p1", "pad2": "p1", "from": "d1"}); !strings.Contains(r.Common.Message, "two different") {
+		t.Fatalf("one pad twice: %q", r.Common.Message)
+	}
+	res := st.ok("game.openPort", "t1", map[string]any{"pad": "p1", "from": "d1"})
+	var tw game.Ship
+	if !st.read(game.ShipsProjector, game.ShipType+".t1", res.Seq, &tw) || fmt.Sprint(tw.Port) != "[p1]" {
+		t.Fatalf("port %+v", tw.Port)
+	}
+	if r := st.refused("game.openPort", "t1", map[string]any{"pad": "p1", "from": "d1"}); !strings.Contains(r.Common.Message, "open already") {
+		t.Fatalf("opened twice: %q", r.Common.Message)
 	}
 }

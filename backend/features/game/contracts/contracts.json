@@ -1,5 +1,9 @@
 {
-  "giver": {"name": "Quartermaster Ines Varga", "title": "The Pole Beacon outpost", "line": "Fliers and diggers welcome. The moon gives you enough to build a small ship and not a scrap more; anything bigger is made of what is out there, in the asteroids and what is left of the broken moons. Do me a job and the work will teach you something."},
+  "giver": {
+    "name": "Quartermaster Ines Varga",
+    "title": "The Pole Beacon outpost",
+    "line": "Fliers and diggers welcome. The moon gives you enough to build a small ship and not a scrap more; anything bigger is made of what is out there, in the asteroids and what is left of the broken moons. Do me a job and the work will teach you something."
+  },
   "contracts": [
     {
       "id": "first-flight",
@@ -7,7 +11,9 @@
       "description": "Bring a ship with every block of its design placed and park it at the outpost, within 40 m of the beacon.",
       "skill": "piloting",
       "xp": 100,
-      "needs": {"complete": true}
+      "needs": {
+        "complete": true
+      }
     },
     {
       "id": "beacon-iron",
@@ -15,7 +21,9 @@
       "description": "Refine iron aboard a prospector and hand 1 m³ of it over from the ship's hold, parked within 40 m of the beacon.",
       "skill": "prospecting",
       "xp": 100,
-      "needs": {"iron": 1}
+      "needs": {
+        "iron": 1
+      }
     },
     {
       "id": "cobalt-shipyard",
@@ -23,7 +31,9 @@
       "description": "The moon's rock holds almost no ore. Fly out to an asteroid, dig its ore, load it into a ship's hold and bring 2 m³ back to the beacon. The shipyard then builds you a hauler's frame.",
       "skill": "mining",
       "xp": 100,
-      "needs": {"ore": 2},
+      "needs": {
+        "ore": 2
+      },
       "unlocks": "hauler"
     },
     {
@@ -32,7 +42,9 @@
       "description": "The outpost is building. Bring 12 m³ of ore in one trip, more than a prospector's hold carries: you will need a hauler.",
       "skill": "mining",
       "xp": 150,
-      "needs": {"ore": 12},
+      "needs": {
+        "ore": 12
+      },
       "design": "hauler"
     },
     {
@@ -42,7 +54,9 @@
       "description": "Job board, any time: bring 3 m³ of rock in a ship's hold. The outpost always needs more pad.",
       "skill": "trade",
       "xp": 40,
-      "needs": {"rock": 3}
+      "needs": {
+        "rock": 3
+      }
     },
     {
       "id": "ore-run",
@@ -51,7 +65,9 @@
       "description": "Job board, any time: bring 8 m³ of asteroid ore in one trip, more than a prospector's hold carries.",
       "skill": "trade",
       "xp": 70,
-      "needs": {"ore": 8}
+      "needs": {
+        "ore": 8
+      }
     },
     {
       "id": "bulk-ore",
@@ -60,7 +76,9 @@
       "description": "Job board, for pilots of Trade 2: bring 30 m³ of ore in one trip, a hauler nearly full.",
       "skill": "trade",
       "xp": 100,
-      "needs": {"ore": 30},
+      "needs": {
+        "ore": 30
+      },
       "level": 2
     },
     {
@@ -70,7 +88,9 @@
       "description": "Job board, for pilots of Trade 3: bring 50 m³ of ore in one trip. Only a freighter carries it.",
       "skill": "trade",
       "xp": 150,
-      "needs": {"ore": 50},
+      "needs": {
+        "ore": 50
+      },
       "level": 3
     },
     {
@@ -80,7 +100,9 @@
       "description": "Job board, for pilots of Trade 4: bring 100 m³ of ore in one trip. Only an ore barge carries it, and only with ion thruster kits fitted.",
       "skill": "trade",
       "xp": 200,
-      "needs": {"ore": 100},
+      "needs": {
+        "ore": 100
+      },
       "design": "barge",
       "level": 4
     },
@@ -90,7 +112,10 @@
       "description": "The quartermaster wants proof the old drives can be made to work again: bring a ship with a jump drive fitted, its hold carrying 2 m³ of iron for the farm on the green planet.",
       "skill": "piloting",
       "xp": 150,
-      "needs": {"iron": 2, "jump": true}
+      "needs": {
+        "iron": 2,
+        "jump": true
+      }
     },
     {
       "id": "cutter-chip",
@@ -98,7 +123,12 @@
       "description": "Show the quartermaster you can refine: bring 4 steel plates and 2 coils of copper wire in your pack, with a ship parked within 40 m of the beacon. She gives you the cutter's design chip, a blueprint whose blocks you build from components.",
       "skill": "prospecting",
       "xp": 80,
-      "needs": {"parts": {"plate": 4, "wire": 2}},
+      "needs": {
+        "parts": {
+          "plate": 4,
+          "wire": 2
+        }
+      },
       "unlocks": "cutter"
     },
     {
@@ -107,7 +137,13 @@
       "description": "The quartermaster has a refinery's blueprint for anyone who has outgrown a cabin forge: bring 6 steel plates, 4 coils of copper wire and 2 bags of cement in your pack, with a ship parked within 40 m of the beacon. A refinery's kilns take bigger loads and work twice as fast (forge 360 V35).",
       "skill": "prospecting",
       "xp": 120,
-      "needs": {"parts": {"plate": 6, "wire": 4, "cement": 2}},
+      "needs": {
+        "parts": {
+          "plate": 6,
+          "wire": 4,
+          "cement": 2
+        }
+      },
       "unlocks": "refinehouse"
     },
     {
@@ -116,8 +152,45 @@
       "description": "With a refinery and storage running, the quartermaster will trust you with the block works' blueprint: bring 10 steel plates, 6 coils of copper wire and 2 battery cells in your pack, with a ship parked within 40 m of the beacon. The block works assembles components from storage into finished blocks (forge 360 V37).",
       "skill": "prospecting",
       "xp": 150,
-      "needs": {"parts": {"plate": 10, "wire": 6, "cell": 2}},
+      "needs": {
+        "parts": {
+          "plate": 10,
+          "wire": 6,
+          "cell": 2
+        }
+      },
       "unlocks": "blockworks"
+    },
+    {
+      "id": "shipyard-chip",
+      "title": "A blueprint chip for the shipyard",
+      "description": "With the block works turning out finished blocks, the quartermaster will trust you with the shipyard's blueprint: bring 12 steel plates, 8 coils of copper wire, 4 battery cells and 2 tungsten nozzles in your pack, with a ship parked within 40 m of the beacon. The shipyard's robot arms place a ship's finished blocks from storage (forge 360 V38).",
+      "skill": "prospecting",
+      "xp": 180,
+      "needs": {
+        "parts": {
+          "plate": 12,
+          "wire": 8,
+          "cell": 4,
+          "nozzle": 2
+        }
+      },
+      "unlocks": "shipyard"
+    },
+    {
+      "id": "spaceport-chip",
+      "title": "A blueprint chip for the spaceport tower",
+      "description": "With ships coming off the shipyard, the quartermaster will trust you with the spaceport tower's blueprint: bring 10 steel plates, 6 coils of copper wire and 4 solar cells in your pack, with a ship parked within 40 m of the beacon. The tower opens a spaceport over its landing pads once storage holds ice for fuel (forge 360 V39).",
+      "skill": "prospecting",
+      "xp": 200,
+      "needs": {
+        "parts": {
+          "plate": 10,
+          "wire": 6,
+          "solarCell": 4
+        }
+      },
+      "unlocks": "tower"
     }
   ]
 }

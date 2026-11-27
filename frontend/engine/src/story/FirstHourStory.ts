@@ -76,6 +76,10 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'council', title: 'The hearth-watch meets', how: "Go up the road to Hawk's Rest and press R by its hearth: the hearth-watch comes to hear about Ashby." },
   // S32: the north road past Ashby
   { id: 'northroad', title: 'The north road', how: "Take the road back to Ashby and follow the furrows north out of the village: a camp, a post, other furrows, and the ford where they end." },
+  // S33: the reeve hears of the second village
+  { id: 'reeve', title: 'Two villages, not one', how: "Go back to Hawk's Rest and press R by its hearth: tell the reeve what you found at the ford." },
+  // S34: the road to Aldermere
+  { id: 'aldermere', title: 'The road to Aldermere', how: "Carry the reeve's letter to the capital: travel from Hawk's Rest to the area named Aldermere, days on foot through the towns on the way." },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

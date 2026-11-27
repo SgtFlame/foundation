@@ -1,7 +1,7 @@
-import { padCharge, padUnder } from '../ship/Pad.ts'
+import { padCharge, padUnder, portOf, portPads, PORT_ICE, PORT_RATE } from '../ship/Pad.ts'
 import { BAY_TOP, bayNear, clamped, needsBay } from '../ship/Bay.ts'
 import { blockCost, costLine, pay, shortOf, type Cost } from '../ship/Blueprint.ts'
-import { DEPOT_REACH, nextAssembly, wantedBlocks } from '../ship/BlockWorks.ts'
+import { armPicks, DEPOT_REACH, nextAssembly, wantedBlocks, yardShip } from '../ship/BlockWorks.ts'
 import { components, forgeAction, forgeSpec, storable, FUEL_COAL, FUEL_RATE, limeFor, msPer, PART_NAMES, type ForgeKind, type ForgeState, type Part } from '../craft/Forge.ts'
 import { DRIVE_CIRCUITS, DRIVE_IRON, DRIVE_MS, DRIVE_ORE, FAB_IRON, FAB_MS, FAB_ORE, fabAction, JUMP_CHARGE, KIT_CIRCUITS, KIT_IRON, KIT_MS, MAX_BOOST, type FabItem, type FabState } from '../craft/Fabricator.ts'
 import { canJump, jumpTarget } from '../ship/Jump.ts'
@@ -95,6 +95,8 @@ export type ShipIntent =
   | { kind: 'takeIngots'; id: string; into?: string } // V20: the forge's iron taken into the pack (V36: or into a storage building)
   | { kind: 'store' | 'withdraw'; id: string; stock: Record<string, number> } // V36: stock between the pack and a storage building
   | { kind: 'assemble'; id: string; block: string; count: number; from: string } // V37: finished blocks made at the block works from storage
+  | { kind: 'armBuild'; id: string; ship: string; from: string } // V38: the shipyard's arms place a ship's blocks from storage
+  | { kind: 'openPort'; id: string; pad: string; pad2?: string; from: string } // V39: a spaceport opened over its landing pads
   | { kind: 'fabricate'; id: string; item: FabItem } // V23: a circuit board (V24: or an ion thruster kit) started at a cabin's fabricator
   | { kind: 'fitKit'; id: string } // V24: an ion thruster kit fitted to a ship
   | { kind: 'fitDrive'; id: string } // V27: a jump drive fitted to a ship
@@ -651,7 +653,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHint()}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.forgeHint()}${this.depotHint()}${this.worksHint()}${this.fabHint()}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.progress?.tools?.scanner ? 'K: scan for ore · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHint()}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.forgeHint()}${this.depotHint()}${this.worksHint()}${this.yardHint()}${this.towerHint()}${this.fabHint()}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.progress?.tools?.scanner ? 'K: scan for ore · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -1424,6 +1426,20 @@ export class VoxelViewport {
       this.updateHint()
     }
     if (works && input.locked && input.pressed('KeyU')) this.assembleAt(works)
+    // V38: U at a shipyard's crane sets its arms to the ship on its bay
+    const yard = this.walker && !seat && !forge && !depot && !works ? this.shipLayer.craneNear(this.walker.pos) : null
+    if (yard !== this.nearYard) {
+      this.nearYard = yard
+      this.updateHint()
+    }
+    if (yard && input.locked && input.pressed('KeyU')) this.armsAt(yard)
+    // V39: U at the spaceport tower's tanks opens the port
+    const tower = this.walker && !seat && !forge && !depot && !works && !yard ? this.shipLayer.towerNear(this.walker.pos) : null
+    if (tower !== this.nearTower) {
+      this.nearTower = tower
+      this.updateHint()
+    }
+    if (tower && input.locked && input.pressed('KeyU')) this.openPortAt(tower)
     // V23: U at the fabricator, when the forge is not nearer
     const fab = this.walker && !seat && !forge && !depot ? this.shipLayer.fabricatorNear(this.walker.pos) : null
     const fabLine = fab ? this.fabHint() : ''
@@ -1610,9 +1626,10 @@ export class VoxelViewport {
       this.onPadSince = 0
       return
     }
-    if (this.onPadSince === 0) this.flashHint('The pad\'s mains clamp on: the battery is charging')
+    const port = portOf(pad, this.shipLayer.ships())
+    if (this.onPadSince === 0) this.flashHint(port ? 'The port\'s ground crew hook up fuel and mains: the battery charges fast' : 'The pad\'s mains clamp on: the battery is charging')
     this.onPadSince += dt
-    b.charge = padCharge(b.charge, dt)
+    b.charge = padCharge(b.charge, dt, port ? PORT_RATE : 1)
   }
 
   // V36: a finished storage building within 30 m of a refinery feeds it
@@ -1667,6 +1684,62 @@ export class VoxelViewport {
     if (!next) return this.flashHint('Storage holds no components the assembler can use: refine plates, wire and cement and put them on the racks')
     this.opts.onShipIntent?.({ kind: 'assemble', id, block: next.block, count: next.count, from: dep.id })
     this.flashHint(`The arms swing: ${next.count} finished ${next.block} go onto storage's racks (H there takes them)`)
+  }
+
+  // V38: the shipyard's robot arms place the blocks of the ship laid out on
+  // a bay in the yard, from finished blocks in storage within 30 m
+  private nearYard: string | null = null
+  private yardPlan(id: string) {
+    const ships = this.shipLayer.ships()
+    const y = ships.find((s) => s.id === id)
+    if (!y) return null
+    const ship = yardShip(y, ships)
+    const dep = this.storageNear(id)
+    return { ship, dep, picks: ship && dep ? armPicks(ship, dep.stock ?? {}) : [] }
+  }
+  private yardHint(): string {
+    if (!this.nearYard) return ''
+    const p = this.yardPlan(this.nearYard)
+    if (!p?.ship) return 'The shipyard: lay out a cutter, hauler, freighter or barge on a bay in the yard · '
+    if (!p.dep) return 'The shipyard: its arms draw finished blocks from storage within 30 m · '
+    return p.picks.length ? `U: the arms place ${p.picks.length} of the ${p.ship.design}'s blocks from storage · ` : `The shipyard: storage holds no finished blocks the ${p.ship.design} needs (assemble them at the block works) · `
+  }
+  armsAt(id: string): void {
+    const p = this.yardPlan(id)
+    if (!p?.ship) return this.flashHint('The arms have nothing to build: lay out a cutter, hauler, freighter or barge on a bay in the yard')
+    if (!p.dep) return this.flashHint('The arms draw finished blocks from storage: build a storage building within 30 m')
+    if (!p.picks.length) return this.flashHint(`Storage holds no finished blocks the ${p.ship.design} needs: assemble them at the block works and put them in storage`)
+    this.opts.onShipIntent?.({ kind: 'armBuild', id, ship: p.ship.id, from: p.dep.id })
+    this.flashHint(`The cranes swing out: the arms set ${p.picks.length} blocks into the ${p.ship.design}`)
+  }
+
+  // V39: the spaceport tower opens a port over its landing pads once storage
+  // within 30 m holds ice for fuel
+  private nearTower: string | null = null
+  private portPlan(id: string) {
+    const ships = this.shipLayer.ships()
+    const t = ships.find((s) => s.id === id)
+    if (!t) return null
+    return { tower: t, pads: portPads(t, ships), dep: this.storageNear(id) }
+  }
+  private towerHint(): string {
+    if (!this.nearTower) return ''
+    const p = this.portPlan(this.nearTower)
+    if (!p) return ''
+    if (p.tower.port?.length) return `The spaceport is open over ${p.tower.port.length} pad${p.tower.port.length > 1 ? 's' : ''}: land on one to refuel fast · `
+    if (!p.pads.length) return 'The spaceport tower: finish a landing pad within 40 m · '
+    const ice = p.dep?.stock?.ice ?? 0
+    if (!p.dep || ice < PORT_ICE) return `The spaceport tower: the port needs ${PORT_ICE} m³ of ice in storage within 30 m for fuel (${Math.round(ice * 10) / 10} now) · `
+    return `U: open the spaceport over ${p.pads.length} pad${p.pads.length > 1 ? 's' : ''} · `
+  }
+  openPortAt(id: string): void {
+    const p = this.portPlan(id)
+    if (!p) return
+    if (p.tower.port?.length) return this.flashHint('The spaceport is open already')
+    if (!p.pads.length) return this.flashHint('The port needs a finished landing pad within 40 m of the tower')
+    if (!p.dep || (p.dep.stock?.ice ?? 0) < PORT_ICE) return this.flashHint(`The port needs ${PORT_ICE} m³ of ice in storage within 30 m: dig ice on the moon and put it on the racks`)
+    this.opts.onShipIntent?.({ kind: 'openPort', id, pad: p.pads[0].id, pad2: p.pads[1]?.id, from: p.dep.id })
+    this.flashHint('The tower lights come up and the beacon turns: the spaceport is open')
   }
 
   // V35: a refinery's kilns take bigger loads, faster

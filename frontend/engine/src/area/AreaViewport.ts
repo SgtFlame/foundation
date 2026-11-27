@@ -20,7 +20,8 @@ import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../sto
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
-import { COUNCIL_LINE, COUNCIL_LINES, councilReady, isHawksRest } from '../story/Council.ts'
+import { COUNCIL_LINE, COUNCIL_LINES, councilReady, isHawksRest, REEVE_LINE, REEVE_LINES, reeveReady } from '../story/Council.ts'
+import { afterJourney, ARRIVE_LINE, isAldermere, journeyReady, LEGS } from '../story/Journey.ts'
 import { NORTH_LINE, NORTH_SENSE, northRoadReady, waymarkAt, waymarkSpots } from '../story/NorthRoad.ts'
 import { TOLD_LINE, ASHBY_LINE, ASHBY_SENSE, ashbyReady, isAshby, remnantAt, remnantSpots, TRACK_LINE, TRACK_REACH, TRACK_SENSE, trackPrints, trackReady } from '../story/Ashby.ts'
 import { WELL_LINE, WELL_REACH, WELL_SENSE, WELL_WARD_LINE, wellReady, wellSpot } from '../story/Well.ts'
@@ -2053,6 +2054,7 @@ export class AreaViewport {
     this.stepFarmWard(p)
     this.stepWell(p)
     this.stepRoad(p)
+    this.stepJourney()
     this.stepSenses(p)
     this.savePlace()
   }
@@ -2320,6 +2322,28 @@ export class AreaViewport {
     }
   }
 
+  // S34: arriving in Aldermere with the reeve's letter plays the journey
+  private journeyOn = false
+  private stepJourney(): void {
+    const st = this.story
+    if (!st || this.journeyOn || !journeyReady(st.done) || !isAldermere(this.area.name)) return
+    this.journeyOn = true
+    // the story object may be replaced by the server's while the days pass:
+    // read it afresh each time
+    const here = () => (this.story && isAldermere(this.area.name) ? this.story : null)
+    LEGS.forEach((leg, i) => setTimeout(() => {
+      if (here()) this.say(leg.line)
+    }, i * 7000))
+    setTimeout(() => {
+      const s = here()
+      this.journeyOn = false
+      if (!s || s.done.aldermere) return
+      s.clock = afterJourney(s.clock)
+      this.reach('aldermere')
+      this.say(ARRIVE_LINE)
+    }, LEGS.length * 7000)
+  }
+
   private atSign = false
   private stepRoad(p: { x: number; z: number }): void {
     const st = this.story!
@@ -2579,6 +2603,7 @@ export class AreaViewport {
     const st = this.story
     // S31: after word of Ashby, the hearth-watch meets at Hawk's Rest's hearth
     if (st && councilReady(st.done) && isHawksRest(this.area.name) && this.nearHearth()) return this.council()
+    if (st && reeveReady(st.done) && isHawksRest(this.area.name) && this.nearHearth()) return this.tellReeve()
     if (st?.done.foretold && !st.done.defended) return this.waitForDark()
     // S23: once the ward is laid, R at Hawk's Rest waits for the night it is tried
     if (st && triedReady(st.done) && this.blessed()) return this.wardNight()
@@ -2609,6 +2634,19 @@ export class AreaViewport {
       this.reach('council')
       this.say(COUNCIL_LINE)
     }, COUNCIL_LINES.length * 7000)
+  }
+
+  // S33: the reeve hears there are two villages, and writes to the capital
+  private tellReeve(): void {
+    const st = this.story!
+    REEVE_LINES.forEach((line, i) => setTimeout(() => {
+      if (this.story === st) this.say(line)
+    }, i * 7000))
+    setTimeout(() => {
+      if (this.story !== st || st.done.reeve) return
+      this.reach('reeve')
+      this.say(REEVE_LINE)
+    }, REEVE_LINES.length * 7000)
   }
 
   // S14: R by a hearth once the notes foretold the night: the days pass

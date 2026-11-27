@@ -190,4 +190,16 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "northroad" {
 		t.Fatalf("northroad %+v", p)
 	}
+	// S33: the reeve hears there are two villages
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "reeve", "area": farm, "x": 9, "z": 3})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "reeve" {
+		t.Fatalf("reeve %+v", p)
+	}
+	// S34: the road to Aldermere
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "aldermere", "area": farm, "x": 9, "z": 3})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "aldermere" {
+		t.Fatalf("aldermere %+v", p)
+	}
 }

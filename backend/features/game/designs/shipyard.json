@@ -1,0 +1,170 @@
+{
+  "id": "shipyard",
+  "title": "Shipyard",
+  "description": "The shipyard (forge 360 V38, the fourth industry building): a concrete apron between two crane pillars, each carrying two robot arms and a lamp, laid out from its blueprint chip (the shipyard-chip contract). Each concrete block costs 2 bags of cement, each crane 6 steel plates and 2 copper wire, each arm 2 plates, 2 wire and a battery cell, each lamp a wire. Finished, its arms place the blocks of a cutter, hauler, freighter or barge laid out on a bay within 25 m, taking finished blocks from a storage building within 30 m (game.armBuild), up to 8 a turn.",
+  "blockSize": 1,
+  "static": true,
+  "chip": true,
+  "blocks": [
+    {
+      "type": "concrete",
+      "at": [
+        -2,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -2,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -2,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "crane",
+      "at": [
+        -3,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "crane",
+      "at": [
+        2,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "arm",
+      "at": [
+        -3,
+        1,
+        -1
+      ]
+    },
+    {
+      "type": "arm",
+      "at": [
+        -3,
+        1,
+        1
+      ]
+    },
+    {
+      "type": "arm",
+      "at": [
+        2,
+        1,
+        -1
+      ]
+    },
+    {
+      "type": "arm",
+      "at": [
+        2,
+        1,
+        1
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        -3,
+        2,
+        0
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        2,
+        2,
+        0
+      ]
+    }
+  ]
+}

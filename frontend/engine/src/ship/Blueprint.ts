@@ -30,6 +30,8 @@ export const BLOCK_COSTS: Record<string, Cost> = {
   assembler: { plate: 4, wire: 3, nozzle: 1 }, // V37: the block works'
   press: { plate: 6, cement: 2 },
   arm: { plate: 2, wire: 2, cell: 1 },
+  crane: { plate: 6, wire: 2 }, // V38: the shipyard's
+  tank: { plate: 5, wire: 1 }, // V39: the spaceport tower's
 }
 
 // What a block of a ship costs: nothing unless the ship keeps chip types

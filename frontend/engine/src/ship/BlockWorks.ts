@@ -46,3 +46,34 @@ export function wantedBlocks(ships: readonly { types?: string[]; placed: number[
 export function finishedBlocks(stock: Readonly<Record<string, number>>): Record<string, number> {
   return Object.fromEntries(Object.entries(stock).filter(([k, v]) => k.startsWith('block:') && v > 0))
 }
+
+// V38: the shipyard's robot arms place a ship's blocks from finished blocks
+// in storage: only a cutter, hauler, freighter or barge laid out on a bay in
+// the yard (within 25 m), up to 8 a turn, in the ship's block order
+export const YARD_REACH = 25
+export const ARMS_PER_TURN = 8
+export const YARD_BUILDS = ['cutter', 'hauler', 'freighter', 'barge'] as const
+
+interface Shipish { id: string; design: string; types?: string[]; placed: number[]; blocks: number; x: number; y: number; z: number }
+
+// The ship the arms work on: the nearest unfinished one the yard builds
+export function yardShip<T extends Shipish>(yard: { x: number; y: number; z: number }, ships: readonly T[]): T | null {
+  const near = ships
+    .filter((s) => (YARD_BUILDS as readonly string[]).includes(s.design) && s.placed.length < s.blocks && Math.hypot(s.x - yard.x, s.y - yard.y, s.z - yard.z) <= YARD_REACH)
+    .sort((a, b) => Math.hypot(a.x - yard.x, a.y - yard.y, a.z - yard.z) - Math.hypot(b.x - yard.x, b.y - yard.y, b.z - yard.z))
+  return near[0] ?? null
+}
+
+// The blocks the arms place next (the server's game.armBuild agrees)
+export function armPicks(ship: { types?: string[]; placed: number[] }, stock: Readonly<Record<string, number>>): number[] {
+  const left: Record<string, number> = {}
+  for (const [k, v] of Object.entries(stock)) if (k.startsWith('block:')) left[k.slice(6)] = v
+  const done = new Set(ship.placed)
+  const out: number[] = []
+  ship.types?.forEach((t, i) => {
+    if (out.length >= ARMS_PER_TURN || done.has(i) || (left[t] ?? 0) < 1) return
+    left[t] -= 1
+    out.push(i)
+  })
+  return out
+}

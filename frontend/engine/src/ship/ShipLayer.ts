@@ -31,6 +31,8 @@ const COLORS: Record<DesignBlock['type'], number> = {
   assembler: 0x4f7d5c, // V37: the block works'
   press: 0x5d5148,
   arm: 0xe0a030,
+  crane: 0xc8b23a, // V38: the shipyard's
+  tank: 0xd8dde3, // V39: the spaceport tower's
 }
 
 interface Shown {
@@ -371,6 +373,16 @@ export class ShipLayer {
   // V37: a finished block works' assembler within reach of a point
   assemblerNear(p: Vec3, reach = 2.2): string | null {
     return this.finishedNear('assembler', p, reach)
+  }
+
+  // V38: a finished shipyard's crane within reach of a point
+  craneNear(p: Vec3, reach = 2.6): string | null {
+    return this.finishedNear('crane', p, reach)
+  }
+
+  // V39: a finished spaceport tower's fuel tank within reach of a point
+  towerNear(p: Vec3, reach = 2.6): string | null {
+    return this.finishedNear('tank', p, reach)
   }
 
   // A block of a type in a finished building within reach of a point: the building's id
