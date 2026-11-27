@@ -58,7 +58,7 @@ func contributePacks(reg *extensions.Registry) {
 			switch {
 			case (e.Type == EventEdited || e.Type == EventHarvested || e.Type == EventAte || e.Type == EventForaged || e.Type == EventSalvaged || e.Type == EventDowned) && e.Target.Type == TerrainType:
 				return PackKey(e.Target.ID, e.UserID)
-			case (e.Type == EventShipLoaded || e.Type == EventCrafted || e.Type == EventSmelting || e.Type == EventIngots || e.Type == EventFabricating || e.Type == EventFabricated || e.Type == EventKitFitted || e.Type == EventDriveFitted || e.Type == EventBlockPlaced || e.Type == EventHandedIn) && e.Target.Type == ShipType:
+			case (e.Type == EventShipLoaded || e.Type == EventCrafted || e.Type == EventSmelting || e.Type == EventIngots || e.Type == EventFabricating || e.Type == EventFabricated || e.Type == EventKitFitted || e.Type == EventDriveFitted || e.Type == EventBlockPlaced || e.Type == EventHandedIn || e.Type == EventStored) && e.Target.Type == ShipType:
 				// V4: loading a ship's hold empties the loader's pack
 				var d struct {
 					World string `json:"world"`

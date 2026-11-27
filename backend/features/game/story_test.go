@@ -172,4 +172,16 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "ashby" || p.Items["ashbylore"] != 1 || !p.Done["track"] {
 		t.Fatalf("ashby %+v", p)
 	}
+	// S30: word of Ashby, told to Wenlan
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "told", "area": farm, "x": 9, "z": 3})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "told" {
+		t.Fatalf("told %+v", p)
+	}
+	// S31: the hearth-watch meets at Hawk's Rest
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "council", "area": farm, "x": 9, "z": 3})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "council" {
+		t.Fatalf("council %+v", p)
+	}
 }

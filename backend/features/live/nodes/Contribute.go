@@ -98,16 +98,17 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	})
 	node(reg, 510, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "live.emit"}, Title: "Emit event", Kinds: []string{KindCommand},
-		Description: "Decides one event for the command to commit; the target's projector folds it into the new state",
+		Description: "Decides one event for the command to commit; the target's projector folds it into the new state. Given another target's id (of the same type, in the same area) and its projection, the event goes to that target instead, committed with the command's own events or not at all (game V36: a ship's hold filled from a storage building)",
 		Example:     "Emit event incremented with data {by: 1}",
 		Examples:    cognition.ConfigExample("live.emit", `{"event":"incremented"}`),
-		Config:      json.RawMessage(`{"type":"object","properties":{"event":{"type":"string","title":"Event","description":"The event's type, one of the spec's events"}},"required":["event"]}`),
+		Config:      json.RawMessage(`{"type":"object","properties":{"event":{"type":"string","title":"Event","description":"The event's type, one of the spec's events"},"projection":{"type":"string","title":"Projection","description":"The projection another target's state is read from, so the commit expects it unchanged; needed with a target"}},"required":["event"]}`),
 		Pins: cognition.Pins{
-			In:  []cognition.Pin{cognition.ExecPin(cognition.Then, ""), {ID: "data", Name: "Data", Type: cognition.Any, Optional: true, Description: "The event's data"}},
+			In: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), {ID: "data", Name: "Data", Type: cognition.Any, Optional: true, Description: "The event's data"},
+				{ID: "target", Name: "Target", Type: "string", Optional: true, Description: "Another target's id, of the command target's type and area; the command's own target when empty"}},
 			Out: []cognition.Pin{cognition.ExecPin(cognition.Then, "")},
 		},
 		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
-			var c struct{ Event string }
+			var c struct{ Event, Projection string }
 			if err := x.Config(&c); err != nil {
 				return nil, "", err
 			}
@@ -118,7 +119,23 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			if !live.ValidToken(c.Event) {
 				return nil, "", fmt.Errorf("%q is not an event type", c.Event)
 			}
-			h.Events = append(h.Events, live.NewEvent{Type: c.Event, Data: in["data"]})
+			ev := live.NewEvent{Type: c.Event, Data: in["data"]}
+			if id, _ := cognition.Get[string](in, "target"); id != "" && h.Decision != nil && id != h.Decision.Target.ID {
+				if !live.ValidToken(id) {
+					return nil, "", fmt.Errorf("%q is not a target id", id)
+				}
+				t := live.Target{Area: h.Decision.Target.Area, Type: h.Decision.Target.Type, ID: id}
+				if c.Projection == "" {
+					return nil, "", fmt.Errorf("an event for another target needs the projection its state is read from")
+				}
+				if h.Decision.Read != nil {
+					if _, err := h.Decision.Read(c.Projection, t); err != nil {
+						return nil, "", err
+					}
+				}
+				ev.Target = &t
+			}
+			h.Events = append(h.Events, ev)
 			return nil, cognition.Then, nil
 		},
 	})

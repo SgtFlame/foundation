@@ -7,13 +7,17 @@
   "spec": {
     "command": "game.smelt",
     "title": "Smelt ore at a forge",
-    "description": "Puts ore from the sender's pack into the forge of a cabin (V20); the target is the cabin's id. Up to 2 m³ goes in, and it smelts at 45 s a m³ (the ship's forge gives {ore, at, kind}); game.takeIngots then takes the iron, 0.8 m³ for each m³ of ore. V30: what may instead name a mineral, refined at 60 s a m³ into components (8 steel plates a m³ of ferrite, 10 copper wire of malachite, 4 solar cells of silica, 3 tungsten nozzles of wolframite, 4 battery cells of spodumene), or rock, 6 bags of cement a m³ at 30 s a m³. Refused for a ship that is not a cabin, a cabin whose forge is not placed, a forge already holding a load, an unknown what, or a pack without it. V33: limestone burns into 6 sacks of lime a m³ at 30 s a m³; cement takes 2 sacks of lime a m³ of rock as well; 0.1 m³ of coal in the pack fuels a load, which is then done twice as fast (forge.rate 2).",
+    "description": "Puts ore from the sender's pack into the forge of a cabin (V20); the target is the cabin's id. Up to 2 m³ goes in, and it smelts at 45 s a m³ (the ship's forge gives {ore, at, kind}); game.takeIngots then takes the iron, 0.8 m³ for each m³ of ore. V30: what may instead name a mineral, refined at 60 s a m³ into components (8 steel plates a m³ of ferrite, 10 copper wire of malachite, 4 solar cells of silica, 3 tungsten nozzles of wolframite, 4 battery cells of spodumene), or rock, 6 bags of cement a m³ at 30 s a m³. Refused for a ship that is not a cabin, a cabin whose forge is not placed, a forge already holding a load, an unknown what, or a pack without it. V33: limestone burns into 6 sacks of lime a m³ at 30 s a m³; cement takes 2 sacks of lime a m³ of rock as well; 0.1 m³ of coal in the pack fuels a load, which is then done twice as fast (forge.rate 2). V35: a finished refinery (design refinehouse) smelts too, taking loads of up to 8 m³ at twice the speed (four times with coal). V36: from names a finished storage building within 30 m of a refinery: the load comes from its stock (minerals only, up to 8 m³).",
     "args": {
       "type": "object",
       "properties": {
         "what": {
           "type": "string",
           "description": "What to put in (V30): ore (the default, smelted into iron), a mineral to refine into components (ferrite into plates, malachite into wire, silica into solar cells, wolframite into nozzles, spodumene into battery cells) or rock (into cement) or limestone (V33, into lime); rock needs 2 sacks of lime a m³"
+        },
+        "from": {
+          "type": "string",
+          "description": "V36: a finished storage building within 30 m of a refinery whose stock feeds the load (minerals only); the pack still gives the coal"
         }
       }
     },
@@ -22,7 +26,8 @@
     "projection": "game.ships",
     "action": "game.play",
     "events": [
-      "smelting"
+      "smelting",
+      "stored"
     ]
   },
   "nodes": [
@@ -39,6 +44,11 @@
             "id": "what",
             "type": "string",
             "description": "What to put in: ore (the default), a mineral or rock"
+          },
+          {
+            "id": "from",
+            "type": "string",
+            "description": "V36: a finished storage building within 30 m of a refinery whose stock feeds the load (minerals only); the pack still gives the coal"
           }
         ]
       }
@@ -110,7 +120,7 @@
         "y": 150
       },
       "config": {
-        "expr": "let w = (what ?? \"\") == \"\" ? \"ore\" : what; let lime = (pack?.parts ?? {})[\"lime\"] ?? 0; let have = w == \"ore\" ? (pack?.ore ?? 0) : w == \"rock\" ? min(pack?.rock ?? 0, lime / 2) : ((pack?.minerals ?? {})[w] ?? 0); !found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a forge\" : !(75 in ship.placed) ? \"the cabin's forge is not built yet\" : ship?.forge != nil ? \"the forge is already working: take what is in it first\" : w == \"coal\" ? \"coal is the forge's fuel: carry it and each load burns a little to go twice as fast\" : w != \"ore\" && !(w in {ferrite: 1, malachite: 1, silica: 1, wolframite: 1, spodumene: 1, rock: 1, limestone: 1}) ? \"the forge cannot refine \" + w + \": it takes ore, ferrite, malachite, silica, wolframite, spodumene, limestone or rock\" : w == \"rock\" && lime < 1 ? \"cement needs lime as well as rock: burn limestone from the green planet into lime first\" : have <= 0.001 ? \"your pack holds no \" + w + \" to put in\" : w != \"ore\" && min(have, 2) * {ferrite: 8, malachite: 10, silica: 4, wolframite: 3, spodumene: 4, rock: 6, limestone: 6}[w] < 0.999999 ? \"too little \" + w + \" to make even one component: dig more\" : \"\"",
+        "expr": "let w = (what ?? \"\") == \"\" ? \"ore\" : what; let lime = (pack?.parts ?? {})[\"lime\"] ?? 0; let src = (from ?? \"\") != \"\"; let have = src ? ((dep?.stock ?? {})[w] ?? 0) : w == \"ore\" ? (pack?.ore ?? 0) : w == \"rock\" ? min(pack?.rock ?? 0, lime / 2) : ((pack?.minerals ?? {})[w] ?? 0); !found ? \"there is no cabin \" + target : !(ship.design in [\"cabin\", \"refinehouse\"]) ? \"only a cabin or a refinery has a forge\" : ship.design == \"cabin\" && !(75 in ship.placed) ? \"the cabin's forge is not built yet\" : ship.design == \"refinehouse\" && len(ship.placed) < ship.blocks ? \"the refinery is not finished: place its last \" + string(ship.blocks - len(ship.placed)) + \" blocks first\" : ship?.forge != nil ? \"the forge is already working: take what is in it first\" : src && ship.design != \"refinehouse\" ? \"only a refinery is fed from storage\" : src && !(hasDep && dep?.design == \"depot\" && len(dep?.placed ?? []) >= (dep?.blocks ?? 1) && (ship.x - dep.x) ** 2 + (ship.y - dep.y) ** 2 + (ship.z - dep.z) ** 2 <= 30 ** 2) ? \"from names a finished storage building within 30 m of the refinery\" : src && w in [\"ore\", \"rock\"] ? \"storage feeds the kilns minerals; bring ore and rock in your pack\" : w == \"coal\" ? \"coal is the forge's fuel: carry it and each load burns a little to go twice as fast\" : w != \"ore\" && !(w in {ferrite: 1, malachite: 1, silica: 1, wolframite: 1, spodumene: 1, rock: 1, limestone: 1}) ? \"the forge cannot refine \" + w + \": it takes ore, ferrite, malachite, silica, wolframite, spodumene, limestone or rock\" : w == \"rock\" && lime < 1 ? \"cement needs lime as well as rock: burn limestone from the green planet into lime first\" : have <= 0.001 ? (src ? \"the storage holds no \" : \"your pack holds no \") + w + \" to put in\" : w != \"ore\" && min(have, ship.design == \"refinehouse\" ? 8 : 2) * {ferrite: 8, malachite: 10, silica: 4, wolframite: 3, spodumene: 4, rock: 6, limestone: 6}[w] < 0.999999 ? \"too little \" + w + \" to make even one component: dig more\" : \"\"",
         "type": "string"
       }
     },
@@ -144,7 +154,7 @@
         "y": 350
       },
       "config": {
-        "expr": "let w = (what ?? \"\") == \"\" ? \"ore\" : what; let lime = (pack?.parts ?? {})[\"lime\"] ?? 0; let have = w == \"ore\" ? pack.ore : w == \"rock\" ? min(pack.rock, lime / 2) : ((pack?.minerals ?? {})[w] ?? 0); let n = floor(min(have, 2) * 1000) / 1000; let fuel = ((pack?.minerals ?? {})[\"coal\"] ?? 0) >= 0.1; let coal = fuel ? {coal: -0.1} : {}; let mins = w == \"ore\" || w == \"rock\" ? coal : fromPairs(concat(toPairs(coal), [[w, -n]])); let taken = w == \"ore\" ? {ore: -n, minerals: mins} : w == \"rock\" ? {rock: -n, parts: {lime: -int(ceil(n * 2 - 0.000001))}, minerals: mins} : {minerals: mins}; let base = {world: ship.world, ore: n, at: now().UnixMilli(), pack: taken}; let k = w == \"ore\" ? base : {world: base.world, ore: n, at: base.at, pack: taken, kind: w}; fuel ? {world: k.world, ore: n, at: k.at, pack: taken, kind: k?.kind, rate: 2} : k",
+        "expr": "let w = (what ?? \"\") == \"\" ? \"ore\" : what; let lime = (pack?.parts ?? {})[\"lime\"] ?? 0; let src = (from ?? \"\") != \"\"; let have = src ? ((dep?.stock ?? {})[w] ?? 0) : w == \"ore\" ? pack.ore : w == \"rock\" ? min(pack.rock, lime / 2) : ((pack?.minerals ?? {})[w] ?? 0); let n = floor(min(have, ship.design == \"refinehouse\" ? 8 : 2) * 1000) / 1000; let fuel = ((pack?.minerals ?? {})[\"coal\"] ?? 0) >= 0.1; let coal = fuel ? {coal: -0.1} : {}; let mins = w == \"ore\" || w == \"rock\" ? coal : fromPairs(concat(toPairs(coal), [[w, -n]])); let taken = src ? {minerals: coal} : w == \"ore\" ? {ore: -n, minerals: mins} : w == \"rock\" ? {rock: -n, parts: {lime: -int(ceil(n * 2 - 0.000001))}, minerals: mins} : {minerals: mins}; let base = {world: ship.world, ore: n, at: now().UnixMilli(), pack: taken}; let k = w == \"ore\" ? base : {world: base.world, ore: n, at: base.at, pack: taken, kind: w}; let rate = (ship.design == \"refinehouse\" ? 2 : 1) * (fuel ? 2 : 1); rate > 1 ? {world: k.world, ore: n, at: k.at, pack: taken, kind: k?.kind, rate: rate} : k",
         "type": "json"
       }
     },
@@ -169,6 +179,78 @@
       "config": {
         "path": "args",
         "fix": "build the forge (block 75) with game.placeBlock, take what is waiting in it with game.takeIngots, and bring ore from the asteroids, minerals from the moon and asteroids, or rock"
+      }
+    },
+    {
+      "id": "depKey",
+      "type": "data.expression",
+      "title": "The storage's key",
+      "position": {
+        "x": 250,
+        "y": 600
+      },
+      "config": {
+        "expr": "\"gameShip.\" + ((from ?? \"\") == \"\" ? \"none\" : from)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "dep",
+      "type": "live.readProjection",
+      "title": "Read the storage",
+      "position": {
+        "x": 500,
+        "y": 600
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "useDep",
+      "type": "data.expression",
+      "title": "Whether storage is used",
+      "position": {
+        "x": 1800,
+        "y": 500
+      },
+      "config": {
+        "expr": "(from ?? \"\") != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branchDep",
+      "type": "flow.branch",
+      "position": {
+        "x": 2400,
+        "y": -100
+      }
+    },
+    {
+      "id": "emitDep",
+      "type": "live.emit",
+      "title": "Change the storage",
+      "position": {
+        "x": 2700,
+        "y": -100
+      },
+      "config": {
+        "event": "stored",
+        "projection": "game.ships"
+      }
+    },
+    {
+      "id": "depTake",
+      "type": "data.expression",
+      "title": "What the storage gives",
+      "position": {
+        "x": 2400,
+        "y": 300
+      },
+      "config": {
+        "expr": "let w = (what ?? \"\") == \"\" ? \"ore\" : what; let n = floor(min((dep?.stock ?? {})[w] ?? 0, 8) * 1000) / 1000; {world: ship.world, stock: fromPairs([[w, -n]])}",
+        "type": "json"
       }
     }
   ],
@@ -371,6 +453,166 @@
       "to": {
         "node": "smelting",
         "pin": "what"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "from"
+      },
+      "to": {
+        "node": "depKey",
+        "pin": "from"
+      }
+    },
+    {
+      "from": {
+        "node": "depKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "dep",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "dep",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "dep"
+      }
+    },
+    {
+      "from": {
+        "node": "dep",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "hasDep"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "from"
+      },
+      "to": {
+        "node": "check",
+        "pin": "from"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "from"
+      },
+      "to": {
+        "node": "useDep",
+        "pin": "from"
+      }
+    },
+    {
+      "from": {
+        "node": "emit",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branchDep",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "useDep",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branchDep",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branchDep",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emitDep",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "from"
+      },
+      "to": {
+        "node": "emitDep",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "depTake",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emitDep",
+        "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "what"
+      },
+      "to": {
+        "node": "depTake",
+        "pin": "what"
+      }
+    },
+    {
+      "from": {
+        "node": "dep",
+        "pin": "value"
+      },
+      "to": {
+        "node": "depTake",
+        "pin": "dep"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "depTake",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "dep",
+        "pin": "value"
+      },
+      "to": {
+        "node": "smelting",
+        "pin": "dep"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "from"
+      },
+      "to": {
+        "node": "smelting",
+        "pin": "from"
       }
     }
   ]

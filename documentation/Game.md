@@ -617,6 +617,45 @@ The Hollowed's road, and Ashby, the village they emptied (the user's lore, 2026-
 - An area named *Ashby* must exist (made in the Areas editor; the seeder does not make one); travel there from the signpost.
 - Tests: `story_test` (`track`, `ashby`, `items.ashbylore`), `Ashby.test.ts`, the step order in `FirstHourStory.test.ts`.
 
+## Built in V34 (forge 360)
+
+The bay floor (the user, 2026-11-27: small ships are hand-built only on a bay floor, whose docking clamp holds them, so ships need no wheels; an early building blueprint).
+
+- `designs/bay.json`: a static chip anyone may lay out: a `clamp` (4 plates, 2 wire) in a deck of 34 `deck` blocks (1 plate each) and four lamps.
+- `game.startShip` takes `bay`: the cutter, hauler, freighter and barge are refused unless it names a finished bay floor of the same world within 12 m (`BAY_REACH`). The skiff, prospector and buildings stay free of bays.
+- Engine `ship/Bay.ts`: `needsBay`, `bayNear`, `clamped`. The viewport's `startShip` stands a chip ship on the nearest finished bay's deck and names it (or says to lay one out); while flying, a ship resting on a bay with its helm idle is held by the clamp (`stepClamp`). A pad or bay floor is laid on the ground, not 2 m above it.
+- Not built: one ship per bay (an empty bay), the outpost's own bay floor for the starting skiff.
+- Tests: `TestBayFloor`, `Bay.test.ts`; the hauler, freighter, barge and cutter tests lay a bay first (`layBay`), and `refineParts` refines four components a load.
+
+## Built in V35 (forge 360)
+
+The refinery, the first industry building (360-VoxelRPGDesign.md › *Industry*).
+
+- `designs/refinehouse.json` (*Refinery*): a static chip of 12 concrete, a back wall of 4 armour, two `kiln`s (3 plates, 2 cement), a `control` block (2 plates, 3 wire) and two lamps; laid out once the `refinery-chip` contract (6 plates, 4 wire, 2 cement) unlocks `refinehouse`.
+- Finished, its kilns smelt and refine like a cabin's forge (`game.smelt`, `game.takeIngots` on the building), but take loads of up to 8 m³ at rate 2, 4 with coal. Unfinished, it is refused.
+- Engine: `ForgeSpec`, `forgeSpec(design)` (`craft/Forge.ts`; `nextLoad` takes the cap), `ShipLayer.kilnNear` (a finished refinery's kiln, found by `forgeNear`).
+- Not built: two lines at once, feeding from storage (the pack still bounds a load).
+- Tests: `TestRefinery` (`refineCement`), `Forge.test.ts`.
+
+## Built in S30 (forge 375)
+
+Word of Ashby. Wenlan's `farmer-ashby` talk (once `ashby` is reached) ends in step `told`: the Brannocks' boy runs to Hawk's Rest, and old Brannock, taken the night the player came, is understood to have been taken, not killed (`TOLD_LINE`). Ashby's furrows now run out along the north road: the captives are walked away, never down into the ground (the user's lore).
+
+## Built in V36 (forge 360)
+
+Storage, the second industry building.
+
+- `designs/depot.json` (*Storage*): a static chip of 12 concrete, four `rack`s (3 plates each) and two lamps; its blueprint comes with the refinery's chip or Trade level 2.
+- `game.store {stock}` and `game.withdraw {stock}` move components (by count) and ore, rock, iron, dust and minerals (m³) between the sender's pack and a finished storage building's `stock` (event `stored`, folded into `Ship.Stock`; the pack's change rides on it). A withdrawal must fit the pack.
+- `game.smelt {from}` feeds a refinery's kilns from a finished storage building within 30 m (minerals only, up to 8 m³; the pack still gives the coal), and `game.takeIngots {into}` puts what a forge made into one. Each also emits a `stored` event on the storage: Foundation's *Emit event* (`live.emit`) now takes a `target` pin and a `projection` config, so a command graph commits an event on another target of its type and area in the same batch, the commit expecting that target unchanged (`Decision.Read`).
+- Engine: `storable`, `components`, `stockLoad` and `forgeAction`'s `stock` (`craft/Forge.ts`), `ShipLayer.depotNear`. In the viewport, U at a rack puts the pack in (all but the coal), H takes the components out, and a refinery with storage near is fed from it and puts its output into it.
+- Not built: two kiln lines, the block works.
+- Tests: `TestStorage`, `Forge.test.ts`.
+
+## Built in S31 (forge 375)
+
+The hearth-watch meets: once word of Ashby is sent (`told`), R by Hawk's Rest's hearth (`isHawksRest`) plays the meeting a caption at a time (`story/Council.ts`, `COUNCIL_LINES`: the reeve, Mira from the well, the miller, Corran Vey) and reaches step `council`: double watches, iron grates on the wells, and someone to follow the north road past Ashby. Placeholder people and lines.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

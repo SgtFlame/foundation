@@ -239,3 +239,7 @@ The first part of the Control Plane (forge `documentation/plans/020a-1-DeployedN
 - **One maker per stream**: `Projections.Stream` lets one goroutine make a stream while others wait, since on a cluster each create is a round of the meta group and a hundred at once time out.
 - **Losing a node** needed no other change: commits retried on a timeout are settled by expected sequences and `Nats-Msg-Id`, and every consumer reconnects.
 - **Tests**: `natsd.StartTestCluster(t, n)` starts an in-process cluster on loopback ports, with `Stop(i)`/`Restart(i)` per node; `TestClusterSurvivesANode` commits with expected sequences while the stream leader and then another node are down. Any package's tests run against a three-node cluster with `FOUNDATION_TEST_NATS_CLUSTER=3 go test ./…`, which makes `natsd.StartTest` connect to a fresh cluster with three replicas (the live core's bus suite passes that way).
+
+## Changed in game V36 (forge 360)
+
+*Emit event* (`live.emit`) takes an optional `target` pin, another target of the command target's type and area, with a `projection` config naming the projection its state is read from: the node calls `Decision.Read` on it, so the commit expects it unchanged, and the event (`NewEvent.Target`) commits in the command's batch. The game's `game.smelt {from}` and `game.takeIngots {into}` use it to change a storage building with the forge.
