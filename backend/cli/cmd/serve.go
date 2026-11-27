@@ -957,6 +957,27 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Every process keeps cx_sources, the connections a trigger listens
 		// to, which adapters' instances lease and run (forge 07c)
 		go connections.Start(ctx, func() connections.Deps { return connectionDeps }, tenantIDs)
+		if serveControlPlane {
+			// forge 20b-2: the infrastructure app in the root tenant, and
+			// the followers between its records and the control account
+			// (its own account with --nats-keys)
+			control := &controlplane.Control{NC: nats.Conn(), JS: nats.JS()}
+			ctlConn, err := natsauth.AccountConn(natsOptions, serveNatsKeys, natsauth.Control, "serve-ctl")
+			if err != nil {
+				return err
+			}
+			if ctlConn != nil {
+				defer ctlConn.Close()
+				control = &controlplane.Control{NC: ctlConn.Conn(), JS: ctlConn.JS()}
+			}
+			if err := controlplane.SeedApp(features.BackgroundArgs(ctx), projections, appService, liveBus); err != nil {
+				return err
+			}
+			controlDeps := controlplane.Deps{Projections: projections, Data: recordDeps, Bus: liveBus, Control: control}
+			if err := controlplane.Start(ctx, func() controlplane.Deps { return controlDeps }); err != nil {
+				return err
+			}
+		}
 		// Scripted connector types (forge 07d), served in this process too
 		go scripted.Serve(ctx, nats.Conn(), func() scripted.Deps { return scriptedDeps }, tenantIDs, scripted.Options{})
 		uiSessions := ui.NewKVSessions(nats.JS())

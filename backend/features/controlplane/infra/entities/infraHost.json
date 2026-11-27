@@ -1,0 +1,95 @@
+{
+  "id": "infraHost",
+  "owner": "app:infrastructure",
+  "name": "Host",
+  "description": "A machine an axiomd daemon in host mode runs on: an LXD cluster member or an on-premise server",
+  "titleField": "name",
+  "fields": [
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "The host's name",
+      "required": true
+    },
+    {
+      "id": "site",
+      "name": "Site",
+      "type": "text",
+      "description": "The site or LXD cluster it belongs to"
+    },
+    {
+      "id": "provider",
+      "name": "Provider",
+      "type": "text",
+      "description": "What runs its instances: lxd"
+    },
+    {
+      "id": "address",
+      "name": "Address",
+      "type": "text",
+      "description": "How the host is reached"
+    },
+    {
+      "id": "status",
+      "name": "Status",
+      "type": "enum",
+      "description": "Desired: active hosts get instances; draining moves them away; retired holds none",
+      "options": [
+        {
+          "id": "active",
+          "name": "Active"
+        },
+        {
+          "id": "draining",
+          "name": "Draining"
+        },
+        {
+          "id": "retired",
+          "name": "Retired"
+        }
+      ],
+      "default": "active"
+    },
+    {
+      "id": "capabilities",
+      "name": "Capabilities",
+      "type": "json",
+      "description": "Reported: what the host can run (container, vm, GPU, storage pools)"
+    },
+    {
+      "id": "facts",
+      "name": "Facts",
+      "type": "json",
+      "description": "Reported: what the daemon found on start and on change (OS, resources, versions)"
+    },
+    {
+      "id": "health",
+      "name": "Health",
+      "type": "enum",
+      "description": "Reported: up while the daemon's heartbeat arrives, down once it stops, unknown before the first",
+      "options": [
+        {
+          "id": "unknown",
+          "name": "Unknown"
+        },
+        {
+          "id": "up",
+          "name": "Up"
+        },
+        {
+          "id": "down",
+          "name": "Down"
+        }
+      ],
+      "default": "unknown"
+    },
+    {
+      "id": "lastEvent",
+      "name": "Last event",
+      "type": "json",
+      "description": "Reported: the last control request's progress or outcome ({request, kind, message, at})"
+    }
+  ],
+  "indexes": []
+}

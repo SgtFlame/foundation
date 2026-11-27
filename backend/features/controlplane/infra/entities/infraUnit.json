@@ -1,0 +1,105 @@
+{
+  "id": "infraUnit",
+  "owner": "app:infrastructure",
+  "name": "Unit",
+  "description": "A service an instance runs: NATS, a serve process, an adapter or another package's systemd unit",
+  "titleField": "name",
+  "fields": [
+    {
+      "id": "instance",
+      "name": "Instance",
+      "type": "relation",
+      "description": "The instance that runs it",
+      "relation": {
+        "entity": "infraInstance"
+      }
+    },
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "The unit's name",
+      "required": true
+    },
+    {
+      "id": "kind",
+      "name": "Kind",
+      "type": "enum",
+      "description": "What it is",
+      "options": [
+        {
+          "id": "nats",
+          "name": "Nats"
+        },
+        {
+          "id": "serve",
+          "name": "Serve"
+        },
+        {
+          "id": "adapter",
+          "name": "Adapter"
+        },
+        {
+          "id": "other",
+          "name": "Other"
+        }
+      ],
+      "default": "other"
+    },
+    {
+      "id": "serviceSet",
+      "name": "Service set",
+      "type": "text",
+      "description": "For serve: the services it runs (serve --services)"
+    },
+    {
+      "id": "package",
+      "name": "Package",
+      "type": "text",
+      "description": "The package that provides it"
+    },
+    {
+      "id": "version",
+      "name": "Version",
+      "type": "text",
+      "description": "A pinned version"
+    },
+    {
+      "id": "channel",
+      "name": "Channel",
+      "type": "text",
+      "description": "The channel it follows when no version is pinned"
+    },
+    {
+      "id": "config",
+      "name": "Configuration",
+      "type": "json",
+      "description": "Its configuration, rendered into its files"
+    },
+    {
+      "id": "status",
+      "name": "Status",
+      "type": "enum",
+      "description": "Desired: running or stopped",
+      "options": [
+        {
+          "id": "running",
+          "name": "Running"
+        },
+        {
+          "id": "stopped",
+          "name": "Stopped"
+        }
+      ],
+      "default": "running"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "by_instance",
+      "fields": [
+        "instance"
+      ]
+    }
+  ]
+}

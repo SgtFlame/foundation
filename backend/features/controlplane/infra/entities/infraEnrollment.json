@@ -1,0 +1,30 @@
+{
+  "id": "infraEnrollment",
+  "owner": "app:infrastructure",
+  "name": "Enrollment",
+  "description": "A one-use enrollment of a host or instance; the token itself is only in the secret store",
+  "titleField": "target",
+  "fields": [
+    {
+      "id": "target",
+      "name": "Target",
+      "type": "text",
+      "description": "The host's or instance's record id",
+      "required": true
+    },
+    {
+      "id": "expiresAt",
+      "name": "Expires",
+      "type": "dateTime",
+      "description": "When the token stops working"
+    },
+    {
+      "id": "spent",
+      "name": "Spent",
+      "type": "bool",
+      "description": "Whether the token was used",
+      "default": false
+    }
+  ],
+  "indexes": []
+}

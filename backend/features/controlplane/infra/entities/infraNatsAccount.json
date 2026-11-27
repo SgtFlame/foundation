@@ -1,0 +1,29 @@
+{
+  "id": "infraNatsAccount",
+  "owner": "app:infrastructure",
+  "name": "NATS account",
+  "description": "A tenant's NATS account: its limits and placement (forge 20e)",
+  "titleField": "tenant",
+  "fields": [
+    {
+      "id": "tenant",
+      "name": "Tenant",
+      "type": "text",
+      "description": "The tenant's id",
+      "required": true
+    },
+    {
+      "id": "limits",
+      "name": "Limits",
+      "type": "json",
+      "description": "Connections, storage, memory and streams"
+    },
+    {
+      "id": "placement",
+      "name": "Placement",
+      "type": "text",
+      "description": "The cluster its streams are placed in"
+    }
+  ],
+  "indexes": []
+}

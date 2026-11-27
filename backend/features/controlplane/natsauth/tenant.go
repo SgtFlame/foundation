@@ -89,3 +89,30 @@ func TenantAccounts(o natsd.Options, keysDir string) (*natsd.PerTenant, error) {
 	}
 	return natsd.NewPerTenant(o, Minter(d, keys, "serve")), nil
 }
+
+// AccountConn connects to one of the deployment's accounts (the control
+// account, for serve's control plane followers) as a user minted from the
+// keys in keysDir (else $FOUNDATION_NATS_KEYS); nil without keys, when the
+// caller uses the connection it has.
+func AccountConn(o natsd.Options, keysDir, account, name string) (*natsd.Server, error) {
+	if keysDir == "" {
+		keysDir = os.Getenv(EnvKeys)
+	}
+	if keysDir == "" || o.URL == "" {
+		return nil, nil
+	}
+	d, err := Load(DirKeys(keysDir))
+	if err != nil {
+		return nil, err
+	}
+	a := d.Account(account)
+	if a == nil {
+		return nil, log.Code("no_account").Errorf("the deployment has no account %s", account)
+	}
+	u, err := a.NewUser(name, Everything, 0)
+	if err != nil {
+		return nil, err
+	}
+	o.Dir, o.Creds, o.CredsData = "", "", u.Creds
+	return natsd.Start(context.Background(), o)
+}

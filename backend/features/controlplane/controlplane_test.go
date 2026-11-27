@@ -9,6 +9,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/identity"
+	"github.com/SgtFlame/foundation/backend/features/records"
 	"gorm.io/gorm"
 )
 
@@ -25,6 +26,7 @@ func fixture(t *testing.T) (*gorm.DB, *authz.Policy) {
 	authz.Contribute(reg)
 	identity.ContributeAccess(reg)
 	ContributeAccess(reg)
+	records.ContributeAccess(reg)
 	pol := authz.NewPolicy(gdb, reg)
 	authz.Install(pol)
 	t.Cleanup(func() { authz.Install(nil) })
@@ -116,5 +118,20 @@ func TestRootTenantWithoutOwner(t *testing.T) {
 	}
 	if _, err := EnsureRootTenant(context.Background(), gdb, 99); err != nil {
 		t.Fatalf("an existing root tenant ignores the owner: %v", err)
+	}
+}
+
+// TestTenantOneReadsNothing: the infrastructure app's records are under the
+// root tenant's path, where a tenant 1 Owner reads nothing.
+func TestTenantOneReadsNothing(t *testing.T) {
+	ctx := context.Background()
+	gdb, pol := fixture(t)
+	if _, err := pol.Grant(ctx, gdb, authz.GrantArgs{UserID: 21, RoleID: authz.RoleOwner, Resource: authz.Resource("tenant", features.LocalTenantID)}); err != nil {
+		t.Fatal(err)
+	}
+	pol.Changed()
+	resource := authz.Resource("tenant", features.RootTenantID) + "/app:" + AppID + "/entity:" + EntityHost
+	if d := pol.Explain(ctx, user(21, features.LocalTenantID), "record.read", resource); d.Allowed {
+		t.Fatalf("a tenant 1 Owner reads the root tenant's hosts: %s", d.Reason)
 	}
 }

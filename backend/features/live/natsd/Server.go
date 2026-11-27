@@ -30,7 +30,10 @@ type Options struct {
 	// Creds is a NATS credentials file (a user JWT and its seed) for an
 	// external server; CA is the deployment's CA certificate for TLS.
 	Creds string
-	CA    string
+	// CredsData is a creds file's text, in place of Creds (a user minted
+	// in memory, forge 20b-2).
+	CredsData []byte
+	CA        string
 	// Listen, when set (e.g. "127.0.0.1:4222"), lets other processes
 	// connect to the embedded server; empty listens nowhere.
 	Listen string
@@ -50,6 +53,9 @@ func (o Options) connectOptions(name string) []nats.Option {
 	opts := []nats.Option{nats.Name(name), nats.MaxReconnects(-1)}
 	if o.Creds != "" {
 		opts = append(opts, nats.UserCredentials(o.Creds))
+	}
+	if len(o.CredsData) > 0 {
+		opts = append(opts, nats.UserJWTAndSeed(splitCreds(o.CredsData)))
 	}
 	if o.CA != "" {
 		opts = append(opts, nats.RootCAs(o.CA))
