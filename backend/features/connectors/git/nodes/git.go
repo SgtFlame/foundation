@@ -41,6 +41,8 @@ type Deps struct {
 	// Repositories lists the connections implementing git.repo@1 that the
 	// caller may read (connections.List); the git.repositories tool's.
 	Repositories func(args features.ServiceArgs) ([]Repository, error)
+	// Mirrors keeps the mirrored Volumes (forge 24e): volumeservice.Mirrors.
+	Mirrors MirrorStore
 }
 
 // MaxTreeEntries bounds what one tree listing gathers across pages.

@@ -14,6 +14,7 @@ const (
 	NodeReadFile    = "git.readFile"
 	NodeCommit      = "git.commit"
 	NodePullRequest = "git.pullRequest"
+	NodeMirror      = "git.mirror"
 )
 
 // Failed is the nodes' exec output for a typed error.
@@ -201,6 +202,41 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				return outcome(e)
 			}
 			return cognition.Values{"number": pr.Number, "url": pr.URL, "state": pr.State, "pullRequest": map[string]any(asValues(pr))}, cognition.Then, nil
+		},
+	})
+	cognition.Nodes.Register(reg, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: NodeMirror, Source: source, Order: 964}, Title: "Sync repository mirror", Category: "Git",
+		Effects: true, External: true,
+		Description: "Brings a mirrored Volume (a read-only Volume under mirrors/ that only this node writes) to a branch's head: a git repository's folder copied as files, which the index then chunks and searches, so kb.search and agents cite them by path and line. With From (the commit last synced) only what changed since is copied and deleted files removed; without it everything is copied and the Volume's other files removed. Skips files over 256 KB, dotted names and vendored folders (Ignore). Makes the Volume on first use; runs only in the default tenant, as an app or background work, never as a person. Give it the last synced commit and keep its Commit output for the next run.",
+		Example:     "Sync repository mirror of the site's connection at main, path www/content, into Volume code-and-castles, from the mirror record's last synced commit, in the job a push enqueues",
+		Tags:        []string{"git", "mirror", "volume", "index", "search"},
+		Sample:      cognition.Values{"sha": sha, "volumeId": "1", "written": 3, "removed": 0, "skipped": 0, "full": true},
+		Pins: cognition.Pins{
+			In: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), connectionPin(),
+				req("ref", "Ref", "string", "The branch to mirror"),
+				req("volume", "Volume", "string", "The mirrored Volume's folder name under mirrors/ (lower-case letters, digits, - and _), made on first use"),
+				opt("path", "Path", "string", "The repository folder to mirror; the whole repository when empty"),
+				opt("from", "From", "string", "The commit last synced; everything is copied when empty"),
+				opt("ignore", "Ignore", "json", "Folder names to skip anywhere in the tree; node_modules, vendor, dist, build, public, resources, target and out when empty")},
+			Out: execs(
+				cognition.DataPin("sha", "Commit", "string", "The commit now mirrored: keep it as the next run's From"),
+				cognition.DataPin("volumeId", "Volume id", "string", "The mirrored Volume's id"),
+				cognition.DataPin("written", "Written", "number", "Files written"),
+				cognition.DataPin("removed", "Removed", "number", "Files removed"),
+				cognition.DataPin("skipped", "Skipped", "number", "Files skipped (too large, dotted, or in an ignored folder)"),
+				cognition.DataPin("full", "Full", "bool", "True when everything was copied")),
+		},
+		Run: func(x *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
+			s := SyncInput{Connection: str(in, "connection"), Ref: str(in, "ref"), Path: str(in, "path"), Volume: str(in, "volume"), From: str(in, "from")}
+			if v, ok := in["ignore"]; ok && v != nil {
+				b, _ := json.Marshal(v)
+				_ = json.Unmarshal(b, &s.Ignore)
+			}
+			res, e := deps().Sync(x.ServiceArgs, s)
+			if e != nil {
+				return outcome(e)
+			}
+			return asValues(res), cognition.Then, nil
 		},
 	})
 }

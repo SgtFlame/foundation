@@ -777,8 +777,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// gittest.control and gittest.log, for Forge's test server page and forge gittest (forge 24a)
 		gittest.ContributeLive(registry, func() *connectors.Dispatcher { return connectorDeps.Dispatcher })
 		// The git nodes and tools (forge 24d): through the dispatcher, as the caller
+		var gitMirrors gitnodes.MirrorStore // the mirrored Volumes (forge 24e), set once the file events exist
 		gitNodeDeps := func() gitnodes.Deps {
-			d := gitnodes.Deps{Repositories: func(a features.ServiceArgs) ([]gitnodes.Repository, error) {
+			d := gitnodes.Deps{Mirrors: gitMirrors, Repositories: func(a features.ServiceArgs) ([]gitnodes.Repository, error) {
 				views, err := connections.List(a, connectionDeps, "", gitconnector.RepoRef)
 				out := make([]gitnodes.Repository, 0, len(views))
 				for _, v := range views {
@@ -963,6 +964,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		})
 
 		fileEvents := volumeservice.NewFileEvents()
+		gitMirrors = volumeservice.Mirrors{Root: kbRoot, Events: fileEvents} // forge 24e
 		if loc.Client != nil {
 			// The index must not miss a file: a durable bus, followed only
 			// where the index runs (forge 21f-2)
