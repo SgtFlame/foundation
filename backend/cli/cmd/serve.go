@@ -124,6 +124,8 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
+	gitconnector "github.com/SgtFlame/foundation/backend/features/connectors/git"
+	"github.com/SgtFlame/foundation/backend/features/connectors/git/gittest"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	connectorsimpl "github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice/impl"
@@ -754,12 +756,15 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		apptools.ContributeSandbox(registry, func() apptools.ForgeDeps { return forgeToolDeps }) // sandbox.run (forge 07j)
 		presence.Contribute(registry, func() *presence.Presence { return livePresence })
 		uitools.Contribute(registry, func() *subscribe.Subscriptions { return liveSubscriptions })
-		made.Contribute(registry, func() made.Deps { return madeDeps })                // chat.mode.*, chat.modes.made, chat.mode.create|options (forge 15h)
-		workspace.Contribute(registry, func() workspace.Deps { return workspaceDeps }) // workspace.*, workspace.list (forge 16a)
-		game.Contribute(registry, func() game.Deps { return gameDeps })                // game.* worlds, game.editTerrain, game.describeWorld (forge 360 V1)
-		infra.Contribute(registry, func() infra.Deps { return infraDeps })             // infra.config.* configurations and versions (forge 22a)
-		infraproviders.Contribute(registry)                                            // the provider types: infra.lxd (forge 22g)
-		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
+		made.Contribute(registry, func() made.Deps { return madeDeps })                                     // chat.mode.*, chat.modes.made, chat.mode.create|options (forge 15h)
+		workspace.Contribute(registry, func() workspace.Deps { return workspaceDeps })                      // workspace.*, workspace.list (forge 16a)
+		game.Contribute(registry, func() game.Deps { return gameDeps })                                     // game.* worlds, game.editTerrain, game.describeWorld (forge 360 V1)
+		infra.Contribute(registry, func() infra.Deps { return infraDeps })                                  // infra.config.* configurations and versions (forge 22a)
+		infraproviders.Contribute(registry)                                                                 // the provider types: infra.lxd (forge 22g)
+		infratest.Contribute(registry)                                                                      // the Infrastructure test server connector type (forge 22c)
+		gitconnector.Contribute(registry)                                                                   // git.repo@1 and git.review@1 (forge 24a)
+		gittest.Contribute(registry)                                                                        // the Git test server connector type (forge 24a)
+		gittest.ContributeLive(registry, func() *connectors.Dispatcher { return connectorDeps.Dispatcher }) // gittest.control and gittest.log (forge 24a)
 		var infraNodeDeps infranodes.Deps
 		infranodes.Contribute(registry, func() infranodes.Deps { return infraNodeDeps }) // Ensure host, instance, unit, packages, Wait healthy, Remove (forge 22e)
 		var infraOutbox func(features.ServiceArgs, live.Area) error
@@ -1105,6 +1110,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		recordEmbedder = embedService
 		recordFiles := recordsfiles.New(nats.JS())
 		recordFiles.SetAccounts(natsAccounts)
+		gittest.Default.SetFiles(recordFiles) // the Git test server keeps large files there (forge 24a)
 		// The record files' data service (forge 21d-4), served over NATS by
 		// serve --services (21g-1)
 		_ = filesproxy.Use(loc, func() filesservice.Service { return filesimpl.CreateService(filesimpl.WithStore(recordFiles)) })
@@ -1499,8 +1505,13 @@ func targetFrom(raw string) (logging.Target, error) {
 // serves, with their metadata (forge 07b); an external adapter binary
 // serves its own with adapter.Serve.
 func connectorImpls() adapter.Options {
-	return adapter.Options{Name: "server", Types: append(infraproviders.Types(), infratest.Type()), Contracts: []connectors.Contract{infra.ComputeContract(), infratest.ControlContract()},
+	o := adapter.Options{Name: "server", Types: append(infraproviders.Types(), infratest.Type()), Contracts: []connectors.Contract{infra.ComputeContract(), infratest.ControlContract()},
 		Impls: append(infraproviders.Impls(), infratest.Default.Impl())} // the Infrastructure test server (forge 22c)
+	// The git connector's types (forge 24)
+	o.Types = append(o.Types, gittest.Type())
+	o.Contracts = append(append(o.Contracts, gitconnector.Contracts()...), gittest.ControlContract())
+	o.Impls = append(o.Impls, gittest.Default.Impl())
+	return o
 }
 
 // knownServices are every service's wire name (forge 21g-1).

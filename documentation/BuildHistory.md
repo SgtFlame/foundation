@@ -1016,3 +1016,12 @@ Configurations, diffs and export, the compute contract and test server, plans, t
 - implement `infra.compute@1` for each provider type and pass `contracttest.Run` against recorded responses;
 - write desired state only through the `infranodes` helpers, by ids from `infranodes.RecordID`, so every step stays idempotent;
 - keep secrets out of configurations: `infra.SecretProblems` refuses them on import and export.
+
+## Forge 24a: the git contracts and the Git test server
+
+`git.repo@1`, `git.review@1`, the Git test server and the contract suite ([GitConnector.md](GitConnector.md) › *Built in forge 24a*). Later parts must:
+
+- pass `git/contracttest.Run` with every new `git.repo@1` type (24b against cassettes, 24c against a smart-HTTP server in the test);
+- keep `commit` idempotent in the type too: add the key with `git.WithKey` and look for it with `git.HasKey` within `git.KeyDepth` commits before pushing;
+- read a change's file only through `git.Decode`/`git.ReadFile` (the caller's files, or vouched ones), and store a large read as the caller through `git.FileResult`;
+- map a protected branch or a bad path to `invalid`, never `auth`, which marks the connection failed.
