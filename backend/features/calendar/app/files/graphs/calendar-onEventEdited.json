@@ -1,0 +1,268 @@
+{
+  "id": "calendar-onEventEdited",
+  "name": "An event was edited here",
+  "description": "Enqueues the push of an event made, changed or deleted by a person (or an agent) on a connected calendar to its outside calendar (the calendar-push job, keyed by the event, so its pushes run in order). The app's own changes (the mirror of outside changes, the outside id written back) start nothing, so an edit never bounces back.",
+  "kind": "app.trigger",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "records.onChanged",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "entity": "calEvent",
+        "events": [
+          "created",
+          "updated",
+          "deleted"
+        ]
+      }
+    },
+    {
+      "id": "calId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "string(record?.calendar ?? old?.calendar ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "cal",
+      "type": "records.get",
+      "title": "Its calendar",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "connected",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "cal != nil \u0026\u0026 (cal.connection ?? \"\") != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "gate",
+      "type": "flow.branch",
+      "position": {
+        "x": 1360,
+        "y": 0
+      }
+    },
+    {
+      "id": "inputs",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "{record: record, old: old, deleted: event == \"deleted\"}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "jobId",
+      "type": "data.expression",
+      "title": "One push per change",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "expr": "\"push_\" + id + \"_\" + (event == \"deleted\" ? \"deleted\" : string(record?._seq ?? 0))",
+        "type": "string"
+      }
+    },
+    {
+      "id": "enqueue",
+      "type": "jobs.enqueue",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "graph": "calendar-push"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "calId",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "old"
+      },
+      "to": {
+        "node": "calId",
+        "pin": "old"
+      }
+    },
+    {
+      "from": {
+        "node": "calId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cal",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "record"
+      },
+      "to": {
+        "node": "connected",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "gate",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "connected",
+        "pin": "value"
+      },
+      "to": {
+        "node": "gate",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "gate",
+        "pin": "true"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "inputs",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "old"
+      },
+      "to": {
+        "node": "inputs",
+        "pin": "old"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "event"
+      },
+      "to": {
+        "node": "inputs",
+        "pin": "event"
+      }
+    },
+    {
+      "from": {
+        "node": "inputs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "inputs"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "jobId",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "jobId",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "event"
+      },
+      "to": {
+        "node": "jobId",
+        "pin": "event"
+      }
+    },
+    {
+      "from": {
+        "node": "jobId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "id"
+      }
+    }
+  ]
+}

@@ -1,0 +1,204 @@
+{
+  "id": "calendar-onConnected",
+  "name": "A calendar was connected",
+  "description": "Enqueues a full sync (the calendar-pull job, keyed by the calendar) when a calendar is made with a connection or its connection is set, so its outside events are mirrored once.",
+  "kind": "app.trigger",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "records.onChanged",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar",
+        "events": [
+          "created",
+          "updated"
+        ]
+      }
+    },
+    {
+      "id": "connected",
+      "type": "data.expression",
+      "title": "Newly connected?",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "(record?.connection ?? \"\") != \"\" \u0026\u0026 (record?.outsideId ?? \"\") != \"\" \u0026\u0026 (event == \"created\" || \"connection\" in keys(old ?? {}) || \"outsideId\" in keys(old ?? {}))",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "gate",
+      "type": "flow.branch",
+      "position": {
+        "x": 680,
+        "y": 0
+      }
+    },
+    {
+      "id": "inputs",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "{calendar: id, full: true}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "jobId",
+      "type": "data.expression",
+      "title": "One full sync per connection made",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "expr": "\"connect_\" + id + \"_\" + string(record?._seq ?? 0)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "enqueue",
+      "type": "jobs.enqueue",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "graph": "calendar-pull"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "connected",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "old"
+      },
+      "to": {
+        "node": "connected",
+        "pin": "old"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "event"
+      },
+      "to": {
+        "node": "connected",
+        "pin": "event"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "gate",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "connected",
+        "pin": "value"
+      },
+      "to": {
+        "node": "gate",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "gate",
+        "pin": "true"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "inputs",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "inputs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "inputs"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "jobId",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "jobId",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "jobId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "id"
+      }
+    }
+  ]
+}

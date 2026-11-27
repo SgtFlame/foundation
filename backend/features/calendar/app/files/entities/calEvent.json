@@ -171,6 +171,12 @@
       "name": "Hold",
       "type": "text",
       "description": "The scheduling hold it belongs to (28h)"
+    },
+    {
+      "id": "refusedChange",
+      "name": "Refused change",
+      "type": "json",
+      "description": "An edit made here that the outside calendar refused because the event had changed there first: {set, at, reason}; the outside version was kept (28f)"
     }
   ],
   "indexes": [
@@ -186,6 +192,13 @@
       "fields": [
         "series",
         "recurrenceId"
+      ]
+    },
+    {
+      "id": "by_outside",
+      "fields": [
+        "calendar",
+        "outsideId"
       ]
     }
   ],

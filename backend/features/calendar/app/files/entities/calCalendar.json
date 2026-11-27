@@ -75,6 +75,38 @@
       "name": "Shared with",
       "type": "json",
       "description": "Who it is shared with and how: [{user, level}], level freeBusy, read or write (calendar.share keeps it, and the grants follow it)"
+    },
+    {
+      "id": "lastSync",
+      "name": "Last sync",
+      "type": "dateTime",
+      "description": "When the outside calendar was last synced (28f)"
+    },
+    {
+      "id": "syncState",
+      "name": "Sync state",
+      "type": "enum",
+      "description": "ok when the last sync finished, behind while one is due, error when it failed (syncError says why)",
+      "options": [
+        {
+          "id": "ok",
+          "name": "OK"
+        },
+        {
+          "id": "behind",
+          "name": "Behind"
+        },
+        {
+          "id": "error",
+          "name": "Error"
+        }
+      ]
+    },
+    {
+      "id": "syncError",
+      "name": "Sync error",
+      "type": "text",
+      "description": "Why the last sync failed, from the connector's error"
     }
   ],
   "indexes": [

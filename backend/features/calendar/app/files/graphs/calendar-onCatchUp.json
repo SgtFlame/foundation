@@ -1,0 +1,214 @@
+{
+  "id": "calendar-onCatchUp",
+  "name": "Catch up outside calendars",
+  "description": "Every day, enqueues a delta sync (the calendar-pull job, keyed by the calendar, its id naming the day so a second run that day enqueues nothing) of every connected calendar, so a change whose notice was lost is mirrored within a day.",
+  "kind": "app.trigger",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onSchedule",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "every": "24h"
+      }
+    },
+    {
+      "id": "query",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "{limit: 5000}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "cals",
+      "type": "records.query",
+      "title": "Every calendar",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "ids",
+      "type": "data.expression",
+      "title": "The connected ones",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "map(filter(records ?? [], (#.connection ?? \"\") != \"\" \u0026\u0026 (#.outsideId ?? \"\") != \"\"), string(#._id))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "each",
+      "type": "flow.forEach",
+      "position": {
+        "x": 1020,
+        "y": 0
+      }
+    },
+    {
+      "id": "inputs",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "{calendar: item, full: false}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "jobId",
+      "type": "data.expression",
+      "title": "One catch-up per calendar and day",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"catchup_\" + date(time).Format(\"20060102\") + \"_\" + item",
+        "type": "string"
+      }
+    },
+    {
+      "id": "enqueue",
+      "type": "jobs.enqueue",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "graph": "calendar-pull"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "query",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cals",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "cals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "ids",
+        "pin": "records"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "each",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "ids",
+        "pin": "value"
+      },
+      "to": {
+        "node": "each",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "body"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "inputs",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "inputs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "inputs"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "jobId",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "time"
+      },
+      "to": {
+        "node": "jobId",
+        "pin": "time"
+      }
+    },
+    {
+      "from": {
+        "node": "jobId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "id"
+      }
+    }
+  ]
+}

@@ -1,0 +1,1231 @@
+{
+  "id": "calendar-pull",
+  "name": "Pull an outside calendar",
+  "description": "Mirrors a connected calendar's outside events into its event records, as a job keyed by the calendar: event.list from the stored cursor (a delta), or over the window when full is set or no cursor is held (a full sync, which also removes mirrored events the outside no longer has). Each event goes through calendar.event.mirror, which leaves alone what it already holds, so running twice writes nothing new. An expired cursor enqueues one full sync; a failure sets the calendar's syncState.",
+  "kind": "server.action",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "calendar",
+            "type": "string",
+            "description": "The calendar record's id"
+          },
+          {
+            "id": "full",
+            "type": "bool",
+            "description": "List the whole window rather than the changes since the cursor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cal",
+      "type": "records.get",
+      "title": "The calendar",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "clock",
+      "type": "data.now",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "ready",
+      "type": "data.expression",
+      "title": "Connected?",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "cal != nil \u0026\u0026 (cal.connection ?? \"\") != \"\" \u0026\u0026 (cal.outsideId ?? \"\") != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "gate",
+      "type": "flow.branch",
+      "position": {
+        "x": 1020,
+        "y": 0
+      }
+    },
+    {
+      "id": "conn",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "string(cal?.connection ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "outCal",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "expr": "string(cal?.outsideId ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "window",
+      "type": "data.expression",
+      "title": "The window",
+      "position": {
+        "x": 680,
+        "y": 600
+      },
+      "config": {
+        "expr": "let n = date(clock);\n{from: (cal?.windowFrom ?? \"\") != \"\" ? cal.windowFrom + \"T00:00:00Z\" : n.Add(duration(\"-2160h\")).UTC().Format(\"2006-01-02T15:04:05Z\"),\n to: (cal?.windowTo ?? \"\") != \"\" ? cal.windowTo + \"T00:00:00Z\" : n.Add(duration(\"8760h\")).UTC().Format(\"2006-01-02T15:04:05Z\")}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "cursor",
+      "type": "data.expression",
+      "title": "The cursor, empty for a full sync",
+      "position": {
+        "x": 680,
+        "y": 800
+      },
+      "config": {
+        "expr": "(full ?? false) ? \"\" : string(cal?.syncCursor ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "list",
+      "type": "connector.call",
+      "title": "List the outside events",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "contract": "calendar.events@1",
+        "operation": "event.list",
+        "inputs": [
+          {
+            "id": "calendar",
+            "name": "Calendar",
+            "type": "string",
+            "description": "The calendar's id"
+          },
+          {
+            "id": "window",
+            "name": "Window",
+            "type": "json",
+            "optional": true,
+            "description": "A range of instants, to exclusive"
+          },
+          {
+            "id": "cursor",
+            "name": "Cursor",
+            "type": "string",
+            "optional": true,
+            "description": "The cursor from the last list, to get only changes since"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "events",
+            "name": "Events",
+            "type": "json",
+            "description": "The events, or the changed ones with a cursor"
+          },
+          {
+            "id": "removed",
+            "name": "Removed",
+            "type": "json",
+            "description": "Ids of events removed since the cursor"
+          },
+          {
+            "id": "cursor",
+            "name": "Cursor",
+            "type": "string",
+            "description": "The cursor to store for the next list"
+          }
+        ],
+        "connection": true,
+        "effect": "read",
+        "sample": {
+          "cursor": "7",
+          "events": [
+            {
+              "attendees": [
+                {
+                  "email": "dana@example.com",
+                  "response": "needsAction"
+                }
+              ],
+              "calendar": "primary",
+              "end": {
+                "local": "2026-12-03T11:00:00",
+                "zone": "America/New_York"
+              },
+              "etag": "1",
+              "iCalUID": "evt-1@axiom",
+              "id": "evt-1",
+              "organizer": {
+                "email": "tony@example.org"
+              },
+              "start": {
+                "local": "2026-12-03T10:00:00",
+                "zone": "America/New_York"
+              },
+              "status": "confirmed",
+              "title": "Renewal call",
+              "transparency": "opaque"
+            }
+          ],
+          "removed": []
+        },
+        "catchRetryable": true
+      }
+    },
+    {
+      "id": "expired",
+      "type": "data.expression",
+      "title": "Cursor expired?",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "string(error?.message ?? \"\") contains \"cursor_expired\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "expiredQ",
+      "type": "flow.branch",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "fullInputs",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "{calendar: calendar, full: true}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "fullId",
+      "type": "data.expression",
+      "title": "One full sync per expired cursor",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"expired_\" + calendar + \"_\" + (cursor == \"\" ? \"none\" : cursor)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "enqueueFull",
+      "type": "jobs.enqueue",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "graph": "calendar-pull"
+      }
+    },
+    {
+      "id": "failArgs",
+      "type": "data.expression",
+      "title": "The calendar's sync state",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"calCalendar\", set: {syncState: (error?.retryable ?? false) ? \"behind\" : \"error\", syncError: string(error?.message ?? \"\")}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "markFailed",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "retryable",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 400
+      },
+      "config": {
+        "expr": "error?.retryable ?? false",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "retryQ",
+      "type": "flow.branch",
+      "position": {
+        "x": 2720,
+        "y": 0
+      }
+    },
+    {
+      "id": "retryLater",
+      "type": "jobs.fail",
+      "position": {
+        "x": 3060,
+        "y": 0
+      },
+      "config": {
+        "retryable": true
+      }
+    },
+    {
+      "id": "locQuery",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "expr": "{where: {calendar: calendar}, limit: 5000}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "locals",
+      "type": "records.query",
+      "title": "The calendar's events here",
+      "position": {
+        "x": 680,
+        "y": 1000
+      },
+      "config": {
+        "entity": "calEvent"
+      }
+    },
+    {
+      "id": "items",
+      "type": "data.expression",
+      "title": "What to mirror",
+      "position": {
+        "x": 1700,
+        "y": 600
+      },
+      "config": {
+        "expr": "let mine = locals ?? [];\nlet byOut = fromPairs(map(filter(mine, (#.outsideId ?? \"\") != \"\"), [#.outsideId, string(#._id)]));\nlet ids = map(mine, string(#._id));\nlet enc = calendar + \"_o_\";\nlet listed = map(events ?? [], #.id);\nlet changed = map(events ?? [], {\n  let e = #;\n  let made = hasSuffix(e.iCalUID ?? \"\", \"@axiom\") ? trimSuffix(e.iCalUID, \"@axiom\") : \"\";\n  ({target: byOut[e.id] ?? ((made != \"\" \u0026\u0026 made in ids) ? made : (enc + replace(replace(replace(toBase64(e.id), \"+\", \"-\"), \"/\", \"_\"), \"=\", \"\"))),\n    event: e, removed: false,\n    series: (e.seriesId ?? \"\") == \"\" ? \"\" : (byOut[e.seriesId] ?? (enc + replace(replace(replace(toBase64(e.seriesId), \"+\", \"-\"), \"/\", \"_\"), \"=\", \"\")))})\n});\nlet gone = map(filter(removed ?? [], byOut[#] != nil), ({target: byOut[#], event: {id: #}, removed: true, series: \"\"}));\nlet missing = (cursor != \"\") ? [] : map(filter(mine, (#.outsideId ?? \"\") != \"\" \u0026\u0026 !(#.outsideId in listed) \u0026\u0026\n  ((#.rrule ?? \"\") != \"\" || len(#.rdate ?? []) \u003e 0 || (string(#.start) \u003e= window.from \u0026\u0026 string(#.start) \u003c window.to))),\n  ({target: string(#._id), event: {id: #.outsideId}, removed: true, series: \"\"}));\nconcat(changed, gone, missing)",
+        "type": "json"
+      }
+    },
+    {
+      "id": "each",
+      "type": "flow.forEach",
+      "position": {
+        "x": 2040,
+        "y": 200
+      }
+    },
+    {
+      "id": "mArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 400
+      },
+      "config": {
+        "expr": "{calendar: calendar, event: item.event, removed: item.removed, series: item.series}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "mTarget",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 600
+      },
+      "config": {
+        "expr": "string(item.target)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "mirror",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 2720,
+        "y": 200
+      },
+      "config": {
+        "command": "calendar.event.mirror"
+      }
+    },
+    {
+      "id": "failMirror",
+      "type": "jobs.fail",
+      "position": {
+        "x": 3060,
+        "y": 200
+      },
+      "config": {
+        "retryable": true
+      }
+    },
+    {
+      "id": "saveArgs",
+      "type": "data.expression",
+      "title": "The new cursor and state",
+      "position": {
+        "x": 1700,
+        "y": 800
+      },
+      "config": {
+        "expr": "{entity: \"calCalendar\", set: {syncCursor: newCursor ?? \"\", lastSync: string(clock), syncState: \"ok\", syncError: \"\"}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "save",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 2380,
+        "y": 800
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "failSave",
+      "type": "jobs.fail",
+      "position": {
+        "x": 2720,
+        "y": 400
+      },
+      "config": {
+        "retryable": true
+      }
+    },
+    {
+      "id": "done",
+      "type": "flow.return",
+      "position": {
+        "x": 2720,
+        "y": 600
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "changes",
+            "type": "number"
+          }
+        ]
+      }
+    },
+    {
+      "id": "count",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 400
+      },
+      "config": {
+        "expr": "len(items ?? [])",
+        "type": "number"
+      }
+    },
+    {
+      "id": "skip",
+      "type": "flow.return",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "changes",
+            "type": "number"
+          }
+        ]
+      }
+    },
+    {
+      "id": "zero",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "expr": "0",
+        "type": "number"
+      }
+    },
+    {
+      "id": "endFull",
+      "type": "flow.return",
+      "position": {
+        "x": 2720,
+        "y": 800
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "changes",
+            "type": "number"
+          }
+        ]
+      }
+    },
+    {
+      "id": "endFailed",
+      "type": "flow.return",
+      "position": {
+        "x": 3060,
+        "y": 400
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "changes",
+            "type": "number"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendar"
+      },
+      "to": {
+        "node": "cal",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "record"
+      },
+      "to": {
+        "node": "ready",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "gate",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "ready",
+        "pin": "value"
+      },
+      "to": {
+        "node": "gate",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "gate",
+        "pin": "false"
+      },
+      "to": {
+        "node": "skip",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "zero",
+        "pin": "value"
+      },
+      "to": {
+        "node": "skip",
+        "pin": "changes"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "record"
+      },
+      "to": {
+        "node": "conn",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "record"
+      },
+      "to": {
+        "node": "outCal",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "record"
+      },
+      "to": {
+        "node": "window",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "clock",
+        "pin": "time"
+      },
+      "to": {
+        "node": "window",
+        "pin": "clock"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "full"
+      },
+      "to": {
+        "node": "cursor",
+        "pin": "full"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "record"
+      },
+      "to": {
+        "node": "cursor",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "gate",
+        "pin": "true"
+      },
+      "to": {
+        "node": "list",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "conn",
+        "pin": "value"
+      },
+      "to": {
+        "node": "list",
+        "pin": "connection"
+      }
+    },
+    {
+      "from": {
+        "node": "outCal",
+        "pin": "value"
+      },
+      "to": {
+        "node": "list",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "window",
+        "pin": "value"
+      },
+      "to": {
+        "node": "list",
+        "pin": "window"
+      }
+    },
+    {
+      "from": {
+        "node": "cursor",
+        "pin": "value"
+      },
+      "to": {
+        "node": "list",
+        "pin": "cursor"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "error"
+      },
+      "to": {
+        "node": "expired",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "failed"
+      },
+      "to": {
+        "node": "expiredQ",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "expired",
+        "pin": "value"
+      },
+      "to": {
+        "node": "expiredQ",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "expiredQ",
+        "pin": "true"
+      },
+      "to": {
+        "node": "enqueueFull",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendar"
+      },
+      "to": {
+        "node": "fullInputs",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "fullInputs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueueFull",
+        "pin": "inputs"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendar"
+      },
+      "to": {
+        "node": "enqueueFull",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendar"
+      },
+      "to": {
+        "node": "fullId",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "cursor",
+        "pin": "value"
+      },
+      "to": {
+        "node": "fullId",
+        "pin": "cursor"
+      }
+    },
+    {
+      "from": {
+        "node": "fullId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueueFull",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "enqueueFull",
+        "pin": "then"
+      },
+      "to": {
+        "node": "endFull",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "zero",
+        "pin": "value"
+      },
+      "to": {
+        "node": "endFull",
+        "pin": "changes"
+      }
+    },
+    {
+      "from": {
+        "node": "expiredQ",
+        "pin": "false"
+      },
+      "to": {
+        "node": "markFailed",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendar"
+      },
+      "to": {
+        "node": "markFailed",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "error"
+      },
+      "to": {
+        "node": "failArgs",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "failArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "markFailed",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "markFailed",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "retryQ",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "markFailed",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "retryQ",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "error"
+      },
+      "to": {
+        "node": "retryable",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "retryable",
+        "pin": "value"
+      },
+      "to": {
+        "node": "retryQ",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "retryQ",
+        "pin": "true"
+      },
+      "to": {
+        "node": "retryLater",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "error"
+      },
+      "to": {
+        "node": "retryLater",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "retryQ",
+        "pin": "false"
+      },
+      "to": {
+        "node": "endFailed",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "zero",
+        "pin": "value"
+      },
+      "to": {
+        "node": "endFailed",
+        "pin": "changes"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendar"
+      },
+      "to": {
+        "node": "locQuery",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "locQuery",
+        "pin": "value"
+      },
+      "to": {
+        "node": "locals",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "locals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "items",
+        "pin": "locals"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "events"
+      },
+      "to": {
+        "node": "items",
+        "pin": "events"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "removed"
+      },
+      "to": {
+        "node": "items",
+        "pin": "removed"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendar"
+      },
+      "to": {
+        "node": "items",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "cursor",
+        "pin": "value"
+      },
+      "to": {
+        "node": "items",
+        "pin": "cursor"
+      }
+    },
+    {
+      "from": {
+        "node": "window",
+        "pin": "value"
+      },
+      "to": {
+        "node": "items",
+        "pin": "window"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "then"
+      },
+      "to": {
+        "node": "each",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "items",
+        "pin": "value"
+      },
+      "to": {
+        "node": "each",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendar"
+      },
+      "to": {
+        "node": "mArgs",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "mArgs",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "body"
+      },
+      "to": {
+        "node": "mirror",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "mTarget",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "mTarget",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mirror",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "mArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mirror",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "mirror",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "failMirror",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "mirror",
+        "pin": "message"
+      },
+      "to": {
+        "node": "failMirror",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "save",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendar"
+      },
+      "to": {
+        "node": "save",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "cursor"
+      },
+      "to": {
+        "node": "saveArgs",
+        "pin": "newCursor"
+      }
+    },
+    {
+      "from": {
+        "node": "clock",
+        "pin": "time"
+      },
+      "to": {
+        "node": "saveArgs",
+        "pin": "clock"
+      }
+    },
+    {
+      "from": {
+        "node": "saveArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "save",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "save",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "done",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "save",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "failSave",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "save",
+        "pin": "message"
+      },
+      "to": {
+        "node": "failSave",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "items",
+        "pin": "value"
+      },
+      "to": {
+        "node": "count",
+        "pin": "items"
+      }
+    },
+    {
+      "from": {
+        "node": "count",
+        "pin": "value"
+      },
+      "to": {
+        "node": "done",
+        "pin": "changes"
+      }
+    }
+  ]
+}

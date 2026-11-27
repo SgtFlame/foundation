@@ -38,6 +38,13 @@
       "action": "entity:calEvent.update",
       "title": "Change an occurrence of a series",
       "description": "Changes an occurrence of the target series: args {recurrenceId, scope this|following|all, set}"
+    },
+    {
+      "type": "event.mirror",
+      "graph": "cmd-calendar-event-mirror",
+      "action": "entity:calEvent.update",
+      "title": "Mirror an outside event",
+      "description": "Mirrors one outside event (calendar.events@1's shape) into the target event record of a connected calendar: args {calendar, event, removed?, series?}; made when new, changed when its etag moved, deleted when removed; sent by the app's sync job"
     }
   ],
   "roles": [
@@ -129,6 +136,36 @@
       "title": "The window slides",
       "description": "Once a day, enqueues the sync of every one-off and series master, one job per event and day, so the window keeps its next year",
       "graph": "calendar-onWindow"
+    },
+    {
+      "id": "onConnected",
+      "title": "A calendar was connected",
+      "description": "Enqueues one full sync of a calendar made with a connection or given one",
+      "graph": "calendar-onConnected"
+    },
+    {
+      "id": "onOutsideChanged",
+      "title": "An outside event changed",
+      "description": "Enqueues a delta sync of the calendars mirroring the noticed outside calendar, keyed by the calendar",
+      "graph": "calendar-onOutsideChanged"
+    },
+    {
+      "id": "onOutsideRemoved",
+      "title": "An outside event was removed",
+      "description": "Enqueues a delta sync of the calendars mirroring the noticed outside calendar, keyed by the calendar",
+      "graph": "calendar-onOutsideRemoved"
+    },
+    {
+      "id": "onCatchUp",
+      "title": "Catch up outside calendars",
+      "description": "Once a day, enqueues a delta sync of every connected calendar, so a lost notice is caught up within a day",
+      "graph": "calendar-onCatchUp"
+    },
+    {
+      "id": "onEventEdited",
+      "title": "An event was edited here",
+      "description": "Enqueues the push of a person's edit of an event on a connected calendar to the outside calendar, keyed by the event",
+      "graph": "calendar-onEventEdited"
     }
   ],
   "tools": [
@@ -152,6 +189,13 @@
       "title": "Update an event",
       "effect": "write",
       "description": "Changes an event's fields; for an occurrence of a series give recurrenceId and scope this, following or all"
+    },
+    {
+      "name": "connect",
+      "graph": "fn-calendar-connect",
+      "title": "Connect outside calendars",
+      "effect": "write",
+      "description": "Makes a calendar, owned by the caller, for each calendar of an outside calendar connection the caller picks (every one when none are named), then mirrors each; give connection and optionally calendars, the outside ids from calendar.list"
     }
   ],
   "requires": {

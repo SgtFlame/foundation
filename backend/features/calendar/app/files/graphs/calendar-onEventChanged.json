@@ -1,7 +1,7 @@
 {
   "id": "calendar-onEventChanged",
   "name": "An event changed",
-  "description": "Enqueues the sync of the occurrences of the series an event belongs to (the calendar-syncEvent job, keyed by the series), as the app, whenever an event is made, changed or deleted: a one-off's or master's own, an exception's master's.",
+  "description": "Enqueues the sync of the occurrences of the series an event belongs to (the calendar-syncEvent job, keyed by the series), as the app, whenever an event is made, changed or deleted, by a person or by the app's sync of an outside calendar: a one-off's or master's own, an exception's master's.",
   "kind": "app.trigger",
   "version": 1,
   "owner": "app:calendar",
@@ -19,7 +19,8 @@
           "created",
           "updated",
           "deleted"
-        ]
+        ],
+        "ownChanges": true
       }
     },
     {
