@@ -56,6 +56,8 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'truedream', title: 'A true dream', how: 'On a night of the lesser full moon (the sill or the almanac tells when), press C at a hearth for the dream tincture, then sleep (R).' },
   // S22: the threshold ward
   { id: 'ward', title: 'The threshold ward', how: "Take five river stones from the culvert by the east field, then walk to Hawk's Rest's door with a sage to lay the ward." },
+  // S23: the night the ward is tried
+  { id: 'tried', title: 'What the ward keeps out', how: "Stand by Hawk's Rest's hearth and press R to wait for the next night with no moon. Stay in the cottage: whatever the ward keeps from the door may find another way in." },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

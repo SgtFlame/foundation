@@ -491,6 +491,15 @@ The ore barge: the job board's biggest ship, the first that needs ion thruster k
 - Engine: `liftOf(design, boost)` in `ship/Ship.ts`; a ship's line shows what its thrusters lift when that is less than its holds.
 - `TestBarge` checks the unlock, the lift refusal and the freighter's holds; `Ship.test.ts` the lift and that the empty barge hovers.
 
+## Built in S23 (forge 375)
+
+What the ward keeps out: the night the threshold ward is tried.
+
+- Step `tried` (Go `StorySteps`, engine `STORY_STEPS`, the reachStory blueprint's list); the fold gives `items.hearthlore`.
+- `story/Tried.ts`: `triedReady(done)` (the ward laid, the night not yet kept), `TRIED_NIGHT` (one raider, 70 s to dawn) and the night's lines.
+- Once the ward is laid, R by Hawk's Rest's hearth waits for the next night with no moon (`wardNight`, 23:00 that night): the ward holds the door (*the scratching stops dead at the ward*), and a night of hearth defence (S5's `HearthNight`) starts at Hawk's Rest itself, with nobody keeping the watch but the character: one Hollowed comes up through the hearthstone. Held until dawn, the step is reached (*A hearthstone is a threshold too*); left alone, the cottage is lost and R waits for the next dark night.
+- `story_test` checks `tried` and the hearth lore; `Tried.test.ts` when the night is ready.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

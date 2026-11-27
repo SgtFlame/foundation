@@ -20,6 +20,7 @@ import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../sto
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
+import { TRIED_DOOR_LINE, TRIED_LINE, TRIED_LOST, TRIED_NIGHT, triedReady } from '../story/Tried.ts'
 import { riverStonesReady, STONES_LINE, STONES_REACH, thresholdSpot, WARD_LINE, WARD_REACH, wardedNight, wardMissing, wardReady } from '../story/Ward.ts'
 import { TINCTURE, TINCTURE_ALSO, tinctureReady, TRUE_DREAM, TRUE_DREAM_LINE } from '../story/Tincture.ts'
 import { BUNDLE_HERBS, BUNDLE_REACH, bundleSpots, bundlesReady, HEDGE_DISHES, SILL_REACH, sillLine, sillSpot } from '../story/Bundles.ts'
@@ -1527,12 +1528,18 @@ export class AreaViewport {
           break
         case 'taken':
           this.nightHud.say(`The whistle stops. ${h.watcher ? `${h.watcher.name} is gone, and` : 'Nobody kept the watch, and'} the family with them, dragged under the stone.`)
-          if (this.story?.done.watch && !this.story.done.defended) this.say('The house was lost. Wenlan will not forgive it, but the dark comes round again: by a hearth, press R to wait for the next night with no moon.')
+          if (this.story && triedReady(this.story.done) && h.house !== this.story.area && this.story.done.defended) this.say(TRIED_LOST)
+          else if (this.story?.done.watch && !this.story.done.defended) this.say('The house was lost. Wenlan will not forgive it, but the dark comes round again: by a hearth, press R to wait for the next night with no moon.')
           else this.flash('The house was lost. Press Stop to try the night again.')
           break
         case 'dawn':
           this.nightHud.say('Dawn greys the shutters. The house held.')
           this.flash('The house held until dawn')
+          // S23: the night the ward was tried, held
+          if (this.story && triedReady(this.story.done) && h.house !== this.story.area && this.story.done.defended) {
+            this.reach('tried')
+            this.say(TRIED_LINE)
+          }
           // S14: the foretold night, survived
           if (this.story?.done.watch && !this.story.done.defended) {
             this.reach('defended')
@@ -1850,7 +1857,6 @@ export class AreaViewport {
     // S10: the willow bough in the culvert and the water backed up into the wheat, until cleared
     const ditch = st.done.reading && !st.done.ditch ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
     if (ditch) {
-      const c = this.set.cell
       const flood = new THREE.Mesh(new THREE.PlaneGeometry(ditch.field.w - 1, ditch.field.d - 1.6).rotateX(-Math.PI / 2), new THREE.MeshStandardNodeMaterial({ color: 0x4f86ad, transparent: true, opacity: 0.75, roughness: 0.1 }))
       flood.position.set(ditch.field.x, 0.62, ditch.field.z)
       this.herbs.add(flood)
@@ -2230,6 +2236,8 @@ export class AreaViewport {
   private rest(): void {
     const st = this.story
     if (st?.done.foretold && !st.done.defended) return this.waitForDark()
+    // S23: once the ward is laid, R at Hawk's Rest waits for the night it is tried
+    if (st && triedReady(st.done) && this.blessed()) return this.wardNight()
     if (st?.done.rest) return this.sleepHere()
     if (!st || !st.done.road || st.done.rest) return
     if (!this.nearHearth()) {
@@ -2265,6 +2273,28 @@ export class AreaViewport {
     else this.reach('watch')
     this.say(`The days pass. You help Wenlan bar the byre and set a hooded lamp by the hearthstone. Day ${st.clock.day + 1}: no moon tonight. Keep the watch at the farmhouse.`)
     this.opts.onStoryNight?.()
+  }
+
+  // S23: R by Hawk's Rest's hearth once the ward is laid: the days pass to
+  // the next night with no moon; the ward holds the door, and one comes up
+  // through the hearthstone instead
+  private wardNight(): void {
+    const st = this.story!
+    if (!this.nearHearth()) return this.flash('Stand by the hearth to wait for the dark night')
+    if (this.hearth && !this.hearth.outcome) return this.flash('The night has come: hold the cottage until dawn')
+    const n = nextNoMoon(nightOf(st.clock))
+    st.clock = { day: n - FIRST_NIGHT, hour: 23 }
+    this.slept = true
+    const fade = document.createElement('div')
+    fade.style.cssText = 'position:absolute;inset:0;background:#000;opacity:1;transition:opacity 2s;z-index:3;pointer-events:none'
+    this.container.appendChild(fade)
+    setTimeout(() => (fade.style.opacity = '0'), 600)
+    setTimeout(() => fade.remove(), 2800)
+    this.drawMarks()
+    this.savePlace(true)
+    this.startHearthNight(this.area, { ...TRIED_NIGHT, seed: hash(this.area.id) + n, cell: this.set.cell })
+    this.nightHud.say(`Day ${st.clock.day + 1}, no moon. Nobody keeps the watch but you: stay in the cottage until dawn.`)
+    this.say(TRIED_DOOR_LINE)
   }
 
   // S9: R by a hearth once night is falling: sleep until seven
