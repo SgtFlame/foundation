@@ -23,6 +23,7 @@ type service struct {
 	bus              *bus.Bus
 	subs             *subscribe.Subscriptions
 	presence         *presence.Presence
+	store            live.Store
 	reg              *extensions.Registry
 	maxSubscriptions func() int
 	maxCalls         int
@@ -37,6 +38,9 @@ func WithBus(b *bus.Bus) Option { return func(s *service) { s.bus = b } }
 func WithSubscriptions(subs *subscribe.Subscriptions) Option {
 	return func(s *service) { s.subs = subs }
 }
+
+// WithStore reads projected keys for Read (forge 21d-4).
+func WithStore(st live.Store) Option { return func(s *service) { s.store = st } }
 
 // WithPresence keeps their presence.
 func WithPresence(p *presence.Presence) Option { return func(s *service) { s.presence = p } }

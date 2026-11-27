@@ -12,7 +12,12 @@ import (
 
 // Ops are the operations a server runs; local ones are left out.
 func Ops(svc liveservice.Service) map[string]services.Handler {
-	return map[string]services.Handler{}
+	return map[string]services.Handler{
+		"Execute":   services.Unary(svc.Execute),
+		"Transact":  services.Unary(svc.Transact),
+		"Read":      services.Unary(svc.Read),
+		"Subscribe": services.Streamed(svc.Subscribe),
+	}
 }
 
 // Serve serves svc's calls on nc.

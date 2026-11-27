@@ -31,3 +31,22 @@ func (p *Proxy) Serve(args liveservice.ServeArgs) liveservice.ServeResponse {
 	}
 	return services.NotServed[liveservice.ServeResponse](Service, "Serve", services.CodeLocal)
 }
+
+func (p *Proxy) Execute(args liveservice.ExecuteArgs) liveservice.ExecuteResponse {
+	return services.Call[liveservice.ExecuteResponse](p.C, Service, "Execute", args, services.Idempotent())
+}
+
+func (p *Proxy) Transact(args liveservice.TransactArgs) liveservice.TransactResponse {
+	return services.Call[liveservice.TransactResponse](p.C, Service, "Transact", args, services.Idempotent())
+}
+
+func (p *Proxy) Read(args liveservice.ReadArgs) liveservice.ReadResponse {
+	return services.Call[liveservice.ReadResponse](p.C, Service, "Read", args, services.Idempotent())
+}
+
+func (p *Proxy) Subscribe(args liveservice.SubscribeArgs) *liveservice.SubscribeRequest {
+	if p.Local != nil {
+		return p.Local.Subscribe(args)
+	}
+	return services.Stream[*liveservice.SubscribeRequest](p.C, Service, "Subscribe", args)
+}

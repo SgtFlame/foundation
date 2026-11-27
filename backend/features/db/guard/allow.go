@@ -48,17 +48,18 @@ var Allow = []Row{
 	{Package: "features/apps/manifests", Owner: "app", Storage: "tenant DB: app rows, versions", Imports: []string{gormImp}},
 	{Package: "features/apps/installs", Owner: "app", Storage: "tenant DB: installs", Imports: []string{gormImp}},
 	{Package: "features/apps/services/appservice/impl", Owner: "app", Storage: "tenant DB", Imports: []string{gormImp}},
-	{Package: "features/records/data", Owner: "record", Storage: "tenant DB: large tables rec_*; record projections", Until: "21d-3"},
+	{Package: "features/records/data", Owner: "record", Storage: "tenant DB: large tables rec_*; record projections"},
 
-	// The live core's streams and buckets (21d-4).
+	// The live core's streams and buckets (21d-4): held by the data and
+	// runner processes; everyone else calls svc.live and svc.files.
 	{Package: "features/live/project", Owner: "live", Storage: "tenant streams, projections, side buckets", Imports: []string{jsImp}},
 	{Package: "features/live/bus", Owner: "live", Storage: "tenant streams", Imports: []string{jsImp}},
-	{Package: "features/live/presence", Owner: "live", Storage: "presence buckets", Until: "21d-4", Imports: []string{jsImp}},
-	{Package: "features/live/nodes", Owner: "live", Storage: "projections read by nodes", Until: "21d-4", Imports: []string{jsImp}},
-	{Package: "features/activity", Owner: "live", Storage: "activity streams", Until: "21d-4", Imports: []string{jsImp}},
-	{Package: "features/ui", Owner: "live", Storage: "UI session buckets", Until: "21d-4", Imports: []string{jsImp}},
-	{Package: "features/records/files", Owner: "files", Storage: "record files' object stores", Until: "21d-4", Imports: []string{jsImp}},
-	{Package: "features/apps/branches", Owner: "live", Storage: "branch buckets", Until: "21d-4", Imports: []string{jsImp}},
+	{Package: "features/live/presence", Owner: "live", Storage: "presence buckets (the live core's, set through svc.live elsewhere later)", Imports: []string{jsImp}},
+	{Package: "features/live/nodes", Owner: "live", Storage: "trigger events' streams, read by the runners' trigger consumers", Imports: []string{jsImp}},
+	{Package: "features/activity", Owner: "live", Storage: "activity streams, written by the live core's followers", Imports: []string{jsImp}},
+	{Package: "features/ui", Owner: "ui (web)", Storage: "UI session buckets, held by the process holding the browser's socket (21d-4 question 2)", Imports: []string{jsImp}},
+	{Package: "features/records/files", Owner: "files", Storage: "record files' object stores (filesservice's store)", Imports: []string{jsImp}},
+	{Package: "features/apps/branches", Owner: "live", Storage: "branch histories read from the def streams", Imports: []string{jsImp}},
 	{Package: "features/jobs", Owner: "jobs", Storage: "job work queues and schedules", Imports: []string{jsImp}},
 
 	// Connectors (21e-1).

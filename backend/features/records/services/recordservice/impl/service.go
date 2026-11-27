@@ -16,7 +16,7 @@ type service struct {
 	bus   *bus.Bus
 	subs  *subscribe.Subscriptions
 	deps  data.Deps
-	files *files.Store
+	files files.Files
 }
 
 // command sends one record command; the bus checks access.

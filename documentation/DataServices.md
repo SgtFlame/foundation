@@ -29,6 +29,15 @@ The tenant database's runtime tables are reached only through their data service
 - The guard's 21d-3 rows became owner rows (no `Until`): `records/entities`, `ui/prefabs`, `apps/manifests`, `apps/installs` and `records/data` are the followers and stores of their data services.
 - Not yet: `appservice`'s export and import still read the copies in process (they run in the `app` service's own process); the two-process test of one database per tenant waits for 21g-1's harness; running each follower only where its data service is real waits for the locator (21f-1).
 
+## Built in forge 21d-4
+
+- **Two kinds of holders**: the live core (`live/project`, `live/bus`, the projectors, followers and trigger consumers, presence and activity) holds the JetStream handle in the data and runner processes; everyone else calls it (21d-4 question 1: one `live` service, the area an argument).
+- **`svc.live` for Go callers**: `liveservice` gained `Execute` and `Transact` (a command or batch as the args' principal, as `bus.Execute`/`bus.Transact`; idempotent by the command id), `Read` (one projected key, service principals only, 403 `services_only`) and `Subscribe` (a query as a 21c stream of snapshots, changes and the failure that ends it; params default to `{}`), beside `Serve`, the browser's socket. `liveimpl.WithStore` gives `Read` its store; without the bus or store the operations answer 503 `live_core_unavailable`.
+- **`svc.files`**: `filesservice` (`records/services/filesservice`, Go only) keeps the record files' object stores: `PutPart` (an upload's part, at most `files.PartSize` = 256 KiB, kept as an object of its own so the parts may reach any process), `Put` (the parts as one file uploaded by the principal, 413 `file_too_large`), `Uploader`, `Get` (a stream: the reference, then the content in parts) and `Delete`. `files.Files` (`data.Files` with `Open` and `Delete`) is what `recordservice` and *Parse transcript* take: the `*files.Store` in its own process, `filesservice.Remote(svc)` elsewhere. Callers check access to the records first, as `data.Upload` and `recordservice.OpenFile` do.
+- **UI sessions** stay in the process holding the browser's socket, which holds `ui_sessions_*` (21d-4 question 2: a handler's every event would otherwise make two hops).
+- The guard's 21d-4 rows became owner rows, each naming whose storage it is: the live core's (`live/presence`, `live/nodes`, `activity`, `apps/branches`), `ui`'s sessions and `files`' store.
+- Not yet: `liveservice.Serve` calling `svc.live` when the core is elsewhere (it calls the bus in its own process), presence and activity through `svc.live`, and the test of a `web` process with no JetStream handle serving the Tasks app, a chat round and an upload, which wait for 21g-1's groups and harness.
+
 ## The inventory
 
 | Storage | Owner (data service) | Packages allowed a handle | Removed by |
@@ -44,8 +53,8 @@ The tenant database's runtime tables are reached only through their data service
 | Tenant DB: segment feedback and votes | `retrieval` | `retrieval`, `retrievalservice/impl`, `retrievaltest` | stays |
 | Tenant DB: Cognition runs and steps | `cognition` | `cognitionservice/impl`, `cognition/traces` | stays |
 | Tenant DB: entity versions, prefab copies, app rows, installs, versions; large tables `rec_*` | `entity`, `prefab`, `app`, `record` | the services' `impl`; `records/entities`, `ui/prefabs`, `apps/manifests`, `apps/installs`, `records/data` | stays (followers named per database, 21d-3) |
-| Tenant streams, projections, side buckets | `live` | `live/project`, `live/bus`; `live/presence`, `live/nodes`, `activity`, `ui`, `apps/branches` | 21d-4 |
-| Record files' object stores | `files` | `records/files` | 21d-4 |
+| Tenant streams, projections, side buckets | `live` | `live/project`, `live/bus`; `live/presence`, `live/nodes`, `activity`, `ui`, `apps/branches` | stays (others call `svc.live`, 21d-4) |
+| Record files' object stores | `files` (`filesservice`) | `records/files` | stays (others call `svc.files`, 21d-4) |
 | Job work queues and schedules | `jobs` | `jobs` | stays |
 | Connector KV (`cx_*`) | `connectors` | `connectors`, `connections`; `connectors/adapter`, `scripted` | 21e-1 |
 | The control account and desired state | `controlplane` | `controlplane` and its daemons' packages | stays (not tenant storage) |

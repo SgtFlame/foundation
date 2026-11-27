@@ -64,6 +64,9 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/records/services/entityservice"
 	entityproxy "github.com/SgtFlame/foundation/backend/features/records/services/entityservice/proxy"
 	entityserver "github.com/SgtFlame/foundation/backend/features/records/services/entityservice/server"
+	"github.com/SgtFlame/foundation/backend/features/records/services/filesservice"
+	filesproxy "github.com/SgtFlame/foundation/backend/features/records/services/filesservice/proxy"
+	filesserver "github.com/SgtFlame/foundation/backend/features/records/services/filesservice/server"
 	"github.com/SgtFlame/foundation/backend/features/records/services/recordservice"
 	recordproxy "github.com/SgtFlame/foundation/backend/features/records/services/recordservice/proxy"
 	recordserver "github.com/SgtFlame/foundation/backend/features/records/services/recordservice/server"
@@ -281,6 +284,21 @@ var Services = []services.Spec{
 		},
 	},
 	{
+		Name:      "files",
+		Interface: reflect.TypeOf((*filesservice.Service)(nil)).Elem(),
+		Ops: []services.OpSpec{
+			{Name: "PutPart", Idempotent: true},
+			{Name: "Put"},
+			{Name: "Uploader", Idempotent: true},
+			{Name: "Get", Stream: true},
+			{Name: "Delete", Idempotent: true},
+		},
+		Proxy: func(c *services.Client) any { return filesproxy.New(c) },
+		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
+			return filesserver.Serve(nc, svc.(filesservice.Service), opts...)
+		},
+	},
+	{
 		Name:      "identity",
 		Interface: reflect.TypeOf((*identityservice.Service)(nil)).Elem(),
 		Ops: []services.OpSpec{
@@ -327,6 +345,10 @@ var Services = []services.Spec{
 		Interface: reflect.TypeOf((*liveservice.Service)(nil)).Elem(),
 		Ops: []services.OpSpec{
 			{Name: "Serve", Local: true},
+			{Name: "Execute", Idempotent: true},
+			{Name: "Transact", Idempotent: true},
+			{Name: "Read", Idempotent: true},
+			{Name: "Subscribe", Stream: true},
 		},
 		Proxy: func(c *services.Client) any { return liveproxy.New(c) },
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {

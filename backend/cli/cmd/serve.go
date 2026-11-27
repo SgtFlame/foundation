@@ -137,6 +137,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/records/rest/recordhandlers"
 	recordssearch "github.com/SgtFlame/foundation/backend/features/records/search"
 	entityimpl "github.com/SgtFlame/foundation/backend/features/records/services/entityservice/impl"
+	filesimpl "github.com/SgtFlame/foundation/backend/features/records/services/filesservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/records/services/recordservice"
 	recordimpl "github.com/SgtFlame/foundation/backend/features/records/services/recordservice/impl"
 	recordssettings "github.com/SgtFlame/foundation/backend/features/records/settings"
@@ -471,7 +472,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var chatLive chatservice.Service
 		var conversationLive conversationservice.Service
 		var collabLive collabservice.Service
-		var transcriptFiles *recordsfiles.Store // Parse transcript's files, once the store is made (forge 18e)
+		var transcriptFiles recordsfiles.Files // Parse transcript's files, once the store is made (forge 18e)
 		registry := extensions.NewRegistry()
 		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.Modes, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, tools.Sources, authz.ResourceTypes,
 			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents, connectors.Contracts, connectors.Types, connections.Validators, authz.ContributedRoles)
@@ -886,6 +887,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		recordEmbedder = embedService
 		recordFiles := recordsfiles.New(nats.JS())
 		recordFiles.SetAccounts(natsAccounts)
+		// The record files' data service (forge 21d-4), served over NATS by
+		// serve --services (21g-1)
+		_ = filesimpl.CreateService(filesimpl.WithStore(recordFiles))
 		transcriptFiles = recordFiles
 		recordTables, err := recordsdata.NewTables(gdb, projections) // large tables in the tenant database (forge 07k)
 		if err != nil {
@@ -1034,7 +1038,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		prefabService = prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
 		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(uiSessions), uiimpl.WithRecorder(activityRecorder),
 			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))
-		liveService := liveimpl.CreateService(liveimpl.WithBus(liveBus), liveimpl.WithSubscriptions(subscriptions), liveimpl.WithPresence(livePresence), liveimpl.WithRegistry(registry),
+		liveService := liveimpl.CreateService(liveimpl.WithBus(liveBus), liveimpl.WithSubscriptions(subscriptions), liveimpl.WithStore(projections), liveimpl.WithPresence(livePresence), liveimpl.WithRegistry(registry),
 			liveimpl.WithMaxSubscriptions(func() int {
 				settings, err := config.Read[livesettings.Live](configService, features.BackgroundArgs(ctx), livesettings.ID)
 				if err != nil || settings.MaxSubscriptions <= 0 {
