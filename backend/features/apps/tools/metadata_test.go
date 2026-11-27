@@ -113,11 +113,12 @@ func everything(t *testing.T) *extensions.Registry {
 	infratest.Contribute(reg)                                                       // forge 22c
 	gitconnector.Contribute(reg)                                                    // forge 24a
 	gittest.Contribute(reg)                                                         // forge 24a
-	gittest.ContributeLive(reg, func() *connectors.Dispatcher { return nil })       // forge 24a
 	infraproviders.Contribute(reg)                                                  // forge 22g
 	infranodes.Contribute(reg, func() infranodes.Deps { return infranodes.Deps{} }) // forge 22e
 	infraapply.Contribute(reg, func() infraapply.Deps { return infraapply.Deps{} }) // forge 22f
 	connectorstest.Contribute(reg)                                                  // the builtin contracts a test registry has
+
+	gittest.ContributeLive(reg, func() *connectors.Dispatcher { return nil }) // gittest.control and gittest.log (forge 24a)
 	return reg
 }
 
