@@ -51,6 +51,12 @@ func (d *Deployment) Save(k Keys) error {
 	if err := k.Put("operator.nk", seed); err != nil {
 		return log.Wrap(err)
 	}
+	if d.Operator.Signing != nil {
+		sseed, _ := d.Operator.Signing.Seed()
+		if err := k.Put("operator-signing.nk", sseed); err != nil {
+			return log.Wrap(err)
+		}
+	}
 	if err := k.Put("operator.jwt", []byte(d.Operator.JWT)); err != nil {
 		return log.Wrap(err)
 	}
@@ -106,6 +112,11 @@ func Load(k Keys) (*Deployment, error) {
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, log.Wrap(err)
+	}
+	if seed, err := k.Get("operator-signing.nk"); err == nil {
+		if d.Operator.Signing, err = nkeys.FromSeed(seed); err != nil {
+			return nil, log.Wrap(err)
+		}
 	}
 	b, err := k.Get("accounts.json")
 	if err != nil {

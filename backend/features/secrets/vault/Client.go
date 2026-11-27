@@ -65,6 +65,11 @@ const noToken = "-"
 // do sends one request with token (the client's when empty) and decodes
 // the response's JSON into out, when given.
 func (c *Client) do(ctx context.Context, method, path, token string, body, out any) error {
+	return c.doH(ctx, method, path, token, nil, body, out)
+}
+
+// doH is do with more request headers (X-Vault-Wrap-TTL).
+func (c *Client) doH(ctx context.Context, method, path, token string, headers map[string]string, body, out any) error {
 	var reader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -90,6 +95,9 @@ func (c *Client) do(ctx context.Context, method, path, token string, body, out a
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {

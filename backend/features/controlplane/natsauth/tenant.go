@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/SgtFlame/foundation/backend/features/live/natsd"
+	"github.com/nats-io/nats.go"
 )
 
 // TenantAccount is the name of a tenant's account (forge 20a-3): T<id>.
@@ -121,4 +123,12 @@ func KeysDir(dir string) string {
 		return os.Getenv(EnvKeys)
 	}
 	return dir
+}
+
+// SysConn connects as the deployment's system user (<keys>/sys.creds),
+// which pushes accounts.
+func SysConn(o natsd.Options, keysDir, name string) (*nats.Conn, error) {
+	o.Creds, o.CredsData = filepath.Join(KeysDir(keysDir), "sys.creds"), nil
+	nc, err := nats.Connect(o.URL, natsd.ConnectOptions(o, name)...)
+	return nc, log.Wrapf(err, "connect as the system user")
 }

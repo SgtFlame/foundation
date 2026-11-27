@@ -30,6 +30,11 @@ const (
 // only that host's user may publish.
 func MintSubject(host string) string { return "ctl.enroll.mint." + KindHost + "." + host }
 
+// IssuerSubject is where an instance's agent asks the credential issuer
+// for a unit's credentials (forge 20h): ctl.issuer.unit.inst.<id>, which
+// only that instance's user may publish.
+func IssuerSubject(instance string) string { return "ctl.issuer.unit." + KindInstance + "." + instance }
+
 // MintRequest names the instance; MintReply carries its token.
 type MintRequest struct {
 	Instance string `json:"instance"`
@@ -70,6 +75,9 @@ func DaemonPermissions(t Target) natsauth.Permissions {
 	}
 	if t.Kind == KindHost {
 		p.Pub = append(p.Pub, MintSubject(t.ID))
+	}
+	if t.Kind == KindInstance {
+		p.Pub = append(p.Pub, IssuerSubject(t.ID))
 	}
 	return p
 }

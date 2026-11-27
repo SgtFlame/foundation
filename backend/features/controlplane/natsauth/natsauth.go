@@ -30,7 +30,10 @@ const (
 type Operator struct {
 	Name string
 	Key  nkeys.KeyPair
-	JWT  string
+	// Signing is the operator's signing key (forge 20h), kept online so an
+	// account can be signed again (a revocation) while Key is offline.
+	Signing nkeys.KeyPair
+	JWT     string
 }
 
 // Account is one NATS account with a signing key that signs its users,
@@ -63,13 +66,19 @@ func operatorFrom(name string, kp nkeys.KeyPair) (*Operator, error) {
 	if err != nil {
 		return nil, log.Wrap(err)
 	}
+	sk, err := nkeys.CreateOperator()
+	if err != nil {
+		return nil, log.Wrap(err)
+	}
+	spub, _ := sk.PublicKey()
 	oc := jwt.NewOperatorClaims(pub)
 	oc.Name = name
+	oc.SigningKeys.Add(spub)
 	token, err := oc.Encode(kp)
 	if err != nil {
 		return nil, log.Wrap(err)
 	}
-	return &Operator{Name: name, Key: kp, JWT: token}, nil
+	return &Operator{Name: name, Key: kp, Signing: sk, JWT: token}, nil
 }
 
 // Limits are an account's JetStream and connection limits; zero values
@@ -129,9 +138,17 @@ func (a *Account) Revoke(userPublic string) {
 	a.Claims.Revoke(userPublic)
 }
 
-// Sign signs the account's current claims with the operator.
+// Sign signs the account's current claims with the operator's signing
+// key, else its own key.
 func (o *Operator) Sign(a *Account) error {
-	token, err := a.Claims.Encode(o.Key)
+	k := o.Signing
+	if k == nil {
+		k = o.Key
+	}
+	if k == nil {
+		return log.Code("no_operator_key").Errorf("no operator key to sign account %s", a.Name)
+	}
+	token, err := a.Claims.Encode(k)
 	if err != nil {
 		return log.Wrapf(err, "sign account %s", a.Name)
 	}

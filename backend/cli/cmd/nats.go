@@ -152,7 +152,7 @@ takes effect without a restart; otherwise add it to trust.conf's preload.`,
 		if err != nil {
 			return err
 		}
-		if d.Operator.Key == nil {
+		if d.Operator.Key == nil && d.Operator.Signing == nil {
 			return fmt.Errorf("%s has no operator.nk: bring the operator's seed back to sign a new account", natsKeysDir)
 		}
 		a, err := d.AddTenant(natsTenant, natsauth.Limits{})

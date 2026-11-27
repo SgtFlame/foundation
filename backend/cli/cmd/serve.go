@@ -72,6 +72,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	"github.com/SgtFlame/foundation/backend/features/controlplane"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/issuer"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/natsauth"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
 	"github.com/SgtFlame/foundation/backend/features/conversation/made"
@@ -981,6 +982,19 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 				}
 				if _, err := ctl.ServeEnroll(ctx, control, keys.Account(natsauth.Control)); err != nil {
 					return err
+				}
+				// forge 20h: the credential issuer, with Vault for the
+				// units' SecretIDs and a system user to push revocations
+				if boot.Vault() {
+					sys, err := natsauth.SysConn(natsOptions, serveNatsKeys, "serve-issuer")
+					if err != nil {
+						return err
+					}
+					defer sys.Close()
+					iss := &issuer.Issuer{C: control, D: keys, Sys: sys, Vault: boot.Client()}
+					if err := iss.Serve(ctx); err != nil {
+						return err
+					}
 				}
 			}
 			if err := controlplane.SeedApp(features.BackgroundArgs(ctx), projections, appService, liveBus); err != nil {
