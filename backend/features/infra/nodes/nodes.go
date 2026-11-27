@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
@@ -35,15 +34,7 @@ type Deps struct {
 
 // RecordID is the desired-state record id of a resource id: its words
 // joined by _, which no configuration id holds, so ids never collide.
-func RecordID(resource string) string {
-	r := strings.NewReplacer(":", "_", "/", "_", ".", "_")
-	id := r.Replace(resource)
-	if len(id) > 120 {
-		sum := sha256.Sum256([]byte(resource))
-		id = id[:100] + "_" + hex.EncodeToString(sum[:8])
-	}
-	return id
-}
+func RecordID(resource string) string { return infra.RecordID(resource) }
 
 // kinds the nodes run in: functions, server actions and triggers (and the
 // jobs 22f enqueues, which run function graphs). Never commands: their

@@ -46,6 +46,9 @@ func TestPlanFromNothing(t *testing.T) {
 create host:west/general/2
 create host:west/general/3
 create cluster:west
+create natsNode:west/1
+create natsNode:west/2
+create natsNode:west/3
 create instance:west/web/web/1
 create instance:west/web/web/2`
 	if got := stepList(p); got != want || len(p.Refusals) != 0 {

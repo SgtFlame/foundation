@@ -2,6 +2,7 @@ package infraapply
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/controlplane"
@@ -25,54 +26,126 @@ func RecordsActual(reg *extensions.Registry, nd func() infranodes.Deps) func(arg
 			return nil, nil
 		}
 		byRecord := map[string]infra.Resource{}
-		var clusters []infra.Resource
+		var clusters, gateways []infra.Resource
 		for _, doc := range docs {
 			rs, _ := infra.Expand(reg, doc)
 			for _, r := range rs {
 				byRecord[infranodes.RecordID(r.ID)] = r
-				if r.Kind == infra.KindCluster {
+				switch r.Kind {
+				case infra.KindCluster:
 					clusters = append(clusters, r)
+				case infra.KindGateway:
+					gateways = append(gateways, r)
 				}
 			}
 		}
 		_ = d.Data.Projections.Settle(args.Context(), args.Principal.TenantID, data.Projector)
-		ids := func(entity string) (map[string]bool, error) {
-			res, err := data.Find(args, d.Data, data.Query{Entity: entity, Fields: []string{"name"}})
+		recs := func(entity string, fields ...string) (map[string]map[string]json.RawMessage, error) {
+			res, err := data.Find(args, d.Data, data.Query{Entity: entity, Fields: append([]string{"name"}, fields...)})
 			if err != nil {
 				return nil, err
 			}
-			out := map[string]bool{}
+			out := map[string]map[string]json.RawMessage{}
 			for _, rec := range res.Records {
 				var id string
 				_ = json.Unmarshal(rec["_id"], &id)
-				out[id] = true
+				out[id] = rec
 			}
 			return out, nil
 		}
-		insts, err := ids(controlplane.EntityInstance)
+		insts, err := recs(controlplane.EntityInstance, "host")
 		if err != nil {
 			return nil, err
 		}
-		hosts, err := ids(controlplane.EntityHost)
+		hosts, err := recs(controlplane.EntityHost)
 		if err != nil {
 			return nil, err
+		}
+		natsRecs, err := recs(controlplane.EntityNatsCluster, "nodes", "gateways", "leafRemotes")
+		if err != nil {
+			return nil, err
+		}
+		jsonOf := func(raw json.RawMessage) any {
+			var v any
+			if json.Unmarshal(raw, &v) != nil || v == nil {
+				return []any{}
+			}
+			return v
 		}
 		var out []infra.Resource
-		for id := range insts {
-			if r, ok := byRecord[id]; ok && r.Kind == infra.KindInstance {
+		for id, rec := range insts {
+			r, ok := byRecord[id]
+			switch {
+			case ok && r.Kind == infra.KindInstance:
 				out = append(out, r)
-			} else if !ok {
+			case ok && r.Kind == infra.KindNatsNode:
+				// A NATS node as its records have it: its host and its
+				// site's cluster record.
+				a := r
+				a.Props = map[string]any{}
+				for k, v := range r.Props {
+					a.Props[k] = v
+				}
+				var host string
+				_ = json.Unmarshal(rec["host"], &host)
+				if want, _ := r.Props["host"].(string); infranodes.RecordID(want) != host {
+					a.Props["host"] = host
+				}
+				nr := natsRecs[fmt.Sprint(r.Props["record"])]
+				a.Props["peers"], a.Props["gateways"], a.Props["leafRemotes"] = jsonOf(nr["nodes"]), jsonOf(nr["gateways"]), jsonOf(nr["leafRemotes"])
+				out = append(out, a)
+			case !ok:
 				out = append(out, infra.Resource{ID: id, Kind: infra.KindInstance, Props: map[string]any{}, HoldsData: true})
 			}
 		}
 		for _, c := range clusters {
 			for _, h := range c.DependsOn {
-				if hosts[infranodes.RecordID(h)] {
+				if hosts[infranodes.RecordID(h)] != nil {
 					out = append(out, c)
 					break
 				}
 			}
 		}
+		for _, g := range gateways {
+			if Joined(g, natsRecs) {
+				out = append(out, g)
+			}
+		}
 		return out, nil
 	}
+}
+
+// Joined tells whether a gateway resource's two sites are joined in their
+// infraNatsCluster records (by record id): one names the other among its
+// gateways, or as the hub of its leaf remotes.
+func Joined(g infra.Resource, natsRecs map[string]map[string]json.RawMessage) bool {
+	sites, _ := g.Props["sites"].([]any)
+	if len(sites) != 2 {
+		return false
+	}
+	names := func(a, b string) bool {
+		rec := natsRecs[infra.NatsClusterRecord(a)]
+		if rec == nil {
+			return false
+		}
+		var gws, leaf []struct {
+			Name string `json:"name"`
+			Hub  string `json:"hub"`
+		}
+		_ = json.Unmarshal(rec["gateways"], &gws)
+		_ = json.Unmarshal(rec["leafRemotes"], &leaf)
+		for _, x := range gws {
+			if x.Name == b {
+				return true
+			}
+		}
+		for _, x := range leaf {
+			if x.Hub == b {
+				return true
+			}
+		}
+		return false
+	}
+	a, b := fmt.Sprint(sites[0]), fmt.Sprint(sites[1])
+	return names(a, b) || names(b, a)
 }

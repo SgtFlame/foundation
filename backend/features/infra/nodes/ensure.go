@@ -97,7 +97,11 @@ func EnsureInstance(args features.ServiceArgs, d Deps, s infra.Step, host string
 		return Instance{}, err
 	}
 	id := RecordID(s.ID)
-	iv := map[string]any{"name": strings.TrimPrefix(id, "instance_"), "profile": profile, "kind": kind}
+	name := str(s.Desired, "instanceName")
+	if name == "" {
+		name = strings.TrimPrefix(id, "instance_")
+	}
+	iv := map[string]any{"name": name, "profile": profile, "kind": kind}
 	if host != "" {
 		iv["host"] = host
 	}
@@ -106,6 +110,53 @@ func EnsureInstance(args features.ServiceArgs, d Deps, s infra.Step, host string
 		return Instance{}, err
 	}
 	return Instance{Record: id, Profile: profile, Changed: c1 || c2}, nil
+}
+
+// NatsNode is what EnsureNatsNode gives.
+type NatsNode struct {
+	Instance string `json:"instance"`
+	Unit     string `json:"unit"`
+	Cluster  string `json:"cluster"`
+	Changed  bool   `json:"changed"`
+}
+
+// EnsureNatsNode makes sure a natsNode step's node exists (forge 22h): its
+// instance on its host (profile nats), its unit of kind nats and its
+// site's infraNatsCluster record holding the nodes, gateways and leaf
+// remotes the configuration gives, written whole by every node of the
+// site, so the nodes may run in any order and at once.
+func EnsureNatsNode(args features.ServiceArgs, d Deps, s infra.Step) (NatsNode, error) {
+	host := RecordID(str(s.Desired, "host"))
+	is := infra.Step{ID: s.ID, Kind: infra.KindInstance, Site: s.Site, Desired: map[string]any{"profile": "nats", "kind": "container", "instanceName": str(s.Desired, "name")}}
+	inst, err := EnsureInstance(args, d, is, host)
+	if err != nil {
+		return NatsNode{}, err
+	}
+	unit, c1, err := EnsureUnit(args, d, inst.Record, infra.Unit{Name: "nats", Kind: "nats"})
+	if err != nil {
+		return NatsNode{}, err
+	}
+	rec := str(s.Desired, "record")
+	if rec == "" {
+		rec = infra.NatsClusterRecord(s.Site)
+	}
+	values := map[string]any{"name": s.Site, "site": s.Site}
+	for _, k := range []string{"peers", "gateways", "leafRemotes"} {
+		v := s.Desired[k]
+		if v == nil {
+			v = []any{}
+		}
+		f := k
+		if k == "peers" {
+			f = "nodes"
+		}
+		values[f] = v
+	}
+	c2, err := d.Ensure(args, controlplane.EntityNatsCluster, rec, values, "infra-"+rec)
+	if err != nil {
+		return NatsNode{}, err
+	}
+	return NatsNode{Instance: inst.Record, Unit: unit, Cluster: rec, Changed: inst.Changed || c1 || c2}, nil
 }
 
 // EnsureUnit makes sure an instance runs a unit (its infraUnit record).
@@ -206,6 +257,13 @@ func RemoveStep(args features.ServiceArgs, d Deps, s infra.Step, account infra.A
 		return removed || ok, err
 	case infra.KindInstance:
 		return d.Remove(args, controlplane.EntityInstance, id, "infra-"+id)
+	case infra.KindNatsNode:
+		u, err := d.Remove(args, controlplane.EntityUnit, id+"__nats", "infra-"+id+"__nats")
+		if err != nil {
+			return false, err
+		}
+		ok, err := d.Remove(args, controlplane.EntityInstance, id, "infra-"+id)
+		return u || ok, err
 	}
 	return false, nil // a cluster is its hosts and instances: nothing of its own yet (22h)
 }

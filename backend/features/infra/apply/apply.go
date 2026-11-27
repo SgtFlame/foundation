@@ -556,6 +556,16 @@ func runStep(args features.ServiceArgs, d infranodes.Deps, s infra.Step, account
 			}
 		}
 		return "instance " + inst.Record + " is in the desired state", nil
+	case infra.KindNatsNode:
+		n, err := infranodes.EnsureNatsNode(args, d, s)
+		if err != nil {
+			return "", err
+		}
+		return "NATS node " + n.Instance + " is in " + n.Cluster, nil
+	case infra.KindGateway:
+		// The sites' NATS nodes write the gateways into their cluster
+		// records; this step only says so once they have.
+		return "the sites' NATS clusters are joined", nil
 	}
 	return "nothing to do for a " + s.Kind + " yet", nil
 }
