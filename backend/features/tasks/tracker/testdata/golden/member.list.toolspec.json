@@ -1,0 +1,19 @@
+{
+  "name": "tasks.tracker.member.list",
+  "title": "List members",
+  "description": "Lists the members of a board, to map them to Axiom's users by email or name.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "board": {
+        "type": "string",
+        "description": "The board's id"
+      }
+    },
+    "required": [
+      "board"
+    ]
+  },
+  "effect": "read",
+  "source": "connector"
+}

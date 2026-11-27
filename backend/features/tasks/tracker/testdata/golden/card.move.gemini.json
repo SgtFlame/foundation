@@ -1,0 +1,29 @@
+{
+  "name": "tasks_tracker_card_move",
+  "description": "Moves a card to a list (status), at a position among its cards; the end when position is left out. Given version, refused with conflict once the card moved on.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The card's outside id"
+      },
+      "list": {
+        "type": "string",
+        "description": "The list's id"
+      },
+      "position": {
+        "type": "number",
+        "description": "A position between its new neighbours'; the end when left out"
+      },
+      "version": {
+        "type": "string",
+        "description": "The version the move was made against"
+      }
+    },
+    "required": [
+      "id",
+      "list"
+    ]
+  }
+}

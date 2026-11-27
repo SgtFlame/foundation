@@ -1,0 +1,11 @@
+{
+  "name": "tasks.tracker.check",
+  "title": "Check",
+  "description": "Signs in and changes nothing: whether the connection's credentials work.",
+  "input": {
+    "type": "object",
+    "properties": {}
+  },
+  "effect": "read",
+  "source": "connector"
+}

@@ -53,6 +53,8 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/records/entities"
 	recordsnodes "github.com/SgtFlame/foundation/backend/features/records/nodes"
 	retrievaltools "github.com/SgtFlame/foundation/backend/features/retrieval/tools"
+	"github.com/SgtFlame/foundation/backend/features/tasks/tracker"
+	"github.com/SgtFlame/foundation/backend/features/tasks/tracker/trackerfake"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 	toolsnodes "github.com/SgtFlame/foundation/backend/features/tools/nodes"
 	"github.com/SgtFlame/foundation/backend/features/ui"
@@ -123,6 +125,8 @@ func everything(t *testing.T) *extensions.Registry {
 	calendarnodes.ContributeIcal(reg, func() calendarnodes.IcalDeps { return calendarnodes.IcalDeps{} }) // forge 28b
 	calendar.Contribute(reg)                                                                             // forge 28c
 	caltest.Contribute(reg)                                                                              // forge 28c
+	tracker.Contribute(reg)                                                                              // forge 30g
+	trackerfake.Contribute(reg, func() trackerfake.Dispatcher { return nil })                            // forge 30g
 	return reg
 }
 

@@ -1,0 +1,16 @@
+{
+  "name": "tasks.tracker.board.list",
+  "title": "List boards",
+  "description": "Lists the boards (projects) the connection can see.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "archived": {
+        "type": "boolean",
+        "description": "Include archived boards too"
+      }
+    }
+  },
+  "effect": "read",
+  "source": "connector"
+}

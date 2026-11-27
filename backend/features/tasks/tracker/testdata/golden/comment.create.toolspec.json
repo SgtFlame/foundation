@@ -1,0 +1,29 @@
+{
+  "name": "tasks.tracker.comment.create",
+  "title": "Comment on a card",
+  "description": "Adds a comment to a card, keyed by our comment id: a create with a key already made gives that comment.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "key": {
+        "type": "string",
+        "description": "Our comment id, the idempotency key"
+      },
+      "card": {
+        "type": "string",
+        "description": "The card's id"
+      },
+      "text": {
+        "type": "string",
+        "description": "The comment, in Markdown"
+      }
+    },
+    "required": [
+      "key",
+      "card",
+      "text"
+    ]
+  },
+  "effect": "write",
+  "source": "connector"
+}

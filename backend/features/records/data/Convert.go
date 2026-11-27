@@ -41,6 +41,9 @@ func Follow(args features.ServiceArgs, deps Deps) error {
 	if err := followRollups(args, deps); err != nil {
 		return err
 	}
+	if err := followRanks(args, deps); err != nil {
+		return err
+	}
 	if deps.Search != nil {
 		if err := deps.Search.Follow(args); err != nil {
 			return err

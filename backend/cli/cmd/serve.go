@@ -222,6 +222,8 @@ import (
 	bootstrapimpl "github.com/SgtFlame/foundation/backend/features/secrets/services/bootstrapservice/impl"
 	secretsimpl "github.com/SgtFlame/foundation/backend/features/secrets/services/secretsservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/secrets/vaultstore"
+	"github.com/SgtFlame/foundation/backend/features/tasks/tracker"
+	"github.com/SgtFlame/foundation/backend/features/tasks/tracker/trackerfake"
 	"github.com/SgtFlame/foundation/backend/features/text"
 	textnodes "github.com/SgtFlame/foundation/backend/features/text/nodes"
 	"github.com/SgtFlame/foundation/backend/features/tools"
@@ -765,6 +767,13 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		infra.Contribute(registry, func() infra.Deps { return infraDeps })             // infra.config.* configurations and versions (forge 22a)
 		infraproviders.Contribute(registry)                                            // the provider types: infra.lxd (forge 22g)
 		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
+		tracker.Contribute(registry)                                                   // the tasks.tracker@1 contract (forge 30g)
+		trackerfake.Contribute(registry, func() trackerfake.Dispatcher {               // the Tasks test server and its control call (forge 30g)
+			if connectorDeps.Dispatcher == nil {
+				return nil
+			}
+			return connectorDeps.Dispatcher
+		})
 		// Calendar (forge 28): the calendar section, the time and iCalendar
 		// nodes (.ics parsed in a limited child process), calendar.events@1
 		// and the Calendar test server
@@ -1528,6 +1537,10 @@ func connectorImpls() adapter.Options {
 	o.Types = append(o.Types, caltest.Type())
 	o.Contracts = append(o.Contracts, calendar.EventsContract(), caltest.ControlContract())
 	o.Impls = append(o.Impls, caltest.Default.Impl())
+	// The Tasks test server (forge 30g)
+	o.Types = append(o.Types, trackerfake.Type())
+	o.Contracts = append(o.Contracts, tracker.Contract(), trackerfake.ControlContract())
+	o.Impls = append(o.Impls, trackerfake.Default.Impl())
 	return o
 }
 

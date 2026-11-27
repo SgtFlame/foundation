@@ -51,6 +51,25 @@ func Contribute(reg *extensions.Registry, deps func() data.Deps) {
 	contributeWrites(reg, deps)
 	contributeReads(reg, deps)
 	contributeFiles(reg, deps)
+	node(reg, 690, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: "records.rankBetween"}, Title: "Rank between",
+		Description: "A position (rank) between two others, for a record made in place: a new card at the top of a column has after empty and before the top card's rank. Leave after empty for the start and before empty for the end; both empty give a first rank. Moving an existing record is record.move, which computes its rank itself (forge 30a).",
+		Example:     "Rank between nothing and the first card's position, set on Create record for a card added at the top of its column",
+		Pins: cognition.Pins{
+			In: []cognition.Pin{cognition.DataPin("after", "After", "string", "The rank it goes after; empty for the start"),
+				cognition.DataPin("before", "Before", "string", "The rank it goes before; empty for the end")},
+			Out: []cognition.Pin{cognition.DataPin("rank", "Rank", "string", "A rank between the two")},
+		},
+		Run: func(_ *cognition.Exec, in cognition.Values) (cognition.Values, string, error) {
+			after, _ := cognition.Get[string](in, "after")
+			before, _ := cognition.Get[string](in, "before")
+			rank, err := records.RankAmong(after, before)
+			if err != nil {
+				return nil, "", err
+			}
+			return cognition.Values{"rank": rank}, "", nil
+		},
+	})
 	node(reg, 700, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: OnChanged}, Title: "On record changed", Category: "Events", Event: true, Kinds: []string{livenodes.KindTrigger},
 		Description: "Starts a trigger, in the background as the app's own principal, once for each record of an entity type created, changed or deleted, on a type the app may read (forge 07a)",
