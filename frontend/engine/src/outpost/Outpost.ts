@@ -182,7 +182,7 @@ export class ContractPanel {
     skills.dataset.skills = ''
     skills.style.cssText = 'border-top:1px solid #333b4a;padding-top:6px;opacity:0.9'
     const lv = (k: string) => progress?.levels[k] ?? 1
-    skills.textContent = `Your skills: piloting ${lv('piloting')} · prospecting ${lv('prospecting')} · mining ${lv('mining')} · trade ${lv('trade')}${progress?.unlocked?.freighter ? ' (the freighter is yours to build)' : ''} · Esc frees the mouse to click · T closes`
+    skills.textContent = `Your skills: piloting ${lv('piloting')} · prospecting ${lv('prospecting')} · mining ${lv('mining')} · trade ${lv('trade')}${progress?.unlocked?.barge ? ' (the freighter and the ore barge are yours to build)' : progress?.unlocked?.freighter ? ' (the freighter is yours to build)' : ''} · Esc frees the mouse to click · T closes`
     this.el.append(skills)
     this.el.style.display = 'block'
   }

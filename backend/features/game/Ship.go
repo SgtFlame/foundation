@@ -53,6 +53,9 @@ type ShipDesign struct {
 	Blocks      []DesignBlock `json:"blocks"`
 	// V13: a building (a static grid): never flown, no cockpit
 	Static bool `json:"static,omitempty"`
+	// V25: the share of its holds its stock thrusters lift; ion thruster
+	// kits (Ship.Boost) add to it, up to a full hold (the ore barge's 0.5)
+	Lift float64 `json:"lift,omitempty"`
 }
 
 // DesignBlock is one block of a design: armor, cockpit, gyro, light,

@@ -23,6 +23,7 @@ export interface ShipDesign {
   blockSize: number
   blocks: DesignBlock[]
   static?: boolean // V13: a building, never flown; the walker cannot pass its blocks but for doors
+  lift?: number // V25: the share of its holds its stock thrusters lift (kits add their boost), up to full
 }
 
 // A ship as the server keeps it (game.worldShips)
@@ -60,6 +61,13 @@ export const GYRO_KW = 2
 export const SOLAR_KW = 2
 export const BATTERY_KJ = 3000
 export const CARGO_PER_HOLD = 6 // m³; the loadShip blueprint holds the same
+
+// V25: the share of a design's holds its thrusters lift with the ion kits'
+// boost fitted (the ore barge: half, a quarter more for each kit), as the
+// loadShip blueprint has it
+export function liftOf(design: Pick<ShipDesign, 'lift'>, boost = 0): number {
+  return design.lift ? Math.min(1, design.lift + boost) : 1
+}
 
 // Crashes (V5, a thin 366): striking the ground faster than SAFE_IMPACT
 // (m/s, along up) breaks some of the blocks that struck, all of them at

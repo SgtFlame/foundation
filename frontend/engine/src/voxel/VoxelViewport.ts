@@ -8,7 +8,7 @@ import { StatsOverlay } from '../debug/StatsOverlay.ts'
 import { Input } from '../input/Input.ts'
 import { Renderer } from '../render/Renderer.ts'
 import { mulberry32 } from './Noise.ts'
-import { CARGO_PER_HOLD, IDLE_HELM, lookQuat, type Helm, type Quat, type ShipDesign, type ShipState } from '../ship/Ship.ts'
+import { CARGO_PER_HOLD, IDLE_HELM, liftOf, lookQuat, type Helm, type Quat, type ShipDesign, type ShipState } from '../ship/Ship.ts'
 import { type GhostHit, ShipLayer } from '../ship/ShipLayer.ts'
 import { DropPod } from '../landing/DropPod.ts'
 import { firstHour, FirstHourPanel } from '../objectives/FirstHour.ts'
@@ -998,7 +998,8 @@ export class VoxelViewport {
     if (holds) {
       const c = s.cargo ?? { dust: 0, rock: 0, iron: 0 }
       const ore = c.ore ?? 0
-      parts.push(`hold ${(c.dust + c.rock + c.iron + ore).toFixed(2)} / ${holds * CARGO_PER_HOLD} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)} · iron ${c.iron.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}`)
+      const lift = liftOf(d, s.boost ?? 0)
+      parts.push(`hold ${(c.dust + c.rock + c.iron + ore).toFixed(2)} / ${holds * CARGO_PER_HOLD} m³${lift < 1 ? ` (its thrusters lift ${Math.round(holds * CARGO_PER_HOLD * lift)} m³: fit ion kits for more)` : ''} · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)} · iron ${c.iron.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}`)
     }
     return parts.join(' · ')
   }

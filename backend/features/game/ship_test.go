@@ -157,7 +157,7 @@ func TestShipDamage(t *testing.T) {
 
 // V6: contracts handed in with a ship at the outpost pay a skill once
 func TestOutpost(t *testing.T) {
-	if c := game.ContractsOf(); len(c.Contracts) != 8 || c.Giver.Name == "" {
+	if c := game.ContractsOf(); len(c.Contracts) != 9 || c.Giver.Name == "" {
 		t.Fatalf("contracts %+v", c)
 	}
 	st := newStack(t)
@@ -546,5 +546,69 @@ func TestFabricator(t *testing.T) {
 	st.ok("game.startShip", "s1", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 110, "z": 0, "q": q})
 	if r := st.refused("game.fitKit", "s1", map[string]any{}); !strings.Contains(r.Common.Message, "no ion thruster kit") {
 		t.Fatalf("a kit from an empty pack: %q", r.Common.Message)
+	}
+}
+
+// V25: Trade 4 unlocks the ore barge, whose stock thrusters lift its holds
+// only half full until ion thruster kits are fitted; the freighter loads
+// every hold
+func TestBarge(t *testing.T) {
+	d, ok := game.DesignOf("barge")
+	if !ok || d.Check() != "" || len(d.Blocks) != 112 || d.Lift != 0.5 {
+		t.Fatalf("barge %+v", d)
+	}
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Barge moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	st.ok("game.startShip", "p1", map[string]any{"world": world, "design": "prospector", "x": 0, "y": 104, "z": 5, "q": q})
+	for i := 0; i < 32; i++ {
+		st.ok("game.placeBlock", "p1", map[string]any{"index": i})
+	}
+	dig := func() {
+		dug := st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 200, "z": 0, "radius": 1.5, "took": map[string]any{"dust": 0, "rock": 3.2, "ore": 0}})
+		var pk game.Pack
+		st.read(game.PacksProjector, game.PackKey(world, 1), dug.Seq, &pk)
+	}
+	var p game.Player
+	for i := 0; i < 8; i++ {
+		if i == 5 {
+			if r := st.refused("game.startShip", "b0", map[string]any{"world": world, "design": "barge", "x": 0, "y": 104, "z": -8, "q": q}); !strings.Contains(r.Common.Message, "Trade has reached level 4") {
+				t.Fatalf("locked barge: %q", r.Common.Message)
+			}
+		}
+		dig()
+		st.ok("game.loadShip", "p1", map[string]any{})
+		res := st.ok("game.handIn", "p1", map[string]any{"contract": "pad-rock"})
+		p = game.Player{}
+		st.read(game.PlayersProjector, game.PackKey(world, 1), res.Seq, &p)
+	}
+	if p.Levels["trade"] != 4 || !p.Unlocked["barge"] || !p.Unlocked["freighter"] {
+		t.Fatalf("after eight jobs %+v", p)
+	}
+	if r := st.refused("game.handIn", "p1", map[string]any{"contract": "refinery-ore"}); !strings.Contains(r.Common.Message, "needs a barge") {
+		t.Fatalf("refinery ore from a prospector: %q", r.Common.Message)
+	}
+	st.ok("game.startShip", "b1", map[string]any{"world": world, "design": "barge", "x": 0, "y": 104, "z": -8, "q": q})
+	// two holds placed: 12 m³, of which the stock thrusters lift 6
+	st.ok("game.placeBlock", "b1", map[string]any{"index": 27})
+	st.ok("game.placeBlock", "b1", map[string]any{"index": 97})
+	dig()
+	st.ok("game.loadShip", "b1", map[string]any{})
+	dig()
+	res := st.ok("game.loadShip", "b1", map[string]any{})
+	var s game.Ship
+	if !st.read(game.ShipsProjector, game.ShipType+".b1", res.Seq, &s) || s.Cargo.Rock < 5.99 || s.Cargo.Rock > 6.01 {
+		t.Fatalf("barge load %+v", s.Cargo)
+	}
+	if r := st.refused("game.loadShip", "b1", map[string]any{}); !strings.Contains(r.Common.Message, "lift only 6 of its 12") {
+		t.Fatalf("barge lift: %q", r.Common.Message)
+	}
+	// the freighter's holds load (they were missing before V25)
+	st.ok("game.startShip", "f1", map[string]any{"world": world, "design": "freighter", "x": 0, "y": 104, "z": 20, "q": q})
+	st.ok("game.placeBlock", "f1", map[string]any{"index": 43})
+	res = st.ok("game.loadShip", "f1", map[string]any{})
+	s = game.Ship{}
+	if !st.read(game.ShipsProjector, game.ShipType+".f1", res.Seq, &s) || s.Cargo.Rock < 0.39 {
+		t.Fatalf("freighter load %+v", s.Cargo)
 	}
 }

@@ -480,6 +480,17 @@ Ion thruster kits: the fabricator's second product, the first ship part, a step 
 - Engine: `craft/Fabricator.ts` gains the kit (`KIT_MS`, `KIT_IRON`, `KIT_CIRCUITS`, `KIT_BOOST`, `MAX_BOOST`; `fabAction(…, item)`); at the fabricator U makes a circuit board and I a kit, the hint offering what the pack can make; by a ship, O fits a kit (`canFitKit`, `fitKit`). A ship's thrust is the pilot's skill times 1 + its boost (`thrustOf`).
 - `TestFabricator` checks the refusals; `Fabricator.test.ts` the kit's timing and needs.
 
+## Built in V25 (forge 360)
+
+The ore barge: the job board's biggest ship, the first that needs ion thruster kits.
+
+- `designs/barge.json` (112 blocks): the freighter lengthened by five rows to 21 cargo holds (126 m³), with no more thrusters. A design's `lift` (`ShipDesign.Lift`, the barge's 0.5) is the share of its holds its stock thrusters lift; each kit's boost adds to it, so two kits lift a full hold.
+- `game.startShip` takes `barge` once the player's Trade reaches 4 (`game.handIn` unlocks it at 300 trade xp, as it unlocks the freighter at 200).
+- `game.loadShip` loads the barge up to `holds × 6 × min(1, lift + boost)` and then refuses with *the barge's stock thrusters lift only N of its M m³: fit ion thruster kits*. It also loads the freighter's eleven holds, which were missing from the blueprint since V11 (the *Ore for the new station* job could not be done).
+- A new job, *Ore for the refinery* (`refinery-ore`, 100 m³ of ore, Trade 4, 200 xp), needs a barge.
+- Engine: `liftOf(design, boost)` in `ship/Ship.ts`; a ship's line shows what its thrusters lift when that is less than its holds.
+- `TestBarge` checks the unlock, the lift refusal and the freighter's holds; `Ship.test.ts` the lift and that the empty barge hovers.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
