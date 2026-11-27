@@ -53,6 +53,7 @@ import (
 	secretsproxy "github.com/SgtFlame/foundation/backend/features/secrets/services/secretsservice/proxy"
 	"github.com/SgtFlame/foundation/backend/features/services"
 	"github.com/SgtFlame/foundation/backend/features/services/catalog"
+	"github.com/SgtFlame/foundation/backend/features/services/instance"
 	"github.com/SgtFlame/foundation/backend/features/services/rest/serviceshandlers"
 	"github.com/SgtFlame/foundation/backend/features/services/routes"
 	"github.com/SgtFlame/foundation/backend/features/services/servers"
@@ -271,6 +272,8 @@ var (
 	serveProcess      string
 	serveCallKey      string
 	serveNatsListen   string
+	serveInstance     string
+	serveInstanceCfg  string
 )
 
 // serveCmd represents the serve command
@@ -308,6 +311,12 @@ Logs go to stderr, and to VictoriaLogs when Settings (System › Logging)
 turns it on; --vlogs-url or $FOUNDATION_VLOGS_URL wins over the setting.
 backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// forge 21g-2: a unit the instance agent starts reads its set and
+		// flags from desired state and its credentials from systemd
+		inst, err := applyInstance(cmd)
+		if err != nil {
+			return err
+		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		// The locator hands each service out (forge 21f-1): every service real
@@ -365,9 +374,19 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		if roleID == "" {
 			roleID = os.Getenv("FOUNDATION_VAULT_ROLE_ID")
 		}
+		if inst.VaultRoleID != "" {
+			roleID = inst.VaultRoleID
+		}
 		boot, err := secrets.NewBootstrap(secrets.VaultOptions{Addr: vaultAddr, Mount: serveVaultMount, RoleID: roleID})
 		if err != nil {
 			return err
+		}
+		if inst.VaultWrappedSecretID != "" && boot.Vault() {
+			// forge 21h: unseal with the unit's single-use SecretID, as
+			// POST /bootstrap/unseal does, with no person
+			if err := boot.Unseal(ctx, inst.VaultWrappedSecretID, roleID); err != nil {
+				return log.Wrapf(err, "unsealing with the unit's SecretID")
+			}
 		}
 		bootstrapService := bootstrapproxy.Use(loc, func() bootstrapservice.Service { return bootstrapimpl.CreateService(bootstrapimpl.WithBootstrap(boot)) })
 		bootstrapHandler := &bootstraphandlers.BootstrapHandler{}
@@ -477,7 +496,13 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			if keyPath == "" {
 				keyPath = filepath.Join(dataDir, "call.key")
 			}
-			keys, err := services.LoadOrCreateKeys(keyPath)
+			var keys *services.Keys
+			if k := bundle["call-key"]; k != "" {
+				// forge 21h: the deployment's call key, from Vault's bundle
+				keys, err = services.ParseKeys([]byte(k))
+			} else {
+				keys, err = services.LoadOrCreateKeys(keyPath)
+			}
 			if err != nil {
 				return err
 			}
@@ -1190,7 +1215,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 				// forge 20h: the credential issuer, with Vault for the
 				// units' SecretIDs
 				if boot.Vault() {
-					iss := &issuer.Issuer{C: control, D: keys, Sys: sys, Vault: boot.Client()}
+					iss := &issuer.Issuer{C: control, D: keys, Sys: sys, Vault: boot.Client(), SetOf: unitSet}
 					if err := iss.Serve(ctx); err != nil {
 						return err
 					}
@@ -1360,6 +1385,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 
 		// Shut down cleanly on SIGTERM, so serve.sh restarts close LanceDB
 		gate.Open(router)
+		if err := instance.Notify("READY=1"); err != nil {
+			log.Warn(ctx, "telling systemd this unit is ready: %v", err)
+		}
 		log.Info(ctx, "ready on %s", serveAddr)
 		select {
 		case err := <-served:
@@ -1417,6 +1445,8 @@ func init() {
 	serveCmd.Flags().StringVar(&serveNatsKeys, "nats-keys", "", "the deployment's NATS keys (cli nats init): each tenant's streams and buckets then live in its own account, made with cli nats tenant add (default $FOUNDATION_NATS_KEYS)")
 	serveCmd.Flags().StringVar(&serveServices, "services", "all", "the services and groups this process runs, comma-separated (web, data, runner, connectors:<type>, or service names); others run the rest (forge 21g-1)")
 	serveCmd.Flags().StringVar(&serveNatsListen, "nats-listen", "", "let other processes on this machine reach the embedded NATS server at this address (e.g. 127.0.0.1:4222), for running several serve processes in development (forge 21g-1)")
+	serveCmd.Flags().StringVar(&serveInstance, "instance", "", "run as this unit of the instance's desired state (forge 21g-2): its service set and flags from --instance-config, its NATS user and Vault SecretID from $CREDENTIALS_DIRECTORY")
+	serveCmd.Flags().StringVar(&serveInstanceCfg, "instance-config", "", "the unit's config the instance agent renders (default /etc/axiom/units/<unit>.json)")
 	serveCmd.Flags().BoolVar(&serveCheck, "check", false, "print which services other processes must run for --services, and exit")
 	serveCmd.Flags().DurationVar(&serveDrain, "drain-timeout", 30*time.Second, "how long calls in flight may finish when the process stops")
 	serveCmd.Flags().StringVar(&serveProcess, "process", "", "this process's name in svc_servers (default <host>-<pid>)")
@@ -1475,4 +1505,70 @@ func serveVersion() string {
 		return bi.Main.Version
 	}
 	return ""
+}
+
+// applyInstance sets serve's flags from the unit's config and
+// credentials (forge 21g-2, 21h): its service set, its flags (a flag on
+// the command line wins), its NATS user and servers, its data directory
+// ($STATE_DIRECTORY) and its process name. Without --instance it does
+// nothing.
+func applyInstance(cmd *cobra.Command) (instance.Credentials, error) {
+	if serveInstance == "" {
+		return instance.Credentials{}, nil
+	}
+	path := serveInstanceCfg
+	if path == "" {
+		path = "/etc/axiom/units/" + serveInstance + ".json"
+	}
+	c, err := instance.Read(path)
+	if err != nil {
+		return instance.Credentials{}, err
+	}
+	for _, name := range c.Names() {
+		f := cmd.Flags().Lookup(name)
+		if f == nil {
+			return instance.Credentials{}, fmt.Errorf("the unit's config names %q, which is not a serve flag", name)
+		}
+		if f.Changed {
+			continue
+		}
+		if err := cmd.Flags().Set(name, c.Flags[name]); err != nil {
+			return instance.Credentials{}, fmt.Errorf("the unit's config sets %s: %v", name, err)
+		}
+	}
+	if !cmd.Flags().Changed("services") && c.ServiceSet != "" {
+		serveServices = c.ServiceSet
+	}
+	if serveProcess == "" {
+		serveProcess = serveInstance
+	}
+	if serveDataDir == "" {
+		serveDataDir = os.Getenv("STATE_DIRECTORY")
+	}
+	creds := instance.ReadCredentials(os.Getenv("CREDENTIALS_DIRECTORY"))
+	if creds.NatsCreds != "" && serveNatsCreds == "" {
+		serveNatsCreds = creds.NatsCreds
+	}
+	if creds.NatsURLs != "" && serveNatsURL == "" {
+		serveNatsURL = creds.NatsURLs
+	}
+	return creds, nil
+}
+
+// unitSet is what a serve unit naming a service set may do (forge 21h):
+// any set --services takes; only a set running the config or secrets
+// service reads configuration secrets in Vault. Its NATS user may still
+// do everything: every process opens the live core's streams until
+// projections, followers and runners start only in the groups that need
+// them.
+func unitSet(set string) (issuer.Set, bool) {
+	names, err := services.ParseSet(set, serviceGroups(), knownServices())
+	if err != nil {
+		return issuer.Set{}, false
+	}
+	pol := issuer.ServerPolicy
+	if names == nil || names["config"] || names["secrets"] {
+		pol += issuer.ConfigPolicy
+	}
+	return issuer.Set{Permissions: natsauth.Everything, Policy: pol}, true
 }

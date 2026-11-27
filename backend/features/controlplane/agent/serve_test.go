@@ -161,3 +161,34 @@ func TestServeUnits(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 }
+
+// TestServeUnitSetChange (forge 21g-2): each serve unit's config file
+// names its service set; changing one unit's set restarts that unit
+// alone, and the template unit is Type=notify, so a unit is active once
+// serve reports it serves.
+func TestServeUnitSetChange(t *testing.T) {
+	f := newFake(t)
+	doc := func(webSet string) map[string]any {
+		return map[string]any{"instance": map[string]any{"name": "i1"}, "units": []map[string]any{
+			{"name": "web", "kind": "serve", "serviceSet": webSet, "config": map[string]any{"log-format": "json"}},
+			{"name": "data", "kind": "serve", "serviceSet": "data,runner"},
+		}}
+	}
+	if err := f.reconcile(doc("web")); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := os.ReadFile(filepath.Join(f.a.Root, "etc/axiom/units/web.json"))
+	if err != nil || !strings.Contains(string(cfg), `"serviceSet": "web"`) || !strings.Contains(string(cfg), `"log-format": "json"`) {
+		t.Fatalf("web's config %s %v", cfg, err)
+	}
+	tmpl, _ := os.ReadFile(filepath.Join(f.a.Root, "etc/systemd/system/axiom-serve@.service"))
+	if !strings.Contains(string(tmpl), "Type=notify") || !strings.Contains(string(tmpl), "--instance %i --instance-config /etc/axiom/units/%i.json") {
+		t.Fatalf("template unit:\n%s", tmpl)
+	}
+	if err := f.reconcile(doc("web,runner")); err != nil {
+		t.Fatal(err)
+	}
+	if f.count("systemctl restart axiom-serve@web") != 1 || f.count("systemctl restart axiom-serve@data") != 0 {
+		t.Fatalf("calls %v", f.calls())
+	}
+}

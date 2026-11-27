@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -23,7 +24,7 @@ type env struct {
 	vault *vaulttest.Fake
 }
 
-func setup(t *testing.T, processes int) *env {
+func setup(t *testing.T, processes int, opts ...func(*Issuer)) *env {
 	t.Helper()
 	s := natsauth.StartTestSecure(t)
 	fake := vaulttest.New(t)
@@ -46,6 +47,9 @@ func setup(t *testing.T, processes int) *env {
 		}
 		v, _ := vault.New(fake.URL, fake.Token)
 		i := &Issuer{C: c, D: s.D, Sys: s.System(), Vault: v}
+		for _, o := range opts {
+			o(i)
+		}
 		if err := i.Serve(ctx); err != nil {
 			t.Fatal(err)
 		}
@@ -240,5 +244,41 @@ func TestTwoProcesses(t *testing.T) {
 			}
 			return err != nil
 		})
+	}
+}
+
+// TestSetOf (forge 21h): with SetOf, any set serve takes is issued with
+// the policy it computes, a set without config reading no configuration
+// secret, and a set it refuses gets nothing.
+func TestSetOf(t *testing.T) {
+	e := setup(t, 1, func(i *Issuer) {
+		i.SetOf = func(set string) (Set, bool) {
+			switch set {
+			case "web":
+				return Set{Permissions: natsauth.Everything, Policy: ServerPolicy}, true
+			case "data,runner":
+				return Set{Permissions: natsauth.Everything, Policy: ServerPolicy + ConfigPolicy}, true
+			}
+			return Set{}, false
+		}
+	})
+	e.place(t, "i1", map[string]any{"name": "web", "kind": "serve", "serviceSet": "web"},
+		map[string]any{"name": "data", "kind": "serve", "serviceSet": "data,runner"},
+		map[string]any{"name": "odd", "kind": "serve", "serviceSet": "nope"})
+	a := e.agent(t, "i1")
+	if _, err := ask(t, a, "i1", "web"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ask(t, a, "i1", "data"); err != nil {
+		t.Fatal(err)
+	}
+	if p := e.vault.Policy("unit-web"); !strings.Contains(p, "server/*") || strings.Contains(p, "config/*") {
+		t.Fatalf("web's policy %q", p)
+	}
+	if p := e.vault.Policy(RoleName("data,runner")); RoleName("data,runner") != "unit-data_runner" || !strings.Contains(p, "config/*") {
+		t.Fatalf("data's policy %q", p)
+	}
+	if _, err := ask(t, a, "i1", "odd"); err == nil {
+		t.Fatal("issued for a set SetOf refuses")
 	}
 }

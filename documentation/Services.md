@@ -65,3 +65,17 @@ See [DataServices.md](DataServices.md): the inventory of storage owners, the gua
 - **Draining**: on SIGTERM a process marks itself draining in `svc_servers`, its servers leave their queue groups (`Server.Stop` now waits until the subscription is gone) and the calls in flight get `--drain-timeout` (30 s, `Locator.StopWithin`), then HTTP shuts down.
 - **Status**: `servicesservice` (`GET /api/v1/services/status`, action `services.read`, an administrator's on `app`) gives the processes and every service with the processes serving it. Forge's Axiom app shows it in the *Services* border tab with the recent `svc.call` records, and `forge services [calls]` prints both.
 - **Config across processes**: `configservice.Resolve` (Go only, no handler) is `Resolved` for a process that does not run config; the proxy's hand-written `Resolved` sends it.
+
+## Built in forge 21g-2: instance mode
+
+- `serve --instance <unit>` (with `--instance-config`, default `/etc/axiom/units/<unit>.json`, the file the instance agent renders from desired state: `{unit, serviceSet, version, config}`) is how the agent's `axiom-serve@<unit>` starts it. `services/instance` reads it: the service set becomes `--services`, every key of `config` is a serve flag by name (text, number, boolean, or a list joined with commas; a key that is not a flag fails the start, naming it), a flag given on the command line wins, the unit is the process's name, and the data directory defaults to systemd's `$STATE_DIRECTORY`.
+- Its NATS user and servers come from `$CREDENTIALS_DIRECTORY` (`nats.creds`, `nats-urls`, `instance.ReadCredentials`).
+- **Ready**: the template unit is now `Type=notify` (`TimeoutStartSec=15min`): serve sends `READY=1` on `$NOTIFY_SOCKET` (`instance.Notify`) once 21g-1's readiness opens its gate, so the agent sees the unit active only when it serves.
+- **A changed set** changes the unit's config file, and the agent restarts that unit alone (draining first, 21g-1); a set naming an unknown service fails the start with a message naming it (iteration question 8: restart, no hot swap).
+
+## Built in forge 21h: bootstrap and secrets
+
+- A unit with `vault-role-id` and `vault-wrapped-secret-id` in `$CREDENTIALS_DIRECTORY` unseals itself: `serve` calls `Bootstrap.Unseal` with them before waiting, exactly as `POST /bootstrap/unseal` does (the wrapping checked, unwrapped once, the AppRole login, the bundle), with no person. A restart gets a new SecretID from the issuer, since each is single-use.
+- With a service set, the call key comes from the bundle's `server/call-key` when Vault has it (`services.ParseKeys`), else `--call-key`.
+- The issuer takes `Issuer.SetOf` (serve's `unitSet`): any set `--services` takes is issued (the fixed table had no `data`), with the AppRole `issuer.RoleName(set)` (`unit-data_runner`) and a policy of `issuer.ServerPolicy` (the bundle) plus `ConfigPolicy` (configuration secrets) only for sets running the config or secrets service. A unit's NATS user still has every permission, and a `web` unit still reads `server/db-key`: every process opens the live core's streams and `web`'s session middleware reads the application database until those move into their groups.
+- Development is unchanged: no Vault, no `--instance`, `--services all`.

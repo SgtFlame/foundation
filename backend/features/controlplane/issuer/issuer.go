@@ -53,8 +53,16 @@ var Sets = map[string]Set{
 	"runner": {Permissions: natsauth.Everything, Policy: policy},
 }
 
-const policy = `path "foundation/data/server/*" { capabilities = ["read"] }
-path "foundation/data/config/*" { capabilities = ["read", "create", "update"] }
+const policy = ServerPolicy + ConfigPolicy
+
+// ServerPolicy reads the bootstrap bundle (server/*: the database key, the
+// call key, the server's AI key); every unit needs it.
+const ServerPolicy = `path "foundation/data/server/*" { capabilities = ["read"] }
+`
+
+// ConfigPolicy reads and writes configuration secrets: only units running
+// the config or secrets service need it (forge 21h).
+const ConfigPolicy = `path "foundation/data/config/*" { capabilities = ["read", "create", "update"] }
 path "foundation/metadata/config/*" { capabilities = ["read", "list"] }
 `
 
@@ -91,6 +99,10 @@ type Issuer struct {
 	Mount string
 	// UserTTL (30 days) and WrapTTL (60 s).
 	UserTTL, WrapTTL time.Duration
+	// SetOf is what a unit naming a service set may do (forge 21h): serve
+	// computes it from --services' groups, so any set serve takes is
+	// issued; nil uses the Sets table.
+	SetOf func(set string) (Set, bool)
 
 	mu sync.Mutex // the account claims are edited in memory
 }
@@ -190,7 +202,13 @@ func (i *Issuer) unit(ctx context.Context, instance string, data []byte) ctl.Uni
 	if err != nil {
 		return ctl.UnitReply{Error: "try again"}
 	}
-	s, known := Sets[set]
+	var s Set
+	known := false
+	if i.SetOf != nil {
+		s, known = i.SetOf(set)
+	} else {
+		s, known = Sets[set]
+	}
 	if !ok || !known {
 		audit.Warn(ctx, "issuer: refused credentials for unit %s on instance %s: not placed there", r.Unit, instance)
 		return ctl.UnitReply{Error: "no serve unit " + r.Unit + " is placed on this instance"}
@@ -204,7 +222,7 @@ func (i *Issuer) unit(ctx context.Context, instance string, data []byte) ctl.Uni
 	if err != nil {
 		return ctl.UnitReply{Error: "bad public key"}
 	}
-	role := "unit-" + set
+	role := RoleName(set)
 	roleID, wrapped, err := i.secretID(ctx, role, s.Policy, instance, r.Unit)
 	if err != nil {
 		audit.Error(ctx, err, "issuer: cannot get a SecretID")
@@ -391,4 +409,15 @@ func (i *Issuer) watch(ctx context.Context) {
 		case <-time.After(time.Second):
 		}
 	}
+}
+
+// RoleName is a set's AppRole: unit-<set>, characters Vault does not take
+// in a name (the commas of web,runner) as '_'.
+func RoleName(set string) string {
+	return "unit-" + strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
+			return r
+		}
+		return '_'
+	}, set)
 }
