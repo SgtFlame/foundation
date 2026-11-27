@@ -63,3 +63,7 @@ func (p *Proxy) SetMode(args conversationservice.SetModeArgs) conversationservic
 func (p *Proxy) SetWorkspaces(args conversationservice.SetWorkspacesArgs) conversationservice.SetWorkspacesResponse {
 	return services.Call[conversationservice.SetWorkspacesResponse](p.C, Service, "SetWorkspaces", args)
 }
+
+func (p *Proxy) SaveToolCall(args conversationservice.SaveToolCallArgs) conversationservice.SaveToolCallResponse {
+	return services.Call[conversationservice.SaveToolCallResponse](p.C, Service, "SaveToolCall", args, services.Idempotent())
+}

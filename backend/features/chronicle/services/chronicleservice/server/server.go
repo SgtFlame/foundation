@@ -13,17 +13,22 @@ import (
 // Ops are the operations a server runs; local ones are left out.
 func Ops(svc chronicleservice.Service) map[string]services.Handler {
 	return map[string]services.Handler{
-		"List":     services.Unary(svc.List),
-		"Get":      services.Unary(svc.Get),
-		"Create":   services.Unary(svc.Create),
-		"Update":   services.Unary(svc.Update),
-		"Delete":   services.Unary(svc.Delete),
-		"Link":     services.Unary(svc.Link),
-		"Types":    services.Unary(svc.Types),
-		"Reindex":  services.Unary(svc.Reindex),
-		"Share":    services.Unary(svc.Share),
-		"Shares":   services.Unary(svc.Shares),
-		"Moderate": services.Unary(svc.Moderate),
+		"List":          services.Unary(svc.List),
+		"Get":           services.Unary(svc.Get),
+		"Create":        services.Unary(svc.Create),
+		"Update":        services.Unary(svc.Update),
+		"Delete":        services.Unary(svc.Delete),
+		"Link":          services.Unary(svc.Link),
+		"Types":         services.Unary(svc.Types),
+		"Reindex":       services.Unary(svc.Reindex),
+		"Share":         services.Unary(svc.Share),
+		"Shares":        services.Unary(svc.Shares),
+		"Moderate":      services.Unary(svc.Moderate),
+		"MemoryEntries": services.Unary(svc.MemoryEntries),
+		"MemoryLinks":   services.Unary(svc.MemoryLinks),
+		"MemoryActive":  services.Unary(svc.MemoryActive),
+		"MemoryApply":   services.Unary(svc.MemoryApply),
+		"MemoryFlag":    services.Unary(svc.MemoryFlag),
 	}
 }
 

@@ -19,7 +19,6 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/logging"
 	"github.com/SgtFlame/foundation/backend/features/retrieval/services/retrievalservice"
-	"gorm.io/gorm"
 )
 
 // SourceID is the chronicle retrieval source's ID, and the SourceID of the
@@ -28,7 +27,9 @@ const SourceID = "chronicle"
 
 // Steps holds what the steps need.
 type Steps struct {
-	DB     *gorm.DB
+	// Memory is where the entries are read and changed (forge 21d-2):
+	// chronicle.MemoryIn(gdb) or chronicleservice.Memory(proxy).
+	Memory chronicle.Memory
 	Chat   chatservice.Service
 	Config config.Reader
 	// Retriever returns the retrieval service, created after the registry
@@ -58,21 +59,18 @@ func (s Steps) level(args features.ServiceArgs, stage func(aisettings.Stages) st
 // entries loads the principal's own entries of the given statuses (all
 // when none are given) by ID: what the memory update may change.
 func (s Steps) entries(args features.ServiceArgs, statuses ...string) (map[uint64]chronicle.Entry, error) {
-	return s.load(chronicle.Owned(s.DB.WithContext(args.Context()), args.Principal), statuses)
+	return s.load(args, false, statuses)
 }
 
 // visible loads the entries the principal may use, shared ones included,
 // of the given statuses by ID: what stage 1 may choose.
 func (s Steps) visible(args features.ServiceArgs, statuses ...string) (map[uint64]chronicle.Entry, error) {
-	return s.load(chronicle.Visible(s.DB.WithContext(args.Context()), args.Principal), statuses)
+	return s.load(args, true, statuses)
 }
 
-func (s Steps) load(q *gorm.DB, statuses []string) (map[uint64]chronicle.Entry, error) {
-	if len(statuses) > 0 {
-		q = q.Where("status IN ?", statuses)
-	}
-	var list []chronicle.Entry
-	if err := q.Find(&list).Error; err != nil {
+func (s Steps) load(args features.ServiceArgs, visible bool, statuses []string) (map[uint64]chronicle.Entry, error) {
+	list, err := s.Memory.Entries(args, visible, statuses)
+	if err != nil {
 		return nil, err
 	}
 	out := make(map[uint64]chronicle.Entry, len(list))

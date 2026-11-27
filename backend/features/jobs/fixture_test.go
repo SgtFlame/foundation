@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -101,21 +102,23 @@ func (h *hits) wait(t *testing.T, name string, n int, within time.Duration) []hi
 // settings is a jobs section for the runners.
 type settings struct{ s jobs.Settings }
 
-func (s settings) Resolved(features.ServiceArgs, string) (json.RawMessage, error) { return json.Marshal(s.s) }
+func (s settings) Resolved(features.ServiceArgs, string) (json.RawMessage, error) {
+	return json.Marshal(s.s)
+}
 
 type fixture struct {
-	t      *testing.T
-	srv    *natsd.Server
-	reg    *extensions.Registry
-	bus    *bus.Bus
-	subs   *subscribe.Subscriptions
-	p      *project.Projections
-	eng    *engine.Engine
+	t       *testing.T
+	srv     *natsd.Server
+	reg     *extensions.Registry
+	bus     *bus.Bus
+	subs    *subscribe.Subscriptions
+	p       *project.Projections
+	eng     *engine.Engine
 	deps    jobs.Deps
 	install *installs.Deps
 	hits    *hits
-	n      atomic.Int64
-	runner *jobs.Runner // the nodes' runner: enqueues, serves nothing until served
+	n       atomic.Int64
+	runner  *jobs.Runner // the nodes' runner: enqueues, serves nothing until served
 }
 
 func setup(t *testing.T, s jobs.Settings) *fixture {
@@ -158,7 +161,7 @@ func setup(t *testing.T, s jobs.Settings) *fixture {
 	srv := natsd.StartTest(t)
 	p := project.New(srv.JS(), reg)
 	t.Cleanup(p.Close)
-	eng := engine.New(gdb, reg, nil)
+	eng := engine.New(traces.In(gdb), reg, nil)
 	eng.SetSource(drafts.Source{Store: p})
 	f := &fixture{t: t, srv: srv, reg: reg, bus: bus.New(p), subs: subscribe.New(p, reg), p: p, eng: eng, hits: h}
 	nodeDeps = livenodes.Deps{Engine: eng, Bus: f.bus, Subscriptions: f.subs, Store: p}

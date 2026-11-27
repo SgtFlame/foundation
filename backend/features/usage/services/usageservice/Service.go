@@ -16,6 +16,35 @@ type Service interface {
 	Records(args RecordsArgs) RecordsResponse
 	//svc:idempotent
 	Capture(args CaptureArgs) CaptureResponse
+	// Append stores a recorder's batch of records and captures, each once
+	// by its ID, and PurgeCaptures deletes expired captures (forge 21d-2):
+	// usage.Store for recorders in processes without the tenant database.
+	// Records keep their own tenants; only service principals may call
+	// them, and only Go code.
+	//svc:idempotent
+	Append(args AppendArgs) AppendResponse
+	//svc:idempotent
+	PurgeCaptures(args PurgeCapturesArgs) PurgeCapturesResponse
+}
+
+type AppendArgs struct {
+	features.ServiceArgs
+	Records  []usage.Record
+	Captures []usage.Capture
+}
+
+type AppendResponse struct {
+	Common features.ServiceResponse
+}
+
+type PurgeCapturesArgs struct {
+	features.ServiceArgs
+	Before time.Time
+}
+
+type PurgeCapturesResponse struct {
+	Common  features.ServiceResponse
+	Deleted int64
 }
 
 // RecordsArgs pages through the records newest first. Zero times leave the

@@ -3,6 +3,7 @@ package impl
 import (
 	"context"
 	"encoding/json"
+	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -101,7 +102,7 @@ func newTestService(t *testing.T, chat *fakeChat) (*service, *[]conversation.Gat
 			{"id": "flash", "model": "m-flash", "pricing": {"inputPerMTok": 1, "outputPerMTok": 10}}]}`,
 		conversationsettings.ModesID: testModesSection,
 	}
-	s := newService(WithDB(gdb), WithChat(chat), WithConfig(config), WithRegistry(reg), WithEngine(engine.New(gdb, reg, config)))
+	s := newService(WithDB(gdb), WithChat(chat), WithConfig(config), WithRegistry(reg), WithEngine(engine.New(traces.In(gdb), reg, config)))
 	// The Ask model of the modes' titles is the service's chat, whichever it is when they run
 	toolsnodes.Contribute(reg, func() toolsnodes.Deps { return toolsnodes.Deps{Chat: s.chat, Registry: reg} })
 	return s, &gathered

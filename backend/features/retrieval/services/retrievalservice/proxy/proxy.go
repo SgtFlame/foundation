@@ -28,3 +28,7 @@ func New(c *services.Client) *Proxy { return &Proxy{C: c} }
 func (p *Proxy) Retrieve(args retrievalservice.RetrieveArgs) retrievalservice.RetrieveResponse {
 	return services.Call[retrievalservice.RetrieveResponse](p.C, Service, "Retrieve", args)
 }
+
+func (p *Proxy) VoteOnce(args retrievalservice.VoteOnceArgs) retrievalservice.VoteOnceResponse {
+	return services.Call[retrievalservice.VoteOnceResponse](p.C, Service, "VoteOnce", args, services.Idempotent())
+}

@@ -16,6 +16,50 @@ type Service interface {
 	NodeTypes(args NodeTypesArgs) NodeTypesResponse
 	ListRuns(args ListRunsArgs) ListRunsResponse
 	GetTrace(args GetTraceArgs) GetTraceResponse
+	// SaveRun keeps a run's trace for an engine in any process (forge
+	// 21d-2): with Begin its record as it starts, else the finished run and
+	// its steps, replacing an earlier copy. ReadRun reads one back and
+	// PurgeRuns deletes old ones. The tenant is the principal's; only
+	// service principals may call them, and only Go code.
+	//svc:idempotent
+	SaveRun(args SaveRunArgs) SaveRunResponse
+	//svc:idempotent
+	ReadRun(args ReadRunArgs) ReadRunResponse
+	//svc:idempotent
+	PurgeRuns(args PurgeRunsArgs) PurgeRunsResponse
+}
+
+type SaveRunArgs struct {
+	features.ServiceArgs
+	Begin bool
+	Run   cognition.Run
+	Steps []cognition.Step
+}
+
+type SaveRunResponse struct {
+	Common features.ServiceResponse
+}
+
+type ReadRunArgs struct {
+	features.ServiceArgs
+	RunID uint64
+}
+
+type ReadRunResponse struct {
+	Common features.ServiceResponse
+	Found  bool
+	Run    cognition.Run
+	Steps  []cognition.Step
+}
+
+type PurgeRunsArgs struct {
+	features.ServiceArgs
+	KeepRuns int
+	KeepDays int
+}
+
+type PurgeRunsResponse struct {
+	Common features.ServiceResponse
 }
 
 type ListGraphsArgs struct {

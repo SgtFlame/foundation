@@ -165,6 +165,11 @@ var Services = []services.Spec{
 			{Name: "Share"},
 			{Name: "Shares"},
 			{Name: "Moderate"},
+			{Name: "MemoryEntries", Idempotent: true},
+			{Name: "MemoryLinks", Idempotent: true},
+			{Name: "MemoryActive", Idempotent: true},
+			{Name: "MemoryApply"},
+			{Name: "MemoryFlag", Idempotent: true},
 		},
 		Proxy: func(c *services.Client) any { return chronicleproxy.New(c) },
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
@@ -180,6 +185,9 @@ var Services = []services.Spec{
 			{Name: "NodeTypes", Local: true},
 			{Name: "ListRuns"},
 			{Name: "GetTrace"},
+			{Name: "SaveRun", Idempotent: true},
+			{Name: "ReadRun", Idempotent: true},
+			{Name: "PurgeRuns", Idempotent: true},
 		},
 		Proxy: func(c *services.Client) any { return cognitionproxy.New(c) },
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
@@ -229,6 +237,7 @@ var Services = []services.Spec{
 			{Name: "Answer"},
 			{Name: "SetMode"},
 			{Name: "SetWorkspaces"},
+			{Name: "SaveToolCall", Idempotent: true},
 		},
 		Proxy: func(c *services.Client) any { return conversationproxy.New(c) },
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
@@ -385,6 +394,7 @@ var Services = []services.Spec{
 		Interface: reflect.TypeOf((*retrievalservice.Service)(nil)).Elem(),
 		Ops: []services.OpSpec{
 			{Name: "Retrieve"},
+			{Name: "VoteOnce", Idempotent: true},
 		},
 		Proxy: func(c *services.Client) any { return retrievalproxy.New(c) },
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
@@ -444,6 +454,8 @@ var Services = []services.Spec{
 			{Name: "Summary", Idempotent: true},
 			{Name: "Records", Idempotent: true},
 			{Name: "Capture", Idempotent: true},
+			{Name: "Append", Idempotent: true},
+			{Name: "PurgeCaptures", Idempotent: true},
 		},
 		Proxy: func(c *services.Client) any { return usageproxy.New(c) },
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {

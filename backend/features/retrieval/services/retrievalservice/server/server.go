@@ -14,6 +14,7 @@ import (
 func Ops(svc retrievalservice.Service) map[string]services.Handler {
 	return map[string]services.Handler{
 		"Retrieve": services.Unary(svc.Retrieve),
+		"VoteOnce": services.Unary(svc.VoteOnce),
 	}
 }
 

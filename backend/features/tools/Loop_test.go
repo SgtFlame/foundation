@@ -17,6 +17,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	"github.com/SgtFlame/foundation/backend/features/tools/settings"
+	"gorm.io/gorm"
 )
 
 // scriptChat answers each model call with the next reply of its script,
@@ -112,7 +113,7 @@ func newLoop(t *testing.T, chat chatservice.Service) (Loop, RunArgs) {
 		t.Fatal(err)
 	}
 	sa := features.ServiceArgs{Ctx: context.Background(), Principal: features.LocalPrincipal(), Meta: features.Meta{Feature: "chat", RoundID: 7}}
-	return Loop{DB: gdb, Chat: chat}, RunArgs{
+	return Loop{Calls: testCalls{gdb}, Chat: chat}, RunArgs{
 		CompleteArgs: chatservice.CompleteArgs{ServiceArgs: sa, Messages: []chatservice.Message{{Role: chatservice.RoleUser, Content: "hi"}}},
 		Settings:     toolssettings.Defaults,
 	}
@@ -144,7 +145,7 @@ func TestLoopRunsToolsAndAnswers(t *testing.T) {
 		t.Fatalf("tools sent = %+v", chat.got[0].Tools)
 	}
 	var stored int64
-	loop.DB.Model(&ToolCall{}).Where("round_id = ?", 7).Count(&stored)
+	loop.Calls.(testCalls).db.Model(&ToolCall{}).Where("round_id = ?", 7).Count(&stored)
 	if stored != 2 {
 		t.Fatalf("stored %d calls", stored)
 	}
@@ -406,4 +407,11 @@ func TestLoopRetriesABusyProviderInALongRound(t *testing.T) {
 	if out.Response.Common.Code != 503 || len(out.Calls) != 1 {
 		t.Fatalf("outcome = %+v", out.Response.Common)
 	}
+}
+
+// testCalls keeps tool calls in the test's database.
+type testCalls struct{ db *gorm.DB }
+
+func (c testCalls) SaveCall(args features.ServiceArgs, rec *ToolCall) error {
+	return c.db.WithContext(args.Context()).Create(rec).Error
 }

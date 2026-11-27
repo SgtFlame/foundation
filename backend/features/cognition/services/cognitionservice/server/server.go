@@ -17,6 +17,9 @@ func Ops(svc cognitionservice.Service) map[string]services.Handler {
 		"GetGraph":   services.Unary(svc.GetGraph),
 		"ListRuns":   services.Unary(svc.ListRuns),
 		"GetTrace":   services.Unary(svc.GetTrace),
+		"SaveRun":    services.Unary(svc.SaveRun),
+		"ReadRun":    services.Unary(svc.ReadRun),
+		"PurgeRuns":  services.Unary(svc.PurgeRuns),
 	}
 }
 

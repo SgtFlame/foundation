@@ -9,7 +9,6 @@ import (
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/chronicle"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
-	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	"github.com/SgtFlame/foundation/backend/features/retrieval/services/retrievalservice"
 )
@@ -121,8 +120,8 @@ func (s Steps) Candidates(in CandidatesIn) (Candidates, error) {
 		}
 	}
 	if len(hubs) > 0 {
-		var links []chronicle.EntryLink
-		if err := chronicle.Owned(s.DB.WithContext(in.Context()), in.Principal).Where("from_id IN ? OR to_id IN ?", hubs, hubs).Find(&links).Error; err != nil {
+		links, err := s.Memory.Links(in.ServiceArgs, hubs)
+		if err != nil {
 			return out, err
 		}
 		hub := map[uint64]bool{}
@@ -152,15 +151,5 @@ func (s Steps) active(in CandidatesIn) ([]uint64, error) {
 	if len(in.Window) == 0 {
 		return nil, nil
 	}
-	last := in.Window[len(in.Window)-1]
-	var segments []retrieval.RoundSegment
-	err := s.DB.WithContext(in.Context()).Scopes(db.InTenant(in.Principal.TenantID)).
-		Where("round_id = ? AND source_id = ? AND pinned", last.ID, SourceID).Order("number").Find(&segments).Error
-	ids := make([]uint64, 0, len(segments))
-	for _, seg := range segments {
-		if id, err := strconv.ParseUint(seg.SegmentKey, 10, 64); err == nil {
-			ids = append(ids, id)
-		}
-	}
-	return ids, err
+	return s.Memory.Active(in.ServiceArgs, in.Window[len(in.Window)-1].ID)
 }

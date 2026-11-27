@@ -147,7 +147,7 @@ func runMode(x *cognition.Exec, in cognition.Values, d toolsnodes.Deps) (cogniti
 	}
 	on := func(b *bool) bool { return b == nil || *b }
 	host := &conversation.CallHost{
-		Args: sa, Registry: d.Registry, DB: d.DB, Chat: d.Chat, Config: d.Config,
+		Args: sa, Registry: d.Registry, Calls: d.Calls, Chat: d.Chat, Config: d.Config,
 		ModeID: mode.ID, ModeLabel: mode.Label, Message: message, Window: windowOf(turns),
 		Level: level.ID, ContextWindow: window, Passages: passages,
 		ProviderSettings: map[string]json.RawMessage{

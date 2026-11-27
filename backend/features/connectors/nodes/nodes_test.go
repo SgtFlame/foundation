@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -71,7 +72,9 @@ func (h *hits) named(name string) []hit {
 
 type settings struct{ s jobs.Settings }
 
-func (s settings) Resolved(features.ServiceArgs, string) (json.RawMessage, error) { return json.Marshal(s.s) }
+func (s settings) Resolved(features.ServiceArgs, string) (json.RawMessage, error) {
+	return json.Marshal(s.s)
+}
 
 type fixture struct {
 	t    *testing.T
@@ -135,7 +138,7 @@ func setup(t *testing.T) *fixture {
 	srv := natsd.StartTest(t)
 	p := project.New(srv.JS(), reg)
 	t.Cleanup(p.Close)
-	eng := engine.New(gdb, reg, nil)
+	eng := engine.New(traces.In(gdb), reg, nil)
 	eng.SetSource(drafts.Source{Store: p})
 	b := bus.New(p)
 	subs := subscribe.New(p, reg)

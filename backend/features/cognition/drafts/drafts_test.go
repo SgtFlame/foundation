@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -59,7 +60,7 @@ func setup(t *testing.T) *fixture {
 	srv := natsd.StartTest(t)
 	p := project.New(srv.JS(), reg)
 	t.Cleanup(p.Close)
-	f.engine = engine.New(gdb, reg, nil)
+	f.engine = engine.New(traces.In(gdb), reg, nil)
 	f.engine.SetSource(drafts.Source{Store: p})
 	deps = drafts.Deps{Engine: f.engine, Projections: p}
 	f.bus, f.subs, f.p = bus.New(p), subscribe.New(p, reg), p

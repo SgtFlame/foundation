@@ -36,3 +36,11 @@ func (p *Proxy) Records(args usageservice.RecordsArgs) usageservice.RecordsRespo
 func (p *Proxy) Capture(args usageservice.CaptureArgs) usageservice.CaptureResponse {
 	return services.Call[usageservice.CaptureResponse](p.C, Service, "Capture", args, services.Idempotent())
 }
+
+func (p *Proxy) Append(args usageservice.AppendArgs) usageservice.AppendResponse {
+	return services.Call[usageservice.AppendResponse](p.C, Service, "Append", args, services.Idempotent())
+}
+
+func (p *Proxy) PurgeCaptures(args usageservice.PurgeCapturesArgs) usageservice.PurgeCapturesResponse {
+	return services.Call[usageservice.PurgeCapturesResponse](p.C, Service, "PurgeCaptures", args, services.Idempotent())
+}

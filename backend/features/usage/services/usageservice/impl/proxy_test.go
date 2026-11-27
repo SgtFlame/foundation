@@ -52,3 +52,35 @@ func TestProxyCaptureAndRecords(t *testing.T) {
 		t.Fatalf("capture %+v, want %+v", c.Common, want)
 	}
 }
+
+// A recorder in another process appends through the proxy; a retried
+// batch stores each record once (forge 21d-2).
+func TestRecorderAppendsThroughTheProxy(t *testing.T) {
+	gdb, err := db.Open(db.WithPath(filepath.Join(t.TempDir(), "test.db")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Migrate(gdb, usage.Models()...); err != nil {
+		t.Fatal(err)
+	}
+	store := usageservice.Store(viaNATS(t, &service{db: gdb}))
+	recs := []usage.Record{{Tenanted: db.Tenanted{TenantID: 1}, Feature: "chat", ModelName: "m"}}
+	recs[0].ID = features.NewTSID()
+	caps := []usage.Capture{{Tenanted: db.Tenanted{TenantID: 1}, RecordID: recs[0].ID, System: "s"}}
+	for i := 0; i < 2; i++ {
+		if err := store.Append(t.Context(), recs, caps); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var n, c int64
+	gdb.Model(&usage.Record{}).Count(&n)
+	gdb.Model(&usage.Capture{}).Count(&c)
+	if n != 1 || c != 1 {
+		t.Fatalf("%d records, %d captures", n, c)
+	}
+	// A person cannot append.
+	r := (&service{db: gdb}).Append(usageservice.AppendArgs{ServiceArgs: features.ServiceArgs{Principal: features.LocalPrincipal()}, Records: recs})
+	if r.Common.Code != http.StatusForbidden {
+		t.Fatalf("a person appended: %+v", r.Common)
+	}
+}

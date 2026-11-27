@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -98,7 +99,7 @@ func newRender(t *testing.T) *render {
 	t.Cleanup(p.Close)
 	b := bus.New(p)
 	subs := subscribe.New(p, reg)
-	eng := engine.New(gdb, reg, nil)
+	eng := engine.New(traces.In(gdb), reg, nil)
 	eng.SetSource(drafts.Source{Store: p})
 	draftDeps = drafts.Deps{Engine: eng, Projections: p}
 	liveDeps = livenodes.Deps{Engine: eng, Bus: b, Subscriptions: subs, Store: p}

@@ -168,7 +168,7 @@ func (h *host) Reply(a conversation.ReplyArgs) (conversation.ReplyOutcome, error
 	call.Ctx = retrieval.WithOptions(call.Context(), retrievalcontext.OptionsOf(h.Settings(retrievalcontext.ID)))
 	start := time.Now()
 	c := &citer{s: h.s, args: args, r: r, emit: h.emit}
-	out := tools.Loop{DB: h.s.db, Chat: h.s.chat}.Run(tools.RunArgs{
+	out := tools.Loop{Calls: conversation.CallsIn(h.s.db), Chat: h.s.chat}.Run(tools.RunArgs{
 		CompleteArgs: chatservice.CompleteArgs{ServiceArgs: call, Level: level.ID, System: a.System, Messages: messages,
 			ModelRef: a.ModelRef, Temperature: a.Temperature, MaxTokens: a.MaxTokens, ThinkingBudget: a.ThinkingBudget},
 		Tools:    a.Tools,

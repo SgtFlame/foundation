@@ -24,6 +24,12 @@ type Service interface {
 	Answer(args AnswerArgs) AnswerResponse
 	SetMode(args SetModeArgs) SetModeResponse
 	SetWorkspaces(args SetWorkspacesArgs) SetWorkspacesResponse
+	// SaveToolCall keeps a tool call of a round or a run (an upsert by its
+	// ID, which the caller sets), for a tool loop in any process (forge
+	// 21d-2). Its tenant and owner are the principal's. Only Go code calls
+	// it.
+	//svc:idempotent
+	SaveToolCall(args SaveToolCallArgs) SaveToolCallResponse
 }
 
 // ListArgs pages through the principal's conversations, newest first.
@@ -256,5 +262,15 @@ type AnswerArgs struct {
 }
 
 type AnswerResponse struct {
+	Common features.ServiceResponse
+}
+
+// SaveToolCallArgs is one tool call's record, its ID set.
+type SaveToolCallArgs struct {
+	features.ServiceArgs
+	Call tools.ToolCall
+}
+
+type SaveToolCallResponse struct {
 	Common features.ServiceResponse
 }

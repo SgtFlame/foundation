@@ -8,11 +8,9 @@ import (
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/apps"
 	"github.com/SgtFlame/foundation/backend/features/authz"
-	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/cognition/rest/cognitiondto"
 	"github.com/SgtFlame/foundation/backend/features/cognition/services/cognitionservice"
 	"github.com/SgtFlame/foundation/backend/features/config"
-	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
 )
@@ -124,14 +122,17 @@ func contributeQueries(reg *extensions.Registry, deps func() Deps) {
 			if d.Engine == nil {
 				return log.Errorf("there is no engine")
 			}
-			// Traces are kept where the run ran: this server's database
-			var run cognition.Run
-			if err := d.Engine.DB().WithContext(args.Context()).Scopes(db.InTenant(args.Principal.TenantID)).First(&run, p.RunID).Error; err != nil {
-				return log.Code("run_not_found").Errorf("the trace of run %d is not kept here; it may have expired", p.RunID)
+			// Traces are kept by the cognition data service (forge 21d-2)
+			t := d.Engine.Traces()
+			if t == nil {
+				return log.Code("run_not_found").Errorf("traces are not kept here")
 			}
-			var steps []cognition.Step
-			if err := d.Engine.DB().WithContext(args.Context()).Scopes(db.InTenant(args.Principal.TenantID)).Where("run_id = ?", run.ID).Order("seq").Find(&steps).Error; err != nil {
+			run, steps, found, err := t.Get(args.Context(), args.Principal.TenantID, p.RunID)
+			if err != nil {
 				return log.Wrap(err)
+			}
+			if !found {
+				return log.Code("run_not_found").Errorf("the trace of run %d is not kept; it may have expired", p.RunID)
 			}
 			// As /cognition/trace gives it
 			trace := cognitiondto.GetTraceResponseFrom(cognitionservice.GetTraceResponse{Common: features.OK(), Run: run, Steps: steps})

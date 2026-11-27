@@ -47,3 +47,15 @@ func (p *Proxy) ListRuns(args cognitionservice.ListRunsArgs) cognitionservice.Li
 func (p *Proxy) GetTrace(args cognitionservice.GetTraceArgs) cognitionservice.GetTraceResponse {
 	return services.Call[cognitionservice.GetTraceResponse](p.C, Service, "GetTrace", args)
 }
+
+func (p *Proxy) SaveRun(args cognitionservice.SaveRunArgs) cognitionservice.SaveRunResponse {
+	return services.Call[cognitionservice.SaveRunResponse](p.C, Service, "SaveRun", args, services.Idempotent())
+}
+
+func (p *Proxy) ReadRun(args cognitionservice.ReadRunArgs) cognitionservice.ReadRunResponse {
+	return services.Call[cognitionservice.ReadRunResponse](p.C, Service, "ReadRun", args, services.Idempotent())
+}
+
+func (p *Proxy) PurgeRuns(args cognitionservice.PurgeRunsArgs) cognitionservice.PurgeRunsResponse {
+	return services.Call[cognitionservice.PurgeRunsResponse](p.C, Service, "PurgeRuns", args, services.Idempotent())
+}

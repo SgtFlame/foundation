@@ -36,6 +36,69 @@ type Service interface {
 	// copies the entry into the global tenant. Nobody moderates their own,
 	// and the two approvals come from two people.
 	Moderate(args ModerateArgs) ModerateResponse
+	// The memory operations are what Chronicle's steps read and change
+	// (chronicle.Memory) when they run in a process without the tenant
+	// database (forge 21d-2). Only Go code calls them.
+	//svc:idempotent
+	MemoryEntries(args MemoryEntriesArgs) MemoryEntriesResponse
+	//svc:idempotent
+	MemoryLinks(args MemoryLinksArgs) MemoryLinksResponse
+	//svc:idempotent
+	MemoryActive(args MemoryActiveArgs) MemoryActiveResponse
+	MemoryApply(args MemoryApplyArgs) MemoryApplyResponse
+	//svc:idempotent
+	MemoryFlag(args MemoryFlagArgs) MemoryFlagResponse
+}
+
+type MemoryEntriesArgs struct {
+	features.ServiceArgs
+	Visible  bool
+	Statuses []string
+}
+
+type MemoryEntriesResponse struct {
+	Common  features.ServiceResponse
+	Entries []chronicle.Entry
+}
+
+type MemoryLinksArgs struct {
+	features.ServiceArgs
+	Hubs []uint64
+}
+
+type MemoryLinksResponse struct {
+	Common features.ServiceResponse
+	Links  []chronicle.EntryLink
+}
+
+type MemoryActiveArgs struct {
+	features.ServiceArgs
+	RoundID uint64
+}
+
+type MemoryActiveResponse struct {
+	Common  features.ServiceResponse
+	Entries []uint64
+}
+
+type MemoryApplyArgs struct {
+	features.ServiceArgs
+	Update chronicle.MemoryUpdate
+}
+
+type MemoryApplyResponse struct {
+	Common   features.ServiceResponse
+	Updated  []chronicle.Entry
+	Proposed []chronicle.Entry
+}
+
+type MemoryFlagArgs struct {
+	features.ServiceArgs
+	RoundID uint64
+}
+
+type MemoryFlagResponse struct {
+	Common features.ServiceResponse
 }
 
 type ShareArgs struct {

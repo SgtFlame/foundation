@@ -31,16 +31,12 @@ var Allow = []Row{
 	{Package: "features/usage/services/usageservice/impl", Owner: "usage", Storage: "tenant DB", Imports: []string{gormImp}},
 	{Package: "features/conversation", Owner: "conversation", Storage: "tenant DB: conversations, rounds, segments, feedback", Imports: []string{gormImp}},
 	{Package: "features/conversation/services/conversationservice/impl", Owner: "conversation", Storage: "tenant DB", Imports: []string{gormImp}},
-	{Package: "features/tools", Owner: "conversation", Storage: "tenant DB: tool calls", Until: "21d-2", Imports: []string{gormImp}},
-	{Package: "features/tools/nodes", Owner: "conversation", Storage: "tenant DB: tool calls", Until: "21d-2", Imports: []string{gormImp}},
 	{Package: "features/chronicle", Owner: "chronicle", Storage: "tenant DB: Chronicle entries, links, rounds, shares", Imports: []string{gormImp}},
 	{Package: "features/chronicle/services/chronicleservice/impl", Owner: "chronicle", Storage: "tenant DB", Imports: []string{gormImp}},
-	{Package: "features/chronicle/steps", Owner: "chronicle", Storage: "tenant DB", Until: "21d-2", Imports: []string{gormImp}},
 	{Package: "features/retrieval", Owner: "retrieval", Storage: "tenant DB: segment feedback and votes", Imports: []string{gormImp}},
 	{Package: "features/retrieval/services/retrievalservice/impl", Owner: "retrieval", Storage: "tenant DB", Imports: []string{gormImp}},
-	{Package: "features/retrieval/tools", Owner: "retrieval", Storage: "tenant DB: votes", Until: "21d-2", Imports: []string{gormImp}},
 	{Package: "features/retrieval/retrievaltest", Owner: "retrieval", Storage: "test fixture", Imports: []string{gormImp}},
-	{Package: "features/cognition/engine", Owner: "cognition", Storage: "tenant DB: Cognition runs and steps", Until: "21d-2", Imports: []string{gormImp}},
+	{Package: "features/cognition/traces", Owner: "cognition", Storage: "tenant DB: Cognition runs and steps", Imports: []string{gormImp}},
 	{Package: "features/cognition/services/cognitionservice/impl", Owner: "cognition", Storage: "tenant DB", Imports: []string{gormImp}},
 
 	// Definition copies and large tables (21d-3).

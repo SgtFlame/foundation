@@ -22,6 +22,7 @@ func Ops(svc conversationservice.Service) map[string]services.Handler {
 		"Answer":           services.Unary(svc.Answer),
 		"SetMode":          services.Unary(svc.SetMode),
 		"SetWorkspaces":    services.Unary(svc.SetWorkspaces),
+		"SaveToolCall":     services.Unary(svc.SaveToolCall),
 	}
 }
 

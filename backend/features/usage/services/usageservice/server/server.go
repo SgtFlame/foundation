@@ -13,9 +13,11 @@ import (
 // Ops are the operations a server runs; local ones are left out.
 func Ops(svc usageservice.Service) map[string]services.Handler {
 	return map[string]services.Handler{
-		"Summary": services.Unary(svc.Summary),
-		"Records": services.Unary(svc.Records),
-		"Capture": services.Unary(svc.Capture),
+		"Summary":       services.Unary(svc.Summary),
+		"Records":       services.Unary(svc.Records),
+		"Capture":       services.Unary(svc.Capture),
+		"Append":        services.Unary(svc.Append),
+		"PurgeCaptures": services.Unary(svc.PurgeCaptures),
 	}
 }
 

@@ -68,3 +68,23 @@ func (p *Proxy) Shares(args chronicleservice.SharesArgs) chronicleservice.Shares
 func (p *Proxy) Moderate(args chronicleservice.ModerateArgs) chronicleservice.ModerateResponse {
 	return services.Call[chronicleservice.ModerateResponse](p.C, Service, "Moderate", args)
 }
+
+func (p *Proxy) MemoryEntries(args chronicleservice.MemoryEntriesArgs) chronicleservice.MemoryEntriesResponse {
+	return services.Call[chronicleservice.MemoryEntriesResponse](p.C, Service, "MemoryEntries", args, services.Idempotent())
+}
+
+func (p *Proxy) MemoryLinks(args chronicleservice.MemoryLinksArgs) chronicleservice.MemoryLinksResponse {
+	return services.Call[chronicleservice.MemoryLinksResponse](p.C, Service, "MemoryLinks", args, services.Idempotent())
+}
+
+func (p *Proxy) MemoryActive(args chronicleservice.MemoryActiveArgs) chronicleservice.MemoryActiveResponse {
+	return services.Call[chronicleservice.MemoryActiveResponse](p.C, Service, "MemoryActive", args, services.Idempotent())
+}
+
+func (p *Proxy) MemoryApply(args chronicleservice.MemoryApplyArgs) chronicleservice.MemoryApplyResponse {
+	return services.Call[chronicleservice.MemoryApplyResponse](p.C, Service, "MemoryApply", args)
+}
+
+func (p *Proxy) MemoryFlag(args chronicleservice.MemoryFlagArgs) chronicleservice.MemoryFlagResponse {
+	return services.Call[chronicleservice.MemoryFlagResponse](p.C, Service, "MemoryFlag", args, services.Idempotent())
+}

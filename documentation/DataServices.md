@@ -9,6 +9,18 @@ Who owns each table, stream and bucket (forge iteration 21, part 21d). A **data 
 - **Users' names**: records' expansions of a relation to `user` (`recordsdata.Deps.Users`) call `userservice.Names {ids}` (Go only, idempotent; `tenant.read`, the tenant's members only, keyed by id as text) instead of reading the application database.
 - **Not moved yet**: `rest`'s `Authenticate` and `identity.Sessions` still read the signing keys and refresh tokens in-process; they move behind `identityservice` with the `web` group (21g-1). `identity.MigrateRoles`, `MarkSuperAdmins` and `Bootstrap` run in the process that holds the application database.
 
+## Built in forge 21d-2
+
+The tenant database's runtime tables are reached only through their data services. Each owner gives an interface its callers hold, implemented over the database in the owning process and over the service's proxy elsewhere:
+
+- **Tool calls**: `tools.Loop.Calls` is a `tools.CallStore` (`SaveCall(args, rec)`, the record's ID set before the save, so a retry stores it once): `conversation.CallsIn(gdb)` in process, `conversationservice.ToolCalls(svc)` through `SaveToolCall` (`conversation.write`; tenant and owner from the principal). `toolsnodes.Deps.Calls` and `conversation.CallHost.Calls` replace their `DB`.
+- **Votes**: `retrievaltools.Contribute(reg, func() retrievalservice.Service)`; `retrievaltools.Vote` checks the sandbox and dry run on the caller's side (the context does not travel) and calls `retrievalservice.VoteOnce` (`retrieval.vote`, 400 `bad_vote` for a verdict other than up or down).
+- **Cognition traces**: `engine.New(t engine.Traces, reg, cfg)`, `Engine.Traces()` in place of `DB()`. `cognition/traces` (`traces.In(gdb)`, nil for a nil database) is the store; `cognitionservice.Traces(svc)` reaches it through `SaveRun` (with `Begin` as a run starts), `ReadRun` and `PurgeRuns`, service principals only. `jobs.trace` reads a trace through `Traces().Get`, so it no longer depends on where the run ran, and `bp.test` takes the failed node from the run's result.
+- **Chronicle memory**: Chronicle's steps keep running where the graph runs, since they call the model and render templates with the run's `tmpl.Env`, which cannot travel (21d-2 question 1: the data behind `chronicleservice`, the steps beside the run). `chroniclesteps.Steps.Memory` is a `chronicle.Memory` (`Entries`, `Links`, `Active`, `Apply` for a memory update's changes in one transaction, `Flag` for a 🚫 round): `chronicle.MemoryIn(gdb)` or `chronicleservice.Memory(svc)` through the `Memory*` operations (`chronicle.read`/`write`; `MemoryApply` is not retried, since it proposes entries).
+- **Usage**: `usage.NewRecorder(store usage.Store, …)` batches as before and writes through `Append` (each record and capture once by ID; the recorder sets the IDs) and `PurgeCaptures`: `usage.StoreIn(gdb)` or `usageservice.Store(svc)`, service principals only. Records are still published on `usage.Events` in the recorder's process (buses cross processes in 21f-2).
+- **Settings** were already read through `configservice` (`config.Read`), so nothing moved.
+- The guard lost the rows of `tools`, `tools/nodes`, `retrieval/tools`, `chronicle/steps` and `cognition/engine` (`cognition/traces` is the owner's), and Forge's allow list is now empty.
+
 ## The inventory
 
 | Storage | Owner (data service) | Packages allowed a handle | Removed by |
@@ -19,10 +31,10 @@ Who owns each table, stream and bucket (forge iteration 21, part 21d). A **data 
 | Application DB: user log levels | `logs` (`logsservice`) | `logsservice/impl` | stays |
 | Tenant DB: settings | `config` | `configservice/impl` | stays |
 | Tenant DB: usage records and captures | `usage` | `usage`, `usageservice/impl` | stays |
-| Tenant DB: conversations, rounds, segments, feedback, tool calls | `conversation` | `conversation`, `conversationservice/impl`; `tools`, `tools/nodes` | 21d-2 (`tools`) |
-| Tenant DB: Chronicle entries, links, rounds, shares; LanceDB `entries` | `chronicle` | `chronicle`, `chronicleservice/impl`; `chronicle/steps` | 21d-2 (`steps`) |
-| Tenant DB: segment feedback and votes | `retrieval` | `retrieval`, `retrievalservice/impl`, `retrievaltest`; `retrieval/tools`, Forge's `devtools/catalog` | 21d-2 (`tools`, catalog) |
-| Tenant DB: Cognition runs and steps | `cognition` | `cognitionservice/impl`; `cognition/engine` (and its `DB()` read by `jobs`, `cognition/drafts`) | 21d-2 |
+| Tenant DB: conversations, rounds, segments, feedback, tool calls | `conversation` | `conversation`, `conversationservice/impl` | stays |
+| Tenant DB: Chronicle entries, links, rounds, shares; LanceDB `entries` | `chronicle` | `chronicle`, `chronicleservice/impl` | stays |
+| Tenant DB: segment feedback and votes | `retrieval` | `retrieval`, `retrievalservice/impl`, `retrievaltest` | stays |
+| Tenant DB: Cognition runs and steps | `cognition` | `cognitionservice/impl`, `cognition/traces` | stays |
 | Tenant DB: entity versions, prefab copies, app rows, installs, versions; large tables `rec_*` | `entity`, `prefab`, `app`, `record` | the services' `impl`; `records/entities`, `ui/prefabs`, `apps/manifests`, `apps/installs`, `records/data` | 21d-3 |
 | Tenant streams, projections, side buckets | `live` | `live/project`, `live/bus`; `live/presence`, `live/nodes`, `activity`, `ui`, `apps/branches` | 21d-4 |
 | Record files' object stores | `files` | `records/files` | 21d-4 |

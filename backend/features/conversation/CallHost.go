@@ -17,7 +17,6 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 	"github.com/SgtFlame/foundation/backend/features/tools/settings"
-	"gorm.io/gorm"
 )
 
 var callLog = logging.In("conversation").Tags("runMode")
@@ -36,7 +35,7 @@ var callLog = logging.In("conversation").Tags("runMode")
 type CallHost struct {
 	Args     features.ServiceArgs // the run's, with its retrieval options on the context
 	Registry *extensions.Registry
-	DB       *gorm.DB
+	Calls    tools.CallStore // where its tool calls are kept (forge 21d-2)
 	Chat     chatservice.Service
 	Config   config.Reader
 
@@ -239,7 +238,7 @@ func (h *CallHost) Reply(a ReplyArgs) (ReplyOutcome, error) {
 	args := chatservice.CompleteArgs{ServiceArgs: call, Level: level, System: a.System, Messages: messages,
 		ModelRef: cmpOr(h.ModelRef, a.ModelRef), Temperature: firstOf(h.Temperature, a.Temperature),
 		MaxTokens: firstOf(h.MaxTokens, a.MaxTokens), ThinkingBudget: firstOf(h.ThinkingBudget, a.ThinkingBudget)}
-	out := tools.Loop{DB: h.DB, Chat: h.Chat}.Run(tools.RunArgs{
+	out := tools.Loop{Calls: h.Calls, Chat: h.Chat}.Run(tools.RunArgs{
 		CompleteArgs: args,
 		Tools:        offered,
 		Settings:     settings,

@@ -9,8 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SgtFlame/foundation/backend/features/activity"
+	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
 	kbnodes "github.com/SgtFlame/foundation/backend/features/kb/nodes"
-	"gorm.io/gorm"
 	"net/http"
 	"net/url"
 	"os"
@@ -522,7 +522,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		toolsnodes.Contribute(registry, func() toolsnodes.Deps { return agentDeps })
 		// Run mode and votes on segments (forge 15b)
 		conversationnodes.ContributeRunMode(registry, func() toolsnodes.Deps { return agentDeps })
-		retrievaltools.Contribute(registry, func() *gorm.DB { return agentDeps.DB })
+		retrievaltools.Contribute(registry, func() retrievalservice.Service { return retrievalService })
 		// The live core, server-driven UI and the Hello app; a command is
 		// also a tool, so livetools runs after every feature's commands
 		livesettings.Contribute(registry)
@@ -775,7 +775,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		}
 
 		// Every AI call is recorded and priced from the model catalog
-		recorder := usage.NewRecorder(gdb, func(ctx context.Context) (aisettings.Models, error) {
+		recorder := usage.NewRecorder(usage.StoreIn(gdb), func(ctx context.Context) (aisettings.Models, error) {
 			return config.Read[aisettings.Models](configService, features.BackgroundArgs(ctx), aisettings.ModelsID)
 		}, usage.NewEvents(), func(ctx context.Context) (usagesettings.Capture, error) {
 			return config.Read[usagesettings.Capture](configService, features.BackgroundArgs(ctx), usagesettings.CaptureID)
@@ -786,7 +786,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		chatService := chatimpl.CreateService(chatimpl.WithProvider(usage.ChatProvider(provider, "gemini", recorder)), chatimpl.WithConfig(configService))
 		// The Cognition Engine runs the graphs, such as each chat round's
 		// mode graph (Personal, by default)
-		cognitionEngine := engine.New(gdb, registry, configService)
+		cognitionEngine := engine.New(traces.In(gdb), registry, configService)
 		for _, g := range cognitionEngine.Graphs() {
 			for _, p := range cognitionEngine.Resolve(g).Problems {
 				log.With("graphId", g.ID, "nodeId", p.NodeID).Warn(ctx, "Cognition graph %s: %s %s", g.ID, p.Severity, p.Message)
@@ -808,9 +808,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		cognitionService := cognitionimpl.CreateService(cognitionimpl.WithDB(gdb), cognitionimpl.WithEngine(cognitionEngine))
 		kbToolDeps = kbtools.Deps{Root: kbRoot, Retrieval: retrievalService, Volumes: volumeService, Collab: collabService}
 		chronicleToolDeps = chronicletools.Deps{Retrieval: retrievalService, Entries: chronicleService}
-		agentDeps = toolsnodes.Deps{DB: gdb, Chat: chatService, Config: configService, Registry: registry}
+		agentDeps = toolsnodes.Deps{Calls: conversation.CallsIn(gdb), Chat: chatService, Config: configService, Registry: registry}
 		chronicleDeps = chroniclecontext.Deps{
-			Steps: chroniclesteps.Steps{DB: gdb, Chat: chatService, Config: configService, Retriever: func() retrievalservice.Service { return retrievalService }},
+			Steps: chroniclesteps.Steps{Memory: chronicle.MemoryIn(gdb), Chat: chatService, Config: configService, Retriever: func() retrievalservice.Service { return retrievalService }},
 		}
 		chronicleNodeDeps = chroniclenodes.Deps{Steps: chronicleDeps.Steps, Entries: chronicleService}
 		// Entries changed or never embedded (no key yet) are indexed now, and
