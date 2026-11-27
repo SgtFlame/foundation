@@ -1,0 +1,367 @@
+{
+  "id": "cmd-game-fabricate",
+  "name": "game.fabricate",
+  "description": "Decides a circuit board started at a cabin's fabricator.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.fabricate",
+    "title": "Make a circuit board at a fabricator",
+    "description": "Starts work in the fabricator of a cabin (V23); the target is the cabin's id. item circuit (the default) is a circuit board: 0.5 m³ of iron and 0.25 m³ of ore from the sender's pack and 30 s; item ionKit (V24) is an ion thruster kit: 1 m³ of iron and 2 circuit boards and 60 s. It is powered by the cabin's solar panel (the ship's fab gives {item, at}); game.takeFabricated then takes the work into the pack (circuits or kits). Refused for a ship that is not a cabin, a cabin whose fabricator or solar panel is not placed, a fabricator already at work, an unknown item, or a pack without what the item takes.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "description": "What to make: circuit (a circuit board, the default) or ionKit (V24, an ion thruster kit)"
+        }
+      }
+    },
+    "area": "game",
+    "targetType": "gameShip",
+    "projection": "game.ships",
+    "action": "game.play",
+    "events": [
+      "fabricating"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "item",
+            "type": "string",
+            "description": "What to make"
+          }
+        ]
+      }
+    },
+    {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 300
+      }
+    },
+    {
+      "id": "shipKey",
+      "type": "data.expression",
+      "title": "Ship key",
+      "position": {
+        "x": 250,
+        "y": 150
+      },
+      "config": {
+        "expr": "\"gameShip.\" + target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ship",
+      "type": "live.readProjection",
+      "title": "Read the cabin",
+      "position": {
+        "x": 500,
+        "y": 150
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "packKey",
+      "type": "data.expression",
+      "title": "Pack key",
+      "position": {
+        "x": 750,
+        "y": 400
+      },
+      "config": {
+        "expr": "(ship?.world ?? \"\") + \".\" + user",
+        "type": "string"
+      }
+    },
+    {
+      "id": "pack",
+      "type": "live.readProjection",
+      "title": "Read the sender's pack",
+      "position": {
+        "x": 1000,
+        "y": 400
+      },
+      "config": {
+        "projector": "game.packs"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why it is refused",
+      "position": {
+        "x": 1300,
+        "y": 150
+      },
+      "config": {
+        "expr": "let it = item ?? \"circuit\"; !found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a fabricator\" : !(76 in ship.placed) ? \"the cabin's fabricator is not built yet\" : !(77 in ship.placed) ? \"the fabricator has no power: place the solar panel on the roof\" : ship?.fab != nil ? \"the fabricator is already at work: take its work first\" : !(it in [\"\", \"circuit\", \"ionKit\"]) ? \"the fabricator makes circuit boards (circuit) and ion thruster kits (ionKit)\" : it == \"ionKit\" ? ((pack?.iron ?? 0) < 1 || (pack?.circuits ?? 0) < 2 ? \"an ion thruster kit takes 1 m³ of iron and 2 circuit boards from your pack\" : \"\") : (pack?.iron ?? 0) < 0.5 || (pack?.ore ?? 0) < 0.25 ? \"a circuit board takes 0.5 m³ of iron and 0.25 m³ of ore from your pack\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Allowed?",
+      "position": {
+        "x": 1550,
+        "y": 150
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "position": {
+        "x": 1800,
+        "y": 0
+      }
+    },
+    {
+      "id": "fabricating",
+      "type": "data.expression",
+      "title": "A circuit board started",
+      "position": {
+        "x": 1800,
+        "y": 350
+      },
+      "config": {
+        "expr": "let it = item ?? \"circuit\"; it == \"ionKit\" ? {world: ship.world, item: \"ionKit\", at: now().UnixMilli(), pack: {iron: -1, circuits: -2}} : {world: ship.world, item: \"circuit\", at: now().UnixMilli(), pack: {iron: -0.5, ore: -0.25}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "position": {
+        "x": 2100,
+        "y": -100
+      },
+      "config": {
+        "event": "fabricating"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "position": {
+        "x": 2100,
+        "y": 150
+      },
+      "config": {
+        "path": "args",
+        "fix": "build the forge (block 75) with game.placeBlock, take any iron waiting in it with game.takeIngots, and bring ore from the asteroids or the wrecks"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "shipKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "shipKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ship",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "packKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pack",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "check",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "pack",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "pack"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "fabricating",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "fabricating",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "item"
+      },
+      "to": {
+        "node": "check",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "item"
+      },
+      "to": {
+        "node": "fabricating",
+        "pin": "item"
+      }
+    }
+  ]
+}

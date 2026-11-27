@@ -1,7 +1,7 @@
 {
   "id": "cabin",
   "title": "Cabin",
-  "description": "A log cabin for the green planet (forge 360 V13): a building, not a ship, so it never moves and you cannot walk through its walls. Walls three logs high with a doorway at the front, a roof with a lamp, a bed and a field bench: sleep in the bed (F) to heal and to wake there instead of at the outpost after a blackout, and craft a hand drill at the bench (U, V14), and smelt ore into iron at the forge by the door (U, V20). Built only on the planet with air.",
+  "description": "A log cabin for the green planet (forge 360 V13): a building, not a ship, so it never moves and you cannot walk through its walls. Walls three logs high with a doorway at the front, a roof with a lamp, a bed and a field bench: sleep in the bed (F) to heal and to wake there instead of at the outpost after a blackout, and craft a hand drill at the bench (U, V14), and smelt ore into iron at the forge by the door (U, V20), and make circuit boards at the fabricator across from it, powered by the solar panel on the roof (U, V23). Built only on the planet with air.",
   "blockSize": 1,
   "static": true,
   "blocks": [
@@ -80,6 +80,8 @@
     {"type": "log", "at": [2, 1, 2]},
     {"type": "bed", "at": [1, -2, 1]},
     {"type": "bench", "at": [-1, -2, 1]},
-    {"type": "forge", "at": [1, -2, -1]}
+    {"type": "forge", "at": [1, -2, -1]},
+    {"type": "fabricator", "at": [-1, -2, -1]},
+    {"type": "solar", "at": [1, 2, 1]}
   ]
 }
