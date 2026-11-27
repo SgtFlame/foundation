@@ -17,6 +17,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -38,6 +39,34 @@ type Projections struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	stopping bool
+	resolver Resolver
+}
+
+// Resolver finds a projector the registry does not hold, per tenant: an
+// installed app's (forge 26d-1), whose id (app.<appId>.<name>) stands for
+// the projector of its current generation. ok is false when there is none.
+type Resolver func(ctx context.Context, tenant uint64, id string) (pr live.Projector, ok bool, err error)
+
+// SetResolver sets the resolver of projectors outside the registry; call
+// it before the first use.
+func (p *Projections) SetResolver(r Resolver) { p.resolver = r }
+
+// resolve is the projector an id names in a tenant: the registry's, else
+// the resolver's.
+func (p *Projections) resolve(ctx context.Context, tenant uint64, id string) (live.Projector, error) {
+	if pr, ok := p.Projector(id); ok {
+		return pr, nil
+	}
+	if p.resolver != nil {
+		pr, ok, err := p.resolver(ctx, tenant, id)
+		if err != nil {
+			return live.Projector{}, err
+		}
+		if ok {
+			return pr, nil
+		}
+	}
+	return live.Projector{}, log.Code("projection_unknown").Errorf("no projector %q", id)
 }
 
 var _ live.Store = (*Projections)(nil)
@@ -63,6 +92,16 @@ func (p *Projections) JetStreamFor(ctx context.Context, tenant uint64) (jetstrea
 		return p.js, nil
 	}
 	return p.acc.For(ctx, tenant)
+}
+
+// ConnFor is the NATS connection of tenant's account, for core NATS
+// subjects such as ephemeral signals (forge 26d-1).
+func (p *Projections) ConnFor(ctx context.Context, tenant uint64) (*nats.Conn, error) {
+	js, err := p.JetStreamFor(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	return js.Conn(), nil
 }
 
 // Registry is the registry the projectors come from.
@@ -165,9 +204,19 @@ func (p *Projections) Bucket(ctx context.Context, tenant uint64, projector strin
 	if kv != nil {
 		return kv, nil
 	}
-	pr, ok := p.Projector(projector)
-	if !ok {
-		return nil, log.Code("projection_unknown").Errorf("no projector %q", projector)
+	pr, err := p.resolve(ctx, tenant, projector)
+	if err != nil {
+		return nil, err
+	}
+	if pr.ID != projector {
+		// A resolved projector's bucket is its generation's
+		name = live.Bucket(tenant, pr.ID)
+		p.mu.Lock()
+		kv = p.buckets[name]
+		p.mu.Unlock()
+		if kv != nil {
+			return kv, nil
+		}
 	}
 	stream, err := p.Stream(ctx, tenant, pr.Area)
 	if err != nil {
@@ -620,9 +669,9 @@ func (p *Projections) Side(ctx context.Context, tenant uint64, name string) (jet
 // Settle waits until the projector has folded every event its stream
 // held when Settle was called, or ctx ends.
 func (p *Projections) Settle(ctx context.Context, tenant uint64, projector string) error {
-	pr, ok := p.Projector(projector)
-	if !ok {
-		return log.Code("projection_unknown").Errorf("no projector %q", projector)
+	pr, err := p.resolve(ctx, tenant, projector)
+	if err != nil {
+		return err
 	}
 	if _, err := p.Bucket(ctx, tenant, projector); err != nil {
 		return err
@@ -660,9 +709,9 @@ func (p *Projections) Settle(ctx context.Context, tenant uint64, projector strin
 // or below it is in the projection. A read that starts after it reflects
 // at least that position.
 func (p *Projections) Folded(ctx context.Context, tenant uint64, projector string) (live.Position, error) {
-	pr, ok := p.Projector(projector)
-	if !ok {
-		return nil, log.Code("projection_unknown").Errorf("no projector %q", projector)
+	pr, err := p.resolve(ctx, tenant, projector)
+	if err != nil {
+		return nil, err
 	}
 	if _, err := p.Bucket(ctx, tenant, projector); err != nil {
 		return nil, err
@@ -710,8 +759,9 @@ func (p *Projections) Get(ctx context.Context, tenant uint64, projector, key str
 		return v, false, log.Wrap(err)
 	}
 	if v.Stream == "" {
-		pr, _ := p.Projector(projector)
-		v.Stream = live.StreamName(tenant, pr.Area)
+		if pr, err := p.resolve(ctx, tenant, projector); err == nil {
+			v.Stream = live.StreamName(tenant, pr.Area)
+		}
 	}
 	return v, ok, nil
 }

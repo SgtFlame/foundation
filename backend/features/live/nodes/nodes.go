@@ -34,6 +34,9 @@ const (
 	KindAction  = "server.action"
 	KindQuery   = "data.query"
 	KindTrigger = "app.trigger"
+	// KindProjector folds one record event into an app projector's value
+	// (forge 26d-1).
+	KindProjector = "projector"
 	// KindConnectorOp is a scripted connector's operation graph (forge
 	// 07d), registered by connectors/scripted; nodes allowed in actions
 	// that a connector operation may use name it too.
@@ -44,6 +47,8 @@ const (
 const (
 	OnCommand = "live.onCommand"
 	OnQuery   = "live.onQuery"
+	// OnFold starts a projector graph with the state and the event.
+	OnFold = "live.onFold"
 )
 
 // Deps are what the nodes and resolvers need, made after the registry.
