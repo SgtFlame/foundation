@@ -31,6 +31,12 @@ func main() {
 		err = enroll(os.Args[2:])
 	case "host", "agent":
 		err = run(os.Args[1], os.Args[2:])
+	case "unit-credentials":
+		if len(os.Args) != 3 {
+			usage()
+			os.Exit(2)
+		}
+		err = agent.AskLocal("", os.Args[2]) // forge 20d-2: run by axiom-serve-creds@<unit>
 	case "version":
 		fmt.Println(daemon.Version)
 	default:
@@ -49,6 +55,7 @@ func usage() {
   axiomd enroll --from /etc/axiomd/enroll.json [--config f] [--state dir]
   axiomd host [--config f] [--lxd-socket path]
   axiomd agent [--config f]
+  axiomd unit-credentials <unit>
   axiomd version`)
 }
 
@@ -105,6 +112,9 @@ func run(mode string, args []string) error {
 		}
 		return d.Run(ctx)
 	}
-	d, _ := agent.New(c) // forge 20d-1: packages, files, units, health
+	d, a := agent.New(c)                          // forge 20d-1: packages, files, units, health
+	if err := a.ServeLocal(ctx, ""); err != nil { // forge 20d-2: serve units' credentials
+		return err
+	}
 	return d.Run(ctx)
 }

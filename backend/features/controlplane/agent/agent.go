@@ -23,6 +23,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/daemon"
 	"github.com/SgtFlame/foundation/backend/features/logging"
 )
@@ -42,15 +43,17 @@ type Desired struct {
 
 // Unit is a service the instance runs.
 type Unit struct {
-	ID      string          `json:"id"`
-	Name    string          `json:"name"`
-	Kind    string          `json:"kind"`
-	Package string          `json:"package"`
-	Version string          `json:"version"`
-	Config  json.RawMessage `json:"config"`
-	Files   []File          `json:"files"`
-	Health  []Check         `json:"health"`
-	Status  string          `json:"status"` // running (default), stopped
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+	// ServiceSet is a serve unit's (serve --services).
+	ServiceSet string          `json:"serviceSet,omitempty"`
+	Package    string          `json:"package"`
+	Version    string          `json:"version"`
+	Config     json.RawMessage `json:"config"`
+	Files      []File          `json:"files"`
+	Health     []Check         `json:"health"`
+	Status     string          `json:"status"` // running (default), stopped
 }
 
 // File is a file a unit needs: content is a Go template over .Config
@@ -99,6 +102,11 @@ type Agent struct {
 	// their environment (tests point these at fakes).
 	Root, State, Path string
 	Env               []string
+	// Control is the agent's own connection, Instance its record id and
+	// NatsURLs the cluster's: serve units' credentials (forge 20d-2).
+	Control  func() *ctl.Control
+	Instance string
+	NatsURLs []string
 
 	mu     sync.Mutex
 	facts  map[string]any
@@ -123,7 +131,17 @@ func (a *Agent) Daemon(cfg daemon.Config) *daemon.Daemon {
 	if a.State == "" {
 		a.State = cfg.State
 	}
-	return &daemon.Daemon{Config: cfg, Reconcile: a.Reconcile, Facts: a.Facts, Units: a.Health}
+	d := &daemon.Daemon{Config: cfg, Reconcile: a.Reconcile, Facts: a.Facts, Units: a.Health}
+	if t, ok := cfg.TargetOf(); ok && a.Instance == "" {
+		a.Instance = t.ID
+	}
+	if a.Control == nil {
+		a.Control = d.Control
+	}
+	if a.NatsURLs == nil {
+		a.NatsURLs = cfg.NatsURLs
+	}
+	return d
 }
 
 func (a *Agent) path(p string) string { return filepath.Join(a.Root, p) }
@@ -196,14 +214,19 @@ func (a *Agent) Reconcile(ctx context.Context, raw json.RawMessage) error {
 	}
 	pkgs, perrs := a.packages(ctx, want, refused)
 	errs = append(errs, perrs...)
-	restart, err := a.files(want.Units)
+	units := serveUnits(want.Units)
+	restart, err := a.files(units)
 	if err != nil {
 		errs = append(errs, err)
 	}
-	states, err := a.units(ctx, want.Units, restart)
+	states, err := a.units(ctx, units, restart)
 	if err != nil {
 		errs = append(errs, err)
 	}
+	if err := a.renew(ctx, want.Units); err != nil {
+		errs = append(errs, err)
+	}
+	a.forget(want.Units)
 	if want.Profile.UnattendedUpgrades != nil {
 		if err := a.unattended(*want.Profile.UnattendedUpgrades); err != nil {
 			errs = append(errs, err)
@@ -213,7 +236,7 @@ func (a *Agent) Reconcile(ctx context.Context, raw json.RawMessage) error {
 	a.facts = map[string]any{"packages": pkgs, "units": states}
 	a.mu.Unlock()
 	a.hmu.Lock()
-	a.want = want.Units
+	a.want = units
 	a.hmu.Unlock()
 	return errors.Join(errs...)
 }
