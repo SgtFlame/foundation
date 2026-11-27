@@ -2,6 +2,7 @@ package recordsnodes
 
 import (
 	"encoding/json"
+	"sync/atomic"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
@@ -24,9 +25,23 @@ type ParseDeps struct {
 	MaxRows func(args features.ServiceArgs) int
 }
 
-// ContributeParseCSV registers Parse CSV; deps gives its dependencies once
-// made.
-func ContributeParseCSV(reg *extensions.Registry, deps func() ParseDeps) {
+// parseDeps is what SetParse was given.
+var parseDeps atomic.Pointer[func() ParseDeps]
+
+// SetParse gives Parse CSV its dependencies (features/wiring/parse.go, as
+// records.SetPlacement does for placement): the node is registered by
+// Contribute with every record node, so any registry holding them can
+// resolve graphs that use it, and parses nothing until this is set.
+func SetParse(deps func() ParseDeps) { parseDeps.Store(&deps) }
+
+// contributeParseCSV registers Parse CSV over what SetParse gives.
+func contributeParseCSV(reg *extensions.Registry) {
+	deps := func() ParseDeps {
+		if f := parseDeps.Load(); f != nil {
+			return (*f)()
+		}
+		return ParseDeps{}
+	}
 	node(reg, 692, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: ParseCSVID}, Title: "Parse CSV",
 		Description: "Reads a CSV file into columns and typed rows, for an import: a file the run's principal uploaded (a file field's value, or Upload file's) or pasted text. The delimiter (comma, semicolon, tab or bar), the header row and the encoding (UTF-8, UTF-16 with a byte order mark, Windows-1252) are detected unless given, and each column's type (number, decimal, date, dateTime, bool, email, url, else text) from its values. " +
@@ -74,10 +89,7 @@ func ContributeParseCSV(reg *extensions.Registry, deps func() ParseDeps) {
 			if err := x.Config(&c); err != nil {
 				return nil, "", err
 			}
-			var d ParseDeps
-			if deps != nil {
-				d = deps()
-			}
+			d := deps()
 			if d.Parse == nil {
 				return fail("CSV files cannot be parsed here")
 			}

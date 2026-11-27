@@ -13,7 +13,7 @@ import (
 )
 
 // Parse (forge 40c): the parse service (CSV first), its access type and
-// Parse CSV. The service comes from the locator, so serve --services can
+// Parse CSV's dependencies (the node itself is a record node). The service comes from the locator, so serve --services can
 // run it in another process; it reads uploaded files through the files
 // service.
 func init() {
@@ -21,7 +21,7 @@ func init() {
 		Name: "parse",
 		Contribute: func(reg *extensions.Registry, env *Env) error {
 			parseservice.ContributeAccess(reg)
-			recordsnodes.ContributeParseCSV(reg, func() recordsnodes.ParseDeps {
+			recordsnodes.SetParse(func() recordsnodes.ParseDeps {
 				return recordsnodes.ParseDeps{
 					Parse: parseService(env),
 					MaxRows: func(args foundation.ServiceArgs) int {
