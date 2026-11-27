@@ -168,7 +168,29 @@ func (a *Account) NewUser(name string, p Permissions, ttl time.Duration) (*User,
 		return nil, log.Wrap(err)
 	}
 	pub, _ := kp.PublicKey()
-	uc := jwt.NewUserClaims(pub)
+	token, err := a.UserJWT(pub, name, p, ttl)
+	if err != nil {
+		return nil, err
+	}
+	seed, err := kp.Seed()
+	if err != nil {
+		return nil, log.Wrap(err)
+	}
+	creds, err := jwt.FormatUserConfig(token, seed)
+	if err != nil {
+		return nil, log.Wrap(err)
+	}
+	return &User{Name: name, Public: pub, JWT: token, Creds: creds}, nil
+}
+
+// UserJWT signs a user JWT for a key someone else holds (forge 20c-1: a
+// daemon enrolling sends only its public key, so its seed never leaves
+// the machine).
+func (a *Account) UserJWT(public, name string, p Permissions, ttl time.Duration) (string, error) {
+	if !nkeys.IsValidPublicUserKey(public) {
+		return "", log.Code("bad_user_key").Errorf("%q is not a user public key", public)
+	}
+	uc := jwt.NewUserClaims(public)
 	uc.Name = name
 	uc.IssuerAccount = a.Public()
 	uc.Pub.Allow.Add(p.Pub...)
@@ -186,18 +208,7 @@ func (a *Account) NewUser(name string, p Permissions, ttl time.Duration) (*User,
 		uc.Expires = time.Now().Add(ttl).Unix()
 	}
 	token, err := uc.Encode(a.Signing)
-	if err != nil {
-		return nil, log.Wrap(err)
-	}
-	seed, err := kp.Seed()
-	if err != nil {
-		return nil, log.Wrap(err)
-	}
-	creds, err := jwt.FormatUserConfig(token, seed)
-	if err != nil {
-		return nil, log.Wrap(err)
-	}
-	return &User{Name: name, Public: pub, JWT: token, Creds: creds}, nil
+	return token, log.Wrap(err)
 }
 
 // Deployment is the operator and the three accounts of forge 20a-2.

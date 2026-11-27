@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/natsauth"
 	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	"github.com/nats-io/nats.go"
@@ -68,8 +69,10 @@ var natsInitCmd = &cobra.Command{
 	Long: `Make a new deployment's NATS trust chain (forge 20a-2): an operator, the
 system account, the control account and the application account, each with
 a signing key. It writes the keys to --keys (mode 0600), the trust lines for
-every nats-server.conf to <keys>/trust.conf, and two creds files: serve.creds
-(an APP user for serve) and sys.creds (a SYS user that pushes accounts).
+every nats-server.conf to <keys>/trust.conf, and three creds files: serve.creds
+(an APP user for serve), sys.creds (a SYS user that pushes accounts) and
+enroll.creds (the CTL user every axiomd enrolls with, which may only ask to
+enroll; forge 20c-1).
 Take operator.nk offline afterwards: accounts then mint users without it.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		k := natsauth.DirKeys(natsKeysDir)
@@ -94,6 +97,13 @@ Take operator.nk offline afterwards: accounts then mint users without it.`,
 			if err := k.Put(u.name+".creds", user.Creds); err != nil {
 				return err
 			}
+		}
+		enroll, err := d.Account(natsauth.Control).NewUser("enroll", ctl.EnrollPermissions, 0)
+		if err != nil {
+			return err
+		}
+		if err := k.Put("enroll.creds", enroll.Creds); err != nil {
+			return err
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "deployment written to %s\n", natsKeysDir)
 		return nil

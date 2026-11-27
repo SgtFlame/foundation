@@ -22,6 +22,7 @@ import (
 	cognitionnodes "github.com/SgtFlame/foundation/backend/features/cognition/nodes"
 	"github.com/SgtFlame/foundation/backend/features/controlplane"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/controlplanetest"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
@@ -39,14 +40,14 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ui/prefabs"
 )
 
-func init() { controlplane.HealthTTL = 2 * time.Second }
+func init() { ctl.HealthTTL = 2 * time.Second }
 
 type stack struct {
 	t    *testing.T
 	bus  *bus.Bus
 	p    *project.Projections
 	data data.Deps
-	ctl  *controlplane.Control
+	ctl  *ctl.Control
 	n    atomic.Int64
 }
 
@@ -116,7 +117,7 @@ func newStack(t *testing.T) *stack {
 	if err := controlplane.SeedApp(args, p, svc, b); err != nil {
 		t.Fatalf("a second seed: %v", err)
 	}
-	s := &stack{t: t, bus: b, p: p, data: dataDeps, ctl: &controlplane.Control{NC: srv.Conn(), JS: srv.JS()}}
+	s := &stack{t: t, bus: b, p: p, data: dataDeps, ctl: &ctl.Control{NC: srv.Conn(), JS: srv.JS()}}
 	deps := controlplane.Deps{Projections: p, Data: dataDeps, Bus: b, Control: s.ctl, Sweep: 200 * time.Millisecond}
 	if err := controlplane.Start(ctx, func() controlplane.Deps { return deps }); err != nil {
 		t.Fatal(err)
@@ -172,7 +173,7 @@ func TestDesiredAndActualState(t *testing.T) {
 	s.create(controlplane.EntityUnit, map[string]any{"instance": inst, "name": "serve", "kind": "serve", "channel": "stable"})
 	s.create(controlplane.EntityPackagePin, map[string]any{"target": prof, "name": "foundation-serve", "source": "firstParty", "channel": "stable"})
 
-	it := controlplane.Target{Kind: controlplane.KindInstance, ID: inst}
+	it := ctl.Target{Kind: ctl.KindInstance, ID: inst}
 	var doc struct {
 		Instance map[string]any   `json:"instance"`
 		Profile  map[string]any   `json:"profile"`
@@ -189,7 +190,7 @@ func TestDesiredAndActualState(t *testing.T) {
 	if _, has := doc.Instance["health"]; has {
 		t.Fatal("a reported field is in desired state")
 	}
-	ht := controlplane.Target{Kind: controlplane.KindHost, ID: host}
+	ht := ctl.Target{Kind: ctl.KindHost, ID: host}
 	until(t, "the host's desired state lists the instance", func() bool {
 		raw, ok, _ := s.ctl.Desired(ctx, ht)
 		var h struct{ Instances []map[string]any }
@@ -231,11 +232,11 @@ func TestDesiredAndActualState(t *testing.T) {
 
 	// One request reported ten times is one done
 	for i := 0; i < 10; i++ {
-		if err := s.ctl.Report(ctx, controlplane.Event{Request: "r-once", Kind: controlplane.EventDone, Target: it}); err != nil {
+		if err := s.ctl.Report(ctx, ctl.Event{Request: "r-once", Kind: ctl.EventDone, Target: it}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	st, err := s.ctl.JS.Stream(ctx, controlplane.StreamName)
+	st, err := s.ctl.JS.Stream(ctx, ctl.StreamName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +246,7 @@ func TestDesiredAndActualState(t *testing.T) {
 		if err != nil {
 			break
 		}
-		var e controlplane.Event
+		var e ctl.Event
 		_ = json.Unmarshal(m.Data, &e)
 		if e.Request == "r-once" {
 			msgs++
@@ -265,4 +266,3 @@ func TestDesiredAndActualState(t *testing.T) {
 		return !ok
 	})
 }
-

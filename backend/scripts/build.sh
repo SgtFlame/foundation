@@ -5,6 +5,7 @@
 #   scripts/build.sh -o out/cli.next build to another path
 #   scripts/build.sh --test [args]   run go test ./... (or args) with the same CGO env
 #   scripts/build.sh --vet           run go vet ./... with the same CGO env
+#   scripts/build.sh -o out/axiomd   build the control plane daemon (no CGO, no LanceDB)
 #
 # The lancedb-go version pinned in go.mod is a commit after v0.1.2, the last
 # release, because full-text (BM25) search is only on its main branch, and
@@ -33,6 +34,13 @@ while [[ $# -gt 0 ]]; do
     *) echo "build.sh: unknown argument $1" >&2; exit 2 ;;
   esac
 done
+
+if [[ "$mode" == build && "$(basename "$out")" == axiomd ]]; then
+  mkdir -p "$(dirname "$out")"
+  version="$(git describe --always --dirty 2>/dev/null || echo dev)"
+  CGO_ENABLED=0 go build -ldflags "-s -X github.com/SgtFlame/foundation/backend/features/controlplane/daemon.Version=$version" -o "$out" ./cmd/axiomd
+  exit 0
+fi
 
 case "$(uname -s)" in
   Linux) os=linux; syslibs="-lm -ldl -lpthread" ;;

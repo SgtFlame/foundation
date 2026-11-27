@@ -9,30 +9,30 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SgtFlame/foundation/backend/features/controlplane"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
 	"github.com/nats-io/nats.go"
 )
 
 // FakeDaemon plays a host's or an instance's daemon.
 type FakeDaemon struct {
-	C      *controlplane.Control
-	Target controlplane.Target
+	C      *ctl.Control
+	Target ctl.Target
 	// Fail makes every request end failed with this message.
 	Fail string
 
 	mu       sync.Mutex
 	sub      *nats.Subscription
 	stop     chan struct{}
-	requests []controlplane.Request
+	requests []ctl.Request
 }
 
 // Start answers the target's requests: each is accepted at once, then
 // reported accepted and done (or failed) on CTL.
 func (f *FakeDaemon) Start(ctx context.Context) error {
 	sub, err := f.C.NC.Subscribe(f.Target.Requests(), func(m *nats.Msg) {
-		var r controlplane.Request
+		var r ctl.Request
 		if err := json.Unmarshal(m.Data, &r); err != nil {
-			raw, _ := json.Marshal(controlplane.Reply{Error: "bad request"})
+			raw, _ := json.Marshal(ctl.Reply{Error: "bad request"})
 			_ = m.Respond(raw)
 			return
 		}
@@ -40,12 +40,12 @@ func (f *FakeDaemon) Start(ctx context.Context) error {
 		f.requests = append(f.requests, r)
 		fail := f.Fail
 		f.mu.Unlock()
-		raw, _ := json.Marshal(controlplane.Reply{Accepted: true})
+		raw, _ := json.Marshal(ctl.Reply{Accepted: true})
 		_ = m.Respond(raw)
-		_ = f.C.Report(ctx, controlplane.Event{Request: r.ID, Kind: controlplane.EventAccepted, Target: f.Target, Verb: r.Verb})
-		end := controlplane.Event{Request: r.ID, Kind: controlplane.EventDone, Target: f.Target, Verb: r.Verb, Message: r.Verb + " done"}
+		_ = f.C.Report(ctx, ctl.Event{Request: r.ID, Kind: ctl.EventAccepted, Target: f.Target, Verb: r.Verb})
+		end := ctl.Event{Request: r.ID, Kind: ctl.EventDone, Target: f.Target, Verb: r.Verb, Message: r.Verb + " done"}
 		if fail != "" {
-			end.Kind, end.Message = controlplane.EventFailed, fail
+			end.Kind, end.Message = ctl.EventFailed, fail
 		}
 		_ = f.C.Report(ctx, end)
 	})
@@ -59,10 +59,10 @@ func (f *FakeDaemon) Start(ctx context.Context) error {
 }
 
 // Requests are the requests it has had.
-func (f *FakeDaemon) Requests() []controlplane.Request {
+func (f *FakeDaemon) Requests() []ctl.Request {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([]controlplane.Request(nil), f.requests...)
+	return append([]ctl.Request(nil), f.requests...)
 }
 
 // SetFacts writes its facts.
@@ -80,7 +80,7 @@ func (f *FakeDaemon) Beat(ctx context.Context, every time.Duration) {
 	stop := make(chan struct{})
 	f.stop = stop
 	f.mu.Unlock()
-	_ = f.C.Beat(ctx, f.Target, controlplane.Health{})
+	_ = f.C.Beat(ctx, f.Target, ctl.Health{})
 	go func() {
 		t := time.NewTicker(every)
 		defer t.Stop()
@@ -91,7 +91,7 @@ func (f *FakeDaemon) Beat(ctx context.Context, every time.Duration) {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				_ = f.C.Beat(ctx, f.Target, controlplane.Health{})
+				_ = f.C.Beat(ctx, f.Target, ctl.Health{})
 			}
 		}
 	}()

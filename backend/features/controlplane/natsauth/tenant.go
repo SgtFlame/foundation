@@ -95,9 +95,7 @@ func TenantAccounts(o natsd.Options, keysDir string) (*natsd.PerTenant, error) {
 // keys in keysDir (else $FOUNDATION_NATS_KEYS); nil without keys, when the
 // caller uses the connection it has.
 func AccountConn(o natsd.Options, keysDir, account, name string) (*natsd.Server, error) {
-	if keysDir == "" {
-		keysDir = os.Getenv(EnvKeys)
-	}
+	keysDir = KeysDir(keysDir)
 	if keysDir == "" || o.URL == "" {
 		return nil, nil
 	}
@@ -115,4 +113,12 @@ func AccountConn(o natsd.Options, keysDir, account, name string) (*natsd.Server,
 	}
 	o.Dir, o.Creds, o.CredsData = "", "", u.Creds
 	return natsd.Start(context.Background(), o)
+}
+
+// KeysDir is dir, else $FOUNDATION_NATS_KEYS.
+func KeysDir(dir string) string {
+	if dir == "" {
+		return os.Getenv(EnvKeys)
+	}
+	return dir
 }

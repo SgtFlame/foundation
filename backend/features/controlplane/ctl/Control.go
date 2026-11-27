@@ -1,4 +1,7 @@
-package controlplane
+// Package ctl is what the daemons and the control plane share
+// (forge 20b-2, 20c-1): the control account's buckets and stream, control
+// requests and enrollment. It imports little, so axiomd stays small.
+package ctl
 
 import (
 	"context"
@@ -13,7 +16,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// What the daemons and the control plane share in the control account
+// The buckets and the stream in the control account
 // (forge 20b-2): desired state resolved per target, reported facts and
 // health, and the CTL stream of control requests' progress.
 const (
@@ -139,7 +142,7 @@ func (c *Control) ensureKV(ctx context.Context, cfg jetstream.KeyValueConfig) er
 	return log.Wrapf(err, "cannot make the bucket %s", cfg.Bucket)
 }
 
-func (c *Control) kv(ctx context.Context, name string) (jetstream.KeyValue, error) {
+func (c *Control) KV(ctx context.Context, name string) (jetstream.KeyValue, error) {
 	kv, err := c.JS.KeyValue(ctx, name)
 	if errors.Is(err, jetstream.ErrBucketNotFound) {
 		if err := c.Ensure(ctx); err != nil {
@@ -172,7 +175,7 @@ func (c *Control) Health(ctx context.Context, t Target) (Health, bool, error) {
 }
 
 func (c *Control) get(ctx context.Context, bucket string, t Target) (json.RawMessage, bool, error) {
-	kv, err := c.kv(ctx, bucket)
+	kv, err := c.KV(ctx, bucket)
 	if err != nil {
 		return nil, false, err
 	}
@@ -196,7 +199,7 @@ func (c *Control) PutDesired(ctx context.Context, t Target, v json.RawMessage) (
 	if ok && string(old) == string(v) {
 		return false, nil
 	}
-	kv, err := c.kv(ctx, DesiredBucket)
+	kv, err := c.KV(ctx, DesiredBucket)
 	if err != nil {
 		return false, err
 	}
@@ -206,7 +209,7 @@ func (c *Control) PutDesired(ctx context.Context, t Target, v json.RawMessage) (
 
 // DeleteDesired removes a target's desired state (its record is gone).
 func (c *Control) DeleteDesired(ctx context.Context, t Target) error {
-	kv, err := c.kv(ctx, DesiredBucket)
+	kv, err := c.KV(ctx, DesiredBucket)
 	if err != nil {
 		return err
 	}
@@ -219,7 +222,7 @@ func (c *Control) DeleteDesired(ctx context.Context, t Target) error {
 
 // PutFacts writes a target's facts (a daemon's).
 func (c *Control) PutFacts(ctx context.Context, t Target, facts any) error {
-	kv, err := c.kv(ctx, FactsBucket)
+	kv, err := c.KV(ctx, FactsBucket)
 	if err != nil {
 		return err
 	}
@@ -230,7 +233,7 @@ func (c *Control) PutFacts(ctx context.Context, t Target, facts any) error {
 
 // Beat writes a target's heartbeat (a daemon's).
 func (c *Control) Beat(ctx context.Context, t Target, h Health) error {
-	kv, err := c.kv(ctx, HealthBucket)
+	kv, err := c.KV(ctx, HealthBucket)
 	if err != nil {
 		return err
 	}

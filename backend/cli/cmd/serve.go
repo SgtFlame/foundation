@@ -71,6 +71,7 @@ import (
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	"github.com/SgtFlame/foundation/backend/features/controlplane"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/natsauth"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
 	"github.com/SgtFlame/foundation/backend/features/conversation/made"
@@ -961,14 +962,26 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			// forge 20b-2: the infrastructure app in the root tenant, and
 			// the followers between its records and the control account
 			// (its own account with --nats-keys)
-			control := &controlplane.Control{NC: nats.Conn(), JS: nats.JS()}
+			control := &ctl.Control{NC: nats.Conn(), JS: nats.JS()}
 			ctlConn, err := natsauth.AccountConn(natsOptions, serveNatsKeys, natsauth.Control, "serve-ctl")
 			if err != nil {
 				return err
 			}
 			if ctlConn != nil {
 				defer ctlConn.Close()
-				control = &controlplane.Control{NC: ctlConn.Conn(), JS: ctlConn.JS()}
+				control = &ctl.Control{NC: ctlConn.Conn(), JS: ctlConn.JS()}
+				// forge 20c-1: daemons enroll here, their users signed
+				// by the control account's key
+				keys, err := natsauth.Load(natsauth.DirKeys(natsauth.KeysDir(serveNatsKeys)))
+				if err != nil {
+					return err
+				}
+				if err := control.Ensure(ctx); err != nil {
+					return err
+				}
+				if _, err := ctl.ServeEnroll(ctx, control, keys.Account(natsauth.Control)); err != nil {
+					return err
+				}
 			}
 			if err := controlplane.SeedApp(features.BackgroundArgs(ctx), projections, appService, liveBus); err != nil {
 				return err

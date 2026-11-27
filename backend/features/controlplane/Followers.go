@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	"github.com/SgtFlame/foundation/backend/features/live/project"
@@ -22,7 +23,7 @@ type Deps struct {
 	Projections *project.Projections
 	Data        data.Deps
 	Bus         *bus.Bus
-	Control     *Control
+	Control     *ctl.Control
 	// Sweep is how often health is checked (2 s when 0).
 	Sweep time.Duration
 }
@@ -116,7 +117,7 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 		}
 		read[e] = rs
 	}
-	docs := map[Target]any{}
+	docs := map[ctl.Target]any{}
 	for id, h := range read[EntityHost] {
 		doc := desired(h)
 		var instances []map[string]json.RawMessage
@@ -128,7 +129,7 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 			}
 		}
 		sortByID(instances)
-		docs[Target{KindHost, id}] = map[string]any{"host": doc, "instances": instances}
+		docs[ctl.Target{Kind: ctl.KindHost, ID: id}] = map[string]any{"host": doc, "instances": instances}
 	}
 	for id, in := range read[EntityInstance] {
 		doc := desired(in)
@@ -153,7 +154,7 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 		}
 		sortByID(units)
 		sortByID(pins)
-		docs[Target{KindInstance, id}] = map[string]any{"instance": doc, "profile": profile, "units": units, "pins": pins}
+		docs[ctl.Target{Kind: ctl.KindInstance, ID: id}] = map[string]any{"instance": doc, "profile": profile, "units": units, "pins": pins}
 	}
 	for t, doc := range docs {
 		raw, _ := json.Marshal(doc)
@@ -166,7 +167,7 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 		}
 	}
 	// Targets whose record is gone
-	kv, err := d.Control.kv(ctx, DesiredBucket)
+	kv, err := d.Control.KV(ctx, ctl.DesiredBucket)
 	if err != nil {
 		return err
 	}
@@ -175,7 +176,7 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 		return log.Wrap(err)
 	}
 	for k := range keys.Keys() {
-		if t, ok := TargetOfKey(k); ok {
+		if t, ok := ctl.TargetOfKey(k); ok {
 			if _, ok := docs[t]; !ok {
 				if err := d.Control.DeleteDesired(ctx, t); err != nil {
 					return err
@@ -197,18 +198,18 @@ func sortByID(rs []map[string]json.RawMessage) {
 
 // nudge asks a target's daemon to reconcile; a daemon not running now
 // reconciles when it starts, so no answer is not a failure.
-func nudge(ctx context.Context, d Deps, t Target, actor string) {
+func nudge(ctx context.Context, d Deps, t ctl.Target, actor string) {
 	if actor == "" {
 		actor = "controlplane"
 	}
-	r := Request{ID: "reconcile-" + t.Key() + "-" + strconv.FormatUint(features.NewTSID(), 10), Verb: "reconcile", Actor: actor}
-	if _, err := d.Control.Send(ctx, t, r); err != nil && !errors.Is(err, ErrNoDaemon) {
+	r := ctl.Request{ID: "reconcile-" + t.Key() + "-" + strconv.FormatUint(features.NewTSID(), 10), Verb: "reconcile", Actor: actor}
+	if _, err := d.Control.Send(ctx, t, r); err != nil && !errors.Is(err, ctl.ErrNoDaemon) {
 		log.With("target", t.Key()).Debug(ctx, "controlplane: no answer to reconcile: %v", err)
 	}
 }
 
-func entityOf(t Target) string {
-	if t.Kind == KindHost {
+func entityOf(t ctl.Target) string {
+	if t.Kind == ctl.KindHost {
 		return EntityHost
 	}
 	return EntityInstance
@@ -216,7 +217,7 @@ func entityOf(t Target) string {
 
 // update sets reported fields on a target's record, if it still exists
 // and they differ; id makes the command idempotent.
-func update(ctx context.Context, d Deps, t Target, id string, set map[string]any) error {
+func update(ctx context.Context, d Deps, t ctl.Target, id string, set map[string]any) error {
 	args := rootArgs(ctx)
 	r, _, err := data.Get(args, d.Data, entityOf(t), t.ID)
 	if err != nil || r == nil {
@@ -244,14 +245,14 @@ func update(ctx context.Context, d Deps, t Target, id string, set map[string]any
 // one durable consumer shared by every process.
 func followEvents(ctx context.Context, deps func() Deps) error {
 	d := deps()
-	cons, err := d.Control.JS.CreateOrUpdateConsumer(ctx, StreamName, jetstream.ConsumerConfig{
+	cons, err := d.Control.JS.CreateOrUpdateConsumer(ctx, ctl.StreamName, jetstream.ConsumerConfig{
 		Durable: "ctl_actual", AckPolicy: jetstream.AckExplicitPolicy, DeliverPolicy: jetstream.DeliverAllPolicy, AckWait: 30 * time.Second,
 	})
 	if err != nil {
 		return log.Wrap(err)
 	}
 	cc, err := cons.Consume(func(m jetstream.Msg) {
-		var e Event
+		var e ctl.Event
 		if json.Unmarshal(m.Data(), &e) != nil {
 			_ = m.Term()
 			return
@@ -276,7 +277,7 @@ func followEvents(ctx context.Context, deps func() Deps) error {
 // watchFacts copies ctl_facts into the records' facts.
 func watchFacts(ctx context.Context, deps func() Deps) {
 	for ctx.Err() == nil {
-		kv, err := deps().Control.kv(ctx, FactsBucket)
+		kv, err := deps().Control.KV(ctx, ctl.FactsBucket)
 		if err == nil {
 			var w jetstream.KeyWatcher
 			if w, err = kv.WatchAll(ctx); err == nil {
@@ -284,7 +285,7 @@ func watchFacts(ctx context.Context, deps func() Deps) {
 					if e == nil || e.Operation() != jetstream.KeyValuePut {
 						continue
 					}
-					t, ok := TargetOfKey(e.Key())
+					t, ok := ctl.TargetOfKey(e.Key())
 					if !ok {
 						continue
 					}
@@ -327,13 +328,13 @@ func sweepHealth(ctx context.Context, deps func() Deps) {
 		case <-t.C:
 		}
 		d := deps()
-		for kind, entity := range map[string]string{KindHost: EntityHost, KindInstance: EntityInstance} {
+		for kind, entity := range map[string]string{ctl.KindHost: EntityHost, ctl.KindInstance: EntityInstance} {
 			rs, err := all(ctx, d, entity)
 			if err != nil {
 				continue
 			}
 			for id, r := range rs {
-				target := Target{kind, id}
+				target := ctl.Target{Kind: kind, ID: id}
 				_, up, err := d.Control.Health(ctx, target)
 				if err != nil {
 					continue
