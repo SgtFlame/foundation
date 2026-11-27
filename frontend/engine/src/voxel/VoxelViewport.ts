@@ -1,5 +1,6 @@
+import { padCharge, padUnder } from '../ship/Pad.ts'
 import { blockCost, costLine, pay, shortOf, type Cost } from '../ship/Blueprint.ts'
-import { forgeAction, msPer, PART_NAMES, type ForgeKind, type ForgeState, type Part } from '../craft/Forge.ts'
+import { forgeAction, FUEL_COAL, FUEL_RATE, limeFor, msPer, PART_NAMES, type ForgeKind, type ForgeState, type Part } from '../craft/Forge.ts'
 import { DRIVE_CIRCUITS, DRIVE_IRON, DRIVE_MS, DRIVE_ORE, FAB_IRON, FAB_MS, FAB_ORE, fabAction, JUMP_CHARGE, KIT_CIRCUITS, KIT_IRON, KIT_MS, MAX_BOOST, type FabItem, type FabState } from '../craft/Fabricator.ts'
 import { canJump, jumpTarget } from '../ship/Jump.ts'
 import * as THREE from 'three/webgpu'
@@ -787,6 +788,7 @@ export class VoxelViewport {
     this.stepNeeds(dt)
     if (this.shipLayer.pilotOf && this.shipLayer.body) {
       this.stepPilot(dt)
+      this.stepPad(dt)
       input.endStep()
       return
     }
@@ -1556,6 +1558,21 @@ export class VoxelViewport {
     this.opts.onShipIntent?.({ kind: 'place', id: g.ship, index: g.index })
   }
 
+  // V33: a ship resting on a finished landing pad charges from its mains
+  private onPadSince = 0
+  private stepPad(dt: number): void {
+    const b = this.shipLayer.body
+    if (!b) return
+    const pad = padUnder(b, Math.hypot(b.v.x, b.v.y, b.v.z), this.shipLayer.ships())
+    if (!pad || b.charge >= 1) {
+      this.onPadSince = 0
+      return
+    }
+    if (this.onPadSince === 0) this.flashHint('The pad\'s mains clamp on: the battery is charging')
+    this.onPadSince += dt
+    b.charge = padCharge(b.charge, dt)
+  }
+
   private forgeOf(id: string): ForgeState | null {
     return this.shipLayer.ships().find((s) => s.id === id)?.forge ?? null
   }
@@ -1673,12 +1690,15 @@ export class VoxelViewport {
       const c = this.carried
       if (c) {
         if (a.what === 'ore') this.carried = { ...c, ore: (c.ore ?? 0) - a.ore }
-        else if (a.what === 'rock') this.carried = { ...c, rock: c.rock - a.ore }
+        else if (a.what === 'rock') this.carried = { ...c, rock: c.rock - a.ore, parts: { ...c.parts, lime: Math.max(0, (c.parts?.lime ?? 0) - limeFor(a.ore)) } }
         else this.carried = { ...c, minerals: { ...c.minerals, [a.what]: Math.max(0, (c.minerals?.[a.what] ?? 0) - a.ore) } }
+        // V33: coal in the pack fuels the load
+        if (a.fuel && this.carried) this.carried = { ...this.carried, minerals: { ...this.carried.minerals, coal: Math.max(0, (this.carried.minerals?.coal ?? 0) - FUEL_COAL) } }
       }
       this.opts.onShipIntent?.({ kind: 'smelt', id, what: a.what })
-      const secs = Math.round((a.ore * msPer(a.what)) / 1000)
-      this.flashHint(a.what === 'ore' ? `You shovel ${a.ore.toFixed(2)} m³ of ore into the forge and work the bellows. It will take ${secs} s` : a.what === 'rock' ? `You tip ${a.ore.toFixed(2)} m³ of rock into the kiln side of the forge to burn for cement. It will take ${secs} s` : `You feed ${a.ore.toFixed(2)} m³ of ${a.what} into the forge to refine. It will take ${secs} s`)
+      const secs = Math.round((a.ore * msPer(a.what)) / (a.fuel ? FUEL_RATE : 1) / 1000)
+      const said = a.what === 'ore' ? `You shovel ${a.ore.toFixed(2)} m³ of ore into the forge and work the bellows` : a.what === 'rock' ? `You tip ${a.ore.toFixed(2)} m³ of rock and ${limeFor(a.ore)} sacks of lime into the kiln side of the forge to burn for cement` : a.what === 'limestone' ? `You stack ${a.ore.toFixed(2)} m³ of limestone in the kiln to burn into lime` : `You feed ${a.ore.toFixed(2)} m³ of ${a.what} into the forge to refine`
+      this.flashHint(`${said}${a.fuel ? '; a shovel of coal under it doubles the heat' : ''}. It will take ${secs} s`)
     } else if (a.kind === 'takeParts') {
       const c = this.carried
       if (c) this.carried = { ...c, parts: { ...c.parts, [a.part]: (c.parts?.[a.part] ?? 0) + a.count } }

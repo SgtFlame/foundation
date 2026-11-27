@@ -96,7 +96,7 @@
         "y": 150
       },
       "config": {
-        "expr": "let f = ship?.forge; let r = {ferrite: [\"plate\", 8, 60000], malachite: [\"wire\", 10, 60000], silica: [\"solarCell\", 4, 60000], wolframite: [\"nozzle\", 3, 60000], spodumene: [\"cell\", 4, 60000], rock: [\"cement\", 6, 30000]}; let k = f?.kind ?? \"\"; let ms = k == \"\" ? 45000 : r[k][2]; let left = f == nil ? 0 : f.ore * ms - (now().UnixMilli() - f.at); let held = (pack?.dust ?? 0) + (pack?.rock ?? 0) + (pack?.ore ?? 0) + (pack?.iron ?? 0) + sum(values(pack?.minerals ?? {})); !found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a forge\" : f == nil ? \"the forge is empty: put ore, a mineral or rock in with game.smelt\" : left > 0 ? \"the forge is still smelting: \" + string(int(ceil(left / 1000))) + \" s left\" : k == \"\" && held + f.ore * 0.8 > 4.0001 ? \"your pack has no room for the iron\" : \"\"",
+        "expr": "let f = ship?.forge; let r = {ferrite: [\"plate\", 8, 60000], malachite: [\"wire\", 10, 60000], silica: [\"solarCell\", 4, 60000], wolframite: [\"nozzle\", 3, 60000], spodumene: [\"cell\", 4, 60000], rock: [\"cement\", 6, 30000], limestone: [\"lime\", 6, 30000]}; let k = f?.kind ?? \"\"; let ms = k == \"\" ? 45000 : r[k][2]; let left = f == nil ? 0 : f.ore * ms / (f?.rate ?? 1) - (now().UnixMilli() - f.at); let held = (pack?.dust ?? 0) + (pack?.rock ?? 0) + (pack?.ore ?? 0) + (pack?.iron ?? 0) + sum(values(pack?.minerals ?? {})); !found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a forge\" : f == nil ? \"the forge is empty: put ore, a mineral or rock in with game.smelt\" : left > 0 ? \"the forge is still smelting: \" + string(int(ceil(left / 1000))) + \" s left\" : k == \"\" && held + f.ore * 0.8 > 4.0001 ? \"your pack has no room for the iron\" : \"\"",
         "type": "string"
       }
     },
@@ -130,7 +130,7 @@
         "y": 350
       },
       "config": {
-        "expr": "let r = {ferrite: [\"plate\", 8, 60000], malachite: [\"wire\", 10, 60000], silica: [\"solarCell\", 4, 60000], wolframite: [\"nozzle\", 3, 60000], spodumene: [\"cell\", 4, 60000], rock: [\"cement\", 6, 30000]}; let k = ship.forge?.kind ?? \"\"; let iron = k == \"\" ? round(ship.forge.ore * 0.8 * 1000) / 1000 : 0; let n = k == \"\" ? 0 : int(floor(ship.forge.ore * r[k][1] + 0.000001)); k == \"\" ? {world: ship.world, iron: iron, pack: {iron: iron}} : {world: ship.world, iron: 0, parts: fromPairs([[r[k][0], n]]), pack: {parts: fromPairs([[r[k][0], n]])}}",
+        "expr": "let r = {ferrite: [\"plate\", 8, 60000], malachite: [\"wire\", 10, 60000], silica: [\"solarCell\", 4, 60000], wolframite: [\"nozzle\", 3, 60000], spodumene: [\"cell\", 4, 60000], rock: [\"cement\", 6, 30000], limestone: [\"lime\", 6, 30000]}; let k = ship.forge?.kind ?? \"\"; let iron = k == \"\" ? round(ship.forge.ore * 0.8 * 1000) / 1000 : 0; let n = k == \"\" ? 0 : int(floor(ship.forge.ore * r[k][1] + 0.000001)); k == \"\" ? {world: ship.world, iron: iron, pack: {iron: iron}} : {world: ship.world, iron: 0, parts: fromPairs([[r[k][0], n]]), pack: {parts: fromPairs([[r[k][0], n]])}}",
         "type": "json"
       }
     },

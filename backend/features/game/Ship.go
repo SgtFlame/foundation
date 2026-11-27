@@ -75,6 +75,7 @@ var BlockCosts = map[string]map[string]float64{
 	"light":    {"wire": 1},
 	"cargo":    {"plate": 4},
 	"refinery": {"plate": 6, "wire": 4}, // V32
+	"concrete": {"cement": 2},           // V33
 }
 
 // DesignBlock is one block of a design: armor, cockpit, gyro, light,
@@ -139,6 +140,8 @@ type Forge struct {
 	// malachite, silica, wolframite, spodumene) or rock, refined into
 	// components (Refines)
 	Kind string `json:"kind,omitempty"`
+	// V33: 2 when 0.1 m³ of coal from the pack fuels it: done twice as fast
+	Rate float64 `json:"rate,omitempty"`
 }
 
 // Refine is what a forge makes of a m³ of a kind other than ore (V30).
@@ -157,6 +160,7 @@ var Refines = map[string]Refine{
 	"wolframite": {"nozzle", 3, 60_000},
 	"spodumene":  {"cell", 4, 60_000},
 	"rock":       {"cement", 6, 30_000},
+	"limestone":  {"lime", 6, 30_000}, // V33
 }
 
 const (
@@ -219,7 +223,7 @@ func (d ShipDesign) Check() string {
 		switch b.Type {
 		case "cockpit":
 			cockpits++
-		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar", "log", "door", "bed", "bench", "forge", "fabricator":
+		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar", "log", "door", "bed", "bench", "forge", "fabricator", "concrete":
 		case "thruster":
 			switch b.Push {
 			case "up", "down", "forward", "back", "left", "right":
@@ -270,6 +274,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		At     int64      `json:"at"`
 		Item   string     `json:"item"`
 		Kind   string     `json:"kind"`
+		Rate   float64    `json:"rate"`
 		Types  []string   `json:"types"`
 		Boost  float64    `json:"boost"`
 	}
@@ -324,7 +329,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 			s.Pilot = ""
 		}
 	case EventSmelting:
-		s.Forge = &Forge{Ore: d.Ore, At: d.At, Kind: d.Kind}
+		s.Forge = &Forge{Ore: d.Ore, At: d.At, Kind: d.Kind, Rate: d.Rate}
 	case EventIngots:
 		s.Forge = nil
 	case EventFabricating:

@@ -1,0 +1,242 @@
+{
+  "id": "pad",
+  "title": "Landing pad",
+  "description": "A landing pad of concrete (forge 360 V33): a static grid of 25 concrete blocks with a lamp at each corner, built on the moon or the green planet from its blueprint. Each concrete block costs 2 bags of cement (rock and lime burnt at a forge), each lamp a copper wire. A ship resting on a finished pad has its battery charged from the pad's mains.",
+  "blockSize": 1,
+  "static": true,
+  "chip": true,
+  "blocks": [
+    {
+      "type": "concrete",
+      "at": [
+        -2,
+        0,
+        -2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        -2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        -2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        -2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        2,
+        0,
+        -2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -2,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        2,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -2,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        2,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -2,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        2,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -2,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        2,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        -2,
+        1,
+        -2
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        2,
+        1,
+        -2
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        -2,
+        1,
+        2
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        2,
+        1,
+        2
+      ]
+    }
+  ]
+}

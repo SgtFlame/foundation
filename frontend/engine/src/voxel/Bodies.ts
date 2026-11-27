@@ -84,6 +84,7 @@ export function planetOf(params: MoonParams): Body {
     craterMaxRadius: 1,
     dustDepth: 1.5,
     soil: true,
+    minerals: PLANET_MINERALS, // V33
   })
   return body('planet', PLANET.x, PLANET.y, PLANET.z, PLANET.radius, gen)
 }
@@ -99,6 +100,8 @@ function body(kind: Body['kind'], x: number, y: number, z: number, radius: numbe
 // V29: the minerals in each body's rock, as shares of it
 export const MOON_MINERALS: MoonParams['minerals'] = { ferrite: 0.14, silica: 0.12, ice: 0.08 }
 export const ASTEROID_MINERALS: MoonParams['minerals'] = { malachite: 0.2, wolframite: 0.15, spodumene: 0.12 }
+// V33: the green planet's old sea beds and forests, under its soil
+export const PLANET_MINERALS: MoonParams['minerals'] = { limestone: 0.2, coal: 0.1 }
 
 export class WorldGenerator {
   readonly params: MoonParams

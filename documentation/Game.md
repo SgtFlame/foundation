@@ -598,6 +598,15 @@ Blueprints from design chips: the third step of *Ships from blocks*, as the user
 
 The hauler, freighter and barge become design chips: their outlines carry `types` (`cmd-game-startShip`'s `chips` table) and each block costs components like the cutter's; the contract and Trade levels that unlocked them now give the chip. A refinery block costs 6 plates and 4 wire. Ships started before V32 keep free outlines. `TestChipDesigns` checks every chip's list against its file; the test helper `refineParts` refines components in parallel cabins. The editor's *Start* tooltip gives a chip ship's whole bill (`billFor`).
 
+## Built in V33 (forge 360)
+
+Lime, coal and the landing pad.
+
+- Two more minerals, under the green planet's soil (`PLANET_MINERALS`): **limestone** (material 10) and **coal** (11), dug into the pack by name (`cmd-game-editTerrain`'s names).
+- The forge burns limestone into **lime** (6 sacks a m³, 30 s a m³). **Cement now takes lime**: 2 sacks a m³ of rock (`CEMENT_LIME`, `limeFor`), the load bounded by the lime carried. **Coal is fuel**: with 0.1 m³ in the pack a load burns it and is done twice as fast (`forge.rate` 2, `FUEL_COAL`, `FUEL_RATE`); coal is never a load.
+- The **landing pad** (`designs/pad.json`): a static chip design anyone may lay out, 25 `concrete` blocks (2 bags of cement each) and four lamps. A ship resting on a finished pad charges its battery (`ship/Pad.ts`, `padUnder`, `PAD_RATE`).
+- Tests: `TestLimeAndPad`, `Forge.test.ts`, `Pad.test.ts`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

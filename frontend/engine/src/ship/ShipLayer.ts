@@ -22,6 +22,7 @@ const COLORS: Record<DesignBlock['type'], number> = {
   bench: 0x8a6a44,
   forge: 0x5a5a60,
   fabricator: 0x7c8794,
+  concrete: 0xb8b4aa, // V33
 }
 
 interface Shown {

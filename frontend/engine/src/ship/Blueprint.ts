@@ -21,6 +21,7 @@ export const BLOCK_COSTS: Record<string, Cost> = {
   light: { wire: 1 },
   cargo: { plate: 4 },
   refinery: { plate: 6, wire: 4 }, // V32
+  concrete: { cement: 2 }, // V33: the landing pad's
 }
 
 // What a block of a ship costs: nothing unless the ship keeps chip types

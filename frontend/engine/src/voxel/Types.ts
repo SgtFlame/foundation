@@ -18,9 +18,13 @@ export const MATERIAL_ICE = 6
 export const MATERIAL_MALACHITE = 7
 export const MATERIAL_WOLFRAMITE = 8
 export const MATERIAL_SPODUMENE = 9
-export const MATERIAL_COUNT = 10
+// V33: the green planet's limestone (burnt into lime for cement) and coal
+// (the forge's fuel)
+export const MATERIAL_LIMESTONE = 10
+export const MATERIAL_COAL = 11
+export const MATERIAL_COUNT = 12
 
-export const MINERALS = ['ferrite', 'silica', 'ice', 'malachite', 'wolframite', 'spodumene'] as const
+export const MINERALS = ['ferrite', 'silica', 'ice', 'malachite', 'wolframite', 'spodumene', 'limestone', 'coal'] as const
 export type Mineral = (typeof MINERALS)[number]
 // A mineral's material id, and back
 export const mineralMaterial = (m: Mineral): number => MATERIAL_FERRITE + MINERALS.indexOf(m)
@@ -33,6 +37,8 @@ export const MINERAL_TINT: Record<Mineral, [number, number, number]> = {
   malachite: [0.18, 0.55, 0.33],
   wolframite: [0.12, 0.12, 0.14],
   spodumene: [0.86, 0.62, 0.66],
+  limestone: [0.82, 0.8, 0.68],
+  coal: [0.07, 0.07, 0.08],
 }
 
 // The chunk grid: CHUNK_SIZE cells along each axis
