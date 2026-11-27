@@ -1,0 +1,94 @@
+{
+  "id": "infraProfile",
+  "owner": "app:infrastructure",
+  "name": "Profile",
+  "description": "What an instance is made from: container or virtual machine, image, resources, packages, units and upgrades",
+  "titleField": "name",
+  "fields": [
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "The profile's name",
+      "required": true
+    },
+    {
+      "id": "kind",
+      "name": "Kind",
+      "type": "enum",
+      "description": "Container or virtual machine",
+      "options": [
+        {
+          "id": "container",
+          "name": "Container"
+        },
+        {
+          "id": "vm",
+          "name": "Vm"
+        }
+      ],
+      "default": "container"
+    },
+    {
+      "id": "image",
+      "name": "Image",
+      "type": "text",
+      "description": "The image instances start from, e.g. ubuntu/24.04"
+    },
+    {
+      "id": "cpu",
+      "name": "CPUs",
+      "type": "number",
+      "description": "Virtual CPUs"
+    },
+    {
+      "id": "memory",
+      "name": "Memory",
+      "type": "text",
+      "description": "Memory limit, e.g. 4GiB"
+    },
+    {
+      "id": "disk",
+      "name": "Disk",
+      "type": "text",
+      "description": "Root disk size, e.g. 20GiB"
+    },
+    {
+      "id": "packages",
+      "name": "Packages",
+      "type": "json",
+      "description": "Package names every instance of it gets"
+    },
+    {
+      "id": "units",
+      "name": "Units",
+      "type": "json",
+      "description": "Unit names every instance of it runs"
+    },
+    {
+      "id": "unattendedUpgrades",
+      "name": "Unattended upgrades",
+      "type": "bool",
+      "description": "Whether the Ubuntu archive's security updates install by themselves",
+      "default": true
+    },
+    {
+      "id": "channel",
+      "name": "Channel",
+      "type": "enum",
+      "description": "The first-party repository channel its instances follow (forge 20f-1)",
+      "options": [
+        {
+          "id": "stable",
+          "name": "Stable"
+        },
+        {
+          "id": "candidate",
+          "name": "Candidate"
+        }
+      ],
+      "default": "stable"
+    }
+  ],
+  "indexes": []
+}

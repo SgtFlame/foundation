@@ -232,7 +232,11 @@ func (r *Runner) triggerConsumers(t *tenant, app string) (map[string]jetstream.S
 	out := map[string]jetstream.Stream{}
 	var streams []jetstream.Stream
 	prefix := fmt.Sprintf("EVT_%d_", t.id)
-	names := r.d.Projections.JetStream().StreamNames(r.ctx, jetstream.WithStreamListSubject(fmt.Sprintf("evt.%d.>", t.id)))
+	tjs, err := r.d.Projections.JetStreamFor(r.ctx, t.id)
+	if err != nil {
+		return nil, log.Wrap(err)
+	}
+	names := tjs.StreamNames(r.ctx, jetstream.WithStreamListSubject(fmt.Sprintf("evt.%d.>", t.id)))
 	for name := range names.Name() {
 		if !strings.HasPrefix(name, prefix) {
 			continue
@@ -421,7 +425,11 @@ func (r *Runner) schedule(t *tenant, in apps.Install, d desired) error {
 		last.Header.Get("Nats-Schedule") == d.schedule && last.Header.Get("Nats-Schedule-Time-Zone") == d.zone && string(last.Data) == string(body) {
 		return nil // as it is already: sending it again would move its next tick
 	}
-	_, err := r.d.Projections.JetStream().PublishMsg(r.ctx, m)
+	js, err := r.d.Projections.JetStreamFor(r.ctx, t.id)
+	if err != nil {
+		return err
+	}
+	_, err = js.PublishMsg(r.ctx, m)
 	return err
 }
 

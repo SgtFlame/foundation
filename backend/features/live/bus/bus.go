@@ -469,8 +469,12 @@ func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstre
 		}
 		msgs[i] = m
 	}
+	js, err := b.p.JetStreamFor(ctx, tenant)
+	if err != nil {
+		return res, false, err
+	}
 	if len(msgs) == 1 {
-		ack, err := b.p.JetStream().PublishMsg(ctx, msgs[0])
+		ack, err := js.PublishMsg(ctx, msgs[0])
 		if err != nil {
 			return res, project.IsConflict(err), err
 		}
@@ -478,7 +482,7 @@ func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstre
 		b.lock(b.lockKey(tenant, evTargets[0])).last.Store(ack.Sequence)
 		return res, false, nil
 	}
-	ack, err := project.PublishBatch(ctx, b.p.JetStream().Conn(), msgs)
+	ack, err := project.PublishBatch(ctx, js.Conn(), msgs)
 	var apiErr *jetstream.APIError
 	if errors.As(err, &apiErr) && apiErr.ErrorCode == project.ErrCodeBatchDuplicate {
 		// Committed before under the same id. The batch's own sequence is

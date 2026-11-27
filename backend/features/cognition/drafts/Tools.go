@@ -75,19 +75,9 @@ func Test(args features.ServiceArgs, deps Deps, a TestArgs) (TestResult, *featur
 	}
 	if err != nil {
 		out.Error = err.Error()
-		var rec cognition.Run
-		if run.RunID != 0 {
-			out.NodeID = failedNode(deps, run.RunID, &rec)
-		}
+		out.NodeID = run.FailedNode
 	}
 	return out, nil
-}
-
-func failedNode(deps Deps, runID uint64, rec *cognition.Run) string {
-	if db := deps.Engine.DB(); db != nil && db.First(rec, runID).Error == nil {
-		return rec.FailedNode
-	}
-	return ""
 }
 
 // draftOrBuiltIn is a graph's draft, else its built-in version.

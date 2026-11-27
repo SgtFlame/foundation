@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/apps/branches"
+	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -149,6 +151,7 @@ func setup(t *testing.T) *fixture {
 		dataDeps   data.Deps
 		prefabDeps prefabs.Deps
 		appDeps    manifests.Deps
+		branchDeps branches.Deps
 		installDep installs.Deps
 		jobDeps    jobs.Deps
 		jobNodes   jobsnodes.Deps
@@ -163,6 +166,7 @@ func setup(t *testing.T) *fixture {
 	recordsnodes.Contribute(reg, func() data.Deps { return dataDeps })
 	prefabs.Contribute(reg, func() prefabs.Deps { return prefabDeps })
 	manifests.Contribute(reg, func() manifests.Deps { return appDeps })
+	branches.Contribute(reg, func() branches.Deps { return branchDeps }) // app branches (forge 19a), which app.publish reads
 	installs.Contribute(reg, func() installs.Deps { return installDep })
 	jobs.Contribute(reg, func() jobs.Deps { return jobDeps })
 	jobsnodes.Contribute(reg, func() jobsnodes.Deps { return jobNodes })
@@ -195,7 +199,7 @@ func setup(t *testing.T) *fixture {
 	srv := natsd.StartTest(t)
 	p := project.New(srv.JS(), reg)
 	t.Cleanup(p.Close)
-	eng := engine.New(gdb, reg, nil)
+	eng := engine.New(traces.In(gdb), reg, nil)
 	eng.SetSource(drafts.Source{Store: p})
 	f := &fixture{t: t, srv: srv, reg: reg, p: p, bus: bus.New(p), subs: subscribe.New(p, reg), secrets: &memSecrets{values: map[string]string{}}, hits: h}
 	nodeDeps = livenodes.Deps{Engine: eng, Bus: f.bus, Subscriptions: f.subs, Store: p}
@@ -204,6 +208,7 @@ func setup(t *testing.T) *fixture {
 	entityDeps = entities.Deps{Projections: p, DB: gdb, OnPublish: func(args features.ServiceArgs) error { return data.Follow(args, dataDeps) }}
 	prefabDeps = prefabs.Deps{Projections: p, DB: gdb}
 	appDeps = manifests.Deps{Projections: p, DB: gdb}
+	branchDeps = branches.Deps{Projections: p}
 	installDep = installs.Deps{Projections: p, DB: gdb, Nodes: nodeDeps}
 	f.bus.Resolve = installs.CommandFor(func() installs.Deps { return installDep }, livenodes.CommandFor(func() livenodes.Deps { return nodeDeps }))
 	f.subs.Resolve = installs.QueryFor(func() installs.Deps { return installDep }, livenodes.QueryFor(func() livenodes.Deps { return nodeDeps }))
@@ -217,7 +222,7 @@ func setup(t *testing.T) *fixture {
 	cxDeps = connectors.Deps{Registry: registry, Dispatcher: dispatcher}
 	connDeps = connections.Deps{Projections: p, Bus: f.bus, Registry: registry, Secrets: f.secrets, Dispatcher: dispatcher}
 	f.deps, f.live = connDeps, &connDeps
-	scrDeps = scripted.Deps{Store: p, Engine: eng, JS: srv.JS(), Reg: reg}
+	scrDeps = scripted.Deps{Store: p, Engine: eng, Books: connectors.InJetStream(srv.JS()), Reg: reg}
 	f.scripted = scrDeps
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)

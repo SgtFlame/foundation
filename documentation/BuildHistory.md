@@ -1007,3 +1007,12 @@ The drop pod and the saved place ([Game.md](Game.md) › *Built in V8, second pa
 
 - treat a missing `at` in `game.player` as "not landed yet", and add any other per-player saved state to `game.players` the same way, from events on a target the sender may name (the world's terrain), keyed by the event's user;
 - keep saves infrequent: `stood` events share the terrain target with edits, so each one moves that target's expected sequence.
+
+## Forge 22a to 22f: Infrastructure as Code
+
+Configurations, diffs and export, the compute contract and test server, plans, the infrastructure nodes and applies ([Infrastructure.md](Infrastructure.md) › *Built in forge 22a to 22f*). Later parts must:
+
+- add a resource kind on `infra.resourceKind` (expansion, compared properties, order, `HoldsData`) and its work in `infraapply.runStep`, rather than special cases in `Plan`;
+- implement `infra.compute@1` for each provider type and pass `contracttest.Run` against recorded responses;
+- write desired state only through the `infranodes` helpers, by ids from `infranodes.RecordID`, so every step stays idempotent;
+- keep secrets out of configurations: `infra.SecretProblems` refuses them on import and export.

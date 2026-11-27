@@ -1,0 +1,112 @@
+{
+  "id": "infraInstance",
+  "owner": "app:infrastructure",
+  "name": "Instance",
+  "description": "A container or virtual machine on a host, made from a profile, running units under an axiomd daemon in instance mode",
+  "titleField": "name",
+  "fields": [
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "The instance's name",
+      "required": true
+    },
+    {
+      "id": "host",
+      "name": "Host",
+      "type": "relation",
+      "description": "The host it runs on",
+      "relation": {
+        "entity": "infraHost"
+      }
+    },
+    {
+      "id": "profile",
+      "name": "Profile",
+      "type": "relation",
+      "description": "The profile it is made from",
+      "relation": {
+        "entity": "infraProfile"
+      }
+    },
+    {
+      "id": "kind",
+      "name": "Kind",
+      "type": "enum",
+      "description": "Container or virtual machine (the profile's when empty)",
+      "options": [
+        {
+          "id": "container",
+          "name": "Container"
+        },
+        {
+          "id": "vm",
+          "name": "Vm"
+        }
+      ]
+    },
+    {
+      "id": "status",
+      "name": "Status",
+      "type": "enum",
+      "description": "Desired: running, stopped, or absent (to be deleted)",
+      "options": [
+        {
+          "id": "running",
+          "name": "Running"
+        },
+        {
+          "id": "stopped",
+          "name": "Stopped"
+        },
+        {
+          "id": "absent",
+          "name": "Absent"
+        }
+      ],
+      "default": "running"
+    },
+    {
+      "id": "facts",
+      "name": "Facts",
+      "type": "json",
+      "description": "Reported: what the daemon found on start and on change (OS, resources, versions)"
+    },
+    {
+      "id": "health",
+      "name": "Health",
+      "type": "enum",
+      "description": "Reported: up while the daemon's heartbeat arrives, down once it stops, unknown before the first",
+      "options": [
+        {
+          "id": "unknown",
+          "name": "Unknown"
+        },
+        {
+          "id": "up",
+          "name": "Up"
+        },
+        {
+          "id": "down",
+          "name": "Down"
+        }
+      ],
+      "default": "unknown"
+    },
+    {
+      "id": "lastEvent",
+      "name": "Last event",
+      "type": "json",
+      "description": "Reported: the last control request's progress or outcome ({request, kind, message, at})"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "by_host",
+      "fields": [
+        "host"
+      ]
+    }
+  ]
+}

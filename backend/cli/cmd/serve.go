@@ -9,14 +9,70 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SgtFlame/foundation/backend/features/activity"
+	chatproxy "github.com/SgtFlame/foundation/backend/features/ai/services/chatservice/proxy"
+	embedproxy "github.com/SgtFlame/foundation/backend/features/ai/services/embedservice/proxy"
+	appproxy "github.com/SgtFlame/foundation/backend/features/apps/services/appservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/authz/services/authzservice"
+	authzproxy "github.com/SgtFlame/foundation/backend/features/authz/services/authzservice/proxy"
+	chronicleproxy "github.com/SgtFlame/foundation/backend/features/chronicle/services/chronicleservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/cognition/services/cognitionservice"
+	cognitionproxy "github.com/SgtFlame/foundation/backend/features/cognition/services/cognitionservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
+	configproxy "github.com/SgtFlame/foundation/backend/features/config/services/configservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice"
+	connectorsproxy "github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice/proxy"
+	conversationproxy "github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/events"
+	"github.com/SgtFlame/foundation/backend/features/events/durable"
+	"github.com/SgtFlame/foundation/backend/features/extensions/services/extensionsservice"
+	extensionsproxy "github.com/SgtFlame/foundation/backend/features/extensions/services/extensionsservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/identity/services/identityservice"
+	identityproxy "github.com/SgtFlame/foundation/backend/features/identity/services/identityservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/identity/services/tenantservice"
+	tenantproxy "github.com/SgtFlame/foundation/backend/features/identity/services/tenantservice/proxy"
+	userproxy "github.com/SgtFlame/foundation/backend/features/identity/services/userservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/index/services/indexservice"
+	indexproxy "github.com/SgtFlame/foundation/backend/features/index/services/indexservice/proxy"
 	kbnodes "github.com/SgtFlame/foundation/backend/features/kb/nodes"
-	"gorm.io/gorm"
+	collabproxy "github.com/SgtFlame/foundation/backend/features/kb/services/collabservice/proxy"
+	kbproxy "github.com/SgtFlame/foundation/backend/features/kb/services/kbservice/proxy"
+	volumeproxy "github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/live/services/liveservice"
+	liveproxy "github.com/SgtFlame/foundation/backend/features/live/services/liveservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/logs/services/logsservice"
+	logsproxy "github.com/SgtFlame/foundation/backend/features/logs/services/logsservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/records/services/entityservice"
+	entityproxy "github.com/SgtFlame/foundation/backend/features/records/services/entityservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/records/services/filesservice"
+	filesproxy "github.com/SgtFlame/foundation/backend/features/records/services/filesservice/proxy"
+	recordproxy "github.com/SgtFlame/foundation/backend/features/records/services/recordservice/proxy"
+	retrievalproxy "github.com/SgtFlame/foundation/backend/features/retrieval/services/retrievalservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/secrets/services/bootstrapservice"
+	bootstrapproxy "github.com/SgtFlame/foundation/backend/features/secrets/services/bootstrapservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/secrets/services/secretsservice"
+	secretsproxy "github.com/SgtFlame/foundation/backend/features/secrets/services/secretsservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/services"
+	"github.com/SgtFlame/foundation/backend/features/services/catalog"
+	"github.com/SgtFlame/foundation/backend/features/services/instance"
+	"github.com/SgtFlame/foundation/backend/features/services/rest/serviceshandlers"
+	"github.com/SgtFlame/foundation/backend/features/services/routes"
+	"github.com/SgtFlame/foundation/backend/features/services/servers"
+	"github.com/SgtFlame/foundation/backend/features/services/services/servicesservice"
+	servicesimpl "github.com/SgtFlame/foundation/backend/features/services/services/servicesservice/impl"
+	servicesproxy "github.com/SgtFlame/foundation/backend/features/services/services/servicesservice/proxy"
+	prefabproxy "github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice/proxy"
+	uiproxy "github.com/SgtFlame/foundation/backend/features/ui/services/uiservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/usage/services/usageservice"
+	usageproxy "github.com/SgtFlame/foundation/backend/features/usage/services/usageservice/proxy"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -70,6 +126,11 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
+	connectorsimpl "github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice/impl"
+	"github.com/SgtFlame/foundation/backend/features/controlplane"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/issuer"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/natsauth"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
 	"github.com/SgtFlame/foundation/backend/features/conversation/made"
 	conversationnodes "github.com/SgtFlame/foundation/backend/features/conversation/nodes"
@@ -88,11 +149,16 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/identity/rest/userhandlers"
 	identityimpl "github.com/SgtFlame/foundation/backend/features/identity/services/identityservice/impl"
 	tenantimpl "github.com/SgtFlame/foundation/backend/features/identity/services/tenantservice/impl"
+	"github.com/SgtFlame/foundation/backend/features/identity/services/userservice"
 	userimpl "github.com/SgtFlame/foundation/backend/features/identity/services/userservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/index/rest/indexhandlers"
 	indeximpl "github.com/SgtFlame/foundation/backend/features/index/services/indexservice/impl"
 	indexsource "github.com/SgtFlame/foundation/backend/features/index/source"
 	"github.com/SgtFlame/foundation/backend/features/index/store/lancestore"
+	"github.com/SgtFlame/foundation/backend/features/infra"
+	infraapply "github.com/SgtFlame/foundation/backend/features/infra/apply"
+	"github.com/SgtFlame/foundation/backend/features/infra/infratest"
+	infranodes "github.com/SgtFlame/foundation/backend/features/infra/nodes"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	kblive "github.com/SgtFlame/foundation/backend/features/kb/live"
@@ -131,6 +197,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/records/rest/recordhandlers"
 	recordssearch "github.com/SgtFlame/foundation/backend/features/records/search"
 	entityimpl "github.com/SgtFlame/foundation/backend/features/records/services/entityservice/impl"
+	filesimpl "github.com/SgtFlame/foundation/backend/features/records/services/filesservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/records/services/recordservice"
 	recordimpl "github.com/SgtFlame/foundation/backend/features/records/services/recordservice/impl"
 	recordssettings "github.com/SgtFlame/foundation/backend/features/records/settings"
@@ -163,6 +230,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ui/prefabs"
 	"github.com/SgtFlame/foundation/backend/features/ui/rest/prefabhandlers"
 	"github.com/SgtFlame/foundation/backend/features/ui/rest/uihandlers"
+	"github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice"
 	prefabimpl "github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/ui/services/uiservice"
 	uiimpl "github.com/SgtFlame/foundation/backend/features/ui/services/uiservice/impl"
@@ -179,22 +247,37 @@ import (
 )
 
 var (
-	serveAddr       string
-	serveKBRoot     string
-	serveDataDir    string
-	serveDB         string
-	serveAppDB      string
-	serveGeminiKey  string
-	serveEmbedModel string
-	serveEmbedDims  int
-	serveChatModel  string
-	serveLogFormat  string
-	serveLogLevel   string
-	serveVLogsURL   string
-	serveVaultAddr  string
-	serveVaultMount string
-	serveVaultRole  string
-	serveNatsURL    string
+	serveAddr         string
+	serveKBRoot       string
+	serveDataDir      string
+	serveDB           string
+	serveAppDB        string
+	serveGeminiKey    string
+	serveEmbedModel   string
+	serveEmbedDims    int
+	serveChatModel    string
+	serveLogFormat    string
+	serveLogLevel     string
+	serveVLogsURL     string
+	serveVaultAddr    string
+	serveVaultMount   string
+	serveVaultRole    string
+	serveNatsURL      string
+	serveNatsCreds    string
+	serveNatsCA       string
+	serveNatsReps     int
+	serveNatsKeys     string
+	serveNatsPlaces   string
+	serveControlPlane bool
+	serveLoopback     bool
+	serveServices     string
+	serveCheck        bool
+	serveDrain        time.Duration
+	serveProcess      string
+	serveCallKey      string
+	serveNatsListen   string
+	serveInstance     string
+	serveInstanceCfg  string
 )
 
 // serveCmd represents the serve command
@@ -232,8 +315,32 @@ Logs go to stderr, and to VictoriaLogs when Settings (System › Logging)
 turns it on; --vlogs-url or $FOUNDATION_VLOGS_URL wins over the setting.
 backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// forge 21g-2: a unit the instance agent starts reads its set and
+		// flags from desired state and its credentials from systemd
+		inst, err := applyInstance(cmd)
+		if err != nil {
+			return err
+		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
+		// The locator hands each service out (forge 21f-1): every service real
+		// as before, or with --services-loopback real, served and reached
+		// through its proxy once NATS is up
+		loc := &services.Locator{}
+		// forge 21g-1: the services this process runs
+		serviceSet, err := services.ParseSet(serveServices, serviceGroups(), knownServices())
+		if err != nil {
+			return err
+		}
+		if serveCheck {
+			if serviceSet == nil {
+				fmt.Println("this process runs every service")
+			} else {
+				fmt.Printf("other processes must run: %s\n", strings.Join(services.Elsewhere(serviceSet, knownServices()), ", "))
+			}
+			return nil
+		}
+		started := time.Now().UTC()
 
 		level, err := logging.ParseLevel(serveLogLevel)
 		if err != nil {
@@ -271,11 +378,21 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		if roleID == "" {
 			roleID = os.Getenv("FOUNDATION_VAULT_ROLE_ID")
 		}
+		if inst.VaultRoleID != "" {
+			roleID = inst.VaultRoleID
+		}
 		boot, err := secrets.NewBootstrap(secrets.VaultOptions{Addr: vaultAddr, Mount: serveVaultMount, RoleID: roleID})
 		if err != nil {
 			return err
 		}
-		bootstrapService := bootstrapimpl.CreateService(bootstrapimpl.WithBootstrap(boot))
+		if inst.VaultWrappedSecretID != "" && boot.Vault() {
+			// forge 21h: unseal with the unit's single-use SecretID, as
+			// POST /bootstrap/unseal does, with no person
+			if err := boot.Unseal(ctx, inst.VaultWrappedSecretID, roleID); err != nil {
+				return log.Wrapf(err, "unsealing with the unit's SecretID")
+			}
+		}
+		bootstrapService := bootstrapproxy.Use(loc, func() bootstrapservice.Service { return bootstrapimpl.CreateService(bootstrapimpl.WithBootstrap(boot)) })
 		bootstrapHandler := &bootstraphandlers.BootstrapHandler{}
 		sealed := gin.New()
 		sealed.Use(rest.Middleware(rest.WithAuthenticate(func(*http.Request) (features.Principal, error) { return features.AnonymousPrincipal(), nil })), gin.Recovery())
@@ -346,15 +463,80 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// The live core's event streams, projections, presence and UI
 		// sessions live in NATS JetStream, embedded with no listener unless
 		// --nats-url names an external server (documentation/Live.md)
-		natsURL := serveNatsURL
-		if natsURL == "" {
-			natsURL = os.Getenv("FOUNDATION_NATS_URL")
+		// (forge 20a-1: a deployed cluster is several URLs, with a creds
+		// file, a CA and every stream made with --nats-replicas)
+		natsd.SetDefault(natsd.Placement{Replicas: natsd.ReplicasOr(serveNatsReps)})
+		// forge 20a-4: tenants placed in a cluster of the supercluster
+		if places, err := natsd.ParsePlacements(natsd.PlacementsOr(serveNatsPlaces)); err != nil {
+			return err
+		} else if len(places) > 0 {
+			natsd.SetTenantPlacements(func(t uint64) (natsd.Placement, bool) { p, ok := places[t]; return p, ok })
 		}
-		nats, err := natsd.Start(ctx, natsd.Options{Dir: filepath.Join(dataDir, "nats"), URL: natsURL})
+		natsOptions := natsd.Options{Dir: filepath.Join(dataDir, "nats"), URL: serveNatsURL, Creds: serveNatsCreds, CA: serveNatsCA, Listen: serveNatsListen}.WithEnv()
+		nats, err := natsd.Start(ctx, natsOptions)
 		if err != nil {
 			return err
 		}
 		defer nats.Close() // drained after the HTTP server has shut down
+		process := serveProcess
+		if process == "" {
+			host, _ := os.Hostname()
+			process = fmt.Sprintf("%s-%d", host, os.Getpid())
+		}
+		if serveLoopback {
+			keys, err := services.NewKeys()
+			if err != nil {
+				return err
+			}
+			loc.Client = &services.Client{NC: nats.Conn(), Caller: process, Keys: keys}
+			loc.Loopback, loc.ServerOptions = true, []services.ServerOption{services.VerifyWith(keys.Public())}
+			defer loc.Stop()
+			log.Info(ctx, "every service call crosses NATS (--services-loopback)")
+		} else if serviceSet != nil {
+			// forge 21g-1: run the set, serve it to other processes and
+			// reach the rest through their proxies; every process signs
+			// and checks call tokens with the same key
+			keyPath := serveCallKey
+			if keyPath == "" {
+				keyPath = filepath.Join(dataDir, "call.key")
+			}
+			var keys *services.Keys
+			if k := bundle["call-key"]; k != "" {
+				// forge 21h: the deployment's call key, from Vault's bundle
+				keys, err = services.ParseKeys([]byte(k))
+			} else {
+				keys, err = services.LoadOrCreateKeys(keyPath)
+			}
+			if err != nil {
+				return err
+			}
+			loc.Client = &services.Client{NC: nats.Conn(), Caller: process, Keys: keys}
+			loc.Set, loc.Serve, loc.ServerOptions = serviceSet, true, []services.ServerOption{services.VerifyWith(keys.Public())}
+			defer loc.Stop()
+			log.Info(ctx, "running the services %s; other processes run %s", serveServices, strings.Join(services.Elsewhere(serviceSet, knownServices()), ", "))
+		}
+		if loc.Client != nil {
+			// A routed tenant's calls go to its dedicated servers (forge 21f-2)
+			table := services.NewRoutes()
+			stopRoutes, err := routes.Watch(ctx, nats.JS(), table)
+			if err != nil {
+				return err
+			}
+			defer stopRoutes()
+			loc.Client.Routes = table
+			loc.ServerOptions = append(loc.ServerOptions, services.WithRoutes(table))
+		}
+		// forge 20a-3: with --nats-keys each tenant's streams and buckets
+		// are in its own account; connectors' state stays in APP
+		perTenant, err := natsauth.TenantAccounts(natsOptions, serveNatsKeys)
+		if err != nil {
+			return err
+		}
+		var natsAccounts natsd.Accounts
+		if perTenant != nil {
+			natsAccounts = perTenant
+			defer perTenant.Close()
+		}
 
 		// The index's and Chronicle's stores are opened first: retrieval's
 		// library and chronicle sources search them
@@ -437,18 +619,20 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var madeDeps made.Deps
 		var workspaceDeps workspace.Deps
 		var gameDeps game.Deps
+		var infraDeps infra.Deps
 		var configLive configservice.Service
 		var chatLive chatservice.Service
 		var conversationLive conversationservice.Service
 		var collabLive collabservice.Service
-		var transcriptFiles *recordsfiles.Store // Parse transcript's files, once the store is made (forge 18e)
+		var transcriptFiles recordsfiles.Files // Parse transcript's files, once the store is made (forge 18e)
 		registry := extensions.NewRegistry()
 		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.Modes, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, tools.Sources, authz.ResourceTypes,
-			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents, connectors.Contracts, connectors.Types, connections.Validators, authz.ContributedRoles)
+			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents, connectors.Contracts, connectors.Types, connections.Validators, authz.ContributedRoles, infra.ResourceKinds)
 		// Each feature declares its resource types and their actions
 		authz.Contribute(registry)
 		authz.ContributeAgents(registry) // agent (forge 07j)
 		identity.ContributeAccess(registry)
+		controlplane.ContributeAccess(registry) // infra, pinned to the root tenant (forge 20b-1)
 		config.ContributeAccess(registry)
 		logs.ContributeAccess(registry)
 		usage.ContributeAccess(registry)
@@ -492,7 +676,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		toolsnodes.Contribute(registry, func() toolsnodes.Deps { return agentDeps })
 		// Run mode and votes on segments (forge 15b)
 		conversationnodes.ContributeRunMode(registry, func() toolsnodes.Deps { return agentDeps })
-		retrievaltools.Contribute(registry, func() *gorm.DB { return agentDeps.DB })
+		retrievaltools.Contribute(registry, func() retrievalservice.Service { return retrievalService })
 		// The live core, server-driven UI and the Hello app; a command is
 		// also a tool, so livetools runs after every feature's commands
 		livesettings.Contribute(registry)
@@ -536,6 +720,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		authznodes.Contribute(registry)                                                  // Grant role, Revoke role (forge 07j)
 		textnodes.Contribute(registry)                                                   // Text diff, Anchor resolve (forge 18b)
 		appdiff.Contribute(registry)                                                     // Structured diff (forge 19d)
+		branches.ContributeTrigger(registry)                                             // On app branch merged (forge 19f)
 		kbnodes.Contribute(registry, func() collabservice.Service { return collabLive }) // Edit text together (forge 18c)
 		// Parse transcript (forge 18e): parsed in a limited child process
 		textnodes.ContributeTranscripts(registry, func() textnodes.TranscriptDeps {
@@ -571,6 +756,14 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		made.Contribute(registry, func() made.Deps { return madeDeps })                // chat.mode.*, chat.modes.made, chat.mode.create|options (forge 15h)
 		workspace.Contribute(registry, func() workspace.Deps { return workspaceDeps }) // workspace.*, workspace.list (forge 16a)
 		game.Contribute(registry, func() game.Deps { return gameDeps })                // game.* worlds, game.editTerrain, game.describeWorld (forge 360 V1)
+		infra.Contribute(registry, func() infra.Deps { return infraDeps })             // infra.config.* configurations and versions (forge 22a)
+		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
+		var infraNodeDeps infranodes.Deps
+		infranodes.Contribute(registry, func() infranodes.Deps { return infraNodeDeps }) // Ensure host, instance, unit, packages, Wait healthy, Remove (forge 22e)
+		var infraOutbox func(features.ServiceArgs, live.Area) error
+		infraapply.Contribute(registry, func() infraapply.Deps {
+			return infraapply.Deps{Infra: infraDeps, Nodes: infraNodeDeps, Outbox: infraOutbox}
+		}) // infra.apply, its step jobs, infra.drift (forge 22f)
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
 		uihandlers.ContributeLive(registry, func() uiservice.Service { return uiService })
 		confighandlers.ContributeLive(registry, func() configservice.Service { return configLive })
@@ -578,7 +771,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		conversationhandlers.ContributeLive(registry, func() conversationservice.Service { return conversationLive })
 		collabhandlers.ContributeLive(registry, func() collabservice.Service { return collabLive })
 		conversationsettings.Contribute(registry) // after every chat.contextProvider: it adds their defaults sections
-		extensionsService := extensionsimpl.CreateService(extensionsimpl.WithRegistry(registry))
+		extensionsService := extensionsproxy.Use(loc, func() extensionsservice.Service {
+			return extensionsimpl.CreateService(extensionsimpl.WithRegistry(registry))
+		})
 
 		// Access is checked against the grants from here on; slice 10's
 		// administrator flag becomes grants once
@@ -586,12 +781,34 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		if err := identity.MigrateRoles(ctx, appDB, policy); err != nil {
 			return err
 		}
+		// Every process's policy drops its caches when any changes a grant
+		// (forge 21d-1).
+		policy.Broadcast(nats.Conn())
+		if _, err := policy.Follow(nats.Conn()); err != nil {
+			return err
+		}
 		authz.Install(policy)
-		authzService := authzimpl.CreateService(authzimpl.WithPolicy(policy), authzimpl.WithMembers(func(tenant, user uint64) (bool, error) {
-			var n int64
-			err := appDB.Model(&identity.Membership{}).Where("tenant_id = ? AND user_id = ?", tenant, user).Count(&n).Error
-			return n > 0, err
-		}))
+		if serveControlPlane {
+			// forge 20b-1: the root tenant, its Owner user 1 when it exists
+			owner := uint64(0)
+			var firsts int64
+			if err := appDB.Model(&identity.User{}).Where("id = ?", features.LocalUserID).Count(&firsts).Error; err != nil {
+				return err
+			}
+			if firsts > 0 {
+				owner = features.LocalUserID
+			}
+			if _, err := controlplane.EnsureRootTenant(ctx, appDB, owner); err != nil {
+				return err
+			}
+		}
+		authzService := authzproxy.Use(loc, func() authzservice.Service {
+			return authzimpl.CreateService(authzimpl.WithPolicy(policy), authzimpl.WithMembers(func(tenant, user uint64) (bool, error) {
+				var n int64
+				err := appDB.Model(&identity.Membership{}).Where("tenant_id = ? AND user_id = ?", tenant, user).Count(&n).Error
+				return n > 0, err
+			}))
+		})
 
 		// The database key seals the signing key (and, without Vault, the
 		// secret settings): from Vault's bootstrap bundle, or the key file
@@ -618,10 +835,21 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		if auth.SingleUser() {
 			log.Info(ctx, "single-user mode: no sign-in until accounts are set up")
 		}
-		identityService := identityimpl.CreateService(identityimpl.WithDB(appDB), identityimpl.WithAuthenticator(auth))
-		tenantService := tenantimpl.CreateService(tenantimpl.WithDB(appDB))
-		userService := userimpl.CreateService(userimpl.WithDB(appDB))
+		identityService := identityproxy.Use(loc, func() identityservice.Service {
+			return identityimpl.CreateService(identityimpl.WithDB(appDB), identityimpl.WithAuthenticator(auth))
+		})
+		tenantService := tenantproxy.Use(loc, func() tenantservice.Service { return tenantimpl.CreateService(tenantimpl.WithDB(appDB)) })
+		userService := userproxy.Use(loc, func() userservice.Service { return userimpl.CreateService(userimpl.WithDB(appDB)) })
 		configChanges := config.NewChanges()
+		if loc.Client != nil {
+			// Buses whose publishers and followers may be in other
+			// processes travel over NATS (forge 21f-2)
+			stopBus, err := events.Over(configChanges, nats.Conn(), "config.changes")
+			if err != nil {
+				return err
+			}
+			defer stopBus()
+		}
 		geminiKey := serveGeminiKey
 		if geminiKey == "" {
 			geminiKey = os.Getenv("GEMINI_API_KEY")
@@ -632,11 +860,13 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		if boot.Vault() {
 			secretStore = vaultstore.New(boot.KV(), cipher, boot.Lost)
 		}
-		configService := configimpl.CreateService(
-			configimpl.WithDB(gdb), configimpl.WithRegistry(registry), configimpl.WithSecrets(secretStore), configimpl.WithChanges(configChanges),
-			configimpl.WithServerSecret(aisettings.ProvidersID, "gemini.apiKey", bundle["gemini-api-key"]), // under every stored key
-			configimpl.WithEnv(aisettings.ProvidersID, "gemini.apiKey", geminiKey),                         // flags and env win for secrets
-		)
+		configService := configproxy.Use(loc, func() configservice.Service {
+			return configimpl.CreateService(
+				configimpl.WithDB(gdb), configimpl.WithRegistry(registry), configimpl.WithSecrets(secretStore), configimpl.WithChanges(configChanges),
+				configimpl.WithServerSecret(aisettings.ProvidersID, "gemini.apiKey", bundle["gemini-api-key"]), // under every stored key
+				configimpl.WithEnv(aisettings.ProvidersID, "gemini.apiKey", geminiKey),                         // flags and env win for secrets
+			)
+		})
 		userName := func(id uint64) string {
 			var u identity.User
 			if appDB.Select("username", "display_name").First(&u, id).Error != nil {
@@ -647,7 +877,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			}
 			return u.Username
 		}
-		secretsService := secretsimpl.CreateService(secretsimpl.WithDB(appDB), secretsimpl.WithBootstrap(boot), secretsimpl.WithConfig(configService), secretsimpl.WithUserName(userName))
+		secretsService := secretsproxy.Use(loc, func() secretsservice.Service {
+			return secretsimpl.CreateService(secretsimpl.WithDB(appDB), secretsimpl.WithBootstrap(boot), secretsimpl.WithConfig(configService), secretsimpl.WithUserName(userName))
+		})
 
 		// Logs are stored where the logging settings say (or the flag, which
 		// wins), and follow them when they change
@@ -673,9 +905,20 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		if t := victoria.Target(); t.Configured() {
 			log.Info(ctx, "storing logs in VictoriaLogs at %s", t.URL)
 		}
-		logsService := logsimpl.CreateService(logsimpl.WithVictoria(victoria), logsimpl.WithConfig(configService), logsimpl.WithDB(appDB))
+		logsService := logsproxy.Use(loc, func() logsservice.Service {
+			return logsimpl.CreateService(logsimpl.WithVictoria(victoria), logsimpl.WithConfig(configService), logsimpl.WithDB(appDB))
+		})
 
 		fileEvents := volumeservice.NewFileEvents()
+		if loc.Client != nil {
+			// The index must not miss a file: a durable bus, followed only
+			// where the index runs (forge 21f-2)
+			stopFiles, err := durable.Link(ctx, nats.JS(), fileEvents, "kb.files", "bus_kb_files_index", loc.Runs("index"))
+			if err != nil {
+				return err
+			}
+			defer stopFiles()
+		}
 		var kbOpts []kbimpl.Option
 		volumeOpts := []volumeimpl.Option{volumeimpl.WithFileEvents(fileEvents)}
 		collabOpts := []collabimpl.Option{collabimpl.WithFileEvents(fileEvents), collabimpl.WithDocumentKinds(func(kind string) (collabservice.DocumentKind, bool) {
@@ -693,9 +936,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			collabOpts = append(collabOpts, collabimpl.WithRoot(serveKBRoot))
 			indexOpts = append(indexOpts, indeximpl.WithRoot(serveKBRoot))
 		}
-		kbService := kbimpl.CreateService(kbOpts...)
-		volumeService := volumeimpl.CreateService(volumeOpts...)
-		collabService := collabimpl.CreateService(collabOpts...)
+		kbService := kbproxy.Use(loc, func() kbservice.Service { return kbimpl.CreateService(kbOpts...) })
+		volumeService := volumeproxy.Use(loc, func() volumeservice.Service { return volumeimpl.CreateService(volumeOpts...) })
+		collabService := collabproxy.Use(loc, func() collabservice.Service { return collabimpl.CreateService(collabOpts...) })
 
 		geminiOpts := []gemini.Option{gemini.WithEmbedDimensions(serveEmbedDims)}
 		if serveEmbedModel != "" {
@@ -725,42 +968,62 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		}
 
 		// Every AI call is recorded and priced from the model catalog
-		recorder := usage.NewRecorder(gdb, func(ctx context.Context) (aisettings.Models, error) {
+		usageEvents := usage.NewEvents()
+		if loc.Client != nil {
+			stopUsage, err := events.Over(usageEvents, nats.Conn(), "usage.records")
+			if err != nil {
+				return err
+			}
+			defer stopUsage()
+		}
+		recorder := usage.NewRecorder(usage.StoreIn(gdb), func(ctx context.Context) (aisettings.Models, error) {
 			return config.Read[aisettings.Models](configService, features.BackgroundArgs(ctx), aisettings.ModelsID)
-		}, usage.NewEvents(), func(ctx context.Context) (usagesettings.Capture, error) {
+		}, usageEvents, func(ctx context.Context) (usagesettings.Capture, error) {
 			return config.Read[usagesettings.Capture](configService, features.BackgroundArgs(ctx), usagesettings.CaptureID)
 		})
 		defer recorder.Close()
-		usageService := usageimpl.CreateService(usageimpl.WithDB(gdb))
-		embedService := embedimpl.CreateService(embedimpl.WithProvider(usage.EmbedProvider(provider, "gemini", recorder)))
-		chatService := chatimpl.CreateService(chatimpl.WithProvider(usage.ChatProvider(provider, "gemini", recorder)), chatimpl.WithConfig(configService))
+		usageService := usageproxy.Use(loc, func() usageservice.Service { return usageimpl.CreateService(usageimpl.WithDB(gdb)) })
+		embedService := embedproxy.Use(loc, func() embedservice.Service {
+			return embedimpl.CreateService(embedimpl.WithProvider(usage.EmbedProvider(provider, "gemini", recorder)))
+		})
+		chatService := chatproxy.Use(loc, func() chatservice.Service {
+			return chatimpl.CreateService(chatimpl.WithProvider(usage.ChatProvider(provider, "gemini", recorder)), chatimpl.WithConfig(configService))
+		})
 		// The Cognition Engine runs the graphs, such as each chat round's
 		// mode graph (Personal, by default)
-		cognitionEngine := engine.New(gdb, registry, configService)
+		cognitionEngine := engine.New(traces.In(gdb), registry, configService)
 		for _, g := range cognitionEngine.Graphs() {
 			for _, p := range cognitionEngine.Resolve(g).Problems {
 				log.With("graphId", g.ID, "nodeId", p.NodeID).Warn(ctx, "Cognition graph %s: %s %s", g.ID, p.Severity, p.Message)
 			}
 		}
-		conversationService := conversationimpl.CreateService(
-			conversationimpl.WithDB(gdb), conversationimpl.WithChat(chatService), conversationimpl.WithConfig(configService), conversationimpl.WithRegistry(registry),
-			conversationimpl.WithEngine(cognitionEngine),
-			conversationimpl.WithActivity(activitycontext.Reader(func() activity.Deps { return activityDeps })),
-			conversationimpl.WithWorkspaces(workspace.KnowledgeReader(func() workspace.Deps { return workspaceDeps })), // the round's workspace (forge 16c)
-			conversationimpl.WithWorkspaceList(workspace.IDLister(func() workspace.Deps { return workspaceDeps })),     // chats per workspace (forge 16d)
-		)
+		conversationService := conversationproxy.Use(loc, func() conversationservice.Service {
+			return conversationimpl.CreateService(
+				conversationimpl.WithDB(gdb), conversationimpl.WithChat(chatService), conversationimpl.WithConfig(configService), conversationimpl.WithRegistry(registry),
+				conversationimpl.WithEngine(cognitionEngine),
+				conversationimpl.WithActivity(activitycontext.Reader(func() activity.Deps { return activityDeps })),
+				conversationimpl.WithWorkspaces(workspace.KnowledgeReader(func() workspace.Deps { return workspaceDeps })), // the round's workspace (forge 16c)
+				conversationimpl.WithWorkspaceList(workspace.IDLister(func() workspace.Deps { return workspaceDeps })),     // chats per workspace (forge 16d)
+			)
+		})
 
-		retrievalService = retrievalimpl.CreateService(
-			retrievalimpl.WithDB(gdb), retrievalimpl.WithEmbedder(embedService), retrievalimpl.WithConfig(configService), retrievalimpl.WithRegistry(registry),
-		)
-		chronicleService := chronicleimpl.CreateService(chronicleimpl.WithDB(gdb), chronicleimpl.WithStore(entries), chronicleimpl.WithEmbedder(embedService),
-			chronicleimpl.WithUserName(userName))
-		cognitionService := cognitionimpl.CreateService(cognitionimpl.WithDB(gdb), cognitionimpl.WithEngine(cognitionEngine))
+		retrievalService = retrievalproxy.Use(loc, func() retrievalservice.Service {
+			return retrievalimpl.CreateService(
+				retrievalimpl.WithDB(gdb), retrievalimpl.WithEmbedder(embedService), retrievalimpl.WithConfig(configService), retrievalimpl.WithRegistry(registry),
+			)
+		})
+		chronicleService := chronicleproxy.Use(loc, func() chronicleservice.Service {
+			return chronicleimpl.CreateService(chronicleimpl.WithDB(gdb), chronicleimpl.WithStore(entries), chronicleimpl.WithEmbedder(embedService),
+				chronicleimpl.WithUserName(userName))
+		})
+		cognitionService := cognitionproxy.Use(loc, func() cognitionservice.Service {
+			return cognitionimpl.CreateService(cognitionimpl.WithDB(gdb), cognitionimpl.WithEngine(cognitionEngine))
+		})
 		kbToolDeps = kbtools.Deps{Root: kbRoot, Retrieval: retrievalService, Volumes: volumeService, Collab: collabService}
 		chronicleToolDeps = chronicletools.Deps{Retrieval: retrievalService, Entries: chronicleService}
-		agentDeps = toolsnodes.Deps{DB: gdb, Chat: chatService, Config: configService, Registry: registry}
+		agentDeps = toolsnodes.Deps{Calls: conversation.CallsIn(gdb), Chat: chatService, Config: configService, Registry: registry}
 		chronicleDeps = chroniclecontext.Deps{
-			Steps: chroniclesteps.Steps{DB: gdb, Chat: chatService, Config: configService, Retriever: func() retrievalservice.Service { return retrievalService }},
+			Steps: chroniclesteps.Steps{Memory: chronicle.MemoryIn(gdb), Chat: chatService, Config: configService, Retriever: func() retrievalservice.Service { return retrievalService }},
 		}
 		chronicleNodeDeps = chroniclenodes.Deps{Steps: chronicleDeps.Steps, Entries: chronicleService}
 		// Entries changed or never embedded (no key yet) are indexed now, and
@@ -781,10 +1044,12 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 
 		// Commands decide on the projections; queries are subscriptions
 		projections := project.New(nats.JS(), registry)
+		projections.SetAccounts(natsAccounts)
 		defer projections.Close()
 		liveBus := bus.New(projections)
 		subscriptions := subscribe.New(projections, registry)
 		livePresence = presence.New(nats.JS(), userName)
+		livePresence.SetAccounts(natsAccounts)
 		// Graph drafts are edited by bp.* commands; the engine runs their
 		// published versions
 		cognitionEngine.SetSource(drafts.Source{Store: projections})
@@ -813,7 +1078,12 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		}
 		connectorDeps = connectors.Deps{Registry: connectorRegistry, Dispatcher: connectorDispatcher}
 		connectionDeps = connections.Deps{Projections: projections, Bus: liveBus, Registry: connectorRegistry, Secrets: secretStore, Dispatcher: connectorDispatcher, Config: configService, Extensions: registry}
-		scriptedDeps = scripted.Deps{Store: projections, Engine: cognitionEngine, JS: connectorRegistry.JetStream(), Reg: registry}
+		scriptedDeps = scripted.Deps{Store: projections, Engine: cognitionEngine, Books: connectors.InJetStream(connectorRegistry.JetStream()), Reg: registry}
+		// The connectors' data service (forge 21e-1), served over NATS for
+		// adapters without a JetStream handle by serve --services (21g-1)
+		_ = connectorsproxy.Use(loc, func() connectorsservice.Service {
+			return connectorsimpl.CreateService(connectorsimpl.WithJetStream(connectorRegistry.JetStream()))
+		})
 		// Adapters' settings on cx.resolve and their sources' status on
 		// cx.status, in a queue group in every process
 		if err := connections.Serve(ctx, nats.Conn(), func() connections.Deps { return connectionDeps }); err != nil {
@@ -832,6 +1102,10 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		liveSubscriptions = subscriptions
 		recordEmbedder = embedService
 		recordFiles := recordsfiles.New(nats.JS())
+		recordFiles.SetAccounts(natsAccounts)
+		// The record files' data service (forge 21d-4), served over NATS by
+		// serve --services (21g-1)
+		_ = filesproxy.Use(loc, func() filesservice.Service { return filesimpl.CreateService(filesimpl.WithStore(recordFiles)) })
 		transcriptFiles = recordFiles
 		recordTables, err := recordsdata.NewTables(gdb, projections) // large tables in the tenant database (forge 07k)
 		if err != nil {
@@ -847,33 +1121,41 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 				}
 				return settings
 			}, Users: func(tenant uint64, ids []uint64) map[uint64]recordsdata.User {
-				var users []identity.User
-				appDB.Select("users.id", "users.username", "users.display_name").
-					Joins("JOIN memberships ON memberships.user_id = users.id AND memberships.tenant_id = ?", tenant).
-					Where("users.id IN ?", ids).Find(&users)
+				// Through identity's data service (forge 21d-1), not its database.
+				resp := userService.Names(userservice.NamesArgs{ServiceArgs: features.ServiceArgs{Ctx: context.Background(), Principal: features.ServicePrincipalFor(tenant, "record")}, IDs: ids})
 				out := map[uint64]recordsdata.User{}
-				for _, u := range users {
-					out[u.ID] = recordsdata.User{Username: u.Username, DisplayName: u.DisplayName}
+				for id, u := range resp.Users {
+					if n, err := strconv.ParseUint(id, 10, 64); err == nil {
+						out[n] = recordsdata.User{Username: u.Username, DisplayName: u.DisplayName}
+					}
 				}
 				return out
 			}}
 		entityDeps = entities.Deps{Projections: projections, DB: gdb, OnPublish: func(args features.ServiceArgs) error { return recordsdata.Follow(args, recordDeps) }}
-		recordService = recordimpl.CreateService(recordimpl.WithRecords(liveBus, subscriptions, recordDeps), recordimpl.WithFiles(recordFiles))
-		entityService := entityimpl.CreateService(entityimpl.WithEntities(entityDeps))
+		recordService = recordproxy.Use(loc, func() recordservice.Service {
+			return recordimpl.CreateService(recordimpl.WithRecords(liveBus, subscriptions, recordDeps), recordimpl.WithFiles(recordFiles))
+		})
+		entityService := entityproxy.Use(loc, func() entityservice.Service { return entityimpl.CreateService(entityimpl.WithEntities(entityDeps)) })
 		prefabDeps = prefabs.Deps{Projections: projections, DB: gdb}
-		appDeps = manifests.Deps{Projections: projections, DB: gdb}
+		var prefabService prefabservice.Service
+		appDeps = manifests.Deps{Projections: projections, DB: gdb, Prefabs: func() prefabservice.Service { return prefabService }}
 		branchDeps = branches.Deps{Projections: projections}
 		installDeps = installs.Deps{Projections: projections, DB: gdb, Nodes: liveNodeDeps, Roles: policy, Config: configService}
 		opsDeps = ops.Deps{Bus: liveBus, Store: projections}
-		appService = appimpl.CreateService(appimpl.WithDeps(func() appimpl.Deps {
-			return appimpl.Deps{Projections: projections, DB: gdb, Bus: liveBus, Subscriptions: subscriptions, Registry: registry}
-		}))
+		appService = appproxy.Use(loc, func() appservice.Service {
+			return appimpl.CreateService(appimpl.WithDeps(func() appimpl.Deps {
+				return appimpl.Deps{Projections: projections, DB: gdb, Bus: liveBus, Subscriptions: subscriptions, Registry: registry}
+			}))
+		})
 		// An installed app's own entity types are under its path (forge 05c)
 		records.SetPlacement(installs.Placement(func() installs.Deps { return installDeps }))
 		authz.SetAgents(recordsdata.Agents{Deps: func() recordsdata.Deps { return recordDeps }}) // agents are records (forge 07j)
 		// Modes people made are listed after the chat.modes settings (forge 15h)
 		workspaceDeps = workspace.Deps{Store: projections, Bus: liveBus}
 		gameDeps = game.Deps{Store: projections}
+		infraDeps = infra.Deps{Bus: liveBus, Store: projections, Compute: infra.DispatcherCompute{D: connectorDispatcher}, Services: func() infra.Services { return infra.Services{Specs: catalog.Services, Groups: serviceGroups()} }} // plans read the providers through infra.compute (forge 22d)
+		infraNodeDeps = infranodes.Deps{Bus: liveBus, Data: recordDeps, Compute: infraDeps.Compute}
+		infraDeps.Actual = infraapply.RecordsActual(registry, func() infranodes.Deps { return infraNodeDeps })
 		workbenchcontext.SetWorkspaceNames(func(args features.ServiceArgs, id string) (string, bool) {
 			return workspace.Name(args, projections, id)
 		})
@@ -890,6 +1172,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		defer jobRunner.Close() // before the projections close
 		jobNodeDeps = jobsnodes.Deps{Runner: jobRunner, Store: projections}
 		branchDeps.Outbox = jobRunner.Outbox // a commit's semantic diff job (forge 19d)
+		infraOutbox = jobRunner.Outbox       // an apply's step jobs (forge 22f)
 		tenantIDs := func() ([]uint64, error) {
 			ids := []uint64{features.LocalTenantID}
 			var rows []uint64
@@ -906,28 +1189,96 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		go jobRunner.Start(tenantIDs)
 		// What people do by hand, followed in every tenant: each process
 		// shares the followers' consumers (forge 15c)
-		activityDeps = activity.Deps{Projections: projections, Store: activity.NewStore(nats.JS()), Config: configService, Bus: liveBus}
+		activityStore := activity.NewStore(nats.JS())
+		activityStore.SetAccounts(natsAccounts)
+		activityDeps = activity.Deps{Projections: projections, Store: activityStore, Config: configService, Bus: liveBus}
 		go activityRecorder.Start(ctx, tenantIDs)
 		activity.WatchSettings(ctx, configChanges, func() activity.Deps { return activityDeps })
 		// Every process keeps cx_sources, the connections a trigger listens
 		// to, which adapters' instances lease and run (forge 07c)
 		go connections.Start(ctx, func() connections.Deps { return connectionDeps }, tenantIDs)
+		if serveControlPlane {
+			// forge 20b-2: the infrastructure app in the root tenant, and
+			// the followers between its records and the control account
+			// (its own account with --nats-keys)
+			control := &ctl.Control{NC: nats.Conn(), JS: nats.JS()}
+			var natsDesired controlplane.Deps // forge 20e: NATS accounts and nodes from records
+			ctlConn, err := natsauth.AccountConn(natsOptions, serveNatsKeys, natsauth.Control, "serve-ctl")
+			if err != nil {
+				return err
+			}
+			if ctlConn != nil {
+				defer ctlConn.Close()
+				control = &ctl.Control{NC: ctlConn.Conn(), JS: ctlConn.JS()}
+				// forge 20c-1: daemons enroll here, their users signed
+				// by the control account's key
+				keys, err := natsauth.Load(natsauth.DirKeys(natsauth.KeysDir(serveNatsKeys)))
+				if err != nil {
+					return err
+				}
+				if err := control.Ensure(ctx); err != nil {
+					return err
+				}
+				if _, err := ctl.ServeEnroll(ctx, control, keys.Account(natsauth.Control)); err != nil {
+					return err
+				}
+				// a system user pushes accounts: tenant accounts from their
+				// records (forge 20e) and the issuer's revocations (20h)
+				sys, err := natsauth.SysConn(natsOptions, serveNatsKeys, "serve-ctl-sys")
+				if err != nil {
+					return err
+				}
+				defer sys.Close()
+				natsDesired = controlplane.Deps{NatsKeys: natsauth.DirKeys(natsauth.KeysDir(serveNatsKeys)), NatsSys: sys, NatsTrust: keys.Trust}
+				// forge 20h: the credential issuer, with Vault for the
+				// units' SecretIDs
+				if boot.Vault() {
+					iss := &issuer.Issuer{C: control, D: keys, Sys: sys, Vault: boot.Client(), SetOf: unitSet}
+					if err := iss.Serve(ctx); err != nil {
+						return err
+					}
+				}
+			}
+			if err := controlplane.SeedApp(features.BackgroundArgs(ctx), projections, appService, liveBus); err != nil {
+				return err
+			}
+			// forge 20c-3: the root tenant's script signing key, kept with
+			// the deployment's keys (else in the data directory)
+			scriptKey, err := ctl.LoadOrMakeSigningKey(controlplane.ScriptKeyPath(natsauth.KeysDir(serveNatsKeys), dataDir))
+			if err != nil {
+				return err
+			}
+			controlDeps := controlplane.Deps{Projections: projections, Data: recordDeps, Bus: liveBus, Control: control, ScriptKey: scriptKey,
+				NatsKeys: natsDesired.NatsKeys, NatsSys: natsDesired.NatsSys, NatsTrust: natsDesired.NatsTrust,
+				RepoKey: controlplane.RepoKeyFile(natsauth.KeysDir(serveNatsKeys))}
+			if err := controlplane.Start(ctx, func() controlplane.Deps { return controlDeps }); err != nil {
+				return err
+			}
+		}
 		// Scripted connector types (forge 07d), served in this process too
 		go scripted.Serve(ctx, nats.Conn(), func() scripted.Deps { return scriptedDeps }, tenantIDs, scripted.Options{})
-		prefabService := prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
-		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())), uiimpl.WithRecorder(activityRecorder),
-			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))
-		liveService := liveimpl.CreateService(liveimpl.WithBus(liveBus), liveimpl.WithSubscriptions(subscriptions), liveimpl.WithPresence(livePresence), liveimpl.WithRegistry(registry),
-			liveimpl.WithMaxSubscriptions(func() int {
-				settings, err := config.Read[livesettings.Live](configService, features.BackgroundArgs(ctx), livesettings.ID)
-				if err != nil || settings.MaxSubscriptions <= 0 {
-					return livesettings.Defaults.MaxSubscriptions
-				}
-				return settings.MaxSubscriptions
-			}))
+		uiSessions := ui.NewKVSessions(nats.JS())
+		uiSessions.SetAccounts(natsAccounts)
+		prefabService = prefabproxy.Use(loc, func() prefabservice.Service {
+			return prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
+		})
+		uiService = uiproxy.Use(loc, func() uiservice.Service {
+			return uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(uiSessions), uiimpl.WithRecorder(activityRecorder),
+				uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))
+		})
+		liveService := liveproxy.Use(loc, func() liveservice.Service {
+			return liveimpl.CreateService(liveimpl.WithBus(liveBus), liveimpl.WithSubscriptions(subscriptions), liveimpl.WithStore(projections), liveimpl.WithPresence(livePresence), liveimpl.WithRegistry(registry),
+				liveimpl.WithMaxSubscriptions(func() int {
+					settings, err := config.Read[livesettings.Live](configService, features.BackgroundArgs(ctx), livesettings.ID)
+					if err != nil || settings.MaxSubscriptions <= 0 {
+						return livesettings.Defaults.MaxSubscriptions
+					}
+					return settings.MaxSubscriptions
+				}))
+		})
 
 		indexOpts = append(indexOpts, indeximpl.WithEmbedder(embedService), indeximpl.WithStore(store))
-		indexService := indeximpl.CreateService(indexOpts...)
+		indexService := indexproxy.Use(loc, func() indexservice.Service { return indeximpl.CreateService(indexOpts...) })
 
 		// rest.Middleware finds each request's principal and logs it in place
 		// of gin's logger. Only the identity routes work signed out; Volumes
@@ -1015,8 +1366,46 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		indexHandler := &indexhandlers.IndexHandler{}
 		indexHandler.Register(volumes, indexService)
 
+		// forge 21g-1: what this process runs, for every process to read,
+		// and readiness: the gate stays closed until every service this
+		// process reaches in others answers
+		servicesService := servicesproxy.Use(loc, func() servicesservice.Service {
+			return servicesimpl.CreateService(servicesimpl.WithKnown(knownServices()), servicesimpl.WithProcesses(func(ctx context.Context) ([]servicesservice.Process, error) {
+				list, err := servers.List(ctx, nats.JS())
+				out := make([]servicesservice.Process, len(list))
+				for i, a := range list {
+					out[i] = servicesservice.Process{Process: a.Process, Host: a.Host, Version: a.Version, Set: a.Set, Services: a.Services, Calls: a.Calls, Started: a.Started, Heartbeat: a.Heartbeat, Draining: a.Draining}
+				}
+				return out, err
+			}))
+		})
+		(&serviceshandlers.ServicesHandler{}).Register(api, servicesService)
+		var announcer *servers.Announcer
+		if loc.Client != nil {
+			host, _ := os.Hostname()
+			announcer, err = servers.Announce(ctx, nats.JS(), func() servers.Announcement {
+				set := serveServices
+				if serveLoopback {
+					set = "all (loopback)"
+				}
+				return servers.Announcement{Process: process, Host: host, Version: serveVersion(), Set: set, Services: loc.Served(), Calls: loc.Proxied(), Started: started}
+			})
+			if err != nil {
+				return err
+			}
+			defer announcer.Stop(context.Background())
+			if err := services.WaitReady(ctx, nats.Conn(), loc.Proxied(), 10*time.Second, func(missing []string) {
+				log.Info(ctx, "waiting for the services %s, which other processes run", strings.Join(missing, ", "))
+			}); err != nil {
+				return nil // stopped while waiting
+			}
+		}
+
 		// Shut down cleanly on SIGTERM, so serve.sh restarts close LanceDB
 		gate.Open(router)
+		if err := instance.Notify("READY=1"); err != nil {
+			log.Warn(ctx, "telling systemd this unit is ready: %v", err)
+		}
 		log.Info(ctx, "ready on %s", serveAddr)
 		select {
 		case err := <-served:
@@ -1024,6 +1413,14 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 				return err
 			}
 		case <-ctx.Done():
+			// forge 21g-1: drain: leave the queue groups so new calls go to
+			// other processes, and give the calls in flight --drain-timeout
+			if announcer != nil {
+				announcer.Draining(context.Background())
+			}
+			if !loc.StopWithin(serveDrain) {
+				log.Warn(context.Background(), "calls still running after --drain-timeout %s", serveDrain)
+			}
 			shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			if err := srv.Shutdown(shutdown); err != nil {
@@ -1060,7 +1457,22 @@ func init() {
 	serveCmd.Flags().StringVar(&serveVaultAddr, "vault-addr", "", "HashiCorp Vault holding the server's secrets, e.g. http://127.0.0.1:8200 (default $FOUNDATION_VAULT_ADDR); serve then starts sealed")
 	serveCmd.Flags().StringVar(&serveVaultMount, "vault-mount", "foundation", "Vault KV v2 mount of the server's secrets")
 	serveCmd.Flags().StringVar(&serveVaultRole, "vault-role-id", "", "the only AppRole role ID an unseal may use (default $FOUNDATION_VAULT_ROLE_ID); without it unseal.sh sends it")
-	serveCmd.Flags().StringVar(&serveNatsURL, "nats-url", "", "an external NATS server with JetStream for the live core, e.g. nats://127.0.0.1:4222 (default $FOUNDATION_NATS_URL); without it NATS runs embedded in <data-dir>/nats")
+	serveCmd.Flags().StringVar(&serveNatsURL, "nats-url", "", "an external NATS server with JetStream for the live core, e.g. nats://127.0.0.1:4222, or a cluster's URLs comma separated (default $FOUNDATION_NATS_URL); without it NATS runs embedded in <data-dir>/nats")
+	serveCmd.Flags().StringVar(&serveNatsCreds, "nats-creds", "", "a NATS credentials file for --nats-url (default $FOUNDATION_NATS_CREDS)")
+	serveCmd.Flags().StringVar(&serveNatsCA, "nats-ca", "", "the deployment's CA certificate for TLS to --nats-url (default $FOUNDATION_NATS_CA)")
+	serveCmd.Flags().StringVar(&serveNatsKeys, "nats-keys", "", "the deployment's NATS keys (cli nats init): each tenant's streams and buckets then live in its own account, made with cli nats tenant add (default $FOUNDATION_NATS_KEYS)")
+	serveCmd.Flags().StringVar(&serveServices, "services", "all", "the services and groups this process runs, comma-separated (web, data, runner, connectors:<type>, or service names); others run the rest (forge 21g-1)")
+	serveCmd.Flags().StringVar(&serveNatsListen, "nats-listen", "", "let other processes on this machine reach the embedded NATS server at this address (e.g. 127.0.0.1:4222), for running several serve processes in development (forge 21g-1)")
+	serveCmd.Flags().StringVar(&serveInstance, "instance", "", "run as this unit of the instance's desired state (forge 21g-2): its service set and flags from --instance-config, its NATS user and Vault SecretID from $CREDENTIALS_DIRECTORY")
+	serveCmd.Flags().StringVar(&serveInstanceCfg, "instance-config", "", "the unit's config the instance agent renders (default /etc/axiom/units/<unit>.json)")
+	serveCmd.Flags().BoolVar(&serveCheck, "check", false, "print which services other processes must run for --services, and exit")
+	serveCmd.Flags().DurationVar(&serveDrain, "drain-timeout", 30*time.Second, "how long calls in flight may finish when the process stops")
+	serveCmd.Flags().StringVar(&serveProcess, "process", "", "this process's name in svc_servers (default <host>-<pid>)")
+	serveCmd.Flags().StringVar(&serveCallKey, "call-key", "", "the call token key every process of a deployment shares (default <data-dir>/call.key; Vault's server/call-key with 21h)")
+	serveCmd.Flags().BoolVar(&serveLoopback, "services-loopback", false, "run every service through its proxy and server in this process, so every call crosses NATS (forge 21f-1)")
+	serveCmd.Flags().BoolVar(&serveControlPlane, "control-plane", false, "make the root tenant (id 3, Infrastructure), the only tenant that holds infrastructure, with user 1 its Owner")
+	serveCmd.Flags().StringVar(&serveNatsPlaces, "nats-placements", "", "tenants placed in clusters of the supercluster, as <tenant>=<cluster>,… (default $FOUNDATION_NATS_PLACEMENTS)")
+	serveCmd.Flags().IntVar(&serveNatsReps, "nats-replicas", 0, "replicas of every stream, bucket and object store this server makes: 3 on a cluster (default $FOUNDATION_NATS_REPLICAS, else 1)")
 	serveCmd.Flags().StringVar(&serveVLogsURL, "vlogs-url", "", "VictoriaLogs to store logs in, e.g. http://localhost:9428 (default $FOUNDATION_VLOGS_URL); wins over Settings")
 }
 
@@ -1085,5 +1497,97 @@ func targetFrom(raw string) (logging.Target, error) {
 // serves, with their metadata (forge 07b); an external adapter binary
 // serves its own with adapter.Serve.
 func connectorImpls() adapter.Options {
-	return adapter.Options{Name: "server"}
+	return adapter.Options{Name: "server", Types: []connectors.Type{infratest.Type()}, Contracts: []connectors.Contract{infra.ComputeContract(), infratest.ControlContract()},
+		Impls: []adapter.Impl{infratest.Default.Impl()}} // the Infrastructure test server (forge 22c)
+}
+
+// knownServices are every service's wire name (forge 21g-1).
+func knownServices() []string {
+	var out []string
+	for _, s := range catalog.Services {
+		if s.Name == "bootstrap" {
+			continue // every process serves the bootstrap routes itself, before NATS
+		}
+		out = append(out, s.Name)
+	}
+	return out
+}
+
+// serviceGroups are the groups --services takes.
+func serviceGroups() services.Groups {
+	return services.FoundationGroups().With(services.Groups{"web": {"services"}})
+}
+
+// serveVersion is the build's module version, for svc_servers.
+func serveVersion() string {
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		return bi.Main.Version
+	}
+	return ""
+}
+
+// applyInstance sets serve's flags from the unit's config and
+// credentials (forge 21g-2, 21h): its service set, its flags (a flag on
+// the command line wins), its NATS user and servers, its data directory
+// ($STATE_DIRECTORY) and its process name. Without --instance it does
+// nothing.
+func applyInstance(cmd *cobra.Command) (instance.Credentials, error) {
+	if serveInstance == "" {
+		return instance.Credentials{}, nil
+	}
+	path := serveInstanceCfg
+	if path == "" {
+		path = "/etc/axiom/units/" + serveInstance + ".json"
+	}
+	c, err := instance.Read(path)
+	if err != nil {
+		return instance.Credentials{}, err
+	}
+	for _, name := range c.Names() {
+		f := cmd.Flags().Lookup(name)
+		if f == nil {
+			return instance.Credentials{}, fmt.Errorf("the unit's config names %q, which is not a serve flag", name)
+		}
+		if f.Changed {
+			continue
+		}
+		if err := cmd.Flags().Set(name, c.Flags[name]); err != nil {
+			return instance.Credentials{}, fmt.Errorf("the unit's config sets %s: %v", name, err)
+		}
+	}
+	if !cmd.Flags().Changed("services") && c.ServiceSet != "" {
+		serveServices = c.ServiceSet
+	}
+	if serveProcess == "" {
+		serveProcess = serveInstance
+	}
+	if serveDataDir == "" {
+		serveDataDir = os.Getenv("STATE_DIRECTORY")
+	}
+	creds := instance.ReadCredentials(os.Getenv("CREDENTIALS_DIRECTORY"))
+	if creds.NatsCreds != "" && serveNatsCreds == "" {
+		serveNatsCreds = creds.NatsCreds
+	}
+	if creds.NatsURLs != "" && serveNatsURL == "" {
+		serveNatsURL = creds.NatsURLs
+	}
+	return creds, nil
+}
+
+// unitSet is what a serve unit naming a service set may do (forge 21h):
+// any set --services takes; only a set running the config or secrets
+// service reads configuration secrets in Vault. Its NATS user may still
+// do everything: every process opens the live core's streams until
+// projections, followers and runners start only in the groups that need
+// them.
+func unitSet(set string) (issuer.Set, bool) {
+	names, err := services.ParseSet(set, serviceGroups(), knownServices())
+	if err != nil {
+		return issuer.Set{}, false
+	}
+	pol := issuer.ServerPolicy
+	if names == nil || names["config"] || names["secrets"] {
+		pol += issuer.ConfigPolicy
+	}
+	return issuer.Set{Permissions: natsauth.Everything, Policy: pol}, true
 }

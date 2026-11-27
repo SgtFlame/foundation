@@ -1,0 +1,16 @@
+{
+  "name": "infra_compute_host_get",
+  "description": "Reads one host by our resource id: its state, addresses and facts. notFound when the provider has no such host.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The host's resource id"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  }
+}

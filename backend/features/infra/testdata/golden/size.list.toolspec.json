@@ -1,0 +1,16 @@
+{
+  "name": "infra.compute.size.list",
+  "title": "List sizes",
+  "description": "The host sizes the provider offers, each with vCPUs, memory, disk, price per hour and vms when it promises nested virtualization.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "region": {
+        "type": "string",
+        "description": "Sizes offered in this region; every size when left out"
+      }
+    }
+  },
+  "effect": "read",
+  "source": "connector"
+}

@@ -27,6 +27,7 @@ const (
 
 // Contribute registers the nodes.
 func Contribute(reg *extensions.Registry) {
+	contributeData(reg)
 	cognition.Nodes.Register(reg, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: DiffID, Source: source, Order: 470}, Title: "Text diff", Category: "Text",
 		Description: "The changes between two texts as hunks, by lines (the default) or by words, using a Myers diff: each hunk {op: insert | delete | replace | move, a: {start, end}, b: {start, end}, aLines, bLines: {start, end}, before, after, text, headingPath}, where a and b are character offsets (end exclusive) in the old and new text, lines are 1-based, and headingPath is the markdown headings the change falls under (the old text's for a delete). A line diff gives a block taken out in one place and put back unchanged in another as one move. Sections are the parts of both texts under the headings the changes touch (each heading to the next), for a model shown only what changed in a long text.",

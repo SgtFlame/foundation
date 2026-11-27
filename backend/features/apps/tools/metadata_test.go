@@ -16,9 +16,9 @@ import (
 	kblive "github.com/SgtFlame/foundation/backend/features/kb/live"
 	kbnodes "github.com/SgtFlame/foundation/backend/features/kb/nodes"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
+	"github.com/SgtFlame/foundation/backend/features/retrieval/services/retrievalservice"
 	textnodes "github.com/SgtFlame/foundation/backend/features/text/nodes"
 	"github.com/SgtFlame/foundation/backend/features/workspace"
-	"gorm.io/gorm"
 	"slices"
 	"strings"
 	"testing"
@@ -37,6 +37,10 @@ import (
 	conversationnodes "github.com/SgtFlame/foundation/backend/features/conversation/nodes"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/game"
+	"github.com/SgtFlame/foundation/backend/features/infra"
+	infraapply "github.com/SgtFlame/foundation/backend/features/infra/apply"
+	"github.com/SgtFlame/foundation/backend/features/infra/infratest"
+	infranodes "github.com/SgtFlame/foundation/backend/features/infra/nodes"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	livenodes "github.com/SgtFlame/foundation/backend/features/live/nodes"
 	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
@@ -63,7 +67,7 @@ func everything(t *testing.T) *extensions.Registry {
 	chroniclenodes.Contribute(reg, func() chroniclenodes.Deps { return chroniclenodes.Deps{} })
 	toolsnodes.Contribute(reg, func() toolsnodes.Deps { return toolsnodes.Deps{} })
 	conversationnodes.ContributeRunMode(reg, func() toolsnodes.Deps { return toolsnodes.Deps{} })
-	retrievaltools.Contribute(reg, func() *gorm.DB { return nil })
+	retrievaltools.Contribute(reg, func() retrievalservice.Service { return nil })
 	if err := uicomponents.Contribute(reg); err != nil {
 		t.Fatal(err)
 	}
@@ -92,6 +96,7 @@ func everything(t *testing.T) *extensions.Registry {
 	authznodes.Contribute(reg)
 	textnodes.Contribute(reg)                                                                                   // Text diff, Anchor resolve (forge 18b)
 	appdiff.Contribute(reg)                                                                                     // Structured diff (forge 19d)
+	branches.ContributeTrigger(reg)                                                                             // On app branch merged (forge 19f)
 	textnodes.ContributeTranscripts(reg, func() textnodes.TranscriptDeps { return textnodes.TranscriptDeps{} }) // Parse transcript (forge 18e)
 	kbnodes.Contribute(reg, func() collabservice.Service { return nil })                                        // Edit text together (forge 18c)
 	authz.ContributeAgents(reg)
@@ -100,8 +105,12 @@ func everything(t *testing.T) *extensions.Registry {
 	connectorsnodes.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
 	connections.Contribute(reg, func() connections.Deps { return connections.Deps{} })
 	scripted.Contribute(reg, func() scripted.Deps { return scripted.Deps{} })
-	game.Contribute(reg, func() game.Deps { return game.Deps{} }) // forge 360 V1
-	connectorstest.Contribute(reg)                                // the builtin contracts a test registry has
+	game.Contribute(reg, func() game.Deps { return game.Deps{} })                   // forge 360 V1
+	infra.Contribute(reg, func() infra.Deps { return infra.Deps{} })                // forge 22a
+	infratest.Contribute(reg)                                                       // forge 22c
+	infranodes.Contribute(reg, func() infranodes.Deps { return infranodes.Deps{} }) // forge 22e
+	infraapply.Contribute(reg, func() infraapply.Deps { return infraapply.Deps{} }) // forge 22f
+	connectorstest.Contribute(reg)                                                  // the builtin contracts a test registry has
 	return reg
 }
 

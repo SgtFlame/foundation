@@ -20,8 +20,10 @@ import (
 // It caches each user's grants and every role, and drops the caches
 // whenever a grant or role changes (one server; RBAC.md › Evaluation).
 type Policy struct {
-	db       *gorm.DB
+	db       *gorm.DB // nil in a process that reads through a Source
+	source   Source
 	registry *extensions.Registry
+	notify   func() // tells other processes the grants changed
 	now      func() time.Time
 
 	mu     sync.Mutex
@@ -38,10 +40,19 @@ type grantee struct {
 
 // NewPolicy evaluates with the grants in gdb and the resource types in reg.
 func NewPolicy(gdb *gorm.DB, reg *extensions.Registry) *Policy {
-	return &Policy{db: gdb, registry: reg, now: time.Now, grants: map[grantee][]RoleGrant{}, warned: map[string]bool{}}
+	return &Policy{db: gdb, source: dbSource{gdb}, registry: reg, now: time.Now, grants: map[grantee][]RoleGrant{}, warned: map[string]bool{}}
 }
 
-// DB is the application database the grants live in.
+// NewPolicyFrom evaluates with the grants src reads, in a process that
+// does not hold the application database (forge 21d-1): its caches are
+// filled from authz's data service and dropped when Follow hears of a
+// change. It cannot write grants, roles or audits.
+func NewPolicyFrom(src Source, reg *extensions.Registry) *Policy {
+	return &Policy{source: src, registry: reg, now: time.Now, grants: map[grantee][]RoleGrant{}, warned: map[string]bool{}}
+}
+
+// DB is the application database the grants live in (nil for a policy
+// made by NewPolicyFrom).
 func (pol *Policy) DB() *gorm.DB { return pol.db }
 
 // Registry is the registry the resource types come from.
@@ -49,6 +60,13 @@ func (pol *Policy) Registry() *extensions.Registry { return pol.registry }
 
 // Changed drops the caches; call it after writing grants or roles.
 func (pol *Policy) Changed() {
+	pol.drop()
+	if pol.notify != nil {
+		pol.notify()
+	}
+}
+
+func (pol *Policy) drop() {
 	pol.mu.Lock()
 	defer pol.mu.Unlock()
 	pol.grants = map[grantee][]RoleGrant{}
@@ -67,8 +85,8 @@ func (pol *Policy) Roles() (map[uint64]Role, error) {
 	for _, r := range Builtins(pol.registry) {
 		roles[r.ID] = r
 	}
-	var custom []CustomRole
-	if err := pol.db.Find(&custom).Error; err != nil {
+	custom, err := pol.source.CustomRoles(context.Background())
+	if err != nil {
 		return nil, err
 	}
 	for _, c := range custom {
@@ -106,12 +124,8 @@ func (pol *Policy) grantsOf(who grantee) ([]RoleGrant, error) {
 	cached, ok := pol.grants[who]
 	pol.mu.Unlock()
 	if !ok {
-		var rows []RoleGrant
-		q := pol.db.Where("user_id = ? AND agent_id = 0", who.id)
-		if who.agent {
-			q = pol.db.Where("agent_id = ?", who.id)
-		}
-		if err := q.Order("id").Find(&rows).Error; err != nil {
+		rows, err := pol.source.Grants(context.Background(), who.agent, who.id)
+		if err != nil {
 			return nil, err
 		}
 		pol.mu.Lock()
@@ -175,6 +189,9 @@ func (pol *Policy) decide(ctx context.Context, p features.Principal, action, res
 		return Decision{Allowed: true, Reason: "every signed-in user may"}
 	}
 	path := Split(resource)
+	if typ.Tenant != 0 && (len(path) == 0 || path[0] != Resource("tenant", typ.Tenant)) {
+		return Decision{Reason: fmt.Sprintf("%s is held only in tenant %d", action, typ.Tenant)}
+	}
 	if act.Apps && p.Kind == features.PrincipalApp && len(path) > 0 && path[0] == Resource("tenant", p.TenantID) {
 		return Decision{Allowed: true, Reason: "every app may in its tenant"}
 	}
@@ -241,6 +258,9 @@ func (pol *Policy) allowing(ctx context.Context, p features.Principal, typ Resou
 			continue
 		}
 		grant := Split(g.Resource)
+		if typ.Tenant != 0 && (len(grant) == 0 || grant[0] != Resource("tenant", typ.Tenant)) {
+			continue // a pinned type is reached only by grants in its tenant
+		}
 		held := Held{Grant: g, Role: role}
 		if !Covers(grant, path) {
 			// A grant on one record reaches records of its scope's types
@@ -394,6 +414,10 @@ func (pol *Policy) audit(ctx context.Context, a AccessAudit) { pol.auditIn(ctx, 
 
 // auditIn records an access change inside tx.
 func (pol *Policy) auditIn(ctx context.Context, tx *gorm.DB, a AccessAudit) {
+	if tx == nil {
+		log.Warn(ctx, "authz: an access audit was made where the application database is not")
+		return
+	}
 	if err := tx.WithContext(context.WithoutCancel(ctx)).Create(&a).Error; err != nil {
 		log.Error(ctx, err, "authz: cannot write the access audit")
 	}

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+echo "snap $*" >>"$FAKE_ARGS"
+mkdir -p "$FAKE_STATE"
+case "$1" in
+  list) [[ -e $FAKE_STATE/snap-$2 ]] ;;
+  install) touch "$FAKE_STATE/snap-$2"; echo "+ snap install $2" >>"$FAKE_LOG" ;;
+esac

@@ -1,5 +1,16 @@
 // The Material icons server-described trees may name, by name
 import AddIcon from '@mui/icons-material/Add'
+// Infrastructure (forge 20g)
+import DashboardIcon from '@mui/icons-material/Dashboard'
+import DnsIcon from '@mui/icons-material/Dns'
+import Inventory2Icon from '@mui/icons-material/Inventory2'
+import WidgetsIcon from '@mui/icons-material/Widgets'
+import RocketLaunchIcon from '@mui/icons-material/RocketLaunch'
+import HubIcon from '@mui/icons-material/Hub'
+import ApprovalIcon from '@mui/icons-material/Approval'
+import StopIcon from '@mui/icons-material/Stop'
+import PauseIcon from '@mui/icons-material/Pause'
+import CancelIcon from '@mui/icons-material/Cancel'
 // Requirements (forge 18a)
 import AssignmentIcon from '@mui/icons-material/Assignment'
 import FlagIcon from '@mui/icons-material/Flag'
@@ -170,6 +181,16 @@ export const icons: Record<string, ComponentType<SvgIconProps>> = {
   undo: UndoIcon,
   record_voice_over: RecordVoiceOverIcon,
   upload_file: UploadFileIcon,
+  dashboard: DashboardIcon,
+  dns: DnsIcon,
+  inventory_2: Inventory2Icon,
+  widgets: WidgetsIcon,
+  rocket_launch: RocketLaunchIcon,
+  hub: HubIcon,
+  approval: ApprovalIcon,
+  stop: StopIcon,
+  pause: PauseIcon,
+  cancel: CancelIcon,
 }
 
 // An icon by name, as a component for places that take one (the Editors view)

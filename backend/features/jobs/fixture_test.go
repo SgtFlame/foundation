@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/apps/branches"
+	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -101,21 +103,23 @@ func (h *hits) wait(t *testing.T, name string, n int, within time.Duration) []hi
 // settings is a jobs section for the runners.
 type settings struct{ s jobs.Settings }
 
-func (s settings) Resolved(features.ServiceArgs, string) (json.RawMessage, error) { return json.Marshal(s.s) }
+func (s settings) Resolved(features.ServiceArgs, string) (json.RawMessage, error) {
+	return json.Marshal(s.s)
+}
 
 type fixture struct {
-	t      *testing.T
-	srv    *natsd.Server
-	reg    *extensions.Registry
-	bus    *bus.Bus
-	subs   *subscribe.Subscriptions
-	p      *project.Projections
-	eng    *engine.Engine
+	t       *testing.T
+	srv     *natsd.Server
+	reg     *extensions.Registry
+	bus     *bus.Bus
+	subs    *subscribe.Subscriptions
+	p       *project.Projections
+	eng     *engine.Engine
 	deps    jobs.Deps
 	install *installs.Deps
 	hits    *hits
-	n      atomic.Int64
-	runner *jobs.Runner // the nodes' runner: enqueues, serves nothing until served
+	n       atomic.Int64
+	runner  *jobs.Runner // the nodes' runner: enqueues, serves nothing until served
 }
 
 func setup(t *testing.T, s jobs.Settings) *fixture {
@@ -132,6 +136,7 @@ func setup(t *testing.T, s jobs.Settings) *fixture {
 		dataDeps   data.Deps
 		prefabDeps prefabs.Deps
 		appDeps    manifests.Deps
+		branchDeps branches.Deps
 		installDep installs.Deps
 		jobDeps    jobs.Deps
 		jobNodes   jobsnodes.Deps
@@ -143,6 +148,7 @@ func setup(t *testing.T, s jobs.Settings) *fixture {
 	recordsnodes.Contribute(reg, func() data.Deps { return dataDeps })
 	prefabs.Contribute(reg, func() prefabs.Deps { return prefabDeps })
 	manifests.Contribute(reg, func() manifests.Deps { return appDeps })
+	branches.Contribute(reg, func() branches.Deps { return branchDeps }) // app branches (forge 19a), which app.publish reads
 	installs.Contribute(reg, func() installs.Deps { return installDep })
 	jobs.Contribute(reg, func() jobs.Deps { return jobDeps })
 	jobsnodes.Contribute(reg, func() jobsnodes.Deps { return jobNodes })
@@ -158,7 +164,7 @@ func setup(t *testing.T, s jobs.Settings) *fixture {
 	srv := natsd.StartTest(t)
 	p := project.New(srv.JS(), reg)
 	t.Cleanup(p.Close)
-	eng := engine.New(gdb, reg, nil)
+	eng := engine.New(traces.In(gdb), reg, nil)
 	eng.SetSource(drafts.Source{Store: p})
 	f := &fixture{t: t, srv: srv, reg: reg, bus: bus.New(p), subs: subscribe.New(p, reg), p: p, eng: eng, hits: h}
 	nodeDeps = livenodes.Deps{Engine: eng, Bus: f.bus, Subscriptions: f.subs, Store: p}
@@ -167,6 +173,7 @@ func setup(t *testing.T, s jobs.Settings) *fixture {
 	entityDeps = entities.Deps{Projections: p, DB: gdb, OnPublish: func(args features.ServiceArgs) error { return data.Follow(args, dataDeps) }}
 	prefabDeps = prefabs.Deps{Projections: p, DB: gdb}
 	appDeps = manifests.Deps{Projections: p, DB: gdb}
+	branchDeps = branches.Deps{Projections: p}
 	installDep = installs.Deps{Projections: p, DB: gdb, Nodes: nodeDeps}
 	f.bus.Resolve = installs.CommandFor(func() installs.Deps { return installDep }, livenodes.CommandFor(func() livenodes.Deps { return nodeDeps }))
 	f.subs.Resolve = installs.QueryFor(func() installs.Deps { return installDep }, livenodes.QueryFor(func() livenodes.Deps { return nodeDeps }))

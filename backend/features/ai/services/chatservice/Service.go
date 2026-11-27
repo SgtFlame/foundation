@@ -10,6 +10,7 @@ import (
 // (Gemini, OpenAI, Azure AI, ...) is chosen when the service is created.
 type Service interface {
 	Complete(args CompleteArgs) CompleteResponse
+	//svc:stream
 	Stream(args StreamArgs) *StreamRequest
 }
 

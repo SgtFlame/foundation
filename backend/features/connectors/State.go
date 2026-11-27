@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	"strings"
 	"time"
 
@@ -86,9 +87,9 @@ func EventStream(ctx context.Context, js jetstream.JetStream, tenant uint64) (je
 	if !errors.Is(err, jetstream.ErrStreamNotFound) {
 		return nil, err
 	}
-	return js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{Name: name, Subjects: []string{fmt.Sprintf("cx.event.%d.>", tenant)},
+	return js.CreateOrUpdateStream(ctx, natsd.Stream(jetstream.StreamConfig{Name: name, Subjects: []string{fmt.Sprintf("cx.event.%d.>", tenant)},
 		Description: "Connector events: cx.event.<tenant>.<connection>.<contract>.<event> (forge 07c)",
-		Storage:     jetstream.FileStorage, Retention: jetstream.LimitsPolicy, Duplicates: EventDuplicates, MaxAge: EventMaxAge, AllowDirect: true})
+		Storage:     jetstream.FileStorage, Retention: jetstream.LimitsPolicy, Duplicates: EventDuplicates, MaxAge: EventMaxAge, AllowDirect: true}))
 }
 
 // EventSubjectsOf are the subjects of a contract's event, of one
@@ -190,20 +191,20 @@ func KV(ctx context.Context, js jetstream.JetStream, cfg jetstream.KeyValueConfi
 
 // SourcesKV is cx_sources.
 func SourcesKV(ctx context.Context, js jetstream.JetStream) (jetstream.KeyValue, error) {
-	return KV(ctx, js, jetstream.KeyValueConfig{Bucket: SourcesBucket, History: 1,
-		Description: "Connector event sources, kept by Foundation: <tenant>.<connection> (forge 07c)"})
+	return KV(ctx, js, natsd.KV(jetstream.KeyValueConfig{Bucket: SourcesBucket, History: 1,
+		Description: "Connector event sources, kept by Foundation: <tenant>.<connection> (forge 07c)"}))
 }
 
 // LeasesKV is cx_leases.
 func LeasesKV(ctx context.Context, js jetstream.JetStream) (jetstream.KeyValue, error) {
-	return KV(ctx, js, jetstream.KeyValueConfig{Bucket: LeasesBucket, History: 1, TTL: LeaseTTL,
-		Description: "Leases on connector event sources: <tenant>.<connection> (forge 07c)"})
+	return KV(ctx, js, natsd.KV(jetstream.KeyValueConfig{Bucket: LeasesBucket, History: 1, TTL: LeaseTTL,
+		Description: "Leases on connector event sources: <tenant>.<connection> (forge 07c)"}))
 }
 
 // CursorsKV is cx_cursors.
 func CursorsKV(ctx context.Context, js jetstream.JetStream) (jetstream.KeyValue, error) {
-	return KV(ctx, js, jetstream.KeyValueConfig{Bucket: CursorsBucket, History: 1,
-		Description: "Connector event sources' cursors: <tenant>.<connection> (forge 07c)"})
+	return KV(ctx, js, natsd.KV(jetstream.KeyValueConfig{Bucket: CursorsBucket, History: 1,
+		Description: "Connector event sources' cursors: <tenant>.<connection> (forge 07c)"}))
 }
 
 // LedgerKey is a ledger entry's key: <connection>.<operation>.<hash of key>.
@@ -224,8 +225,8 @@ type LedgerEntry struct {
 }
 
 func ledgerKV(ctx context.Context, js jetstream.JetStream, tenant uint64) (jetstream.KeyValue, error) {
-	return KV(ctx, js, jetstream.KeyValueConfig{Bucket: LedgerBucket(tenant), History: 1, TTL: LedgerTTL,
-		Description: "What outside services accepted, by connection, operation and idempotency key (forge 07c)"})
+	return KV(ctx, js, natsd.KV(jetstream.KeyValueConfig{Bucket: LedgerBucket(tenant), History: 1, TTL: LedgerTTL,
+		Description: "What outside services accepted, by connection, operation and idempotency key (forge 07c)"}))
 }
 
 // LedgerGet reads a ledger entry.
@@ -266,8 +267,8 @@ func LedgerPut(ctx context.Context, js jetstream.JetStream, tenant uint64, conne
 // allows one session at a time), trying until ctx ends; release gives it
 // back. A holder that dies loses it after LockTTL.
 func Lock(ctx context.Context, js jetstream.JetStream, tenant uint64, connection, holder string) (release func(), err error) {
-	kv, err := KV(ctx, js, jetstream.KeyValueConfig{Bucket: LocksBucket(tenant), History: 1, TTL: LockTTL,
-		Description: "Locks on connections of exclusive types: <connection> (forge 07c)"})
+	kv, err := KV(ctx, js, natsd.KV(jetstream.KeyValueConfig{Bucket: LocksBucket(tenant), History: 1, TTL: LockTTL,
+		Description: "Locks on connections of exclusive types: <connection> (forge 07c)"}))
 	if err != nil {
 		return nil, err
 	}
@@ -303,6 +304,37 @@ func Lock(ctx context.Context, js jetstream.JetStream, tenant uint64, connection
 		case <-time.After(250 * time.Millisecond):
 		}
 	}
+}
+
+// TryLock tries once to take a connection's exclusive lock: held is false
+// while another holds it (forge 21e-1: the connectors service's Lock).
+func TryLock(ctx context.Context, js jetstream.JetStream, tenant uint64, connection, holder string) (rev uint64, held bool, err error) {
+	kv, err := KV(ctx, js, natsd.KV(jetstream.KeyValueConfig{Bucket: LocksBucket(tenant), History: 1, TTL: LockTTL,
+		Description: "Locks on connections of exclusive types: <connection> (forge 07c)"}))
+	if err != nil {
+		return 0, false, err
+	}
+	rev, err = kv.Create(ctx, connection, []byte(holder))
+	if errors.Is(err, jetstream.ErrKeyExists) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return rev, true, nil
+}
+
+// Unlock gives back a lock TryLock took at rev.
+func Unlock(ctx context.Context, js jetstream.JetStream, tenant uint64, connection string, rev uint64) error {
+	kv, err := KV(ctx, js, natsd.KV(jetstream.KeyValueConfig{Bucket: LocksBucket(tenant), History: 1, TTL: LockTTL,
+		Description: "Locks on connections of exclusive types: <connection> (forge 07c)"}))
+	if err != nil {
+		return err
+	}
+	if err := kv.Delete(ctx, connection, jetstream.LastRevision(rev)); err != nil && !errors.Is(err, jetstream.ErrKeyNotFound) && !isWrongSequence(err) {
+		return err
+	}
+	return nil
 }
 
 // EventID is a connector event's id: its id fields' values joined by |,

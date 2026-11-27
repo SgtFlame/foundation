@@ -102,5 +102,11 @@ func newService(opts ...Option) *service {
 	for _, opt := range opts {
 		opt(s)
 	}
+	// Every change drops the cached values of its section, including a
+	// change another process published (forge 21f-2: config.Changes over
+	// NATS)
+	if s.changes != nil {
+		s.changes.Subscribe(func(c config.Changed) { s.drop(c.Section) })
+	}
 	return s
 }

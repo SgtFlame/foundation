@@ -19,7 +19,6 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	"github.com/SgtFlame/foundation/backend/features/tools/settings"
-	"gorm.io/gorm"
 )
 
 // ErrTimeout is what a Gate returns when a client tool's result did not
@@ -41,10 +40,10 @@ type Gate interface {
 
 // Loop is the tool loop (seam 4 in documentation/BuildHistory.md): chat's
 // Send runs it, and Cognition's Agent node wraps it. Each call is a
-// ToolCall record, stored in DB when it ends.
+// ToolCall record, saved in Calls when it ends (none when nil).
 type Loop struct {
-	DB   *gorm.DB
-	Chat chatservice.Service
+	Calls CallStore
+	Chat  chatservice.Service
 }
 
 // RunArgs is one round of the loop. CompleteArgs is the first model call:
@@ -266,9 +265,14 @@ func (l Loop) call(args RunArgs, step, n int, c chatservice.ToolCall, byWire map
 		body, size := l.cap(args.Settings, content)
 		rec.Status, rec.Error, rec.Result, rec.ResultBytes = status, failure, string(body), size
 		rec.DurationMs = time.Since(start).Milliseconds()
-		if l.DB != nil {
+		if l.Calls != nil {
 			persist := context.WithoutCancel(args.Context())
-			if err := l.DB.WithContext(persist).Create(&rec).Error; err != nil {
+			if rec.ID == 0 {
+				rec.ID = features.NewTSID()
+			}
+			sa := args.ServiceArgs
+			sa.Ctx = persist
+			if err := l.Calls.SaveCall(sa, &rec); err != nil {
 				Log.With("tool", rec.Name, "roundId", rec.RoundID).Error(persist, err, "cannot store the call of %s", rec.Name)
 			}
 		}

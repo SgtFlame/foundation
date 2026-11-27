@@ -280,10 +280,10 @@ func emit(x *cognition.Exec, d Deps, contract func(string) (connectors.Contract,
 		h.Events = append(h.Events, adapter.Event{Contract: ct.Ref(), Name: def.ID, ID: id, Payload: payload})
 		return id, nil
 	}
-	if d.JS == nil {
+	if d.Books == nil {
 		return "", fmt.Errorf("there is no event stream here")
 	}
-	return id, connectors.PublishEvent(x.Context(), d.JS, tenant, conn, ct.Ref(), def.ID, id, payload, timeNow())
+	return id, d.Books.Publish(x.Context(), tenant, conn, ct.Ref(), def.ID, id, payload, timeNow())
 }
 
 // ConnectionItem is one connection Connections of type gives.

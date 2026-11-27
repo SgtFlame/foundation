@@ -1,0 +1,48 @@
+{
+  "id": "infraAptSource",
+  "owner": "app:infrastructure",
+  "name": "Apt source",
+  "description": "A third-party apt repository (a PPA or a vendor's): instances install from it only once it is approved, so the allow list starts empty",
+  "titleField": "name",
+  "fields": [
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "A short name, used in its file names (letters, digits and dashes)",
+      "required": true
+    },
+    {
+      "id": "uris",
+      "name": "URIs",
+      "type": "text",
+      "description": "The repository's URIs, space separated",
+      "required": true
+    },
+    {
+      "id": "suites",
+      "name": "Suites",
+      "type": "text",
+      "description": "Its suites, space separated, e.g. noble"
+    },
+    {
+      "id": "components",
+      "name": "Components",
+      "type": "text",
+      "description": "Its components, space separated, e.g. main"
+    },
+    {
+      "id": "key",
+      "name": "Signing key",
+      "type": "text",
+      "description": "The repository's ASCII-armored signing key"
+    },
+    {
+      "id": "approved",
+      "name": "Approved",
+      "type": "bool",
+      "description": "On the allow list: only an approved source is written to an instance"
+    }
+  ],
+  "indexes": []
+}

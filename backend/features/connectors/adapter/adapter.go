@@ -23,7 +23,6 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/logging"
 	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nuid"
 )
 
@@ -58,7 +57,7 @@ type Context struct {
 	// it did not upload them (forge 07n question 3); see Vouched.
 	Files    []string
 	Log      logging.Builder
-	js       jetstream.JetStream
+	books    connectors.Books
 	accepted *bool
 }
 
@@ -67,13 +66,13 @@ type Context struct {
 // (07c): a retry, in any process, then returns it without a request. The
 // runtime writes it after a successful call if the type did not.
 func (c Context) Accepted(result json.RawMessage) error {
-	if c.Key == "" || c.js == nil {
+	if c.Key == "" || c.books == nil {
 		return nil
 	}
 	if c.accepted != nil {
 		*c.accepted = true
 	}
-	return connectors.LedgerPut(c, c.js, c.Tenant(), c.Connection, c.Operation, c.Key, connectors.LedgerEntry{Result: result, CallID: c.CallID})
+	return c.books.LedgerPut(c, c.Tenant(), c.Connection, c.Operation, c.Key, connectors.LedgerEntry{Result: result, CallID: c.CallID})
 }
 
 // Vouched reports whether the dispatcher vouched that the caller may use
@@ -86,7 +85,10 @@ func (c Context) Tenant() uint64 { return c.Args.Principal.TenantID }
 
 // PutDiscovered stores the contract a connection discovered (75c).
 func (c Context) PutDiscovered(connection string, contract connectors.Contract) (connectors.Discovered, error) {
-	return connectors.PutDiscovered(c, c.js, c.Tenant(), connection, contract)
+	if c.books == nil {
+		return connectors.Discovered{}, connectors.Errorf(connectors.CodeUnavailable, "discovery is not kept here")
+	}
+	return c.books.PutDiscovered(c, c.Tenant(), connection, contract)
 }
 
 // Impl is a type's implementation.
@@ -210,6 +212,11 @@ type Options struct {
 	// the adapter asks Foundation on cx.resolve (07c), which answers only
 	// for a connection of a type it serves.
 	Resolve func(ctx context.Context, tenant uint64, typ, connection string) (Connection, error)
+	// Books keep the announcements, ledger, locks, leases, cursors and
+	// events (forge 21e-1): connectorsservice.Remote for an adapter
+	// without a JetStream handle; without it, the cx_* buckets through
+	// nc's JetStream.
+	Books connectors.Books
 	// IdleTimeout is how long an unused session stays open (5m).
 	IdleTimeout time.Duration
 	// LeaseEvery is how often an instance refreshes its leases and looks
@@ -239,7 +246,7 @@ func Serve(ctx context.Context, nc *nats.Conn, opts Options) error {
 
 type server struct {
 	nc       *nats.Conn
-	js       jetstream.JetStream
+	books    connectors.Books
 	o        Options
 	instance string
 	impls    map[string]Impl
@@ -281,11 +288,14 @@ func newServer(nc *nats.Conn, o Options) (*server, error) {
 	if o.Host == "" {
 		o.Host, _ = os.Hostname()
 	}
-	js, err := jetstream.New(nc)
-	if err != nil {
-		return nil, err
+	books := o.Books
+	if books == nil {
+		var err error
+		if books, err = connectors.BooksOn(nc); err != nil {
+			return nil, err
+		}
 	}
-	s := &server{nc: nc, js: js, o: o, instance: nuid.Next(), impls: map[string]Impl{}, types: map[string]connectors.Type{},
+	s := &server{nc: nc, books: books, o: o, instance: nuid.Next(), impls: map[string]Impl{}, types: map[string]connectors.Type{},
 		refs: map[string]connectors.Contract{}, sem: make(chan struct{}, o.MaxConcurrent), sessions: map[string]*entry{}}
 	for _, c := range o.Contracts {
 		s.refs[c.Ref()] = c
@@ -347,11 +357,6 @@ func (s *server) run(ctx context.Context) error {
 		s.unsubscribe(subs)
 		return err
 	}
-	kv, err := connectors.AdaptersKV(ctx, s.js)
-	if err != nil {
-		s.unsubscribe(subs)
-		return err
-	}
 	// Surfaces listen with a gateway that refuses every request until 75a
 	surfaces, stopSurfaces := context.WithCancel(ctx)
 	for _, sf := range s.o.Surfaces {
@@ -366,7 +371,7 @@ func (s *server) run(ctx context.Context) error {
 			}
 		}()
 	}
-	s.announce(ctx, kv)
+	s.announce(ctx)
 	// Event sources: this instance contends for the leases of its types'
 	s.wg.Add(1)
 	go func() {
@@ -383,7 +388,7 @@ loop:
 		case <-ctx.Done():
 			break loop
 		case <-tick.C:
-			s.announce(ctx, kv)
+			s.announce(ctx)
 		case <-idle.C:
 			s.closeIdle()
 		}
@@ -395,7 +400,7 @@ loop:
 	bg, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	for _, a := range s.announcements() {
-		_ = kv.Delete(bg, a.Key())
+		_ = s.books.Withdraw(bg, a.Key())
 	}
 	s.mu.Lock()
 	for k, e := range s.sessions {
@@ -435,9 +440,9 @@ func (s *server) announcements() []connectors.Announcement {
 	return out
 }
 
-func (s *server) announce(ctx context.Context, kv jetstream.KeyValue) {
+func (s *server) announce(ctx context.Context) {
 	for _, a := range s.announcements() {
-		if err := connectors.Announce(ctx, kv, a); err != nil && ctx.Err() == nil {
+		if err := s.books.Announce(ctx, a); err != nil && ctx.Err() == nil {
 			log.Warn(ctx, "announcing %s failed: %v", a.Key(), err)
 		}
 	}
@@ -499,7 +504,7 @@ func (s *server) handle(m *nats.Msg) {
 	ctx = logging.WithContext(ctx, b)
 	args := features.ServiceArgs{Ctx: ctx, Principal: h.Principal.In(call.Tenant), Meta: h.Meta}
 	accepted := false
-	x := Context{Context: ctx, Args: args, CallID: h.CallID, Contract: h.Contract, Operation: call.Operation, Key: h.Key, Connection: call.Connection, Files: h.Files, Log: b, js: s.js, accepted: &accepted}
+	x := Context{Context: ctx, Args: args, CallID: h.CallID, Contract: h.Contract, Operation: call.Operation, Key: h.Key, Connection: call.Connection, Files: h.Files, Log: b, books: s.books, accepted: &accepted}
 	result, e := s.call(x, im, call, m.Data)
 	if e == nil && h.Key != "" && !accepted {
 		if err := x.Accepted(result); err != nil {
@@ -555,7 +560,7 @@ func key(tenant uint64, typ, connection string) string {
 // on a session opened for it and closed after, so no two instances in any
 // process hold a session on the connection at once.
 func (s *server) exclusive(x Context, im Impl, call connectors.ParsedCall, data []byte) (json.RawMessage, error) {
-	release, err := connectors.Lock(x, s.js, call.Tenant, call.Connection, s.instance)
+	release, err := s.books.Lock(x, call.Tenant, call.Connection, s.instance)
 	if err != nil {
 		return nil, err
 	}

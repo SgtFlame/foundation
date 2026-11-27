@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -146,7 +147,7 @@ func newEngine(t *testing.T, graphs map[string]cognition.Graph) (*Engine, *toy, 
 	for id, g := range graphs {
 		cognition.Graphs.Register(reg, cognition.BuiltIn{Descriptor: extensions.Descriptor{ID: id}, Graph: g})
 	}
-	e := New(gdb, reg, nil)
+	e := New(traces.In(gdb), reg, nil)
 	t.Cleanup(e.purges.Wait)
 	return e, tt, gdb
 }

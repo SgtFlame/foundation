@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"github.com/SgtFlame/foundation/backend/features/services"
 	"sync"
 
 	"github.com/SgtFlame/foundation/backend/features/ai/services/chatservice"
@@ -72,6 +73,16 @@ func WithWorkspaces(read conversation.WorkspaceReader) Option {
 func WithWorkspaceList(list conversation.WorkspaceList) Option {
 	return func(s *service) {
 		s.workspaceList = list
+	}
+}
+
+// WithCalls makes Answer reach a round waiting in another process (forge
+// 21c): each waiting call is also served on its services.WaitSubject with
+// opts (how the server trusts its callers), and an answer for a call not
+// waiting here is sent there with c.
+func WithCalls(c *services.Client, opts ...services.ServerOption) Option {
+	return func(s *service) {
+		s.calls, s.callOpts = c, opts
 	}
 }
 

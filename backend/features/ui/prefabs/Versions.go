@@ -26,7 +26,7 @@ func Follow(args features.ServiceArgs, deps Deps) error {
 	}
 	tenant := args.Principal.TenantID
 	subject := live.Target{Area: live.AreaDefinitions, Type: TargetType, ID: "*"}.Subject(tenant, EventPublished)
-	return deps.Projections.Follow(args.Context(), tenant, live.AreaDefinitions, Follower, []string{subject}, func(e live.Event) error {
+	return deps.Projections.Follow(args.Context(), tenant, live.AreaDefinitions, db.Named(Follower, deps.DB), []string{subject}, func(e live.Event) error {
 		return copyVersion(deps, e)
 	})
 }

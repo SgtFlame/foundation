@@ -1,0 +1,12 @@
+[Unit]
+Description=Axiom host daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/axiomd host
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

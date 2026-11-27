@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"maps"
 	"slices"
 	"strconv"
@@ -83,6 +84,14 @@ func publishSpec() spec {
 // for a rev.
 func (c *decision) publishCommit(commit string) (string, []live.Problem) {
 	app := c.Target.ID
+	// Without app branches (a server or test that does not contribute
+	// them) no app has commits: a rev is published as before 19c
+	if !branchesHere(c.reg) {
+		if commit != "" {
+			return "", []live.Problem{{Code: "app_commit_not_head", Path: "args.commit", Message: fmt.Sprintf("%s has no commits: app branches are not available here", app), Fix: "publish a rev"}}
+		}
+		return "", nil
+	}
 	store, ok := c.deps.Projections.(branches.Projections)
 	if !ok {
 		return "", problem("", "the app's commits cannot be read here", "")
@@ -302,11 +311,7 @@ func (c *decision) prefabEnv(m apps.Manifest) ui.PrefabEnv {
 			return ui.PrefabsUsed(p.Template)
 		},
 		Version: func(id string, version int) (ui.Prefab, bool) {
-			if c.deps.DB == nil {
-				return ui.Prefab{}, false
-			}
-			p, _, err := prefabs.Version(c.ServiceArgs, prefabs.Deps{Projections: c.deps.Projections, DB: c.deps.DB}, id, version)
-			return p, err == nil
+			return PrefabVersion(c.ServiceArgs, c.deps, id, version)
 		},
 		Entity: func(id string) bool { _, ok := c.publishedEntity(id); return ok },
 		Query: func(name string) bool {
@@ -371,4 +376,17 @@ func GetVersion(args features.ServiceArgs, store live.Store, app string, version
 // stream.
 type settler interface {
 	Settle(ctx context.Context, tenant uint64, projector string) error
+}
+
+// branchesHere reports whether app branches' projector is contributed.
+func branchesHere(reg *extensions.Registry) bool {
+	if reg == nil {
+		return false
+	}
+	for _, p := range live.Projectors.All(reg) {
+		if p.ID == branches.Projector {
+			return true
+		}
+	}
+	return false
 }

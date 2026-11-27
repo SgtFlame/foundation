@@ -1,0 +1,24 @@
+{
+  "id": "infraRollout",
+  "owner": "app:infrastructure",
+  "name": "Rollout",
+  "description": "Moving the instances that follow a channel to its new version of a package, in waves with a health gate between them that stops on the first failure (forge 20f-2). Create one to start it; set status to paused, running or aborted to pause, resume or abort it.",
+  "titleField": "package",
+  "fields": [
+    {"id": "channel", "name": "Channel", "type": "text", "description": "The channel whose new version it rolls out", "required": true},
+    {"id": "package", "name": "Package", "type": "text", "description": "The package it moves", "required": true},
+    {"id": "waveSize", "name": "Wave size", "type": "number", "description": "Instances per wave (1 when left out)"},
+    {"id": "order", "name": "Order", "type": "json", "description": "Instance ids to move first, in this order; the rest follow by id"},
+    {"id": "waveTimeoutSeconds", "name": "Wave timeout", "type": "number", "description": "Seconds a wave may take to report the version installed and healthy (600 when left out)"},
+    {"id": "status", "name": "Status", "type": "enum", "description": "starting until its waves are planned, then running, paused, done, failed or aborted", "options": [
+      {"id": "starting", "name": "Starting"}, {"id": "running", "name": "Running"}, {"id": "paused", "name": "Paused"},
+      {"id": "done", "name": "Done"}, {"id": "failed", "name": "Failed"}, {"id": "aborted", "name": "Aborted"}], "default": "starting"},
+    {"id": "from", "name": "From", "type": "text", "description": "Reported: the version instances leave"},
+    {"id": "to", "name": "To", "type": "text", "description": "Reported: the version instances move to"},
+    {"id": "waves", "name": "Waves", "type": "json", "description": "Reported: [[instance ids]] in order"},
+    {"id": "wave", "name": "Wave", "type": "number", "description": "Reported: the wave moving now (0 is the first)"},
+    {"id": "waveStartedAt", "name": "Wave started", "type": "dateTime", "description": "Reported: when the current wave began"},
+    {"id": "failed", "name": "Failure", "type": "text", "description": "Reported: the instance that stopped it, and why"}
+  ],
+  "indexes": []
+}

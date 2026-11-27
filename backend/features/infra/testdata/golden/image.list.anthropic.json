@@ -1,0 +1,8 @@
+{
+  "name": "infra_compute_image_list",
+  "description": "The images hosts can be made from.",
+  "input_schema": {
+    "type": "object",
+    "properties": {}
+  }
+}

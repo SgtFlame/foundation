@@ -1,0 +1,65 @@
+{
+  "name": "infra_compute_size_list",
+  "title": "List sizes",
+  "description": "The host sizes the provider offers, each with vCPUs, memory, disk, price per hour and vms when it promises nested virtualization.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "region": {
+        "type": "string",
+        "description": "Sizes offered in this region; every size when left out"
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "sizes": {
+        "type": "array",
+        "description": "The sizes",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The size's id"
+            },
+            "vcpus": {
+              "type": "integer",
+              "description": "Virtual CPUs"
+            },
+            "memoryMb": {
+              "type": "integer",
+              "description": "Memory in MB"
+            },
+            "diskGb": {
+              "type": "integer",
+              "description": "Disk in GB"
+            },
+            "price": {
+              "type": "number",
+              "description": "Price per hour in the account's currency"
+            },
+            "vms": {
+              "type": "boolean",
+              "description": "Whether it can run virtual machines"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      }
+    },
+    "required": [
+      "sizes"
+    ]
+  },
+  "annotations": {
+    "title": "List sizes",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

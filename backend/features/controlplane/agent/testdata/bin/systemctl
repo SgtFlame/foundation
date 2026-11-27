@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# A fake systemctl: an active unit is a file in $FAKE_STATE/active.
+set -euo pipefail
+mkdir -p "$FAKE_STATE/active" "$FAKE_STATE/enabled"
+case "$1" in
+  is-active)
+    if [[ -f "$FAKE_STATE/active/$2" ]]; then echo active; else echo inactive; exit 3; fi ;;
+  *) echo "systemctl $*" >> "$FAKE_STATE/calls" ;;
+esac
+case "$1" in
+  daemon-reload) ;;
+  enable) [[ "$2" == --now ]] && { touch "$FAKE_STATE/enabled/$3" "$FAKE_STATE/active/$3"; } ;;
+  disable) [[ "$2" == --now ]] && { rm -f "$FAKE_STATE/enabled/$3" "$FAKE_STATE/active/$3"; } ;;
+  restart|start) touch "$FAKE_STATE/active/$2" ;;
+  stop) rm -f "$FAKE_STATE/active/$2" ;;
+esac

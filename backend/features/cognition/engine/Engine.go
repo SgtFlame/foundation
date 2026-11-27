@@ -12,6 +12,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,14 +25,13 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/logging"
-	"gorm.io/gorm"
 )
 
 var log = logging.In("cognition")
 
 // Engine runs the graphs and node types of a registry.
 type Engine struct {
-	db       *gorm.DB
+	traces   Traces // nil keeps no traces
 	registry *extensions.Registry
 	config   config.Reader // nil uses cognitionsettings.Defaults
 	source   GraphSource   // the tenants' published graphs; nil runs built-ins only
@@ -60,18 +60,35 @@ type DraftSource interface {
 // purgeEvery is how often, at most, a finished run purges old traces.
 const purgeEvery = 10 * time.Minute
 
+// Traces is where an engine keeps its runs' traces (forge 21d-2): the
+// cognition data service's, traces.In(gdb) where the tenant database is,
+// cognitionservice.Traces(proxy) elsewhere.
+type Traces interface {
+	// Begin stores a run's record as it starts (TraceAll).
+	Begin(ctx context.Context, rec cognition.Run) error
+	// Save stores a finished run with its steps, idempotent by run id.
+	Save(ctx context.Context, rec cognition.Run, steps []cognition.Step) error
+	// Get is a tenant's run with its steps, found false when not kept.
+	Get(ctx context.Context, tenant, runID uint64) (cognition.Run, []cognition.Step, bool, error)
+	// Purge deletes old traces (cognition section's keepRuns, keepDays).
+	Purge(ctx context.Context, keepRuns, keepDays int) error
+}
+
 // New makes an engine over the registry's cognition.node and
-// cognition.graph contributions, keeping traces in gdb.
-func New(gdb *gorm.DB, reg *extensions.Registry, cfg config.Reader) *Engine {
-	return &Engine{db: gdb, registry: reg, config: cfg, untraced: map[string]int64{}}
+// cognition.graph contributions, keeping traces in t (none when nil).
+func New(t Traces, reg *extensions.Registry, cfg config.Reader) *Engine {
+	if v := reflect.ValueOf(t); t != nil && v.Kind() == reflect.Pointer && v.IsNil() {
+		t = nil
+	}
+	return &Engine{traces: t, registry: reg, config: cfg, untraced: map[string]int64{}}
 }
 
 // SetSource sets where the tenants' published graphs come from; the drafts
 // are made after the engine, since their commands validate against it.
 func (e *Engine) SetSource(s GraphSource) { e.source = s }
 
-// DB is the database the traces are kept in.
-func (e *Engine) DB() *gorm.DB { return e.db }
+// Traces is where the engine keeps its traces (nil when it keeps none).
+func (e *Engine) Traces() Traces { return e.traces }
 
 // Registry is the registry the engine's graphs, node types and data types
 // come from.
@@ -286,8 +303,8 @@ func (e *Engine) Run(args RunArgs) (Result, error) {
 	r.record.ID = features.NewTSID()
 	persist := context.WithoutCancel(args.Context())
 	traceAll := args.Trace == TraceAll
-	if traceAll {
-		if err := e.db.WithContext(persist).Create(&r.record).Error; err != nil {
+	if traceAll && e.traces != nil {
+		if err := e.traces.Begin(persist, r.record); err != nil {
 			return Result{}, log.Wrap(err)
 		}
 	}
@@ -311,14 +328,10 @@ func (e *Engine) Run(args RunArgs) (Result, error) {
 		e.countMu.Unlock()
 		return kept(Result{RunID: r.record.ID, Outputs: r.result}), nil
 	}
-	if dbErr := e.db.WithContext(persist).Transaction(func(tx *gorm.DB) error {
-		if len(r.steps) > 0 {
-			if err := tx.CreateInBatches(r.steps, 100).Error; err != nil {
-				return err
-			}
-		}
-		return tx.Save(&r.record).Error
-	}); dbErr != nil {
+	if e.traces == nil {
+		return kept(Result{RunID: r.record.ID, Outputs: r.result, FailedNode: r.record.FailedNode}), err
+	}
+	if dbErr := e.traces.Save(persist, r.record, r.steps); dbErr != nil {
 		log.With("runId", r.record.ID).Error(persist, dbErr, "cannot store the trace of run %d", r.record.ID)
 	}
 	e.purges.Go(func() { e.purge(persist, settings) })
@@ -411,15 +424,10 @@ func (e *Engine) purge(ctx context.Context, s cognitionsettings.Cognition) {
 // Purge deletes the traces that are neither among their graph's last
 // keepRuns runs (per tenant) nor younger than keepDays.
 func (e *Engine) Purge(ctx context.Context, keepRuns, keepDays int) error {
-	cutoff := time.Now().AddDate(0, 0, -keepDays)
-	return e.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`DELETE FROM cognition_runs WHERE started_at < ? AND id NOT IN (
-			SELECT id FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY tenant_id, graph_id ORDER BY started_at DESC, id DESC) AS n FROM cognition_runs) WHERE n <= ?)`,
-			cutoff, keepRuns).Error; err != nil {
-			return err
-		}
-		return tx.Exec(`DELETE FROM cognition_run_steps WHERE run_id NOT IN (SELECT id FROM cognition_runs)`).Error
-	})
+	if e.traces == nil {
+		return nil
+	}
+	return e.traces.Purge(ctx, keepRuns, keepDays)
 }
 
 // newRun prepares a run's state: the exec successors and data sources by pin.

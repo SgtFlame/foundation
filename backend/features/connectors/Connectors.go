@@ -221,7 +221,14 @@ type Type struct {
 	// tenant:<t>/connectors:<group>, so a role scoped there (Forge's Mail
 	// administrator) manages them and no others. Empty for none.
 	Group string `json:"group,omitempty"`
+	// Services are the services its adapter calls (forge 21e-2), of
+	// AdapterServices; with svc.connectors they are all NATS lets it
+	// reach (AdapterPermissions).
+	Services []string `json:"services,omitempty"`
 }
+
+// AdapterServices are the services a type may declare its adapter calls.
+var AdapterServices = []string{"records", "files", "connections"}
 
 // SurfaceInfo is an inbound surface as the registry lists it (75a): an
 // outside endpoint that calls the gateway on the bus.

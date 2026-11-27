@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	"maps"
 	"os"
 	"slices"
@@ -66,10 +67,10 @@ type tenant struct {
 	id       uint64
 	stream   jetstream.Stream
 	mu       sync.Mutex
-	queues   map[string]bool                      // queues with a worker here
+	queues   map[string]bool                     // queues with a worker here
 	triggers map[string]jetstream.ConsumeContext // trigger consumers consumed here, by area/name
-	outboxes map[live.Area]bool                   // areas whose outbox is followed here
-	wake     chan struct{}                        // a worker freed a slot
+	outboxes map[live.Area]bool                  // areas whose outbox is followed here
+	wake     chan struct{}                       // a worker freed a slot
 	// pending are apps with a trigger that could not start yet (its app's
 	// roles not synced yet, by whichever process syncs them), reconciled
 	// again on each discovery; warned is what was last logged per trigger
@@ -196,11 +197,15 @@ func (r *Runner) tenantOf(id uint64) *tenant {
 // by one runner and removed when it acknowledges it; delayed jobs and
 // schedules are its message schedules.
 func (r *Runner) stream(tenant uint64) (jetstream.Stream, error) {
-	s, err := r.d.Projections.JetStream().CreateOrUpdateStream(r.ctx, jetstream.StreamConfig{
+	js, err := r.d.Projections.JetStreamFor(r.ctx, tenant)
+	if err != nil {
+		return nil, log.Wrap(err)
+	}
+	s, err := js.CreateOrUpdateStream(r.ctx, natsd.Stream(jetstream.StreamConfig{
 		Name: StreamName(tenant), Subjects: []string{Subjects(tenant)}, Storage: jetstream.FileStorage,
 		Retention: jetstream.WorkQueuePolicy, Duplicates: project.Duplicates, AllowDirect: true,
 		AllowMsgSchedules: true, AllowRollup: true,
-	})
+	}))
 	if err != nil {
 		return nil, log.Wrapf(err, "cannot make the job queue %s", StreamName(tenant))
 	}
@@ -230,7 +235,12 @@ func (r *Runner) discover(t *tenant) {
 			r.serveQueue(t, q)
 		}
 	}
-	streams := r.d.Projections.JetStream().StreamNames(ctx, jetstream.WithStreamListSubject(fmt.Sprintf("evt.%d.>", t.id)))
+	tjs, err := r.d.Projections.JetStreamFor(ctx, t.id)
+	if err != nil {
+		log.Error(ctx, err, "jobs: cannot reach tenant %d's account", t.id)
+		return
+	}
+	streams := tjs.StreamNames(ctx, jetstream.WithStreamListSubject(fmt.Sprintf("evt.%d.>", t.id)))
 	prefix := fmt.Sprintf("EVT_%d_", t.id)
 	for name := range streams.Name() {
 		area := live.Area(strings.TrimPrefix(name, prefix))
@@ -294,7 +304,10 @@ func (r *Runner) dispatch(t *tenant, e live.Event) error {
 	if !ok {
 		return fmt.Errorf("the job %s cannot be read", e.Target.ID)
 	}
-	js := r.d.Projections.JetStream()
+	js, err := r.d.Projections.JetStreamFor(r.ctx, t.id)
+	if err != nil {
+		return err
+	}
 	if e.Type == EventCanceled {
 		err := t.stream.Purge(r.ctx, jetstream.WithPurgeSubject(AtSubject(t.id, j.ID)))
 		if err != nil && !errors.Is(err, jetstream.ErrMsgNotFound) {
@@ -325,7 +338,7 @@ func (r *Runner) dispatch(t *tenant, e live.Event) error {
 		m.Header.Set("Nats-Schedule-Target", RunSubject(t.id, j.Queue, j.Key))
 		m.Header.Set("Nats-Rollup", "sub")
 	}
-	_, err := js.PublishMsg(r.ctx, m)
+	_, err = js.PublishMsg(r.ctx, m)
 	return err
 }
 

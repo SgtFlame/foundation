@@ -297,3 +297,8 @@ func (b *Bootstrap) startRenewing(auth vault.Auth) {
 		}
 	}()
 }
+
+// Client is the logged-in Vault client (nil without Vault), for the
+// credential issuer (forge 20h), whose policy lets it manage unit-*
+// AppRoles.
+func (b *Bootstrap) Client() *vault.Client { return b.client }

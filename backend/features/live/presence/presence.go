@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SgtFlame/foundation/backend/features/authz"
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	"slices"
 	"strconv"
 	"strings"
@@ -57,6 +58,7 @@ type Entry struct {
 // Presence is the presence buckets.
 type Presence struct {
 	js       jetstream.JetStream
+	acc      natsd.Accounts
 	userName func(uint64) string
 	mu       sync.Mutex
 	buckets  map[uint64]jetstream.KeyValue
@@ -76,9 +78,13 @@ func (p *Presence) bucket(ctx context.Context, tenant uint64) (jetstream.KeyValu
 	if kv := p.buckets[tenant]; kv != nil {
 		return kv, nil
 	}
-	kv, err := p.js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+	js, err := natsd.For(ctx, p.acc, p.js, tenant)
+	if err != nil {
+		return nil, log.Wrap(err)
+	}
+	kv, err := js.CreateOrUpdateKeyValue(ctx, natsd.KV(jetstream.KeyValueConfig{
 		Bucket: fmt.Sprintf("presence_%d", tenant), Description: "Who is in each object", History: 1, TTL: TTL, Storage: jetstream.MemoryStorage,
-	})
+	}))
 	if err != nil {
 		return nil, log.Wrapf(err, "cannot make the presence bucket")
 	}
@@ -282,3 +288,7 @@ func (p *Presence) run(f live.Feed) error {
 		}
 	}
 }
+
+// SetAccounts keeps each tenant's data in its own NATS account (forge
+// 20a-3); before it is called every tenant uses the store's JetStream.
+func (x *Presence) SetAccounts(a natsd.Accounts) { x.acc = a }

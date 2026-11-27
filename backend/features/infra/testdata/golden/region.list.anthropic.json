@@ -1,0 +1,8 @@
+{
+  "name": "infra_compute_region_list",
+  "description": "The regions hosts can be made in.",
+  "input_schema": {
+    "type": "object",
+    "properties": {}
+  }
+}

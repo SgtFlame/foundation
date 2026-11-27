@@ -12,6 +12,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
+	"github.com/SgtFlame/foundation/backend/features/services"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 )
 
@@ -22,7 +23,16 @@ const maxClientTools = 20
 type waiting struct {
 	owner   features.Principal
 	answers chan conversationservice.AnswerArgs
+	srv     *services.Server // where answers from other processes arrive
 }
+
+// answerSubject is where a call's answer arrives from another process.
+func answerSubject(roundID uint64, callID string) string {
+	return services.WaitSubject(Service, "answer", strconv.FormatUint(roundID, 10), callID)
+}
+
+// Service is the conversation service's name on the wire.
+const Service = "conversation"
 
 func waitKey(roundID uint64, callID string) string {
 	return strconv.FormatUint(roundID, 10) + "/" + callID
@@ -34,6 +44,13 @@ func (s *service) expect(owner features.Principal, roundID uint64, callID string
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	w := &waiting{owner: owner, answers: make(chan conversationservice.AnswerArgs, 1)}
+	if s.calls != nil {
+		srv, err := services.ServeAt(s.calls.NC, answerSubject(roundID, callID), Service, services.Unary(s.deliver), s.callOpts...)
+		if err != nil {
+			log.With("roundId", roundID, "callId", callID).Warn(context.Background(), "answers from other processes cannot reach call %s: %v", callID, err)
+		}
+		w.srv = srv
+	}
 	s.waiting[waitKey(roundID, callID)] = w
 	return w
 }
@@ -46,8 +63,12 @@ func (s *service) waitingFor(roundID uint64, callID string) *waiting {
 
 func (s *service) forget(roundID uint64, callID string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	w := s.waiting[waitKey(roundID, callID)]
 	delete(s.waiting, waitKey(roundID, callID))
+	s.mu.Unlock()
+	if w != nil && w.srv != nil {
+		go w.srv.Stop()
+	}
 }
 
 // gate pauses a round's calls for its user: Approve for writes, RunClient

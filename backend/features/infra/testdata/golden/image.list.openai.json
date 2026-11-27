@@ -1,0 +1,11 @@
+{
+  "type": "function",
+  "function": {
+    "name": "infra_compute_image_list",
+    "description": "The images hosts can be made from.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+}

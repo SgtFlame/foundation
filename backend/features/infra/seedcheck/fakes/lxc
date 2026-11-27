@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# A fake lxc for the seed's check (forge 22o): instances, files, packages
+# and units are files under $FAKE_STATE; every call's argv goes to
+# $FAKE_ARGS, and each call that changes something to $FAKE_LOG with a +.
+set -euo pipefail
+st=$FAKE_STATE
+echo "lxc $*" >>"$FAKE_ARGS"
+rec() { echo "+ $*" >>"$FAKE_LOG"; }
+mkdir -p "$st"
+
+exec_in() {
+  local name=$1 cmd=$2; shift 2
+  local fs=$st/fs/$name
+  case "$cmd" in
+    cat) cat "$fs$1" 2>/dev/null ;;
+    cloud-init) ;;
+    dpkg-query)
+      local p=${!#}
+      [[ -e $st/pkg/$name/$p ]] || exit 1
+      printf 'install ok installed' ;;
+    apt-get)
+      case "$1" in
+        update) rec "$name apt-get update" ;;
+        install)
+          shift 2
+          mkdir -p "$st/pkg/$name"
+          for p in "$@"; do touch "$st/pkg/$name/$p"; done
+          rec "$name apt-get install $*" ;;
+      esac ;;
+    systemctl)
+      case "$1" in
+        is-enabled) [[ -e $st/unit/$name/$3.enabled ]] ;;
+        is-active) [[ -e $st/unit/$name/$3.active ]] ;;
+        enable) mkdir -p "$st/unit/$name"; touch "$st/unit/$name/$3.enabled" "$st/unit/$name/$3.active"; rec "$name systemctl enable --now $3" ;;
+        daemon-reload) rec "$name systemctl daemon-reload" ;;
+        restart) rec "$name systemctl restart $2" ;;
+      esac ;;
+    curl)
+      local url=${!#}
+      case "$url" in
+        */api/v1/bootstrap/status) echo '{"state":"ready"}' ;;
+        */api/v1/identity/status)
+          if [[ -e $st/setup ]]; then echo '{"singleUser":false}'; else echo '{"singleUser":true}'; fi ;;
+        */api/v1/identity/setup)
+          local body
+          body=$(cat)
+          [[ $(jq -r '.password | length' <<<"$body") -ge 8 ]] || exit 22
+          jq -c '{username, password}' <<<"$body" >"$st/setup"
+          rec "$name setup $(jq -r .username <<<"$body")" ;;
+        *) exit 22 ;;
+      esac ;;
+    foundation|forge)
+      # <bin> infra import ... <dir>, the password on stdin
+      local dir=${!#} sum
+      read -r pw
+      [[ "$pw" == $(jq -r .password "$st/setup") ]] || { echo "wrong password" >&2; exit 1; }
+      sum=$(cd "$fs$dir" && find . -type f -print0 | sort -z | xargs -0 cat | sha256sum | cut -c1-16)
+      if [[ -e $st/imported && $(cat "$st/imported") == "$sum" ]]; then
+        echo "the draft is version 1 already"
+      else
+        echo "$sum" >"$st/imported"
+        rec "$name import $dir"
+        echo "committed version 1"
+      fi ;;
+    /root/seed/seed.sh)
+      # The seed run again in the VM: its own fake world.
+      local a=()
+      for x in "$@"; do
+        if [[ $x == /root/seed/* ]]; then a+=("$fs$x"); else a+=("$x"); fi
+      done
+      FAKE_STATE=$st/vm/$name bash "$fs$cmd" "${a[@]}" ;;
+    *) echo "fake lxc: no $cmd in an instance" >&2; exit 2 ;;
+  esac
+}
+
+case "$1" in
+  info) [[ -e $st/inst/$2 ]] ;;
+  launch) mkdir -p "$st/inst/$3"; rec "lxc launch ${*:2}" ;;
+  storage) [[ $2 == show && -e $st/lxd-init ]] ;;
+  list) echo "10.1.2.3 (eth0)" ;;
+  file)
+    dest=${!#}
+    name=${dest%%/*} path=/${dest#*/}
+    mkdir -p "$(dirname "$st/fs/$name$path")"
+    cat >"$st/fs/$name$path"
+    rec "lxc file push $dest" ;;
+  exec)
+    name=$2
+    shift 3
+    exec_in "$name" "$@" ;;
+  *) echo "fake lxc: $1" >&2; exit 2 ;;
+esac

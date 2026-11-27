@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	"strconv"
 
 	"github.com/SgtFlame/foundation/backend/features"
@@ -31,8 +32,8 @@ func secretRef(tenant uint64, connection, field, version string) config.SecretRe
 }
 
 func secretsKV(ctx context.Context, js jetstream.JetStream, tenant uint64) (jetstream.KeyValue, error) {
-	return connectors.KV(ctx, js, jetstream.KeyValueConfig{Bucket: connectors.SecretsBucket(tenant), History: 1,
-		Description: "Connection secrets' SecretStore placeholders: <connection>.<field>.<version>, never values (forge 07c)"})
+	return connectors.KV(ctx, js, natsd.KV(jetstream.KeyValueConfig{Bucket: connectors.SecretsBucket(tenant), History: 1,
+		Description: "Connection secrets' SecretStore placeholders: <connection>.<field>.<version>, never values (forge 07c)"}))
 }
 
 // secretArg is one secret in arguments: a value to seal, a reference to

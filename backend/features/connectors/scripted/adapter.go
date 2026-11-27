@@ -21,7 +21,6 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 )
 
 var timeNow = func() time.Time { return time.Now().UTC() }
@@ -31,7 +30,7 @@ var timeNow = func() time.Time { return time.Now().UTC() }
 type Deps struct {
 	Store  live.Store // the installs and connections
 	Engine *engine.Engine
-	JS     jetstream.JetStream // CX_<tenant> and the cursors
+	Books  connectors.Books // CX_<tenant> and the cursors (forge 21e-1)
 	Reg    *extensions.Registry
 }
 
@@ -185,6 +184,9 @@ func (s *server) apply(ctx context.Context, t *tenant, all map[string]apps.Insta
 		o := s.o.Adapter
 		o.Types, o.Contracts, o.Tenants = types, contracts, []uint64{t.id}
 		o.Impls = nil
+		if o.Books == nil {
+			o.Books = s.deps().Books
+		}
 		for _, ty := range types {
 			app, name, _ := strings.Cut(ty.ID, ".")
 			o.Impls = append(o.Impls, adapter.Impl{Type: ty.ID, Open: s.opener(app, name)})
@@ -354,13 +356,10 @@ func (x *session) Watch(ctx adapter.Context, cursor json.RawMessage, emitFn func
 	}
 	if len(host.Events) == 0 && next != nil && !bytes.Equal(next, cursor) {
 		d := x.s.deps()
-		kv, err := connectors.CursorsKV(ctx, d.JS)
-		if err != nil {
-			return err
+		if d.Books == nil {
+			return fmt.Errorf("there are no cursors here")
 		}
-		body, _ := json.Marshal(connectors.Cursor{Cursor: next, At: timeNow()})
-		_, err = kv.Put(ctx, connectors.SourceKey(ctx.Tenant(), x.conn.ID), body)
-		return err
+		return d.Books.PutCursor(ctx, connectors.SourceKey(ctx.Tenant(), x.conn.ID), connectors.Cursor{Cursor: next, At: timeNow()})
 	}
 	return nil
 }

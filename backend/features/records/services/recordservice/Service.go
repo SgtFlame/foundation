@@ -27,9 +27,11 @@ type Service interface {
 	Search(args SearchArgs) SearchResponse
 	// Upload keeps a file for an entity type's file fields and returns the
 	// reference a record's field is then set to.
+	//svc:local
 	Upload(args UploadArgs) UploadResponse
 	// OpenFile reads a file a record's field holds, for someone who can
 	// read the record.
+	//svc:local
 	OpenFile(args OpenFileArgs) OpenFileResponse
 	// Create, Update and Delete are only called from Go.
 	Create(args CreateArgs) CommandResponse

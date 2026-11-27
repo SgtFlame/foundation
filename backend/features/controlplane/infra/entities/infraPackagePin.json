@@ -1,0 +1,65 @@
+{
+  "id": "infraPackagePin",
+  "owner": "app:infrastructure",
+  "name": "Package pin",
+  "description": "A package an instance or profile installs at a version or from a channel",
+  "titleField": "name",
+  "fields": [
+    {
+      "id": "target",
+      "name": "Target",
+      "type": "text",
+      "description": "The instance's or profile's record id"
+    },
+    {
+      "id": "name",
+      "name": "Package",
+      "type": "text",
+      "description": "The package name",
+      "required": true
+    },
+    {
+      "id": "source",
+      "name": "Source",
+      "type": "enum",
+      "description": "The first-party repository, the Ubuntu archive, or an approved third-party source",
+      "options": [
+        {
+          "id": "firstParty",
+          "name": "FirstParty"
+        },
+        {
+          "id": "ubuntu",
+          "name": "Ubuntu"
+        },
+        {
+          "id": "thirdParty",
+          "name": "ThirdParty"
+        }
+      ],
+      "default": "firstParty"
+    },
+    {
+      "id": "version",
+      "name": "Version",
+      "type": "text",
+      "description": "The pinned version"
+    },
+    {
+      "id": "channel",
+      "name": "Channel",
+      "type": "text",
+      "description": "The channel, when no version is pinned"
+    },
+    {
+      "id": "repository",
+      "name": "Repository",
+      "type": "relation",
+      "description": "For a third-party pin: the apt source it installs from",
+      "relation": {
+        "entity": "infraAptSource"
+      }
+    }
+  ],
+  "indexes": []
+}

@@ -23,7 +23,7 @@ func Follow(args features.ServiceArgs, deps Deps) error {
 	}
 	tenant := args.Principal.TenantID
 	t := live.Target{Area: live.AreaDefinitions, Type: TargetType, ID: "*"}
-	return deps.Projections.Follow(args.Context(), tenant, live.AreaDefinitions, Follower,
+	return deps.Projections.Follow(args.Context(), tenant, live.AreaDefinitions, db.Named(Follower, deps.DB),
 		[]string{t.Subject(tenant, EventCreated), t.Subject(tenant, EventInfoSet)}, func(e live.Event) error {
 			return copyApp(deps, e)
 		})
@@ -74,7 +74,7 @@ func FollowVersions(args features.ServiceArgs, deps Deps) error {
 	}
 	tenant := args.Principal.TenantID
 	subject := live.Target{Area: live.AreaDefinitions, Type: VersionTargetType, ID: "*"}.Subject(tenant, EventPublished)
-	return deps.Projections.Follow(args.Context(), tenant, live.AreaDefinitions, VersionsFollower, []string{subject}, func(e live.Event) error {
+	return deps.Projections.Follow(args.Context(), tenant, live.AreaDefinitions, db.Named(VersionsFollower, deps.DB), []string{subject}, func(e live.Event) error {
 		v, err := decode[apps.Version](e.Data)
 		if err != nil {
 			return fmt.Errorf("cannot read the version: %w", err)

@@ -1,0 +1,44 @@
+{
+  "name": "infra_compute_region_list",
+  "title": "List regions",
+  "description": "The regions hosts can be made in.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "regions": {
+        "type": "array",
+        "description": "The regions",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The region's id"
+            },
+            "name": {
+              "type": "string",
+              "description": "Its name"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      }
+    },
+    "required": [
+      "regions"
+    ]
+  },
+  "annotations": {
+    "title": "List regions",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

@@ -8,6 +8,7 @@ const routes = [
   'ai',
   'index',
   'extensions',
+  'services',
   'config',
   'usage',
   'logs',

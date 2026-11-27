@@ -1,0 +1,16 @@
+{
+  "name": "infra_compute_host_delete",
+  "description": "Deletes a host and what was made for it, with its disk. Deleting a host that is gone succeeds, with deleted false.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The host's resource id to delete"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  }
+}

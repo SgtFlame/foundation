@@ -22,7 +22,7 @@ func WithRecords(b *bus.Bus, subs *subscribe.Subscriptions, deps data.Deps) Opti
 }
 
 // WithFiles sets where file fields' content is kept.
-func WithFiles(f *files.Store) Option {
+func WithFiles(f files.Files) Option {
 	return func(s *service) { s.files = f }
 }
 

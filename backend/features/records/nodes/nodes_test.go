@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -132,7 +133,7 @@ func setup(t *testing.T) *fixture {
 	srv := natsd.StartTest(t)
 	p := project.New(srv.JS(), reg)
 	t.Cleanup(p.Close)
-	f := &fixture{t: t, p: p, bus: bus.New(p), subs: subscribe.New(p, reg), eng: engine.New(gdb, reg, nil)}
+	f := &fixture{t: t, p: p, bus: bus.New(p), subs: subscribe.New(p, reg), eng: engine.New(traces.In(gdb), reg, nil)}
 	deps = data.Deps{Projections: p, Bus: f.bus}
 	f.deps = deps
 	entityDeps = entities.Deps{Projections: p, OnPublish: func(args features.ServiceArgs) error { return data.Follow(args, deps) }}

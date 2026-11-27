@@ -1,0 +1,44 @@
+{
+  "name": "infra_compute_image_list",
+  "title": "List images",
+  "description": "The images hosts can be made from.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "images": {
+        "type": "array",
+        "description": "The images",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The image's id"
+            },
+            "name": {
+              "type": "string",
+              "description": "Its name"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      }
+    },
+    "required": [
+      "images"
+    ]
+  },
+  "annotations": {
+    "title": "List images",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

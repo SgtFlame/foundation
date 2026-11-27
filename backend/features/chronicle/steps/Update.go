@@ -13,8 +13,6 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/chronicle"
 	"github.com/SgtFlame/foundation/backend/features/cognition/tmpl"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
-	"github.com/SgtFlame/foundation/backend/features/db"
-	"gorm.io/gorm"
 )
 
 // UpdateIn is the round the memory update learns from.
@@ -121,54 +119,37 @@ func (s Steps) Update(in UpdateIn) (Changes, error) {
 	for _, e := range all {
 		titles[strings.ToLower(strings.TrimSpace(e.Title))] = true
 	}
-	err = s.DB.WithContext(in.Context()).Transaction(func(tx *gorm.DB) error {
-		for _, u := range reply.Updates {
-			id, _ := strconv.ParseUint(strings.TrimSpace(u.ID), 10, 64)
-			i := slices.IndexFunc(used, func(e chronicle.Entry) bool { return e.ID == id })
-			short, full := strings.TrimSpace(u.ShortSummary), strings.TrimSpace(u.FullSummary)
-			if i < 0 || full == "" || (short == used[i].ShortSummary && full == used[i].FullSummary) {
-				continue
-			}
-			e := used[i]
-			previous, _ := json.Marshal(map[string]string{"shortSummary": e.ShortSummary, "fullSummary": e.FullSummary})
-			e.ShortSummary, e.FullSummary = short, full
-			if err := tx.Model(&e).Updates(map[string]any{"short_summary": short, "full_summary": full}).Error; err != nil {
-				return err
-			}
-			if err := tx.Create(&chronicle.EntryRound{Tenanted: e.Tenanted, EntryID: e.ID, RoundID: in.Round.ID, ConversationID: in.Round.ConversationID,
-				Action: chronicle.ActionUpdated, Previous: string(previous)}).Error; err != nil {
-				return err
-			}
-			changes.Updated = append(changes.Updated, e)
+	u := chronicle.MemoryUpdate{RoundID: in.Round.ID, ConversationID: in.Round.ConversationID}
+	for _, r := range reply.Updates {
+		id, _ := strconv.ParseUint(strings.TrimSpace(r.ID), 10, 64)
+		i := slices.IndexFunc(used, func(e chronicle.Entry) bool { return e.ID == id })
+		short, full := strings.TrimSpace(r.ShortSummary), strings.TrimSpace(r.FullSummary)
+		if i < 0 || full == "" || (short == used[i].ShortSummary && full == used[i].FullSummary) {
+			continue
 		}
-		for _, p := range reply.Proposals {
-			title := strings.TrimSpace(p.Title)
-			if len(changes.Proposed) >= in.MaxProposals || title == "" || titles[strings.ToLower(title)] {
-				continue
-			}
-			t, ok := chronicle.TypeOf(p.Type)
-			if !ok {
-				t, _ = chronicle.TypeOf("note")
-			}
-			parent, _ := strconv.ParseUint(strings.TrimSpace(p.ParentID), 10, 64)
-			if _, ok := all[parent]; !ok {
-				parent = 0
-			}
-			e := chronicle.Entry{Tenanted: db.TenantOf(in.Principal), Owned: db.OwnedBy(in.Principal), Type: t.ID, Title: clip(title, 200),
-				ShortSummary: strings.TrimSpace(p.ShortSummary), FullSummary: strings.TrimSpace(p.FullSummary), Fields: "{}",
-				ParentID: parent, Status: chronicle.StatusProposed}
-			if err := tx.Create(&e).Error; err != nil {
-				return err
-			}
-			if err := tx.Create(&chronicle.EntryRound{Tenanted: e.Tenanted, EntryID: e.ID, RoundID: in.Round.ID, ConversationID: in.Round.ConversationID,
-				Action: chronicle.ActionCreated}).Error; err != nil {
-				return err
-			}
-			titles[strings.ToLower(title)] = true
-			changes.Proposed = append(changes.Proposed, e)
+		u.Updates = append(u.Updates, chronicle.SummaryUpdate{ID: id, ShortSummary: short, FullSummary: full})
+	}
+	for _, p := range reply.Proposals {
+		title := strings.TrimSpace(p.Title)
+		if len(u.Proposals) >= in.MaxProposals || title == "" || titles[strings.ToLower(title)] {
+			continue
 		}
-		return nil
-	})
+		t, ok := chronicle.TypeOf(p.Type)
+		if !ok {
+			t, _ = chronicle.TypeOf("note")
+		}
+		parent, _ := strconv.ParseUint(strings.TrimSpace(p.ParentID), 10, 64)
+		if _, ok := all[parent]; !ok {
+			parent = 0
+		}
+		u.Proposals = append(u.Proposals, chronicle.Entry{Type: t.ID, Title: clip(title, 200),
+			ShortSummary: strings.TrimSpace(p.ShortSummary), FullSummary: strings.TrimSpace(p.FullSummary), Fields: "{}", ParentID: parent})
+		titles[strings.ToLower(title)] = true
+	}
+	if len(u.Updates) == 0 && len(u.Proposals) == 0 {
+		return changes, nil
+	}
+	changes.Updated, changes.Proposed, err = s.Memory.Apply(in.ServiceArgs, u)
 	if err != nil {
 		return Changes{}, err
 	}

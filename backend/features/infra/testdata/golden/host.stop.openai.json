@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "infra_compute_host_stop",
+    "description": "Stops a running host, keeping its disk; stopping a stopped one does nothing.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The host's resource id"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  }
+}
