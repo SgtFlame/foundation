@@ -21,3 +21,7 @@ Several threads build at once, and every one of them used to append to the same 
 - Each paragraph, heading, table row and top-level list item is its own fragment. In `claude-md/`, add to a long paragraph (*Extension points*, *Access and tenancy*, …) by a new fragment numbered just after it (`0185-<feature>.md`) rather than by appending to the paragraph's own file.
 - To read a whole file as it will be after your change, run `scripts/docs-index.sh` and read it, then `git checkout` the generated files before committing (or just read the fragments).
 - To turn another shared file into fragments: `scripts/docs-split.py sections|blocks <file> <dir>`, add the line to `scripts/docs-index.conf`, run `scripts/docs-index.sh`, and commit all three in one pull request.
+
+## Code: registration from a feature's own file
+
+The same rule holds for code. A new backend feature wires itself from its own file in `backend/features/wiring/` (see `CLAUDE.md` › *Wiring a feature from its own file*) instead of appending to the lists in `serve.go`, `connectorImpls`, apps/tools' `everything()` or forge's devtools catalog. Where a shared list cannot be avoided, add one line in sorted order, never at the end.
