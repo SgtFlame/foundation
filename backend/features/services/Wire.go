@@ -78,6 +78,7 @@ type Headers struct {
 	Principal   *features.PrincipalRef // nil when the call carries none
 	Tenant      uint64
 	Caller      string
+	Token       string // the call token (forge 21b)
 }
 
 // Set writes the headers onto a request.
@@ -106,11 +107,14 @@ func (h Headers) Set(hdr nats.Header) {
 	if h.Caller != "" {
 		hdr.Set(HeaderCaller, h.Caller)
 	}
+	if h.Token != "" {
+		hdr.Set(HeaderToken, h.Token)
+	}
 }
 
 // ReadHeaders reads a call's headers.
 func ReadHeaders(hdr nats.Header) (Headers, error) {
-	h := Headers{CallID: hdr.Get(HeaderCall), Trace: hdr.Get(HeaderTrace), Idempotency: hdr.Get(HeaderIdempotency), Caller: hdr.Get(HeaderCaller)}
+	h := Headers{CallID: hdr.Get(HeaderCall), Trace: hdr.Get(HeaderTrace), Idempotency: hdr.Get(HeaderIdempotency), Caller: hdr.Get(HeaderCaller), Token: hdr.Get(HeaderToken)}
 	if h.CallID == "" {
 		return h, fmt.Errorf("the call has no id")
 	}

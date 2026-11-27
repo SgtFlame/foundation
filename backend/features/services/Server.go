@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"crypto/ed25519"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -39,6 +41,12 @@ type ServerOption func(*Server)
 // Only tests and loopback use it, until the call token (forge 21b).
 func TrustHeaders() ServerOption { return func(s *Server) { s.trust = true } }
 
+// VerifyWith makes the server accept call tokens signed by any of public
+// (forge 21b): Keys.Public of the processes that make them.
+func VerifyWith(public []ed25519.PublicKey) ServerOption {
+	return func(s *Server) { s.public = public }
+}
+
 // Concurrency bounds how many calls the server runs at once (256 when
 // unset).
 func Concurrency(n int) ServerOption { return func(s *Server) { s.slots = make(chan struct{}, n) } }
@@ -48,6 +56,7 @@ type Server struct {
 	service string
 	ops     map[string]Handler
 	trust   bool
+	public  []ed25519.PublicKey
 	slots   chan struct{}
 	sub     *nats.Subscription
 	wg      sync.WaitGroup
@@ -100,7 +109,27 @@ func (s *Server) handle(m *nats.Msg) {
 		b = b.Tenant(strconv.FormatUint(h.Tenant, 10))
 	}
 	p := features.AnonymousPrincipal()
-	if h.Principal != nil {
+	var tok *Token
+	if h.Token != "" {
+		t, err := Verify(h.Token, s.public, time.Now())
+		switch {
+		case errors.Is(err, ErrExpired):
+			s.reply(ctx, m, op, start, failure{Failed(http.StatusUnauthorized, CodeExpired, "The call's token expired.")})
+			return
+		case err != nil:
+			log.Warn(ctx, "svc.call %s.%s refused: %v", s.service, op, err)
+			s.reply(ctx, m, op, start, failure{Failed(http.StatusUnauthorized, CodeUntrusted, "Who the call is for cannot be trusted.")})
+			return
+		}
+		tok = &t
+		p = t.PrincipalOf()
+		if p.TenantID != 0 {
+			b = b.Tenant(strconv.FormatUint(p.TenantID, 10))
+		}
+		if p.UserID != 0 {
+			b = b.User(strconv.FormatUint(p.UserID, 10))
+		}
+	} else if h.Principal != nil {
 		if !s.trust {
 			s.reply(ctx, m, op, start, failure{Failed(http.StatusUnauthorized, CodeUntrusted, "Who the call is for cannot be trusted.")})
 			return
@@ -111,6 +140,9 @@ func (s *Server) handle(m *nats.Msg) {
 		}
 	}
 	ctx = logging.WithContext(ctx, b)
+	if tok != nil {
+		ctx = WithToken(ctx, *tok)
+	}
 	cancel := func() {}
 	if !h.Deadline.IsZero() {
 		ctx, cancel = context.WithDeadline(ctx, h.Deadline)

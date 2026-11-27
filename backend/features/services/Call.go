@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/SgtFlame/foundation/backend/features/logging"
 	"github.com/nats-io/nats.go"
 )
@@ -26,6 +27,11 @@ type Client struct {
 	// Timeout bounds a call whose context has no deadline (DefaultTimeout
 	// when 0).
 	Timeout time.Duration
+	// Keys, in a process that runs an entry point, sign the call token of
+	// a call whose context carries none, or one for another principal
+	// (forge 21b). A process without them only forwards the tokens its
+	// calls came with.
+	Keys *Keys
 	// Retries is how many times an idempotent call is sent again when no
 	// server answers (3 when 0; -1 for none).
 	Retries int
@@ -98,9 +104,31 @@ func Call[R any](c *Client, service, op string, args any, opts ...CallOption) R 
 		Caller:      c.Caller,
 		Tenant:      a.Principal.TenantID,
 	}
+	if authz.HasAs(ctx) {
+		return finish(Failed(http.StatusForbidden, CodeAsLocal, "A check decided by a role cannot be sent to another process."), errors.New("the call runs under authz.WithAs"))
+	}
 	if a.Principal.Kind != "" {
-		ref := a.Principal.Ref()
-		h.Principal = &ref
+		tok, has := TokenFrom(ctx)
+		fresh := has && time.Until(time.Unix(tok.Expires, 0)) > 30*time.Second
+		switch {
+		case has && tok.Names(a.Principal) && (fresh || c.Keys == nil):
+			h.Token = tok.Raw()
+		case c.Keys != nil:
+			var parent *Token
+			if has && !tok.Names(a.Principal) {
+				parent = &tok
+			}
+			t, err := c.Keys.Mint(a.Principal, parent)
+			if err != nil {
+				return finish(Failed(http.StatusInternalServerError, "call_token", ""), err)
+			}
+			h.Token = t.Raw()
+		case has:
+			return finish(Failed(http.StatusForbidden, CodePrincipalChanged, "This process cannot make a call for another principal."), errors.New("no call key to narrow the token"))
+		default:
+			ref := a.Principal.Ref()
+			h.Principal = &ref
+		}
 	}
 	msg := nats.NewMsg(Subject(service, op))
 	h.Set(msg.Header)
