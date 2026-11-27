@@ -10,6 +10,7 @@ import (
 // carrying commands, subscriptions, presence, calls and the frames of the
 // live.extension contributions (UI sessions, collaboration rooms).
 type Service interface {
+	//svc:local
 	Serve(args ServeArgs) ServeResponse
 }
 

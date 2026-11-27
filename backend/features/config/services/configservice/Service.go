@@ -16,10 +16,12 @@ import (
 // secret.
 type Service interface {
 	config.Reader
+	//svc:local
 	Sections(args SectionsArgs) SectionsResponse
 	Get(args GetArgs) GetResponse
 	Set(args SetArgs) SetResponse
 	Reset(args ResetArgs) ResetResponse
+	//svc:stream
 	Watch(args WatchArgs) *WatchRequest
 }
 

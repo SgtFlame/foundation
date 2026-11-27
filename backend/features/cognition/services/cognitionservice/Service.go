@@ -12,6 +12,7 @@ import (
 type Service interface {
 	ListGraphs(args ListGraphsArgs) ListGraphsResponse
 	GetGraph(args GetGraphArgs) GetGraphResponse
+	//svc:local
 	NodeTypes(args NodeTypesArgs) NodeTypesResponse
 	ListRuns(args ListRunsArgs) ListRunsResponse
 	GetTrace(args GetTraceArgs) GetTraceResponse

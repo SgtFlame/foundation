@@ -16,6 +16,7 @@ import (
 type Service interface {
 	List(args ListArgs) ListResponse
 	Rounds(args RoundsArgs) RoundsResponse
+	//svc:stream
 	Send(args SendArgs) *SendRequest
 	Feedback(args FeedbackArgs) FeedbackResponse
 	ContextProviders(args ContextProvidersArgs) ContextProvidersResponse

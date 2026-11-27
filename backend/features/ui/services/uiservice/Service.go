@@ -14,8 +14,11 @@ type Service interface {
 	EditorKinds(args EditorKindsArgs) EditorKindsResponse
 	// Open, Event and Close are Go-only: the ui.* frames of the live
 	// connection call them (uihandlers.ContributeLive).
+	//svc:local
 	Open(args OpenArgs) OpenResponse
+	//svc:local
 	Event(args EventArgs)
+	//svc:local
 	Close(args CloseArgs)
 }
 

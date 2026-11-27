@@ -10,8 +10,11 @@ import (
 // Service reads the usage records of the principal's tenant: summed for the
 // Dashboard, or one by one (documentation/Usage.md).
 type Service interface {
+	//svc:idempotent
 	Summary(args SummaryArgs) SummaryResponse
+	//svc:idempotent
 	Records(args RecordsArgs) RecordsResponse
+	//svc:idempotent
 	Capture(args CaptureArgs) CaptureResponse
 }
 

@@ -16,6 +16,7 @@ type Service interface {
 	// OpenDoc returns the room of a document of a kind (Documents.go): a
 	// record's markdown field. Its FileID is joined as a file's is.
 	OpenDoc(args OpenDocArgs) OpenFileResponse
+	//svc:local
 	Collaborate(args CollaborateArgs) CollaborateResponse
 	// EditFile is Go-only (the kb.edit tool calls it), so it has no route.
 	EditFile(args EditFileArgs) EditFileResponse
