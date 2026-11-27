@@ -36,3 +36,7 @@ func (p *Proxy) Create(args userservice.CreateArgs) userservice.CreateResponse {
 func (p *Proxy) Update(args userservice.UpdateArgs) userservice.UpdateResponse {
 	return services.Call[userservice.UpdateResponse](p.C, Service, "Update", args)
 }
+
+func (p *Proxy) Names(args userservice.NamesArgs) userservice.NamesResponse {
+	return services.Call[userservice.NamesResponse](p.C, Service, "Names", args, services.Idempotent())
+}

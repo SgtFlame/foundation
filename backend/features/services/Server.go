@@ -218,6 +218,13 @@ func (s *Server) handle(m *nats.Msg) {
 			Debug(ctx, "svc.stream %s.%s", s.service, op)
 		return
 	}
+	if ctx.Err() != nil {
+		// The caller gave up (its deadline passed or it canceled): it
+		// already answered itself, so no reply races its own.
+		log.With("service", s.service, "op", op, "durationMs", time.Since(start).Milliseconds(), "side", "server").
+			Debug(ctx, "svc.call %s.%s ended after its caller gave up", s.service, op)
+		return
+	}
 	s.reply(ctx, m, op, start, resp)
 }
 

@@ -118,6 +118,8 @@ var Services = []services.Spec{
 			{Name: "Revoke"},
 			{Name: "Agents"},
 			{Name: "Explain"},
+			{Name: "ReadGrants", Idempotent: true},
+			{Name: "ReadRoles", Idempotent: true},
 		},
 		Proxy: func(c *services.Client) any { return authzproxy.New(c) },
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
@@ -455,6 +457,7 @@ var Services = []services.Spec{
 			{Name: "List"},
 			{Name: "Create"},
 			{Name: "Update"},
+			{Name: "Names", Idempotent: true},
 		},
 		Proxy: func(c *services.Client) any { return userproxy.New(c) },
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {

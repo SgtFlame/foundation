@@ -16,6 +16,29 @@ type Service interface {
 	// Administrator cannot demote or disable themselves, and one enabled
 	// Super Administrator always remains.
 	Update(args UpdateArgs) UpdateResponse
+	// Names gives the names of those of IDs who are members of the
+	// principal's tenant, for a relation to user (records' expansions,
+	// forge 21d-1). Only Go code calls it.
+	//svc:idempotent
+	Names(args NamesArgs) NamesResponse
+}
+
+// NamesArgs names users of the principal's tenant.
+type NamesArgs struct {
+	features.ServiceArgs
+	IDs []uint64
+}
+
+// Name is how a user is shown.
+type Name struct {
+	Username    string
+	DisplayName string
+}
+
+type NamesResponse struct {
+	Common features.ServiceResponse
+	// Users are by id, as text: a JSON object's keys are strings.
+	Users map[string]Name
 }
 
 // Summary is a user with the tenants they belong to.

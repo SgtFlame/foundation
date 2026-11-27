@@ -36,6 +36,14 @@ type Service interface {
 	// Explain decides whether a user may do an action on a resource, and
 	// why, without auditing a denial: the Access checker.
 	Explain(args ExplainArgs) ExplainResponse
+	// ReadGrants is a user's or agent's grants, expired ones included, for
+	// the policy of a process without the application database (forge
+	// 21d-1). Only service principals may call it, and only Go code.
+	//svc:idempotent
+	ReadGrants(args ReadGrantsArgs) ReadGrantsResponse
+	// ReadRoles is every tenant's custom roles, as ReadGrants.
+	//svc:idempotent
+	ReadRoles(args ReadRolesArgs) ReadRolesResponse
 }
 
 type MeArgs struct {
@@ -150,4 +158,25 @@ type ExplainArgs struct {
 type ExplainResponse struct {
 	Common   features.ServiceResponse
 	Decision authz.Decision
+}
+
+// ReadGrantsArgs names whose grants: a user's, or with Agent an agent's.
+type ReadGrantsArgs struct {
+	features.ServiceArgs
+	Agent bool
+	ID    uint64
+}
+
+type ReadGrantsResponse struct {
+	Common features.ServiceResponse
+	Grants []authz.RoleGrant
+}
+
+type ReadRolesArgs struct {
+	features.ServiceArgs
+}
+
+type ReadRolesResponse struct {
+	Common features.ServiceResponse
+	Roles  []authz.CustomRole
 }

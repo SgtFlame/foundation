@@ -23,6 +23,8 @@ func Ops(svc authzservice.Service) map[string]services.Handler {
 		"Revoke":        services.Unary(svc.Revoke),
 		"Agents":        services.Unary(svc.Agents),
 		"Explain":       services.Unary(svc.Explain),
+		"ReadGrants":    services.Unary(svc.ReadGrants),
+		"ReadRoles":     services.Unary(svc.ReadRoles),
 	}
 }
 

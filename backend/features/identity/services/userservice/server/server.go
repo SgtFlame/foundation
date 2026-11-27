@@ -16,6 +16,7 @@ func Ops(svc userservice.Service) map[string]services.Handler {
 		"List":   services.Unary(svc.List),
 		"Create": services.Unary(svc.Create),
 		"Update": services.Unary(svc.Update),
+		"Names":  services.Unary(svc.Names),
 	}
 }
 

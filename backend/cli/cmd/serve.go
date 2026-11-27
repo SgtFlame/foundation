@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -92,6 +93,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/identity/rest/userhandlers"
 	identityimpl "github.com/SgtFlame/foundation/backend/features/identity/services/identityservice/impl"
 	tenantimpl "github.com/SgtFlame/foundation/backend/features/identity/services/tenantservice/impl"
+	"github.com/SgtFlame/foundation/backend/features/identity/services/userservice"
 	userimpl "github.com/SgtFlame/foundation/backend/features/identity/services/userservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/index/rest/indexhandlers"
 	indeximpl "github.com/SgtFlame/foundation/backend/features/index/services/indexservice/impl"
@@ -614,6 +616,12 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		if err := identity.MigrateRoles(ctx, appDB, policy); err != nil {
 			return err
 		}
+		// Every process's policy drops its caches when any changes a grant
+		// (forge 21d-1).
+		policy.Broadcast(nats.Conn())
+		if _, err := policy.Follow(nats.Conn()); err != nil {
+			return err
+		}
 		authz.Install(policy)
 		if serveControlPlane {
 			// forge 20b-1: the root tenant, its Owner user 1 when it exists
@@ -892,13 +900,13 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 				}
 				return settings
 			}, Users: func(tenant uint64, ids []uint64) map[uint64]recordsdata.User {
-				var users []identity.User
-				appDB.Select("users.id", "users.username", "users.display_name").
-					Joins("JOIN memberships ON memberships.user_id = users.id AND memberships.tenant_id = ?", tenant).
-					Where("users.id IN ?", ids).Find(&users)
+				// Through identity's data service (forge 21d-1), not its database.
+				resp := userService.Names(userservice.NamesArgs{ServiceArgs: features.ServiceArgs{Ctx: context.Background(), Principal: features.ServicePrincipalFor(tenant, "record")}, IDs: ids})
 				out := map[uint64]recordsdata.User{}
-				for _, u := range users {
-					out[u.ID] = recordsdata.User{Username: u.Username, DisplayName: u.DisplayName}
+				for id, u := range resp.Users {
+					if n, err := strconv.ParseUint(id, 10, 64); err == nil {
+						out[n] = recordsdata.User{Username: u.Username, DisplayName: u.DisplayName}
+					}
 				}
 				return out
 			}}

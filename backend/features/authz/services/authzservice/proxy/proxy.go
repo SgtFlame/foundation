@@ -64,3 +64,11 @@ func (p *Proxy) Agents(args authzservice.AgentsArgs) authzservice.AgentsResponse
 func (p *Proxy) Explain(args authzservice.ExplainArgs) authzservice.ExplainResponse {
 	return services.Call[authzservice.ExplainResponse](p.C, Service, "Explain", args)
 }
+
+func (p *Proxy) ReadGrants(args authzservice.ReadGrantsArgs) authzservice.ReadGrantsResponse {
+	return services.Call[authzservice.ReadGrantsResponse](p.C, Service, "ReadGrants", args, services.Idempotent())
+}
+
+func (p *Proxy) ReadRoles(args authzservice.ReadRolesArgs) authzservice.ReadRolesResponse {
+	return services.Call[authzservice.ReadRolesResponse](p.C, Service, "ReadRoles", args, services.Idempotent())
+}

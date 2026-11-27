@@ -170,6 +170,9 @@ func TestStreamLostWhenServerGoes(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = srv
+	if err := sc.Flush(); err != nil { // the subscription reaches the server
+		t.Fatal(err)
+	}
 	idle := streamIdle
 	streamIdle = time.Second
 	defer func() { streamIdle = idle }()
