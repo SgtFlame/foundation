@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/nats-io/jwt/v2"
@@ -63,13 +64,27 @@ func (d *Deployment) Save(k Keys) error {
 	return log.Wrap(k.Put("accounts.json", b))
 }
 
-// SaveAccount writes one account after a change (limits, revocations).
+// SaveAccount writes one account after a change (limits, revocations),
+// or a new one (a tenant's), adding it to the account list.
 func (d *Deployment) SaveAccount(k Keys, name string) error {
 	a := d.Accounts[name]
 	seed, _ := a.Key.Seed()
 	sseed, _ := a.Signing.Seed()
 	b, _ := json.Marshal(savedAccount{Seed: string(seed), Signing: string(sseed), JWT: a.JWT})
-	return log.Wrap(k.Put("account-"+name+".json", b))
+	if err := k.Put("account-"+name+".json", b); err != nil {
+		return log.Wrap(err)
+	}
+	var names []string
+	if raw, err := k.Get("accounts.json"); err == nil {
+		_ = json.Unmarshal(raw, &names)
+	}
+	if slices.Contains(names, name) {
+		return nil
+	}
+	names = append(names, name)
+	slices.Sort(names)
+	raw, _ := json.Marshal(names)
+	return log.Wrap(k.Put("accounts.json", raw))
 }
 
 // Load reads a deployment Save wrote. A deployment whose operator seed was

@@ -365,7 +365,11 @@ func (b *Bus) Transact(r Request, ops []live.Op, dryRun bool) TransactResult {
 				evTargets = append(evTargets, t)
 			}
 		}
-		ack, err := project.PublishBatch(ctx, b.p.JetStream().Conn(), msgs)
+		js, err := b.p.JetStreamFor(ctx, tenant)
+		if err != nil {
+			return TransactResult{Result: Result{Common: *r.Fail(http.StatusInternalServerError, log.Wrapf(err, "cannot reach the tenant's account"))}}
+		}
+		ack, err := project.PublishBatch(ctx, js.Conn(), msgs)
 		if err != nil && project.IsConflict(err) {
 			// Someone committed since: decide again once projected
 			var keys []string

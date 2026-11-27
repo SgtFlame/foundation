@@ -17,6 +17,7 @@ import (
 // the same entry store it once.
 type Store struct {
 	js   jetstream.JetStream
+	acc  natsd.Accounts
 	mu   sync.Mutex
 	made map[uint64]jetstream.Stream
 }
@@ -35,7 +36,11 @@ func (s *Store) Stream(ctx context.Context, tenant uint64) (jetstream.Stream, er
 	if st != nil {
 		return st, nil
 	}
-	st, err := s.js.CreateOrUpdateStream(ctx, natsd.Stream(jetstream.StreamConfig{
+	js, err := natsd.For(ctx, s.acc, s.js, tenant)
+	if err != nil {
+		return nil, log.Wrap(err)
+	}
+	st, err = js.CreateOrUpdateStream(ctx, natsd.Stream(jetstream.StreamConfig{
 		Name: StreamName(tenant), Subjects: []string{Subjects(tenant)}, Storage: jetstream.FileStorage,
 		Retention: jetstream.LimitsPolicy, Discard: jetstream.DiscardOld, MaxAge: MaxHours * time.Hour, MaxMsgsPerSubject: MaxCount,
 		Duplicates: project.Duplicates, AllowMsgTTL: true, AllowDirect: true,
@@ -61,7 +66,11 @@ func (s *Store) Append(ctx context.Context, tenant, user uint64, e Entry, set Se
 		return log.Wrap(err)
 	}
 	subject := Subject(tenant, user)
-	ack, err := s.js.Publish(ctx, subject, raw, jetstream.WithMsgID(e.ID), jetstream.WithMsgTTL(max(set.Keep(), time.Second)))
+	js, err := natsd.For(ctx, s.acc, s.js, tenant)
+	if err != nil {
+		return log.Wrap(err)
+	}
+	ack, err := js.Publish(ctx, subject, raw, jetstream.WithMsgID(e.ID), jetstream.WithMsgTTL(max(set.Keep(), time.Second)))
 	if err != nil {
 		return log.Wrapf(err, "cannot record activity on %s", subject)
 	}
@@ -191,3 +200,7 @@ func (s *Store) Read(ctx context.Context, tenant, user uint64) ([]Entry, error) 
 		return nil, err
 	}
 }
+
+// SetAccounts keeps each tenant's data in its own NATS account (forge
+// 20a-3); before it is called every tenant uses the store's JetStream.
+func (x *Store) SetAccounts(a natsd.Accounts) { x.acc = a }

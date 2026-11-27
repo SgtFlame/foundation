@@ -54,6 +54,41 @@ func TestNoRawStreamConfig(t *testing.T) {
 	}
 }
 
+// TestSharedJetStreamOnlyForServices: the shared (APP) connection's
+// JetStream is used only by the connectors, whose state stays in the
+// services account (forge 20a-3); everything a tenant owns gets its
+// JetStream from Projections.JetStreamFor or natsd.For.
+func TestSharedJetStreamOnlyForServices(t *testing.T) {
+	root, err := filepath.Abs("../../..") // backend/
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared := regexp.MustCompile(`Projections\.JetStream\(\)`)
+	allowed := []string{"features/connectors/", "features/jobs/Triggers.go"} // te.Stream: CX_<tenant> is the connectors'
+	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return err
+		}
+		rel, _ := filepath.Rel(root, path)
+		for _, a := range allowed {
+			if strings.HasPrefix(filepath.ToSlash(rel), a) {
+				return nil
+			}
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		for _, m := range shared.FindAllIndex(b, -1) {
+			t.Errorf("%s:%d: use Projections.JetStreamFor(ctx, tenant): a tenant's streams are in its own account", rel, strings.Count(string(b[:m[0]]), "\n")+1)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPlacementDefaults(t *testing.T) {
 	defer SetDefault(Placement{Replicas: 1})
 	SetDefault(Placement{Replicas: 3, Cluster: "east"})

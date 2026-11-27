@@ -192,3 +192,8 @@ func StartTest(t testing.TB) *Server {
 	t.Cleanup(s.Close)
 	return s
 }
+
+// ConnectOptions are the options a connection to the deployment as o
+// describes takes (its name, creds, CA and reconnects), for tools that
+// connect without JetStream.
+func ConnectOptions(o Options, name string) []nats.Option { return o.connectOptions(name) }

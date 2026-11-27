@@ -7,6 +7,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features/controlplane/natsauth"
 	"github.com/SgtFlame/foundation/backend/features/live/natsd"
+	"github.com/nats-io/nats.go"
 	"github.com/spf13/cobra"
 )
 
@@ -119,16 +120,72 @@ var natsUserCmd = &cobra.Command{
 	},
 }
 
+var natsTenant uint64
+
+var natsTenantCmd = &cobra.Command{
+	Use:   "tenant",
+	Short: "Maintain the tenants' NATS accounts",
+}
+
+var natsTenantAddCmd = &cobra.Command{
+	Use:   "add",
+	Short: "Make a tenant's NATS account and push it to the cluster",
+	Long: `Make tenant --tenant's account T<id> (forge 20a-3), where serve run with
+--nats-keys keeps that tenant's streams and buckets. It needs the operator's
+seed (operator.nk) in --keys. With --nats-url it pushes the account to the
+running cluster as a SYS user (<keys>/sys.creds unless --nats-creds), so it
+takes effect without a restart; otherwise add it to trust.conf's preload.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		k := natsauth.DirKeys(natsKeysDir)
+		d, err := natsauth.Load(k)
+		if err != nil {
+			return err
+		}
+		if d.Operator.Key == nil {
+			return fmt.Errorf("%s has no operator.nk: bring the operator's seed back to sign a new account", natsKeysDir)
+		}
+		a, err := d.AddTenant(natsTenant, natsauth.Limits{})
+		if err != nil {
+			return err
+		}
+		if err := d.SaveAccount(k, a.Name); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "account %s (%s) saved\n", a.Name, a.Public())
+		o := natsd.Options{URL: natsURL, Creds: natsCreds, CA: natsCA}.WithEnv()
+		if o.URL == "" {
+			return nil
+		}
+		if natsCreds == "" {
+			o.Creds = filepath.Join(natsKeysDir, "sys.creds")
+		}
+		nc, err := nats.Connect(o.URL, natsd.ConnectOptions(o, "cli nats tenant add")...)
+		if err != nil {
+			return err
+		}
+		defer nc.Close()
+		if err := natsauth.Push(nc, a); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "account %s pushed\n", a.Name)
+		return nil
+	},
+}
+
 func init() {
 	home, _ := os.UserHomeDir()
-	for _, c := range []*cobra.Command{natsInitCmd, natsUserCmd} {
+	natsTenantAddCmd.Flags().Uint64Var(&natsTenant, "tenant", 0, "the tenant's id")
+	_ = natsTenantAddCmd.MarkFlagRequired("tenant")
+	natsTenantCmd.AddCommand(natsTenantAddCmd)
+	natsCmd.AddCommand(natsTenantCmd)
+	for _, c := range []*cobra.Command{natsInitCmd, natsUserCmd, natsTenantAddCmd} {
 		c.Flags().StringVar(&natsKeysDir, "keys", filepath.Join(home, ".foundation", "nats-keys"), "where the deployment's keys are kept")
 	}
 	natsUserCmd.Flags().StringVar(&natsAccount, "account", natsauth.App, "the account")
 	natsUserCmd.Flags().StringVar(&natsUser, "name", "serve", "the user's name")
 	natsCmd.AddCommand(natsInitCmd, natsUserCmd)
 
-	for _, c := range []*cobra.Command{natsReplicasCmd} {
+	for _, c := range []*cobra.Command{natsReplicasCmd, natsTenantAddCmd} {
 		c.Flags().StringVar(&natsURL, "nats-url", "", "the cluster's URLs, comma separated (default $FOUNDATION_NATS_URL)")
 		c.Flags().StringVar(&natsCreds, "nats-creds", "", "a credentials file (default $FOUNDATION_NATS_CREDS)")
 		c.Flags().StringVar(&natsCA, "nats-ca", "", "the deployment's CA certificate (default $FOUNDATION_NATS_CA)")

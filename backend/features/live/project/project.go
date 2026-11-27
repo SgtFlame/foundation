@@ -28,6 +28,7 @@ const Duplicates = 10 * time.Minute
 // Projections is the live core's streams and projection buckets.
 type Projections struct {
 	js       jetstream.JetStream
+	acc      natsd.Accounts // each tenant's account (forge 20a-3); nil: js for every tenant
 	reg      *extensions.Registry
 	mu       sync.Mutex
 	streams  map[string]jetstream.Stream
@@ -47,8 +48,22 @@ func New(js jetstream.JetStream, reg *extensions.Registry) *Projections {
 		running: map[string]jetstream.ConsumeContext{}, ctx: ctx, cancel: cancel}
 }
 
-// JetStream is the connection the projections use.
+// JetStream is the shared connection: the application account, where
+// what is not one tenant's lives (connectors' state, forge 20a-3). A
+// tenant's own streams and buckets are reached through JetStreamFor.
 func (p *Projections) JetStream() jetstream.JetStream { return p.js }
+
+// SetAccounts gives each tenant its own NATS account (forge 20a-3); call
+// it before the first use.
+func (p *Projections) SetAccounts(a natsd.Accounts) { p.acc = a }
+
+// JetStreamFor is the JetStream holding the tenant's streams and buckets.
+func (p *Projections) JetStreamFor(ctx context.Context, tenant uint64) (jetstream.JetStream, error) {
+	if p.acc == nil {
+		return p.js, nil
+	}
+	return p.acc.For(ctx, tenant)
+}
 
 // Registry is the registry the projectors come from.
 func (p *Projections) Registry() *extensions.Registry { return p.reg }
@@ -90,17 +105,21 @@ func (p *Projections) Stream(ctx context.Context, tenant uint64, area live.Area)
 	if s != nil {
 		return s, nil
 	}
-	s, err := made(func() (jetstream.Stream, error) {
+	js, err := p.JetStreamFor(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	s, err = made(func() (jetstream.Stream, error) {
 		cfg := natsd.Stream(jetstream.StreamConfig{
 			Name: name, Subjects: []string{live.StreamSubjects(tenant, area)}, Storage: jetstream.FileStorage,
 			Retention: jetstream.LimitsPolicy, Duplicates: Duplicates, AllowDirect: true, AllowAtomicPublish: true,
 		})
 		// an existing stream keeps its replicas: raising them is
 		// `cli nats replicas`'s, never a side effect of first use
-		if old, err := p.js.Stream(ctx, name); err == nil {
+		if old, err := js.Stream(ctx, name); err == nil {
 			cfg.Replicas, cfg.Placement = old.CachedInfo().Config.Replicas, old.CachedInfo().Config.Placement
 		}
-		return p.js.CreateOrUpdateStream(ctx, cfg)
+		return js.CreateOrUpdateStream(ctx, cfg)
 	})
 	if err != nil {
 		return nil, log.Wrapf(err, "cannot make the event stream %s", name)
@@ -154,13 +173,17 @@ func (p *Projections) Bucket(ctx context.Context, tenant uint64, projector strin
 	if err != nil {
 		return nil, err
 	}
+	js, err := p.JetStreamFor(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
 	kv, err = made(func() (jetstream.KeyValue, error) {
-		return p.js.CreateOrUpdateKeyValue(ctx, natsd.KV(jetstream.KeyValueConfig{Bucket: name, Description: pr.Title, History: 1, Storage: jetstream.FileStorage}))
+		return js.CreateOrUpdateKeyValue(ctx, natsd.KV(jetstream.KeyValueConfig{Bucket: name, Description: pr.Title, History: 1, Storage: jetstream.FileStorage}))
 	})
 	if err != nil {
 		return nil, log.Wrapf(err, "cannot make the projection %s", name)
 	}
-	if err := p.allowAtomic(ctx, "KV_"+name); err != nil {
+	if err := p.allowAtomic(ctx, js, "KV_"+name); err != nil {
 		return nil, err
 	}
 	if err := p.run(ctx, tenant, pr, stream, kv); err != nil {
@@ -174,8 +197,8 @@ func (p *Projections) Bucket(ctx context.Context, tenant uint64, projector strin
 
 // allowAtomic lets a bucket's stream take atomic batches, so a batch of
 // events is written to a projection all at once.
-func (p *Projections) allowAtomic(ctx context.Context, stream string) error {
-	s, err := p.js.Stream(ctx, stream)
+func (p *Projections) allowAtomic(ctx context.Context, js jetstream.JetStream, stream string) error {
+	s, err := js.Stream(ctx, stream)
 	if err != nil {
 		return log.Wrapf(err, "cannot read the stream %s", stream)
 	}
@@ -184,7 +207,7 @@ func (p *Projections) allowAtomic(ctx context.Context, stream string) error {
 		return nil
 	}
 	cfg.AllowAtomicPublish = true
-	if _, err := p.js.UpdateStream(ctx, cfg); err != nil {
+	if _, err := js.UpdateStream(ctx, cfg); err != nil {
 		return log.Wrapf(err, "cannot allow atomic batches on %s", stream)
 	}
 	return nil
@@ -465,7 +488,10 @@ func (p *Projections) fold(pr live.Projector, kv jetstream.KeyValue, msg jetstre
 	case len(writes) == 1:
 		err = write(ctx, kv, writes[0].key, writes[0].raw, writes[0].rev)
 	case len(writes) > 1:
-		err = writeBatch(ctx, p.js.Conn(), kv.Bucket(), writes)
+		var js jetstream.JetStream
+		if js, err = p.JetStreamFor(ctx, e.TenantID); err == nil {
+			err = writeBatch(ctx, js.Conn(), kv.Bucket(), writes)
+		}
 	}
 	if err != nil {
 		if errors.Is(err, jetstream.ErrKeyExists) {
@@ -577,7 +603,11 @@ func (p *Projections) Side(ctx context.Context, tenant uint64, name string) (jet
 	if kv != nil {
 		return kv, nil
 	}
-	kv, err := p.js.CreateOrUpdateKeyValue(ctx, natsd.KV(jetstream.KeyValueConfig{Bucket: bucket, History: 1, Storage: jetstream.FileStorage}))
+	js, err := p.JetStreamFor(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	kv, err = js.CreateOrUpdateKeyValue(ctx, natsd.KV(jetstream.KeyValueConfig{Bucket: bucket, History: 1, Storage: jetstream.FileStorage}))
 	if err != nil {
 		return nil, log.Wrapf(err, "cannot make the bucket %s", bucket)
 	}
