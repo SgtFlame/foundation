@@ -538,6 +538,15 @@ The jump drive: the first part made from something the moon's ground does not gi
 - **Jumping**: `ship/Jump.ts` (`jumpTarget`, `canJump`): from the cockpit, M jumps a ship with a drive and at least half its battery (`JUMP_CHARGE`) to `JUMP_HEIGHT` (60 m) above the other body's top, the planet from the moon and the moon from the planet, spending half its charge; the pilot saves the place with `game.flyShip`, which has never limited distance.
 - Keys: M at the fabricator makes a drive, M by a ship fits it, M in the seat jumps. `TestJumpDrive` checks the coil and the refusals; `Jump.test.ts` and the Fabricator test the rest.
 
+## Built in S26 (forge 375)
+
+The well: with both hearths warded, the Hollowed's next way in.
+
+- Step `well`; the fold gives `items.welllore`.
+- `story/Well.ts`: `wellSpot(pieces, cell)` (the yard piece's well, where `Models.ts` draws it), `wellReady(done)` (both `hearthward` and `farmward`, not yet `well`), and the lines.
+- Once Wenlan's hearth is warded, frost rings the well's stones (drawn in `drawMarks`) and the senses layer smells *frost, at noon* from it; walking to the well reaches the step.
+- Tests: `story_test` (`well`), `Well.test.ts`, and the step order in `FirstHourStory.test.ts`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

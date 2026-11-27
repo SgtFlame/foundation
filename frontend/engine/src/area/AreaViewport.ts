@@ -20,6 +20,7 @@ import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../sto
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
+import { WELL_LINE, WELL_REACH, WELL_SENSE, wellReady, wellSpot } from '../story/Well.ts'
 import { bankSageReady, bankSageSpot, FARM_WARD_LINE, FARM_WARDED_NIGHT, HEARTH_REACH, HEARTH_WARD_LINE, hearthStonesReady, hearthWarded, hearthWardMissing, hearthWardReady, nextHearthWard, SAGE_LINE, SAGE_REACH, wardSpots } from '../story/HearthWard.ts'
 import { TRIED_DOOR_LINE, TRIED_LINE, TRIED_LOST, TRIED_NIGHT, triedReady } from '../story/Tried.ts'
 import { riverStonesReady, STONES_LINE, STONES_REACH, thresholdSpot, WARD_LINE, WARD_REACH, wardedNight, wardMissing, wardReady } from '../story/Ward.ts'
@@ -1803,6 +1804,13 @@ export class AreaViewport {
     this.drawHerbs()
     this.drawStones()
     const st = this.story
+    // S26: frost on the well's stones once the hearths are shut
+    const well = st && this.area.id === st.area && st.done.farmward && !this.set.interior ? wellSpot(Object.values(this.area.pieces), this.set.cell) : null
+    if (well) {
+      const frost = new THREE.Mesh(new THREE.RingGeometry(1.25, 1.9, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicNodeMaterial({ color: 0xdfeaf2, transparent: true, opacity: 0.7 }))
+      frost.position.set(well.x, 0.06, well.z)
+      this.marks.add(frost)
+    }
     if (!st || this.area.id !== st.area || !st.done.howl) return
     const c = this.set.cell
     const yard = Object.values(this.area.pieces).find((p) => p.piece === 'yard')
@@ -2020,6 +2028,7 @@ export class AreaViewport {
     this.stepCache(p)
     this.stepBundles(p)
     this.stepFarmWard(p)
+    this.stepWell(p)
     this.stepSenses(p)
     this.savePlace()
   }
@@ -2134,6 +2143,18 @@ export class AreaViewport {
       } else this.say(hearthWardMissing(st.items))
     }
     this.atFarmStone = at
+  }
+
+  // S26: the frost-cold well in the yard, once both hearths are warded
+  private stepWell(p: { x: number; z: number }): void {
+    const st = this.story!
+    if (this.set.interior || this.area.id !== st.area || !wellReady(st.done)) return
+    const w = wellSpot(Object.values(this.area.pieces), this.set.cell)
+    if (!w || Math.hypot(p.x - w.x, p.z - w.z) > WELL_REACH) return
+    st.items.welllore = 1
+    this.reach('well')
+    this.drawMarks()
+    this.say(WELL_LINE)
   }
 
   // S20: walking up to a bundle takes it into the herbal; the sill tells the moons
@@ -2276,6 +2297,9 @@ export class AreaViewport {
     }
     if (!st || this.area.id !== st.area) return []
     const out: Source[] = []
+    // S26: the well, frost-cold once both hearths are shut
+    const well = wellReady(st.done) ? wellSpot(Object.values(this.area.pieces), this.set.cell) : null
+    if (well) out.push({ id: 'well', ...well, sense: 'smell', text: WELL_SENSE, from: 'from the well', range: 30 })
     if (st.done.howl && !st.done.signature && this.signature) {
       out.push({ id: 'signature', ...this.signature, sense: 'smell', text: 'Old pennies, and scorched snow', from: 'out by the well', range: 30 })
     }
