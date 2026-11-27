@@ -83,6 +83,13 @@ type Read struct {
 	Projector string `json:"projector"`
 	Key       string `json:"key"`
 	Pattern   bool   `json:"pattern,omitempty"`
+	// Checked, with Seq the value's sequence when it was read (0 when
+	// absent), lets the watch see a change folded between the read and the
+	// watch's start: a key's first entry at another sequence runs the
+	// query again (Read projection sets them; a projector started by the
+	// read itself, such as an app's, folds right after it, forge 26d-4).
+	Checked bool   `json:"-"`
+	Seq     uint64 `json:"-"`
 }
 
 // patternDebounce is how long a query graph that read a key pattern waits
@@ -426,7 +433,11 @@ func RunQuery(f live.Feed, d Deps, q QueryRun) error {
 						started = true
 						continue
 					}
-					if started {
+					seq := e.Value.Seq
+					if e.Deleted {
+						seq = 0
+					}
+					if started || (r.Checked && seq != r.Seq) {
 						select {
 						case changed <- struct{}{}:
 						default:

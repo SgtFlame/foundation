@@ -57,10 +57,17 @@ The manifest gives four tools to chat and agents: `nexus.readChannel` and `nexus
 - **App queries reach an app's users.** An installed app's query whose spec says `record.read` used to be checked on the tenant, which no app role holds. It is now checked as the app's reach: `record.read` on any of the app's own entity types (`installs.reaches`). Its graph still reads only what row rules allow.
 - **`notifications.Ensure` caches per projections**, so a test's fresh server is asked again.
 
+## Changed in forge 26d-4
+
+The Messaging app (Forge's starter library) is the pages over this app. For it:
+- `channels` gives each direct conversation's `peerName`, the other person's name, so a list can show it without reading users.
+- A query graph that reads an app projection with *Read projection* now runs again when the key changed between its read and its watch's start (Foundation `live/nodes`, `Read.Checked`/`Seq`). An app projector starts on its first read, so its first folds land right after that read, and `unread` used to stay at its first count.
+- `TestChannels` follows `unread` live.
+
 ## Tests
 
 `go test ./features/nexus`:
-- `TestChannels` covers posting, joining, retries, unread counts, mark read, editing, deleting, reactions, mentions and archiving.
+- `TestChannels` covers posting, a live `unread` subscription, joining, retries, unread counts, mark read, editing, deleting, reactions, mentions and archiving.
 - `TestPrivateChannels` covers hiding, adding, a forged membership, leaving and direct conversations.
 - `TestDocument` checks the blueprints-only document.
 

@@ -2,6 +2,7 @@ package nexus_test
 
 import (
 	"context"
+	"sync"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -29,6 +30,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/identity"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
+	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	livenodes "github.com/SgtFlame/foundation/backend/features/live/nodes"
@@ -302,7 +304,20 @@ func TestChannels(t *testing.T) {
 	if got := s.find(ana, nexus.EntityMessage, map[string]any{"channel": "c1"}); len(got) != 1 {
 		t.Fatalf("one message posted twice made %d", len(got))
 	}
+	// A live subscription to the counts follows the next message
+	counts := &sink{}
+	{
+		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(cancel)
+		args := user(ana)
+		args.Ctx = ctx
+		if fail := s.subs.Open(subscribe.OpenArgs{ServiceArgs: args, Query: "nexus.unread", Params: json.RawMessage(`{"channel":"c1"}`), Sink: counts}); fail != nil {
+			t.Fatal(fail.Message)
+		}
+		until(t, "the counts' snapshot", func() bool { return counts.count() == 1 })
+	}
 	s.ok(ana, "message.post", "m2", map[string]any{"channel": "c1", "text": "welcome"})
+	until(t, "the live counts", func() bool { return counts.count() == 2 })
 
 	// The unread projector counts them; marking read follows
 	until(t, "the channel's count", func() bool {
@@ -428,4 +443,26 @@ func TestDocument(t *testing.T) {
 	if problems := apps.CheckDocument(d, apps.DocumentEnvOf(s.reg)); len(problems) > 0 {
 		t.Fatalf("%+v", problems)
 	}
+}
+
+// sink keeps a live query's value.
+type sink struct {
+	mu    sync.Mutex
+	value any
+}
+
+func (k *sink) Snapshot(v any, _ live.Position) { k.mu.Lock(); k.value = v; k.mu.Unlock() }
+func (k *sink) Change(d live.Delta, _ live.Position) {
+	k.mu.Lock()
+	k.value = live.Apply(k.value, d)
+	k.mu.Unlock()
+}
+func (k *sink) Failed(features.ServiceResponse) {}
+func (k *sink) count() float64 {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	raw, _ := json.Marshal(k.value)
+	var v struct{ Count float64 }
+	_ = json.Unmarshal(raw, &v)
+	return v.Count
 }

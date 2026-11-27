@@ -1,14 +1,14 @@
 {
   "id": "qry-nexus-channels",
   "name": "channels",
-  "description": "The caller's channels and direct conversations, from their memberships ({channels: [{id, name, topic, kind, private, archived, peer, role, seen}]}), named channels by name, then direct conversations; with the unread query per channel for its counts.",
+  "description": "The caller's channels and direct conversations, from their memberships ({channels: [{id, name, topic, kind, private, archived, peer, peerName, role, seen}]}), named channels by name, then direct conversations; with the unread query per channel for its counts.",
   "kind": "data.query",
   "version": 1,
   "owner": "app:nexus",
   "spec": {
     "query": "channels",
     "title": "My channels",
-    "description": "The caller's channels and direct conversations, from their memberships ({channels: [{id, name, topic, kind, private, archived, peer, role, seen}]}), named channels by name, then direct conversations; with the unread query per channel for its counts.",
+    "description": "The caller's channels and direct conversations, from their memberships ({channels: [{id, name, topic, kind, private, archived, peer, peerName, role, seen}]}), named channels by name, then direct conversations; with the unread query per channel for its counts.",
     "params": {
       "type": "object",
       "properties": {}
@@ -59,6 +59,29 @@
       }
     },
     {
+      "id": "dq",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "type": "json",
+        "expr": "{where: {kind: \"direct\"}, limit: 1000, expand: [\"owner\", \"peer\"]}"
+      }
+    },
+    {
+      "id": "dms",
+      "type": "records.query",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "entity": "nexusChannel"
+      }
+    },
+    {
       "id": "out",
       "type": "data.expression",
       "position": {
@@ -67,7 +90,7 @@
       },
       "config": {
         "type": "json",
-        "expr": "let rows = map(filter(mine ?? [], #._expanded?.channel != nil), { let c = #._expanded.channel;\n  ({id: c._id, name: c.name ?? \"\", topic: c.topic ?? \"\", kind: c.kind ?? \"channel\", private: c.private ?? false, archived: c.archived ?? false,\n    peer: string(c.owner ?? \"\") == me ? string(c.peer ?? \"\") : string(c.owner ?? \"\"), role: #.role ?? \"member\", seen: #.seen ?? 0}) });\n{channels: concat(sortBy(filter(rows, #.kind != \"direct\"), #.name), filter(rows, #.kind == \"direct\"))}"
+        "expr": "let names = fromPairs(map(dms ?? [], [#._id, string(#.owner ?? \"\") == me ? string(#._expanded?.peer?._title ?? \"\") : string(#._expanded?.owner?._title ?? \"\")]));\nlet rows = map(filter(mine ?? [], #._expanded?.channel != nil), { let c = #._expanded.channel;\n  ({id: c._id, name: c.name ?? \"\", topic: c.topic ?? \"\", kind: c.kind ?? \"channel\", private: c.private ?? false, archived: c.archived ?? false,\n    peer: string(c.owner ?? \"\") == me ? string(c.peer ?? \"\") : string(c.owner ?? \"\"), peerName: names[c._id] ?? \"\", role: #.role ?? \"member\", seen: #.seen ?? 0}) });\n{channels: concat(sortBy(filter(rows, #.kind != \"direct\"), #.name), filter(rows, #.kind == \"direct\"))}"
       }
     },
     {
@@ -117,6 +140,26 @@
       "to": {
         "node": "out",
         "pin": "mine"
+      }
+    },
+    {
+      "from": {
+        "node": "dq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "dms",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "dms",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "dms"
       }
     },
     {

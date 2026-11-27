@@ -92,7 +92,7 @@
     {
       "name": "channels",
       "graph": "qry-nexus-channels",
-      "description": "The caller's channels and direct conversations, from their memberships ({channels: [{id, name, topic, kind, private, archived, peer, role, seen}]}), named channels by name, then direct conversations; with the unread query per channel for its counts."
+      "description": "The caller's channels and direct conversations, from their memberships ({channels: [{id, name, topic, kind, private, archived, peer, peerName, role, seen}]}), named channels by name, then direct conversations; with the unread query per channel for its counts."
     },
     {
       "name": "messages",
