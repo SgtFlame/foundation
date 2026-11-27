@@ -1,0 +1,205 @@
+{
+  "id": "calendar-onOutsideRemoved",
+  "name": "An outside event was removed",
+  "description": "On calendar.events@1's eventRemoved, enqueues a delta sync (the calendar-pull job, keyed by the calendar, so a burst of notices runs one at a time) of each calendar record mirroring the noticed calendar of that connection.",
+  "kind": "app.trigger",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "connector.on",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "contract": "calendar.events@1",
+        "event": "eventRemoved",
+        "outputs": [
+          {
+            "id": "id",
+            "name": "Id",
+            "type": "string",
+            "description": "The notice's own id, unique"
+          },
+          {
+            "id": "calendar",
+            "name": "Calendar",
+            "type": "string",
+            "description": "The calendar's id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "query",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "{where: {connection: connection}, limit: 500}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "cals",
+      "type": "records.query",
+      "title": "The connection's calendars here",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "ids",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "map(filter(records ?? [], string(#.outsideId ?? \"\") == calendar), string(#._id))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "each",
+      "type": "flow.forEach",
+      "position": {
+        "x": 1360,
+        "y": 0
+      }
+    },
+    {
+      "id": "inputs",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "{calendar: item, full: false}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "enqueue",
+      "type": "jobs.enqueue",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "graph": "calendar-pull"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "connection"
+      },
+      "to": {
+        "node": "query",
+        "pin": "connection"
+      }
+    },
+    {
+      "from": {
+        "node": "query",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cals",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "cals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "ids",
+        "pin": "records"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "calendar"
+      },
+      "to": {
+        "node": "ids",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "each",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "ids",
+        "pin": "value"
+      },
+      "to": {
+        "node": "each",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "body"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "inputs",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "inputs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "inputs"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "key"
+      }
+    }
+  ]
+}

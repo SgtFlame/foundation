@@ -1,0 +1,401 @@
+{
+  "id": "calendar-syncEvent",
+  "name": "Sync an event",
+  "description": "Keeps a one-off's or series master's occurrences in step with it, as a job: plans the 14-day slices of its calendar's window that need a sync (every slice for a series; for a one-off, those holding its start or an occurrence it had) and sends calendar.occurrences.sync for each, since one command writes at most a slice's occurrences. Enqueued by the app's triggers, keyed by the event, so one event's syncs run one at a time.",
+  "kind": "server.action",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "event",
+            "type": "string",
+            "description": "The one-off's or series master's id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ev",
+      "type": "records.get",
+      "title": "The event",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "entity": "calEvent"
+      }
+    },
+    {
+      "id": "occQuery",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "{where: {series: event}, limit: 2000}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "occs",
+      "type": "records.query",
+      "title": "The occurrences it has",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "calOccurrence"
+      }
+    },
+    {
+      "id": "calId",
+      "type": "data.expression",
+      "title": "Its calendar",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "string(ev?.calendar ?? (len(occs ?? []) \u003e 0 ? occs[0].calendar : \"\"))",
+        "type": "string"
+      }
+    },
+    {
+      "id": "cal",
+      "type": "records.get",
+      "title": "The calendar",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "clock",
+      "type": "data.now",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "slices",
+      "type": "data.expression",
+      "title": "The slices to sync",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "let n = date(clock);\nlet cf = (cal?.windowFrom ?? \"\") != \"\" ? cal.windowFrom + \"T00:00:00Z\" : n.Add(duration(\"-2160h\")).UTC().Format(\"2006-01-02T15:04:05Z\");\nlet ct = (cal?.windowTo ?? \"\") != \"\" ? cal.windowTo + \"T00:00:00Z\" : n.Add(duration(\"8760h\")).UTC().Format(\"2006-01-02T15:04:05Z\");\nlet total = max(int((date(ct) - date(cf)).Hours() / 336) + 1, 1);\nlet every = map(0..(total - 1), { let e = date(cf).Add(duration(string((# + 1) * 336) + \"h\")).UTC().Format(\"2006-01-02T15:04:05Z\"); ({from: date(cf).Add(duration(string(# * 336) + \"h\")).UTC().Format(\"2006-01-02T15:04:05Z\"), to: e \u003c ct ? e : ct}) });\nlet recurring = ev != nil \u0026\u0026 ((ev.rrule ?? \"\") != \"\" || len(ev.rdate ?? []) \u003e 0);\nlet slots = map(concat(ev != nil ? [string(ev.start)] : [], map(occs ?? [], string(#.recurrenceId ?? \"\"))), len(#) == 10 ? # + \"T00:00:00Z\" : #);\nrecurring ? every : filter(every, { let s = #; any(slots, # \u003e= s.from \u0026\u0026 # \u003c s.to) })",
+        "type": "json"
+      }
+    },
+    {
+      "id": "each",
+      "type": "flow.forEach",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "expr": "{from: item.from, to: item.to, now: string(clock)}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "sync",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "command": "calendar.occurrences.sync"
+      }
+    },
+    {
+      "id": "fail",
+      "type": "jobs.fail",
+      "position": {
+        "x": 3060,
+        "y": 0
+      },
+      "config": {
+        "retryable": true
+      }
+    },
+    {
+      "id": "done",
+      "type": "flow.return",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "slices",
+            "type": "number"
+          }
+        ]
+      }
+    },
+    {
+      "id": "count",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 200
+      },
+      "config": {
+        "expr": "len(slices ?? [])",
+        "type": "number"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "event"
+      },
+      "to": {
+        "node": "ev",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "event"
+      },
+      "to": {
+        "node": "occQuery",
+        "pin": "event"
+      }
+    },
+    {
+      "from": {
+        "node": "occQuery",
+        "pin": "value"
+      },
+      "to": {
+        "node": "occs",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "ev",
+        "pin": "record"
+      },
+      "to": {
+        "node": "calId",
+        "pin": "ev"
+      }
+    },
+    {
+      "from": {
+        "node": "occs",
+        "pin": "records"
+      },
+      "to": {
+        "node": "calId",
+        "pin": "occs"
+      }
+    },
+    {
+      "from": {
+        "node": "calId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cal",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "clock",
+        "pin": "time"
+      },
+      "to": {
+        "node": "slices",
+        "pin": "clock"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "record"
+      },
+      "to": {
+        "node": "slices",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "ev",
+        "pin": "record"
+      },
+      "to": {
+        "node": "slices",
+        "pin": "ev"
+      }
+    },
+    {
+      "from": {
+        "node": "occs",
+        "pin": "records"
+      },
+      "to": {
+        "node": "slices",
+        "pin": "occs"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "each",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "slices",
+        "pin": "value"
+      },
+      "to": {
+        "node": "each",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "args",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "clock",
+        "pin": "time"
+      },
+      "to": {
+        "node": "args",
+        "pin": "clock"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "body"
+      },
+      "to": {
+        "node": "sync",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "event"
+      },
+      "to": {
+        "node": "sync",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "sync",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "sync",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "fail",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "sync",
+        "pin": "message"
+      },
+      "to": {
+        "node": "fail",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "done",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "slices",
+        "pin": "value"
+      },
+      "to": {
+        "node": "count",
+        "pin": "slices"
+      }
+    },
+    {
+      "from": {
+        "node": "count",
+        "pin": "value"
+      },
+      "to": {
+        "node": "done",
+        "pin": "slices"
+      }
+    }
+  ]
+}

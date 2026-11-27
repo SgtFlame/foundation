@@ -1,0 +1,198 @@
+{
+  "id": "fn-calendar-listEvents",
+  "name": "List events",
+  "description": "The occurrences on the calendars the caller may see inside a window, in time order, each with its event's title, or only Busy on a calendar shared with them as free/busy. Args {from, to, calendars?}.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "from",
+            "type": "string",
+            "description": "The window's start, RFC 3339"
+          },
+          {
+            "id": "to",
+            "type": "string",
+            "description": "The window's end (exclusive), RFC 3339"
+          },
+          {
+            "id": "calendars",
+            "type": "json",
+            "optional": true,
+            "description": "Calendar ids to list; every calendar the caller may see when left out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "query",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "{filter: {\"and\": concat([{field: \"start\", op: \"lt\", value: to}, ({field: \"end\", op: \"gt\", value: from})], len(calendars ?? []) \u003e 0 ? [{field: \"calendar\", op: \"in\", value: calendars}] : [])}, sort: [{field: \"start\"}], limit: 500, expand: [\"event\", \"calendar\"]}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "occ",
+      "type": "records.query",
+      "title": "The occurrences in the window",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "calOccurrence"
+      }
+    },
+    {
+      "id": "events",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "map(filter(records ?? [], (#.status ?? \"confirmed\") != \"cancelled\"), ({id: #._id, event: string(#.event), series: string(#.series ?? \"\"), calendar: string(#.calendar), calendarName: #._expanded?.calendar?.name ?? \"\", title: #._expanded?.event == nil ? \"Busy\" : (#._expanded.event.title ?? \"\"), location: #._expanded?.event?.location ?? \"\", start: #.start, end: #.end, allDay: #.allDay ?? false, recurrenceId: #.recurrenceId ?? \"\", recurring: string(#.series ?? \"\") != \"\" \u0026\u0026 (#._expanded?.event?.rrule ?? \"\") != \"\" || string(#.series ?? \"\") != string(#.event), busy: (#.transparency ?? \"opaque\") != \"transparent\", details: #._expanded?.event != nil}))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "count",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "len(events)",
+        "type": "number"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "events",
+            "type": "json"
+          },
+          {
+            "id": "count",
+            "type": "number"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "from"
+      },
+      "to": {
+        "node": "query",
+        "pin": "from"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "to"
+      },
+      "to": {
+        "node": "query",
+        "pin": "to"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendars"
+      },
+      "to": {
+        "node": "query",
+        "pin": "calendars"
+      }
+    },
+    {
+      "from": {
+        "node": "query",
+        "pin": "value"
+      },
+      "to": {
+        "node": "occ",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "occ",
+        "pin": "records"
+      },
+      "to": {
+        "node": "events",
+        "pin": "records"
+      }
+    },
+    {
+      "from": {
+        "node": "events",
+        "pin": "value"
+      },
+      "to": {
+        "node": "count",
+        "pin": "events"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "events",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "events"
+      }
+    },
+    {
+      "from": {
+        "node": "count",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "count"
+      }
+    }
+  ]
+}

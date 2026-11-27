@@ -1,0 +1,69 @@
+{
+  "id": "calHold",
+  "name": "Hold",
+  "owner": "app:calendar",
+  "description": "Tentative time held on someone's calendar while a meeting is being agreed (forge 28h); declared in 28e, used from 28h.",
+  "titleField": "title",
+  "fields": [
+    {
+      "id": "title",
+      "name": "Title",
+      "type": "text",
+      "description": "What the time is held for"
+    },
+    {
+      "id": "calendar",
+      "name": "Calendar",
+      "type": "relation",
+      "description": "Where it is held",
+      "relation": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "slots",
+      "name": "Slots",
+      "type": "json",
+      "description": "The slots held: [{start, end, event}]"
+    },
+    {
+      "id": "status",
+      "name": "Status",
+      "type": "enum",
+      "description": "open, chosen or released",
+      "options": [
+        {
+          "id": "open",
+          "name": "Open"
+        },
+        {
+          "id": "chosen",
+          "name": "Chosen"
+        },
+        {
+          "id": "released",
+          "name": "Released"
+        }
+      ],
+      "default": "open"
+    },
+    {
+      "id": "expires",
+      "name": "Expires",
+      "type": "dateTime",
+      "description": "When the held time is released if nothing is chosen"
+    },
+    {
+      "id": "subject",
+      "name": "Subject",
+      "type": "json",
+      "description": "What it is about: {entity, id} (a mail thread, a conversation)"
+    }
+  ],
+  "access": {
+    "read": "principal.kind == 'app' || principal.owner || principal.hasRole('calWriter', record.calendar)",
+    "create": "principal.kind == 'app' || principal.hasRole('calWriter', record.calendar)",
+    "update": "principal.kind == 'app' || principal.hasRole('calWriter', record.calendar)",
+    "delete": "principal.kind == 'app' || principal.hasRole('calWriter', record.calendar)"
+  }
+}

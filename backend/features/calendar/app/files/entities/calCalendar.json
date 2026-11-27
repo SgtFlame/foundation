@@ -1,0 +1,125 @@
+{
+  "id": "calCalendar",
+  "name": "Calendar",
+  "owner": "app:calendar",
+  "description": "A calendar of the Calendar library app (forge 28e): a person's own, a team's (no owner) or a room's, native or mirrored from an outside calendar through a connection. Who may see and change it is its grants: whoever made it holds Calendar writer on it, and sharing grants writer, reader or free/busy (calendar.share).",
+  "titleField": "name",
+  "fields": [
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "The calendar's name",
+      "required": true
+    },
+    {
+      "id": "color",
+      "name": "Colour",
+      "type": "text",
+      "description": "A theme palette name (primary, secondary, success, warning, error, info) or a CSS colour"
+    },
+    {
+      "id": "zone",
+      "name": "Time zone",
+      "type": "text",
+      "description": "The IANA zone its events are made in by default, e.g. Europe/London"
+    },
+    {
+      "id": "owner",
+      "name": "Owner",
+      "type": "relation",
+      "description": "Whose calendar it is; none for a team calendar or a room",
+      "relation": {
+        "entity": "user"
+      }
+    },
+    {
+      "id": "room",
+      "name": "Room",
+      "type": "bool",
+      "description": "A room: a team calendar people book"
+    },
+    {
+      "id": "connection",
+      "name": "Connection",
+      "type": "connection",
+      "description": "The outside calendar's connection (calendar.events@1); empty for a native calendar",
+      "contract": "calendar.events@1"
+    },
+    {
+      "id": "outsideId",
+      "name": "Outside id",
+      "type": "text",
+      "description": "The calendar's id at the outside service"
+    },
+    {
+      "id": "syncCursor",
+      "name": "Sync cursor",
+      "type": "text",
+      "description": "The outside calendar's change cursor (28f)"
+    },
+    {
+      "id": "windowFrom",
+      "name": "Window from",
+      "type": "date",
+      "description": "The first day mirrored and expanded; 90 days back when empty"
+    },
+    {
+      "id": "windowTo",
+      "name": "Window to",
+      "type": "date",
+      "description": "The day after the last mirrored and expanded; a year ahead when empty"
+    },
+    {
+      "id": "sharedWith",
+      "name": "Shared with",
+      "type": "json",
+      "description": "Who it is shared with and how: [{user, level}], level freeBusy, read or write (calendar.share keeps it, and the grants follow it)"
+    },
+    {
+      "id": "lastSync",
+      "name": "Last sync",
+      "type": "dateTime",
+      "description": "When the outside calendar was last synced (28f)"
+    },
+    {
+      "id": "syncState",
+      "name": "Sync state",
+      "type": "enum",
+      "description": "ok when the last sync finished, behind while one is due, error when it failed (syncError says why)",
+      "options": [
+        {
+          "id": "ok",
+          "name": "OK"
+        },
+        {
+          "id": "behind",
+          "name": "Behind"
+        },
+        {
+          "id": "error",
+          "name": "Error"
+        }
+      ]
+    },
+    {
+      "id": "syncError",
+      "name": "Sync error",
+      "type": "text",
+      "description": "Why the last sync failed, from the connector's error"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "by_owner",
+      "fields": [
+        "owner"
+      ]
+    }
+  ],
+  "access": {
+    "read": "principal.kind == 'app' || principal.owner || record.owner == principal.user || principal.hasRole('calWriter', record._id) || principal.hasRole('calReader', record._id) || principal.hasRole('calFreeBusy', record._id)",
+    "update": "principal.kind == 'app' || record.owner == principal.user || principal.hasRole('calWriter', record._id)",
+    "delete": "principal.kind == 'app' || record.owner == principal.user || principal.hasRole('calWriter', record._id)"
+  }
+}

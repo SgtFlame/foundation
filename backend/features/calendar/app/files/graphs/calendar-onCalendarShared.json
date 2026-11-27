@@ -1,0 +1,418 @@
+{
+  "id": "calendar-onCalendarShared",
+  "name": "A calendar's sharing changed",
+  "description": "Keeps a calendar's grants in step with it, as the app: whoever made it holds Calendar writer on it, and each person in sharedWith holds Calendar writer, Calendar reader or Free/busy by their level; a level changed or a person removed loses the role they had.",
+  "kind": "app.trigger",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "records.onChanged",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar",
+        "events": [
+          "created",
+          "updated"
+        ]
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "let r = record ?? {};\nlet o = old ?? {};\nlet creator = string(r._createdBy ?? \"\");\nlet mine = creator == \"\" ? [] : [creator + \"/calWriter\"];\nlet hadShared = \"sharedWith\" in o ? o.sharedWith : r.sharedWith;\nlet want = uniq(concat(mine, filter(map(r.sharedWith ?? [], string(#.user ?? \"\") + \"/\" + ((#.level ?? \"\") == \"write\" ? \"calWriter\" : (#.level ?? \"\") == \"read\" ? \"calReader\" : (#.level ?? \"\") == \"freeBusy\" ? \"calFreeBusy\" : \"\")), !hasPrefix(#, \"/\") \u0026\u0026 !hasSuffix(#, \"/\"))));\nlet had = event == \"created\" ? [] : uniq(concat(mine, filter(map(hadShared ?? [], string(#.user ?? \"\") + \"/\" + ((#.level ?? \"\") == \"write\" ? \"calWriter\" : (#.level ?? \"\") == \"read\" ? \"calReader\" : (#.level ?? \"\") == \"freeBusy\" ? \"calFreeBusy\" : \"\")), !hasPrefix(#, \"/\") \u0026\u0026 !hasSuffix(#, \"/\"))));\n{add: map(filter(want, !(# in had)), ({user: split(#, \"/\")[0], role: split(#, \"/\")[1]})), remove: map(filter(had, !(# in want)), ({user: split(#, \"/\")[0], role: split(#, \"/\")[1]}))}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "addList",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.add",
+        "type": "json"
+      }
+    },
+    {
+      "id": "removeList",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.remove",
+        "type": "json"
+      }
+    },
+    {
+      "id": "entity",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"calCalendar\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "adds",
+      "type": "flow.forEach",
+      "title": "Each grant to make",
+      "position": {
+        "x": 1020,
+        "y": 0
+      }
+    },
+    {
+      "id": "user",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.user",
+        "type": "string"
+      }
+    },
+    {
+      "id": "role",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.role",
+        "type": "string"
+      }
+    },
+    {
+      "id": "grant",
+      "type": "authz.grantRole",
+      "position": {
+        "x": 1700,
+        "y": 0
+      }
+    },
+    {
+      "id": "grantFail",
+      "type": "jobs.fail",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "retryable": true
+      }
+    },
+    {
+      "id": "removes",
+      "type": "flow.forEach",
+      "title": "Each grant to take back",
+      "position": {
+        "x": 1360,
+        "y": 400
+      }
+    },
+    {
+      "id": "ruser",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.user",
+        "type": "string"
+      }
+    },
+    {
+      "id": "rrole",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.role",
+        "type": "string"
+      }
+    },
+    {
+      "id": "revoke",
+      "type": "authz.revokeRole",
+      "position": {
+        "x": 2040,
+        "y": 200
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "old"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "old"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "event"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "event"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "addList",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "removeList",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "adds",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "addList",
+        "pin": "value"
+      },
+      "to": {
+        "node": "adds",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "adds",
+        "pin": "item"
+      },
+      "to": {
+        "node": "user",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "adds",
+        "pin": "item"
+      },
+      "to": {
+        "node": "role",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "adds",
+        "pin": "body"
+      },
+      "to": {
+        "node": "grant",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "role",
+        "pin": "value"
+      },
+      "to": {
+        "node": "grant",
+        "pin": "role"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "value"
+      },
+      "to": {
+        "node": "grant",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "entity",
+        "pin": "value"
+      },
+      "to": {
+        "node": "grant",
+        "pin": "entity"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "grant",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "grant",
+        "pin": "failed"
+      },
+      "to": {
+        "node": "grantFail",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "grant",
+        "pin": "error"
+      },
+      "to": {
+        "node": "grantFail",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "adds",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "removes",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "removeList",
+        "pin": "value"
+      },
+      "to": {
+        "node": "removes",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "removes",
+        "pin": "item"
+      },
+      "to": {
+        "node": "ruser",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "removes",
+        "pin": "item"
+      },
+      "to": {
+        "node": "rrole",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "removes",
+        "pin": "body"
+      },
+      "to": {
+        "node": "revoke",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "rrole",
+        "pin": "value"
+      },
+      "to": {
+        "node": "revoke",
+        "pin": "role"
+      }
+    },
+    {
+      "from": {
+        "node": "ruser",
+        "pin": "value"
+      },
+      "to": {
+        "node": "revoke",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "entity",
+        "pin": "value"
+      },
+      "to": {
+        "node": "revoke",
+        "pin": "entity"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "revoke",
+        "pin": "record"
+      }
+    }
+  ]
+}
