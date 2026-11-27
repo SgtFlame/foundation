@@ -34,6 +34,9 @@ type Config struct {
 	Target   string   `json:"target"`
 	NatsURLs []string `json:"natsUrls"`
 	CA       string   `json:"ca,omitempty"`
+	// EnrollCreds is the shared enroll user's creds file, kept by a host
+	// to hand to the instances it makes (forge 20c-2).
+	EnrollCreds string `json:"enrollCreds,omitempty"`
 	// Creds is the creds file's path (/var/lib/axiomd/creds), State the
 	// directory of its own state (/var/lib/axiomd).
 	Creds string `json:"creds"`
@@ -118,6 +121,15 @@ func Enroll(ctx context.Context, c Config, enrollCreds, token, configPath string
 	if err := os.WriteFile(c.Creds, creds, 0o600); err != nil {
 		return c, log.Wrap(err)
 	}
+	if enrollCreds != "" {
+		if raw, err := os.ReadFile(enrollCreds); err == nil {
+			kept := filepath.Join(c.State, "enroll.creds")
+			if err := os.WriteFile(kept, raw, 0o600); err != nil {
+				return c, log.Wrap(err)
+			}
+			c.EnrollCreds = kept
+		}
+	}
 	c.Target = rep.Target.Key()
 	if configPath != "" {
 		if err := c.Save(configPath); err != nil {
@@ -159,6 +171,7 @@ type Daemon struct {
 	c      *ctl.Control
 	target ctl.Target
 	mu     sync.Mutex
+	rmu    sync.Mutex // one reconcile at a time
 	run    chan struct{}
 }
 
@@ -248,6 +261,8 @@ func (d *Daemon) reconcile(ctx context.Context) error {
 	if d.Reconcile == nil {
 		return nil
 	}
+	d.rmu.Lock()
+	defer d.rmu.Unlock()
 	desired, _, err := d.c.Desired(ctx, d.target)
 	if err != nil {
 		return err

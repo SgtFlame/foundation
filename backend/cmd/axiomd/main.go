@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	"github.com/SgtFlame/foundation/backend/features/controlplane/daemon"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/hostd"
 )
 
 const defaultConfig = "/etc/axiomd/axiomd.json"
@@ -44,7 +45,9 @@ func main() {
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
   axiomd enroll --token <t> --url <nats urls> [--enroll-creds f] [--ca f] [--mode host|agent] [--config f] [--state dir]
-  axiomd host|agent [--config f]
+  axiomd enroll --from /etc/axiomd/enroll.json [--config f] [--state dir]
+  axiomd host [--config f] [--lxd-socket path]
+  axiomd agent [--config f]
   axiomd version`)
 }
 
@@ -57,7 +60,17 @@ func enroll(args []string) error {
 	mode := fs.String("mode", "host", "host or agent")
 	config := fs.String("config", defaultConfig, "where the config is written")
 	state := fs.String("state", "/var/lib/axiomd", "the daemon's state directory (the creds file is kept here)")
+	from := fs.String("from", "", "an enrollment file a host wrote (cloud-init), in place of the other flags")
 	_ = fs.Parse(args)
+	if *from != "" {
+		c, err := daemon.EnrollFrom(context.Background(), *from, *state, *config)
+		if err != nil {
+			return err
+		}
+		_ = os.Remove(*from) // its token is spent
+		fmt.Printf("enrolled as %s; config written to %s\n", c.Target, *config)
+		return nil
+	}
 	if *token == "" || *urls == "" {
 		return fmt.Errorf("--token and --url are required")
 	}
@@ -73,6 +86,7 @@ func enroll(args []string) error {
 func run(mode string, args []string) error {
 	fs := flag.NewFlagSet(mode, flag.ExitOnError)
 	config := fs.String("config", defaultConfig, "the config file")
+	socket := fs.String("lxd-socket", "", "LXD's socket (host mode; found when left out)")
 	_ = fs.Parse(args)
 	c, err := daemon.LoadConfig(*config)
 	if err != nil {
@@ -83,8 +97,14 @@ func run(mode string, args []string) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if mode == "host" {
+		d, _, err := hostd.New(c, *socket) // forge 20c-2: LXD instances
+		if err != nil {
+			return err
+		}
+		return d.Run(ctx)
+	}
+	// What agent mode does to an instance comes with 20d-1 (packages)
 	d := &daemon.Daemon{Config: c, Facts: daemon.HostFacts}
-	// What each mode does to the machine comes with 20c-2 (LXD) and 20d-1
-	// (packages); until then reconcile only acknowledges desired state.
 	return d.Run(ctx)
 }

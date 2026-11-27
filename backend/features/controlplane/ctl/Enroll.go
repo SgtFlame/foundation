@@ -25,6 +25,25 @@ const (
 	EnrollSubject = "ctl.enroll"
 )
 
+// MintSubject is where a host's daemon asks for an enrollment token for
+// an instance placed on it (forge 20c-2): ctl.enroll.mint.host.<id>, which
+// only that host's user may publish.
+func MintSubject(host string) string { return "ctl.enroll.mint." + KindHost + "." + host }
+
+// MintRequest names the instance; MintReply carries its token.
+type MintRequest struct {
+	Instance string `json:"instance"`
+}
+
+type MintReply struct {
+	Token string `json:"token,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+// MintTTL is how long a token a host asks for lasts: long enough for an
+// instance to boot and run cloud-init.
+var MintTTL = 2 * time.Hour
+
 // EnrollPermissions are the shared enroll user's: it may only ask.
 var EnrollPermissions = natsauth.Permissions{Pub: []string{EnrollSubject}, Sub: []string{"_INBOX.>"}}
 
@@ -33,7 +52,7 @@ var EnrollPermissions = natsauth.Permissions{Pub: []string{EnrollSubject}, Sub: 
 // any other daemon's or of a tenant.
 func DaemonPermissions(t Target) natsauth.Permissions {
 	k := t.Key()
-	return natsauth.Permissions{
+	p := natsauth.Permissions{
 		Pub: []string{
 			"ctl.evt." + k + ".>",
 			"$KV." + FactsBucket + "." + k,
@@ -47,6 +66,10 @@ func DaemonPermissions(t Target) natsauth.Permissions {
 		Sub:       []string{t.Requests(), "_INBOX.>"},
 		Responses: true,
 	}
+	if t.Kind == KindHost {
+		p.Pub = append(p.Pub, MintSubject(t.ID))
+	}
+	return p
 }
 
 type token struct {
@@ -157,5 +180,68 @@ func ServeEnroll(ctx context.Context, c *Control, signer Signer) (*nats.Subscrip
 	if err != nil {
 		return nil, log.Wrap(err)
 	}
+	mint, err := c.NC.QueueSubscribe(MintSubject("*"), "ctl.enroll", func(m *nats.Msg) {
+		raw, _ := json.Marshal(c.mintFor(ctx, m))
+		_ = m.Respond(raw)
+	})
+	if err != nil {
+		_ = sub.Unsubscribe()
+		return nil, log.Wrap(err)
+	}
+	go func() {
+		<-ctx.Done()
+		_ = mint.Unsubscribe()
+	}()
 	return sub, log.Wrap(c.NC.Flush())
+}
+
+// mintFor answers a host's request for an instance's token: only for an
+// instance whose desired state places it on that host.
+func (c *Control) mintFor(ctx context.Context, m *nats.Msg) MintReply {
+	host := m.Subject[len(MintSubject("")):]
+	var req MintRequest
+	if err := json.Unmarshal(m.Data, &req); err != nil || req.Instance == "" || host == "" {
+		return MintReply{Error: "bad request"}
+	}
+	inst := Target{Kind: KindInstance, ID: req.Instance}
+	raw, ok, err := c.Desired(ctx, inst)
+	if err != nil {
+		return MintReply{Error: "try again"}
+	}
+	var doc struct {
+		Instance struct {
+			Host string `json:"host"`
+		} `json:"instance"`
+	}
+	if ok {
+		_ = json.Unmarshal(raw, &doc)
+	}
+	if !ok || doc.Instance.Host != host {
+		return MintReply{Error: "the instance is not placed on this host"}
+	}
+	tok, err := c.MintToken(ctx, inst, MintTTL)
+	if err != nil {
+		return MintReply{Error: "try again"}
+	}
+	return MintReply{Token: tok}
+}
+
+// Mint asks for an enrollment token for an instance placed on host (a
+// host daemon's call).
+func (c *Control) Mint(ctx context.Context, host, instance string) (string, error) {
+	raw, _ := json.Marshal(MintRequest{Instance: instance})
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	m, err := c.NC.RequestWithContext(ctx, MintSubject(host), raw)
+	if err != nil {
+		return "", log.Wrap(err)
+	}
+	var rep MintReply
+	if err := json.Unmarshal(m.Data, &rep); err != nil {
+		return "", log.Wrap(err)
+	}
+	if rep.Error != "" {
+		return "", log.Code("mint_refused").Errorf("no token for instance %s: %s", instance, rep.Error)
+	}
+	return rep.Token, nil
 }

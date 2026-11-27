@@ -121,15 +121,19 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 	for id, h := range read[EntityHost] {
 		doc := desired(h)
 		var instances []map[string]json.RawMessage
+		profiles := map[string]map[string]json.RawMessage{}
 		for iid, in := range read[EntityInstance] {
 			if str(in, "host") == id {
 				i := desired(in)
 				i["id"], _ = json.Marshal(iid)
 				instances = append(instances, i)
+				if pid := str(in, "profile"); read[EntityProfile][pid] != nil {
+					profiles[pid] = desired(read[EntityProfile][pid])
+				}
 			}
 		}
 		sortByID(instances)
-		docs[ctl.Target{Kind: ctl.KindHost, ID: id}] = map[string]any{"host": doc, "instances": instances}
+		docs[ctl.Target{Kind: ctl.KindHost, ID: id}] = map[string]any{"host": doc, "instances": instances, "profiles": profiles}
 	}
 	for id, in := range read[EntityInstance] {
 		doc := desired(in)
@@ -289,11 +293,15 @@ func watchFacts(ctx context.Context, deps func() Deps) {
 					if !ok {
 						continue
 					}
-					var facts any
+					var facts map[string]any
 					_ = json.Unmarshal(e.Value(), &facts)
+					set := map[string]any{"facts": facts}
+					if c, ok := facts["capabilities"]; ok && t.Kind == ctl.KindHost {
+						set["capabilities"] = c // a host's, from its facts (forge 20c-2)
+					}
 					id := "ctl-facts-" + t.Key() + "-" + strconv.FormatUint(e.Revision(), 10)
 					for try := 0; try < 10; try++ {
-						if err := update(ctx, deps(), t, id, map[string]any{"facts": facts}); err == nil {
+						if err := update(ctx, deps(), t, id, set); err == nil {
 							break
 						}
 						time.Sleep(time.Second)
