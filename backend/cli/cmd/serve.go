@@ -758,8 +758,11 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		infra.Contribute(registry, func() infra.Deps { return infraDeps })             // infra.config.* configurations and versions (forge 22a)
 		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
 		var infraNodeDeps infranodes.Deps
-		infranodes.Contribute(registry, func() infranodes.Deps { return infraNodeDeps })                                           // Ensure host, instance, unit, packages, Wait healthy, Remove (forge 22e)
-		infraapply.Contribute(registry, func() infraapply.Deps { return infraapply.Deps{Infra: infraDeps, Nodes: infraNodeDeps} }) // infra.apply, its step jobs, infra.drift (forge 22f)
+		infranodes.Contribute(registry, func() infranodes.Deps { return infraNodeDeps }) // Ensure host, instance, unit, packages, Wait healthy, Remove (forge 22e)
+		var infraOutbox func(features.ServiceArgs, live.Area) error
+		infraapply.Contribute(registry, func() infraapply.Deps {
+			return infraapply.Deps{Infra: infraDeps, Nodes: infraNodeDeps, Outbox: infraOutbox}
+		}) // infra.apply, its step jobs, infra.drift (forge 22f)
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
 		uihandlers.ContributeLive(registry, func() uiservice.Service { return uiService })
 		confighandlers.ContributeLive(registry, func() configservice.Service { return configLive })
@@ -1168,6 +1171,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		defer jobRunner.Close() // before the projections close
 		jobNodeDeps = jobsnodes.Deps{Runner: jobRunner, Store: projections}
 		branchDeps.Outbox = jobRunner.Outbox // a commit's semantic diff job (forge 19d)
+		infraOutbox = jobRunner.Outbox       // an apply's step jobs (forge 22f)
 		tenantIDs := func() ([]uint64, error) {
 			ids := []uint64{features.LocalTenantID}
 			var rows []uint64

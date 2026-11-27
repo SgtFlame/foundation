@@ -85,6 +85,9 @@ func (a *Apply) Step(id string) *StepState {
 type Deps struct {
 	Infra infra.Deps
 	Nodes infranodes.Deps
+	// Outbox makes sure the infra area's job outbox is followed
+	// (jobs.Runner.Outbox), so the step jobs a commit names are enqueued.
+	Outbox func(args features.ServiceArgs, area live.Area) error
 }
 
 // JobID is a step's job id: a repeat of the same attempt is dropped.
@@ -190,11 +193,18 @@ func readApply(d live.Decision) (*Apply, []live.Problem) {
 	return &a, nil
 }
 
-func register(reg *extensions.Registry, c live.Command, decide func(d live.Decision) ([]live.NewEvent, []live.Problem)) {
+func register(reg *extensions.Registry, deps func() Deps, c live.Command, decide func(d live.Decision) ([]live.NewEvent, []live.Problem)) {
 	c.Source, c.Area, c.TargetType, c.Projection = source, infra.Area, ApplyType, ApplyProjector
 	c.Decide = func(d live.Decision) ([]live.NewEvent, []live.Problem) {
 		if ps := rootOnly(d.Principal); ps != nil {
 			return nil, ps
+		}
+		// The jobs a decision enqueues are enqueued by the area's outbox
+		// follower, which must be followed before the commit.
+		if out := deps().Outbox; out != nil {
+			if err := out(d.ServiceArgs, infra.Area); err != nil {
+				return nil, []live.Problem{{Message: "the jobs of infrastructure applies cannot be enqueued: " + err.Error()}}
+			}
 		}
 		return decide(d)
 	}
@@ -214,7 +224,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		Area:       infra.Area, Types: []string{ApplyType}, Fold: foldApply,
 	})
 
-	register(reg, live.Command{
+	register(reg, deps, live.Command{
 		Descriptor: extensions.Descriptor{ID: "infra.apply"}, Title: "Apply a plan",
 		Description: "Applies a plan infra.plan made: its steps run as durable jobs in dependency order, each enqueueing the steps it unblocks; a step that removes what holds data waits as a proposal for infra.apply.approve. Refused for a plan with refusals (plan_refused), one older than 15 minutes (plan_stale: plan again) or one already applied (use infra.apply.resume). Follow it with infra.applyOf {id: plan}.",
 		Action:      infra.ActionAdmin,
@@ -260,7 +270,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		return emit("started", a), nil
 	})
 
-	register(reg, live.Command{
+	register(reg, deps, live.Command{
 		Descriptor: extensions.Descriptor{ID: "infra.apply.step"}, Title: "Record an apply step",
 		Description: "Records a step's outcome (sent by its job) and enqueues the steps it unblocks.",
 		Action:      infra.ActionAdmin, Internal: true,
@@ -301,7 +311,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		return emit(typ, a), nil
 	})
 
-	register(reg, live.Command{
+	register(reg, deps, live.Command{
 		Descriptor: extensions.Descriptor{ID: "infra.apply.approve"}, Title: "Approve a removal",
 		Description: "Approves a proposed step of an apply, one that removes what holds data (an instance, a cluster), so it runs. The target is the apply (its plan's id).",
 		Action:      infra.ActionApprove,
@@ -324,7 +334,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		return emit("approved", a), nil
 	})
 
-	register(reg, live.Command{
+	register(reg, deps, live.Command{
 		Descriptor: extensions.Descriptor{ID: "infra.apply.resume"}, Title: "Resume an apply",
 		Description: "Runs an apply's failed steps again, and those whose jobs ran out of attempts, each as a new attempt; the steps waiting for them follow. The target is the apply (its plan's id).",
 		Action:      infra.ActionAdmin,

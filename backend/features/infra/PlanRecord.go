@@ -248,7 +248,10 @@ func MakePlan(args features.ServiceArgs, reg *extensions.Registry, deps Deps, co
 	if r.Common.Code >= 300 {
 		return PlanRecord{}, fmt.Errorf("%s", r.Common.Message)
 	}
-	rec.ID = id
+	rec.ID, rec.CreatedBy, rec.Status = id, authorOf(args.Principal), PlanReady
+	if len(rec.Refusals) > 0 {
+		rec.Status = PlanRefused
+	}
 	return rec, nil
 }
 
