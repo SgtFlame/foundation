@@ -172,6 +172,17 @@ func checkType(f Field, p string, exists func(string) bool, e *EntityType) []liv
 				add(p+".contract", fmt.Sprintf("%q is not a contract reference", f.Contract), "write id@version, such as mail.mailbox@1 (connectors.contracts)")
 			}
 		}
+	case "rank":
+		if f.Scope == "" {
+			break
+		}
+		if e == nil {
+			add(p+".scope", "a rank orders within a field of its entity type, so it belongs at the top level", "")
+			break
+		}
+		if sf, _, ok := e.FieldByID(f.Scope); !ok || sf.Hidden || sf.ID == f.ID || !Sortable(sf) {
+			add(p+".scope", fmt.Sprintf("%q is not another field of this entity type with an order", f.Scope), "name the field it orders within, such as a status relation or enum, or leave scope out to order the whole type")
+		}
 	case "json":
 		if f.Schema != nil {
 			var s map[string]any

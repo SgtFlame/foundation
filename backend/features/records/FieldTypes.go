@@ -43,6 +43,8 @@ var FieldTypes = []FieldType{
 		Tags: []string{"numeric", "exact"}, Examples: example(`{"name":"Rate","type":"decimal","scale":4}`)},
 	{ID: "money", Title: "Money", Group: GroupBasic, Description: "An exact amount with scale (2 when left out) and an ISO 4217 currency; any currency when it has none",
 		Tags: []string{"numeric", "currency", "price"}, Examples: example(`{"name":"Price","type":"money","scale":2,"currency":"EUR"}`)},
+	{ID: "rank", Title: "Position", Group: GroupBasic, Description: "An ordered position (a card's place in a column, an item's in a checklist): text that sorts between any two others, optionally within scope (the field it orders within). Set it with record.move {before, after} or the Rank between node, never by hand",
+		Tags: []string{"order", "position", "sort", "drag", "kanban"}, Examples: example(`{"name":"Position","type":"rank"}`)},
 	{ID: "bool", Title: "Yes/no", Group: GroupBasic, Description: "True or false",
 		Tags: []string{"boolean", "checkbox", "flag"}, Examples: example(`{"name":"Done","type":"bool","default":false}`)},
 	{ID: "date", Title: "Date", Group: GroupBasic, Description: "A calendar date, YYYY-MM-DD",
