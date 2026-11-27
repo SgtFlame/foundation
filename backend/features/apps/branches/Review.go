@@ -63,9 +63,9 @@ func KindsOf(c Commit) []string {
 				seen[KindAccess] = true
 			case d.Type == "app":
 				switch field {
-				case "roles", "settingsSchema", "settings":
+				case "roles", "settingsSchema", "settings", "ephemeral":
 					seen[KindAccess] = true
-				case "commands", "queries", "triggers", "tools", "connectors":
+				case "commands", "queries", "triggers", "tools", "connectors", "projectors":
 					seen[KindGraphs] = true
 				case "entities":
 					seen[KindEntities] = true
