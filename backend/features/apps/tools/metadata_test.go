@@ -1,6 +1,11 @@
 package apptools_test
 
 import (
+	"github.com/SgtFlame/foundation/backend/features/calendar"
+	"github.com/SgtFlame/foundation/backend/features/calendar/caltest"
+	calendarnodes "github.com/SgtFlame/foundation/backend/features/calendar/nodes"
+	calendarsettings "github.com/SgtFlame/foundation/backend/features/calendar/settings"
+
 	"encoding/json"
 	"github.com/SgtFlame/foundation/backend/features/activity"
 	"github.com/SgtFlame/foundation/backend/features/authz"
@@ -110,18 +115,23 @@ func everything(t *testing.T) *extensions.Registry {
 	connectorsnodes.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
 	connections.Contribute(reg, func() connections.Deps { return connections.Deps{} })
 	scripted.Contribute(reg, func() scripted.Deps { return scripted.Deps{} })
-	game.Contribute(reg, func() game.Deps { return game.Deps{} })                   // forge 360 V1
-	infra.Contribute(reg, func() infra.Deps { return infra.Deps{} })                // forge 22a
-	infratest.Contribute(reg)                                                       // forge 22c
-	gitconnector.Contribute(reg)                                                    // forge 24a
-	gittest.Contribute(reg)                                                         // forge 24a
-	gitgithub.Contribute(reg)                                                       // forge 24b
-	githttps.Contribute(reg)                                                        // forge 24c
-	infraproviders.Contribute(reg)                                                  // forge 22g
-	infranodes.Contribute(reg, func() infranodes.Deps { return infranodes.Deps{} }) // forge 22e
-	infraapply.Contribute(reg, func() infraapply.Deps { return infraapply.Deps{} }) // forge 22f
-	connectorstest.Contribute(reg)                                                  // the builtin contracts a test registry has
+	game.Contribute(reg, func() game.Deps { return game.Deps{} })                                        // forge 360 V1
+	infra.Contribute(reg, func() infra.Deps { return infra.Deps{} })                                     // forge 22a
+	infratest.Contribute(reg)                                                                            // forge 22c
+	infraproviders.Contribute(reg)                                                                       // forge 22g
+	infranodes.Contribute(reg, func() infranodes.Deps { return infranodes.Deps{} })                      // forge 22e
+	infraapply.Contribute(reg, func() infraapply.Deps { return infraapply.Deps{} })                      // forge 22f
+	connectorstest.Contribute(reg)                                                                       // the builtin contracts a test registry has
+	calendarsettings.Contribute(reg)                                                                     // forge 28a
+	calendarnodes.Contribute(reg)                                                                        // forge 28a
+	calendarnodes.ContributeIcal(reg, func() calendarnodes.IcalDeps { return calendarnodes.IcalDeps{} }) // forge 28b
+	calendar.Contribute(reg)                                                                             // forge 28c
+	caltest.Contribute(reg)                                                                              // forge 28c
 
+	gitconnector.Contribute(reg)                                              // forge 24a
+	gittest.Contribute(reg)                                                   // forge 24a
+	gitgithub.Contribute(reg)                                                 // forge 24b
+	githttps.Contribute(reg)                                                  // forge 24c
 	gittest.ContributeLive(reg, func() *connectors.Dispatcher { return nil }) // gittest.control and gittest.log (forge 24a)
 	return reg
 }

@@ -5,6 +5,7 @@ package main
 
 import (
 	"github.com/SgtFlame/foundation/backend/cli/cmd"
+	"github.com/SgtFlame/foundation/backend/features/calendar/ical"
 	"github.com/SgtFlame/foundation/backend/features/text"
 )
 
@@ -13,6 +14,11 @@ func main() {
 	// server (forge 18e): it reads stdin, writes stdout and exits
 	if text.TranscriptChildRequested() {
 		text.ServeTranscriptChild()
+		return
+	}
+	// A child started to parse one .ics file (forge 28b)
+	if ical.ChildRequested() {
+		ical.ServeChild()
 		return
 	}
 	cmd.Execute()

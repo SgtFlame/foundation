@@ -5,6 +5,7 @@ go 1.27.1
 require (
 	github.com/apache/arrow/go/v17 v17.0.0
 	github.com/coder/websocket v1.8.15
+	github.com/emersion/go-ical v0.0.0-20261112170022-46c5b53a1723
 	github.com/expr-lang/expr v1.17.8
 	github.com/gin-gonic/gin v1.12.0
 	github.com/glebarez/sqlite v1.11.0
@@ -21,6 +22,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
+	github.com/teambition/rrule-go v1.8.2
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/crypto v0.58.0
 	google.golang.org/genai v1.75.0
