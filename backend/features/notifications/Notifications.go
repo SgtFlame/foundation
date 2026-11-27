@@ -59,20 +59,27 @@ type Notification struct {
 	Key string `json:"key,omitempty"`
 }
 
-// ensured are the tenants whose entity type is published, a cache of the
-// projection.
+// ensured are the tenants whose entity type is published, by the
+// projections they were read from (so a test's fresh server is asked
+// again), a cache of the projection.
 var ensured sync.Map
+
+type ensuredKey struct {
+	store  any
+	tenant uint64
+}
 
 // Ensure makes sure the tenant's notification entity type is published,
 // importing and publishing it as the tenant's service principal the first
 // time. Every process may do this at once: the commands' ids make the
 // streams drop the copies.
 func Ensure(ctx context.Context, d Deps, tenant uint64) error {
-	if _, ok := ensured.Load(tenant); ok {
+	key := ensuredKey{d.Projections, tenant}
+	if _, ok := ensured.Load(key); ok {
 		return nil
 	}
 	if v, ok, err := d.Projections.Get(ctx, tenant, entities.PublishedProjector, "entity."+Entity); err == nil && ok && v.Value != nil {
-		ensured.Store(tenant, true)
+		ensured.Store(key, true)
 		return nil
 	}
 	args := features.ServiceArgs{Ctx: ctx, Principal: features.ServicePrincipal(tenant)}
@@ -99,7 +106,7 @@ func Ensure(ctx context.Context, d Deps, tenant uint64) error {
 			return log.Wrap(err)
 		}
 	}
-	ensured.Store(tenant, true)
+	ensured.Store(key, true)
 	return nil
 }
 

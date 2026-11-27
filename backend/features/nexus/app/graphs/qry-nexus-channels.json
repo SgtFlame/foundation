@@ -1,0 +1,153 @@
+{
+  "id": "qry-nexus-channels",
+  "name": "channels",
+  "description": "The caller's channels and direct conversations, from their memberships ({channels: [{id, name, topic, kind, private, archived, peer, role, seen}]}), named channels by name, then direct conversations; with the unread query per channel for its counts.",
+  "kind": "data.query",
+  "version": 1,
+  "owner": "app:nexus",
+  "spec": {
+    "query": "channels",
+    "title": "My channels",
+    "description": "The caller's channels and direct conversations, from their memberships ({channels: [{id, name, topic, kind, private, archived, peer, role, seen}]}), named channels by name, then direct conversations; with the unread query per channel for its counts.",
+    "params": {
+      "type": "object",
+      "properties": {}
+    },
+    "action": "record.read"
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onQuery",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "q",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "{where: {user: me}, limit: 1000, expand: [\"channel\"]}"
+      }
+    },
+    {
+      "id": "mine",
+      "type": "records.query",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusMember"
+      }
+    },
+    {
+      "id": "out",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "let rows = map(filter(mine ?? [], #._expanded?.channel != nil), { let c = #._expanded.channel;\n  ({id: c._id, name: c.name ?? \"\", topic: c.topic ?? \"\", kind: c.kind ?? \"channel\", private: c.private ?? false, archived: c.archived ?? false,\n    peer: string(c.owner ?? \"\") == me ? string(c.peer ?? \"\") : string(c.owner ?? \"\"), role: #.role ?? \"member\", seen: #.seen ?? 0}) });\n{channels: concat(sortBy(filter(rows, #.kind != \"direct\"), #.name), filter(rows, #.kind == \"direct\"))}"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "result",
+            "name": "result",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "q",
+        "pin": "me"
+      }
+    },
+    {
+      "from": {
+        "node": "q",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mine",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "mine",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "mine"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "out",
+        "pin": "me"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "out",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "result"
+      }
+    }
+  ]
+}
