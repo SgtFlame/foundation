@@ -125,6 +125,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	gitconnector "github.com/SgtFlame/foundation/backend/features/connectors/git"
+	gitgithub "github.com/SgtFlame/foundation/backend/features/connectors/git/github"
 	"github.com/SgtFlame/foundation/backend/features/connectors/git/gittest"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
@@ -764,6 +765,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
 		gitconnector.Contribute(registry)                                              // git.repo@1 and git.review@1 (forge 24a)
 		gittest.Contribute(registry)                                                   // the Git test server connector type (forge 24a)
+		gitgithub.Contribute(registry)                                                 // the git.github connector type (forge 24b)
 		// gittest.control and gittest.log, for Forge's test server page and forge gittest (forge 24a)
 		gittest.ContributeLive(registry, func() *connectors.Dispatcher { return connectorDeps.Dispatcher })
 		var infraNodeDeps infranodes.Deps
@@ -1111,7 +1113,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		recordEmbedder = embedService
 		recordFiles := recordsfiles.New(nats.JS())
 		recordFiles.SetAccounts(natsAccounts)
-		gittest.Default.SetFiles(recordFiles) // the Git test server keeps large files there (forge 24a)
+		gittest.Default.SetFiles(recordFiles)     // the Git test server keeps large files there (forge 24a)
+		gitconnector.ServerFiles.Set(recordFiles) // and the git types (forge 24b)
 		// The record files' data service (forge 21d-4), served over NATS by
 		// serve --services (21g-1)
 		_ = filesproxy.Use(loc, func() filesservice.Service { return filesimpl.CreateService(filesimpl.WithStore(recordFiles)) })
@@ -1511,7 +1514,8 @@ func connectorImpls() adapter.Options {
 	// The git connector's types (forge 24)
 	o.Types = append(o.Types, gittest.Type())
 	o.Contracts = append(append(o.Contracts, gitconnector.Contracts()...), gittest.ControlContract())
-	o.Impls = append(o.Impls, gittest.Default.Impl())
+	o.Types = append(o.Types, gitgithub.Type())
+	o.Impls = append(o.Impls, gittest.Default.Impl(), gitgithub.Impl(gitgithub.Options{Files: gitconnector.ServerFiles}))
 	return o
 }
 

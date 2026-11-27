@@ -1025,3 +1025,10 @@ Configurations, diffs and export, the compute contract and test server, plans, t
 - keep `commit` idempotent in the type too: add the key with `git.WithKey` and look for it with `git.HasKey` within `git.KeyDepth` commits before pushing;
 - read a change's file only through `git.Decode`/`git.ReadFile` (the caller's files, or vouched ones), and store a large read as the caller through `git.FileResult`;
 - map a protected branch or a bad path to `invalid`, never `auth`, which marks the connection failed.
+
+## Forge 24b: `git.github`
+
+GitHub through its REST and Git Data APIs ([GitConnector.md](GitConnector.md) › *Built in forge 24b*). Later parts must:
+
+- give a git type the file store through `git.ServerFiles` in `serve.go`, never the store itself before it exists;
+- test a new HTTP type against a stand-in server in the test, as `githubtest` is, and keep a `TestReal…` that runs the suite against the real service when its credentials are in the environment.

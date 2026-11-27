@@ -35,6 +35,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/cognition/drafts"
 	cognitionnodes "github.com/SgtFlame/foundation/backend/features/cognition/nodes"
 	gitconnector "github.com/SgtFlame/foundation/backend/features/connectors/git"
+	gitgithub "github.com/SgtFlame/foundation/backend/features/connectors/git/github"
 	"github.com/SgtFlame/foundation/backend/features/connectors/git/gittest"
 	conversationnodes "github.com/SgtFlame/foundation/backend/features/conversation/nodes"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -113,6 +114,7 @@ func everything(t *testing.T) *extensions.Registry {
 	infratest.Contribute(reg)                                                       // forge 22c
 	gitconnector.Contribute(reg)                                                    // forge 24a
 	gittest.Contribute(reg)                                                         // forge 24a
+	gitgithub.Contribute(reg)                                                       // forge 24b
 	infraproviders.Contribute(reg)                                                  // forge 22g
 	infranodes.Contribute(reg, func() infranodes.Deps { return infranodes.Deps{} }) // forge 22e
 	infraapply.Contribute(reg, func() infraapply.Deps { return infraapply.Deps{} }) // forge 22f

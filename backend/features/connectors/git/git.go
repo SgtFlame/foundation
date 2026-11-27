@@ -10,6 +10,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/SgtFlame/foundation/backend/features"
@@ -455,3 +456,54 @@ func Unmarshal(args json.RawMessage, into any) error {
 
 // Result marshals a call's result.
 func Result(v any) (json.RawMessage, error) { return json.Marshal(v) }
+
+// LazyFiles is a Files given its store later (serve.go makes the adapter
+// options before the record files' store): until Set, every call fails.
+type LazyFiles struct {
+	mu sync.RWMutex
+	f  Files
+}
+
+// Set gives it the store.
+func (l *LazyFiles) Set(f Files) {
+	l.mu.Lock()
+	l.f = f
+	l.mu.Unlock()
+}
+
+func (l *LazyFiles) get() (Files, error) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	if l.f == nil {
+		return nil, connectors.Errorf(connectors.CodeUnavailable, "the file store is not ready")
+	}
+	return l.f, nil
+}
+
+func (l *LazyFiles) Put(ctx context.Context, tenant, user uint64, name, contentType string, r io.Reader, max int64) (records.FileRef, error) {
+	f, err := l.get()
+	if err != nil {
+		return records.FileRef{}, err
+	}
+	return f.Put(ctx, tenant, user, name, contentType, r, max)
+}
+
+func (l *LazyFiles) Uploader(ctx context.Context, tenant uint64, id string) (uint64, bool, error) {
+	f, err := l.get()
+	if err != nil {
+		return 0, false, err
+	}
+	return f.Uploader(ctx, tenant, id)
+}
+
+func (l *LazyFiles) Open(ctx context.Context, tenant uint64, id string) (io.ReadCloser, records.FileRef, bool, error) {
+	f, err := l.get()
+	if err != nil {
+		return nil, records.FileRef{}, false, err
+	}
+	return f.Open(ctx, tenant, id)
+}
+
+// ServerFiles is this process's file store for the git types, set by
+// serve.go once the record files' store exists.
+var ServerFiles = &LazyFiles{}

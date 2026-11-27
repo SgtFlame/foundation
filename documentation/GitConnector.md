@@ -47,3 +47,21 @@ A ref is a branch name, a full ref or a commit sha. Paths are from the repositor
 ### The suite
 
 `git/contracttest.Run(t, call, Options{Prefix, Push, Watch, Review, Run})` is what every `git.repo@1` type passes: a commit creates a branch and `readFile` gives back text and binary content; a path outside the repository is `invalid`; `readTree` lists children, recursively, and one entry per page; `compare` names what a second commit modified and deleted; a stale `expectHead` is `conflict`; a retried keyed commit makes one commit; `listRefs` finds the branch; changes that change nothing make no commit; with `Push` and `Watch`, an outside push arrives once as `pushed` with its paths; with `Review`, `openPullRequest` twice opens one, and it reads and lists. `Run` names a run's branches apart on a real host. `go test ./features/connectors/git/...` runs it on the test server.
+
+## Built in forge 24b: `git.github`
+
+`git/github` implements `git.repo@1` and `git.review@1` against GitHub's REST API (version 2022-11-28), served by `serve.go`'s in-process adapter with the record files' store (`git.ServerFiles`, a `git.LazyFiles` set once the store exists).
+
+**Settings**: `owner`, `repo`, `token` (a secret: a fine-grained personal access token with *Contents* and *Pull requests* read and write on the chosen repositories), `baseUrl` (`https://api.github.com`, or `https://<host>/api/v3` for GitHub Enterprise Server), `pollSeconds` (60, at least 15) and `allowDefaultBranch` (read by 24d's tools and nodes). *Sign in with GitHub* comes with 26a-2.
+
+**Reads**: `check` is `GET /repos/{o}/{r}` (the default branch, `permissions.push` as `canWrite`); `listRefs` pages `git/matching-refs`; a ref resolves through `GET commits/{ref}`; `readTree` reads the commit's tree recursively once and pages it with `git.List` (a truncated tree is `invalid`); `readFile` reads `contents/{path}?ref=`, and the blob (`git/blobs/{sha}`) when GitHub gives no content (over 1 MB); `compare` diffs the two commits' trees exactly, not from their merge base as GitHub's compare endpoint does.
+
+**Commit without cloning** (the Git Data API): read the branch's head (`git/ref/heads/{b}`); with a key, look for it in the head's last 50 commits; check `expectHead`; make a blob only for binary content (text goes inline in the tree); `POST git/trees` on the parent's tree (a `null` sha deletes a path); a tree equal to the parent's is `unchanged`; `POST git/commits`; then `PATCH git/refs/heads/{b}` with `force: false`, or `POST git/refs` for a new branch. A racing push makes that refusal (`not a fast forward`, `already exists`) a `conflict`.
+
+**Pull requests**: `openPullRequest` first lists open ones from `owner:head` into base and gives the first; `state` is `merged` for a closed pull request with `merged_at`; `listPullRequests {state: merged}` lists closed ones and keeps the merged.
+
+**Errors**: 429, or 403 with `X-RateLimit-Remaining: 0` or a rate-limit message, is `rateLimited`, retryable, after `Retry-After` or `X-RateLimit-Reset`; a protected branch is `invalid`; other 401 and 403 are `auth`; 404 `notFound` (GitHub answers 404 for a repository the token cannot see); 409 and the fast-forward refusals `conflict`; other 422 `invalid`; 5xx and no answer `unavailable`, retryable.
+
+**Events** are polled every `pollSeconds`: the branch heads (`matching-refs/heads/`) against the cursor's (a moved or new branch is `pushed`, its paths from comparing the trees; a new branch's from its last commit), and the 30 pull requests updated last against the newest `updated_at` seen (`pullRequestChanged`). The first look only notes where things are; the cursor is stored with an event. Webhooks come with 26b-2.
+
+**Tests**: `githubtest` is a stand-in for the endpoints above over one repository in memory, behind an `httptest` server (token check, outside pushes, protected branches, injected failures, request counts); the suite runs against it, as do the error mapping and the batch shape of a commit. `TestRealRepository` runs the suite against a real repository when `GIT_GITHUB_REPO=owner/repo` and `GIT_GITHUB_TOKEN` are set; its branches start `suite/` and end with the run's time.
