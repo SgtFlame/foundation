@@ -37,3 +37,14 @@ test('then Wenlan\'s hearth, from a third handful of stones and sage; warded hea
   assert.equal(hearthWarded({ farmward: true }, kitchen), true)
   assert.equal(hearthWarded({}, hawk), false)
 })
+
+test('then the well, once looked into, from a fourth handful (S27)', () => {
+  const done = { tried: true, hearthward: true, farmward: true }
+  assert.equal(nextHearthWard(done), null)
+  assert.equal(nextHearthWard({ ...done, well: true }), 'wellward')
+  assert.equal(nextHearthWard({ ...done, well: true, wellward: true }), null)
+  assert.equal(hearthStonesReady({ ...done, well: true }, {}), true)
+  assert.equal(wardSpots('wellward').stones, 'culvert-stones-4')
+  assert.equal(hearthWardReady({ ...done, well: true }, { riverstones: 1, sage: 1 }, 'wellward'), true)
+  assert.match(hearthWardMissing({}, 'The well'), /^The well wants five river stones/)
+})

@@ -555,6 +555,15 @@ The jump trial: the outpost's first contract that needs a jump drive.
 - `cmd-game-handIn` refuses it with *this job needs a ship with a jump drive fitted*; `handInProblem` in `outpost/Outpost.ts` says the same on the contract board.
 - Tests: `TestJumpDrive` (the refusal), `Outpost.test.ts` (the board's reasons), the contract count in `TestOutpost`.
 
+## Built in S27 (forge 375)
+
+The well ward: the threshold nobody warded, warded.
+
+- Step `wellward`; the fold spends a sage and the river stones and gives `items.wellward`.
+- `story/HearthWard.ts`: `nextHearthWard` gives `wellward` once `well` is reached (type `Ward`), `wardSpots('wellward')` is `culvert-stones-4` and `ditch-sage-3`, and `hearthWardMissing(items, what)` names the well; so the culvert and the bank give a fourth handful through the same senses and steps as before.
+- At the well's rim with both, the ward is laid (`WELL_WARD_LINE` in `story/Well.ts`); the frost ring gives way to sage round the rim and five stones, four on it and one on the windlass beam.
+- Tests: `story_test` (`wellward`), `HearthWard.test.ts`, the step order in `FirstHourStory.test.ts`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

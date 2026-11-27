@@ -41,7 +41,8 @@ test('a later step done counts the earlier ones, and the next is the first left'
   assert.equal(nextStep({ tried: true }), 'hearthward')
   assert.equal(nextStep({ hearthward: true }), 'farmward')
   assert.equal(nextStep({ farmward: true }), 'well')
-  assert.equal(nextStep({ well: true }), null)
+  assert.equal(nextStep({ well: true }), 'wellward')
+  assert.equal(nextStep({ wellward: true }), null)
 })
 
 test('three herbs grow by the farmstead trees, one per tree, the same each time (S7)', () => {

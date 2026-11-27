@@ -64,6 +64,8 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'farmward', title: "Ward Wenlan's hearth", how: "The farmhouse hearthstone is where they came up before. Take five more river stones from the culvert and sage from the ditch bank, then go into the farmhouse kitchen and stand on its hearthstone." },
   // S26: the well
   { id: 'well', title: 'The way they will come', how: 'With both hearths warded, follow the cold in the yard by day: something is wrong with the well.' },
+  // S27: the well ward
+  { id: 'wellward', title: 'Ward the well', how: 'Take five more river stones from the culvert and sage from the ditch bank, then go to the frost-cold well in the yard and stand at its rim.' },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

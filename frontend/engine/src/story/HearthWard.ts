@@ -7,15 +7,20 @@
 export const SAGE_REACH = 1.6 // metres from the sage on the bank
 export const HEARTH_REACH = 1.4 // metres from the hearthstone's middle
 
-// The hearth ward still to lay: Hawk's Rest's (S24), then Wenlan's (S25)
-export function nextHearthWard(done: Readonly<Record<string, boolean>>): 'hearthward' | 'farmward' | null {
+export type Ward = 'hearthward' | 'farmward' | 'wellward'
+
+// The ward still to lay: Hawk's Rest's hearth (S24), then Wenlan's (S25),
+// then, once the well has been looked into, the well (S27)
+export function nextHearthWard(done: Readonly<Record<string, boolean>>): Ward | null {
   if (!done.tried) return null
   if (!done.hearthward) return 'hearthward'
-  return done.farmward ? null : 'farmward'
+  if (!done.farmward) return 'farmward'
+  return done.well && !done.wellward ? 'wellward' : null
 }
 
 // The gathering spots for each hearth ward (each spot is counted once)
-export function wardSpots(ward: 'hearthward' | 'farmward'): { stones: string; sage: string } {
+export function wardSpots(ward: Ward): { stones: string; sage: string } {
+  if (ward === 'wellward') return { stones: 'culvert-stones-4', sage: 'ditch-sage-3' }
   return ward === 'hearthward' ? { stones: 'culvert-stones-2', sage: 'ditch-sage' } : { stones: 'culvert-stones-3', sage: 'ditch-sage-2' }
 }
 
@@ -31,7 +36,7 @@ export function bankSageReady(done: Readonly<Record<string, boolean>>, items: Re
 }
 
 // Whether the hearth ward can be laid: the lore, the stones and a sage
-export function hearthWardReady(done: Readonly<Record<string, boolean>>, items: Readonly<Record<string, number>>, ward: 'hearthward' | 'farmward' = 'hearthward'): boolean {
+export function hearthWardReady(done: Readonly<Record<string, boolean>>, items: Readonly<Record<string, number>>, ward: Ward = 'hearthward'): boolean {
   return nextHearthWard(done) === ward && (items.riverstones ?? 0) >= 1 && (items.sage ?? 0) >= 1
 }
 
@@ -45,9 +50,9 @@ export function hearthWarded(done: Readonly<Record<string, boolean>>, house: { n
 }
 
 // What is missing for the hearth ward, worst first, or '' when it can be laid
-export function hearthWardMissing(items: Readonly<Record<string, number>>): string {
-  if (!(items.riverstones ?? 0)) return 'The hearthstone wants five river stones, as the door had: the culvert has more'
-  if (!(items.sage ?? 0)) return 'The hearthstone wants sage: some has seeded itself on the ditch bank by the culvert'
+export function hearthWardMissing(items: Readonly<Record<string, number>>, what = 'The hearthstone'): string {
+  if (!(items.riverstones ?? 0)) return `${what} wants five river stones, as the door had: the culvert has more`
+  if (!(items.sage ?? 0)) return `${what} wants sage: some has seeded itself on the ditch bank by the culvert`
   return ''
 }
 

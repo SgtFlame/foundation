@@ -20,7 +20,7 @@ import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../sto
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
-import { WELL_LINE, WELL_REACH, WELL_SENSE, wellReady, wellSpot } from '../story/Well.ts'
+import { WELL_LINE, WELL_REACH, WELL_SENSE, WELL_WARD_LINE, wellReady, wellSpot } from '../story/Well.ts'
 import { bankSageReady, bankSageSpot, FARM_WARD_LINE, FARM_WARDED_NIGHT, HEARTH_REACH, HEARTH_WARD_LINE, hearthStonesReady, hearthWarded, hearthWardMissing, hearthWardReady, nextHearthWard, SAGE_LINE, SAGE_REACH, wardSpots } from '../story/HearthWard.ts'
 import { TRIED_DOOR_LINE, TRIED_LINE, TRIED_LOST, TRIED_NIGHT, triedReady } from '../story/Tried.ts'
 import { riverStonesReady, STONES_LINE, STONES_REACH, thresholdSpot, WARD_LINE, WARD_REACH, wardedNight, wardMissing, wardReady } from '../story/Ward.ts'
@@ -1806,10 +1806,21 @@ export class AreaViewport {
     const st = this.story
     // S26: frost on the well's stones once the hearths are shut
     const well = st && this.area.id === st.area && st.done.farmward && !this.set.interior ? wellSpot(Object.values(this.area.pieces), this.set.cell) : null
-    if (well) {
+    if (well && !st?.done.wellward) {
       const frost = new THREE.Mesh(new THREE.RingGeometry(1.25, 1.9, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicNodeMaterial({ color: 0xdfeaf2, transparent: true, opacity: 0.7 }))
       frost.position.set(well.x, 0.06, well.z)
       this.marks.add(frost)
+    } else if (well) {
+      // S27: the well ward: sage round the rim, a stone at each quarter and one on the beam
+      const sage = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.06, 6, 24).rotateX(Math.PI / 2), new THREE.MeshStandardNodeMaterial({ color: 0x8fa38a, roughness: 1 }))
+      sage.position.set(well.x, 1.02, well.z)
+      this.marks.add(sage)
+      const pale = new THREE.MeshStandardNodeMaterial({ color: 0xe6e1d3, roughness: 0.6 })
+      for (const [dx, dy, dz] of [[1.25, 1.06, 0], [-1.25, 1.06, 0], [0, 1.06, 1.25], [0, 1.06, -1.25], [0, 2.7, 0]]) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), pale)
+        m.position.set(well.x + dx, dy, well.z + dz)
+        this.marks.add(m)
+      }
     }
     if (!st || this.area.id !== st.area || !st.done.howl) return
     const c = this.set.cell
@@ -2145,16 +2156,33 @@ export class AreaViewport {
     this.atFarmStone = at
   }
 
-  // S26: the frost-cold well in the yard, once both hearths are warded
+  // S26: the frost-cold well in the yard, once both hearths are warded;
+  // S27: standing at its rim with stones and sage wards it
+  private atWell = false
   private stepWell(p: { x: number; z: number }): void {
     const st = this.story!
-    if (this.set.interior || this.area.id !== st.area || !wellReady(st.done)) return
+    if (this.set.interior || this.area.id !== st.area) return
+    const ward = nextHearthWard(st.done) === 'wellward'
+    if (!wellReady(st.done) && !ward) return
     const w = wellSpot(Object.values(this.area.pieces), this.set.cell)
-    if (!w || Math.hypot(p.x - w.x, p.z - w.z) > WELL_REACH) return
-    st.items.welllore = 1
-    this.reach('well')
-    this.drawMarks()
-    this.say(WELL_LINE)
+    const at = !!w && Math.hypot(p.x - w.x, p.z - w.z) <= WELL_REACH
+    if (at && !this.atWell) {
+      if (wellReady(st.done)) {
+        st.items.welllore = 1
+        this.reach('well')
+        this.drawMarks()
+        this.say(WELL_LINE)
+      } else if (hearthWardReady(st.done, st.items, 'wellward')) {
+        st.items.sage--
+        st.items.riverstones = 0
+        st.items.wellward = 1
+        this.reach('wellward')
+        this.drawMarks()
+        this.drawHerbs()
+        this.say(WELL_WARD_LINE)
+      } else this.say(hearthWardMissing(st.items, 'The well'))
+    }
+    this.atWell = at
   }
 
   // S20: walking up to a bundle takes it into the herbal; the sill tells the moons

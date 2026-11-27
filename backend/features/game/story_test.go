@@ -158,4 +158,11 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "well" || p.Items["welllore"] != 1 {
 		t.Fatalf("well %+v", p)
 	}
+	// S27: a fourth handful, and the well warded
+	st.ok("game.reachStory", farm, map[string]any{"area": farm, "x": 9, "z": 3, "item": "riverstones", "spot": "culvert-stones-4"})
+	st.ok("game.reachStory", farm, map[string]any{"area": farm, "x": 9, "z": 3, "item": "sage", "spot": "ditch-sage-3"})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "wellward", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "wellward" || p.Items["wellward"] != 1 || p.Items["riverstones"] != 0 || p.Items["sage"] != 0 {
+		t.Fatalf("wellward %+v", p)
+	}
 }
