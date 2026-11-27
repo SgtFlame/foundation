@@ -94,27 +94,34 @@ func revision(c Connection) uint64 {
 	return binary.BigEndian.Uint64(sum[:8])
 }
 
-// receivesAny reports whether t receives callbacks and one of the listened
-// contracts has an event delivered by callback.
-func receivesAny(ctx context.Context, d Deps, tenant uint64, t connectors.Type, listened []string) (bool, error) {
+// callbackEvents are the subscription names (else ids) of the events
+// delivered by callback in the listened contracts, sorted, when t
+// receives callbacks.
+func callbackEvents(ctx context.Context, d Deps, tenant uint64, t connectors.Type, listened []string) ([]string, error) {
 	if t.Receives == "" {
-		return false, nil
+		return nil, nil
 	}
+	var out []string
 	for _, ref := range listened {
 		ci, ok, err := d.Registry.Contract(ctx, tenant, ref)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 		if !ok {
 			continue
 		}
 		for _, ev := range ci.Contract.Events {
 			if slices.Contains(ev.Delivery, connectors.DeliveryCallback) {
-				return true, nil
+				name := ev.Subscription
+				if name == "" {
+					name = ev.ID
+				}
+				out = append(out, name)
 			}
 		}
 	}
-	return false, nil
+	slices.Sort(out)
+	return slices.Compact(out), nil
 }
 
 // Reconcile makes the tenant's cx_sources what its installs and
@@ -161,19 +168,19 @@ func Reconcile(ctx context.Context, d Deps, tenant uint64) error {
 			}
 			contracts = append(contracts, l.contract)
 		}
-		if len(contracts) == 0 {
-			continue
-		}
 		slices.Sort(contracts)
-		callbacks, err := receivesAny(ctx, d, tenant, t.Type, contracts)
-		if err != nil {
-			return err
-		}
-		if callbacks {
-			// a trigger listens to its callbacks: it needs its hook (forge 26b-1)
-			if _, err := hooks.Ensure(ctx, d.Projections.JetStream(), tenant, c.ID, c.Type); err != nil {
+		if t.Type.Receives != "" {
+			// its hook, registered for the callback events triggers listen to (forge 26b-1, 26b-2)
+			events, err := callbackEvents(ctx, d, tenant, t.Type, contracts)
+			if err != nil {
 				return err
 			}
+			if err := syncHook(ctx, d, tenant, c, events); err != nil {
+				log.With("connection", c.ID).Warn(ctx, "the hook of connection %s is not registered yet: %v", c.ID, err)
+			}
+		}
+		if len(contracts) == 0 {
+			continue
 		}
 		want[connectors.SourceKey(tenant, c.ID)] = connectors.Source{Tenant: tenant, Connection: c.ID, Type: c.Type, Contracts: contracts,
 			PollInterval: c.Options.PollInterval, Since: c.Options.Since, Revision: revision(c)}

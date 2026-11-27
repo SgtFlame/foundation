@@ -65,10 +65,12 @@ type Connection struct {
 	CheckedAt time.Time `json:"checkedAt,omitzero"`
 	Options   Options   `json:"options"`
 	// Account is who signed it in, for a type with OAuth (forge 26a-1).
-	Account   string    `json:"account,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
-	CreatedBy uint64    `json:"createdBy,string,omitempty"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Account string `json:"account,omitempty"`
+	// Hook is its hook's registration with the service (forge 26b-2).
+	Hook      *HookState `json:"hook,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+	CreatedBy uint64     `json:"createdBy,string,omitempty"`
+	UpdatedAt time.Time  `json:"updatedAt"`
 }
 
 // Options are a connection's event source options.
@@ -220,22 +222,28 @@ func (f Fields) Validate(settings map[string]any, secrets map[string]string) []F
 // the adapter as accessToken and expiresAt.
 const OAuthSecret = "oauth"
 
-// WithOAuth adds the oauth secret field to a type's fields.
-func (f Fields) WithOAuth() Fields {
-	if slices.Contains(f.Secrets, OAuthSecret) {
-		return f
-	}
-	props := map[string]*config.Schema{}
-	for k, v := range f.Schema.Properties {
-		props[k] = v
-	}
-	props[OAuthSecret] = &config.Schema{Type: "secret", Title: "Sign-in"}
-	schema := *f.Schema
-	schema.Properties = props
-	secrets := append(slices.Clone(f.Secrets), OAuthSecret)
-	slices.Sort(secrets)
-	return Fields{Schema: &schema, Secrets: secrets}
+// HookState is where a connection's hook registration stands: the URL
+// and events it was registered for, or why it was not.
+type HookState struct {
+	URL    string   `json:"url,omitempty"`
+	Events []string `json:"events,omitempty"`
+	// Registered is set once the service has it; Manual when the type
+	// registers nothing, so a person pastes URL into the service.
+	Registered bool      `json:"registered,omitempty"`
+	Manual     bool      `json:"manual,omitempty"`
+	Error      string    `json:"error,omitempty"`
+	At         time.Time `json:"at"`
 }
+
+// HookSecret is the secret a connection keeps its hook's registration
+// and signing secret in (forge 26b-2), set by connection.setHook; the
+// signing secret reaches the adapter as hookSecret.
+const HookSecret = "hook"
+
+// SystemSecrets are the secrets the server keeps, never named by
+// connection.create or connection.update nor checked against the type's
+// schema.
+var SystemSecrets = []string{OAuthSecret, HookSecret}
 
 // FieldProblem is a settings problem at a path.
 type FieldProblem struct{ Path, Message string }

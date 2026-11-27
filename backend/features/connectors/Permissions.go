@@ -33,8 +33,8 @@ func AdapterPermissions(types ...Type) Permissions {
 	}
 	for _, t := range types {
 		p.Subscribe = append(p.Subscribe, CallSubjects(t.ID))
-		if t.Receives != "" { // its callbacks (forge 26b-1)
-			p.Subscribe = append(p.Subscribe, ReceiveSubjects(t.ID))
+		if t.Receives != "" { // its callbacks (forge 26b-1) and hook registrations (26b-2)
+			p.Subscribe = append(p.Subscribe, ReceiveSubjects(t.ID), RegisterSubjects(t.ID))
 		}
 		for _, svc := range t.Services {
 			p.Publish = append(p.Publish, serviceSubjects[svc]...)

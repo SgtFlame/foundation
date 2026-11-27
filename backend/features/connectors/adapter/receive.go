@@ -124,3 +124,89 @@ func (s *server) verify(x Context, im Impl, tenant uint64, typ, connection strin
 	}
 	return events, nil
 }
+
+// registerSubjects are what the adapter answers registrations on: every
+// type with a Registrar.
+func (s *server) registerSubjects() map[string][]string {
+	out := map[string][]string{}
+	for id, im := range s.impls {
+		if im.Register == nil {
+			continue
+		}
+		if len(s.o.Tenants) == 0 {
+			out[id] = []string{connectors.RegisterSubjects(id)}
+			continue
+		}
+		for _, t := range s.o.Tenants {
+			out[id] = append(out[id], connectors.TenantRegisterSubjects(t, id))
+		}
+	}
+	return out
+}
+
+// registerHook runs a registration from the bus, beside the calls.
+func (s *server) registerHook(m *nats.Msg) {
+	s.wg.Add(1)
+	s.sem <- struct{}{}
+	go func() {
+		defer func() { <-s.sem; s.wg.Done() }()
+		rep := s.handleRegister(m)
+		raw, _ := json.Marshal(rep)
+		_ = m.Respond(raw)
+	}()
+}
+
+func (s *server) handleRegister(m *nats.Msg) (rep connectors.RegisterReply) {
+	tenant, typ, connection, err := connectors.ParseRegisterSubject(m.Subject)
+	if err != nil {
+		return connectors.RegisterReply{Error: connectors.Errorf(connectors.CodeInvalid, "%v", err)}
+	}
+	im, ok := s.impls[typ]
+	if !ok || im.Register == nil {
+		return connectors.RegisterReply{Error: connectors.Errorf(connectors.CodeNotSupported, "%s registers no hooks", typ)}
+	}
+	var req connectors.RegisterRequest
+	if err := json.Unmarshal(m.Data, &req); err != nil {
+		return connectors.RegisterReply{Error: connectors.Errorf(connectors.CodeInvalid, "the registration is not readable")}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	b := log.With("type", typ, "connection", connection)
+	ctx = logging.WithContext(ctx, b)
+	args := features.ServiceArgs{Ctx: ctx, Principal: features.ServicePrincipal(tenant)}
+	x := Context{Context: ctx, Args: args, Connection: connection, Log: b, books: s.books}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error(x, fmt.Errorf("%v", r), "%s's Registrar panicked", typ)
+			rep = connectors.RegisterReply{Error: connectors.Errorf(connectors.CodeUnavailable, "%s failed", typ)}
+		}
+	}()
+	conn, err := s.resolve(x, tenant, typ, connection)
+	if err != nil {
+		return connectors.RegisterReply{Error: connectors.AsError(err)}
+	}
+	var reg Registration
+	var secret string
+	switch req.Op {
+	case connectors.HookRegister:
+		reg, secret, err = im.Register.Register(x, conn, req.URL, req.Events)
+	case connectors.HookUpdate:
+		if req.Registration == nil {
+			return connectors.RegisterReply{Error: connectors.Errorf(connectors.CodeInvalid, "an update names its registration")}
+		}
+		reg, secret, err = im.Register.Update(x, conn, *req.Registration, req.URL, req.Events)
+	case connectors.HookUnregister:
+		if req.Registration != nil {
+			err = im.Register.Unregister(x, conn, *req.Registration)
+		}
+		if err == nil {
+			return connectors.RegisterReply{}
+		}
+	default:
+		return connectors.RegisterReply{Error: connectors.Errorf(connectors.CodeInvalid, "%q is not a registration op", req.Op)}
+	}
+	if err != nil {
+		return connectors.RegisterReply{Error: connectors.AsError(err)}
+	}
+	return connectors.RegisterReply{Registration: &reg, Secret: secret}
+}

@@ -1,6 +1,7 @@
 package connectors
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -152,4 +153,55 @@ func ParseReceiveSubject(subject string) (uint64, string, string, error) {
 		return 0, "", "", fmt.Errorf("%q names no tenant", subject)
 	}
 	return tenant, FromToken(parts[3]), parts[4], nil
+}
+
+// RegisterSubject asks a connection's type to register, update or remove
+// its hook with the service (26b-2): cx.register.<tenant>.<type>.<connection>,
+// answered by the type's adapter with a Registrar.
+func RegisterSubject(tenant uint64, typ, connection string) string {
+	return fmt.Sprintf("cx.register.%d.%s.%s", tenant, Token(typ), connection)
+}
+
+// RegisterSubjects are every registration for typ, in every tenant.
+func RegisterSubjects(typ string) string { return fmt.Sprintf("cx.register.*.%s.*", Token(typ)) }
+
+// TenantRegisterSubjects are the registrations for typ in one tenant.
+func TenantRegisterSubjects(tenant uint64, typ string) string {
+	return fmt.Sprintf("cx.register.%d.%s.*", tenant, Token(typ))
+}
+
+// ParseRegisterSubject splits a register subject.
+func ParseRegisterSubject(subject string) (uint64, string, string, error) {
+	return ParseReceiveSubject(strings.Replace(subject, "cx.register.", "cx.receive.", 1))
+}
+
+// Hook registration ops.
+const (
+	HookRegister   = "register"
+	HookUpdate     = "update"
+	HookUnregister = "unregister"
+)
+
+// HookRegistration is what a type's Registrar keeps of a hook it
+// registered with the service: the service's id for it and any data it
+// needs to change it.
+type HookRegistration struct {
+	ID   string          `json:"id"`
+	Data json.RawMessage `json:"data,omitempty"`
+}
+
+// RegisterRequest is a cx.register body.
+type RegisterRequest struct {
+	Op           string            `json:"op"` // register, update or unregister
+	URL          string            `json:"url,omitempty"`
+	Events       []string          `json:"events,omitempty"` // the listened events' subscription names
+	Registration *HookRegistration `json:"registration,omitempty"`
+}
+
+// RegisterReply is a cx.register reply: the registration (none after
+// unregister) and the signing secret the service gave, if any.
+type RegisterReply struct {
+	Registration *HookRegistration `json:"registration,omitempty"`
+	Secret       string            `json:"secret,omitempty"`
+	Error        *Error            `json:"error,omitempty"`
 }

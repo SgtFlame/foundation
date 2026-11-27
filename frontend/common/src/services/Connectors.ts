@@ -123,6 +123,8 @@ export interface Connection {
   options: ConnectionOptions
   // account: who signed it in, for a type with OAuth (forge 26a-1)
   account?: string
+  // hook: its hook's registration with the service (forge 26b-2)
+  hook?: { url?: string; events?: string[]; registered?: boolean; manual?: boolean; error?: string; at: string }
   createdAt: string
   updatedAt: string
 }

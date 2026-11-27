@@ -1098,6 +1098,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		connectionDeps = connections.Deps{Projections: projections, Bus: liveBus, Registry: connectorRegistry, Secrets: secretStore, Dispatcher: connectorDispatcher, Config: configService, Extensions: registry}
 		oauthDeps = oauth.Deps{Connections: func() connections.Deps { return connectionDeps }, PublicBase: publicURL()}
 		connectionDeps.Tokens = oauth.Tokens{Deps: oauthDeps} // forge 26a-1
+		connectionDeps.PublicBase = publicURL()               // hooks' base URL (forge 26b-2)
 		scriptedDeps = scripted.Deps{Store: projections, Engine: cognitionEngine, Books: connectors.InJetStream(connectorRegistry.JetStream()), Reg: registry}
 		// The connectors' data service (forge 21e-1), served over NATS for
 		// adapters without a JetStream handle by serve --services (21g-1)

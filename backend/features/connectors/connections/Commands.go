@@ -36,6 +36,9 @@ type Deps struct {
 	// Tokens refresh an OAuth connection's access token before cx.resolve
 	// gives it (forge 26a-1); without it the stored token is given as it is.
 	Tokens TokenSource
+	// PublicBase is serve's --public-url, the hooks' base URL when the
+	// connectors.hooks section names none (forge 26b-2).
+	PublicBase string
 }
 
 // Events.
@@ -47,7 +50,15 @@ const (
 	EventEnabled       = "enabled"
 	EventDeleted       = "deleted"
 	EventStatusChanged = "statusChanged"
+	EventHookChanged   = "hookChanged" // forge 26b-2
 )
+
+// hookChanged is a hook registration's event: the state (nil when it
+// was removed) and the hook secret's reference (nil clears, absent keeps).
+type hookChanged struct {
+	Hook    *HookState         `json:"hook"`
+	Secrets map[string]*string `json:"secrets,omitempty"`
+}
 
 // updated is an update event's data: settings as a merge patch (nil
 // removes), secrets' references (nil clears), the options when given, and
@@ -147,6 +158,25 @@ func fold(f live.Fold) (json.RawMessage, error) {
 			c.Status = s.Status
 		}
 		c.LastError, c.CheckedAt = s.Error, s.At
+	case EventHookChanged:
+		var h hookChanged
+		if err := json.Unmarshal(e.Data, &h); err != nil {
+			return nil, err
+		}
+		c.Hook = h.Hook
+		for k, v := range h.Secrets {
+			if c.Secrets == nil {
+				c.Secrets = map[string]string{}
+			}
+			if v == nil {
+				delete(c.Secrets, k)
+			} else {
+				c.Secrets[k] = *v
+			}
+		}
+		if len(c.Secrets) == 0 {
+			c.Secrets = nil
+		}
 	case EventDeleted:
 		return nil, nil
 	default:
@@ -284,6 +314,49 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		},
 	})
 	command(live.Command{
+		Descriptor: extensions.Descriptor{ID: "connection.setHook"}, Title: "Keep a connection's hook registration", Internal: true, NoTool: true,
+		Description: "Keeps where a connection's hook registration with its service stands and, as its hook secret, the registration and the signing secret the service gave. Committed by the server only.",
+		Args: json.RawMessage(`{"type":"object","properties":{
+  "hook":{"description":"{url, events, registered, manual, error}, or null once removed"},
+  "secrets":{"type":"object","description":"{hook: the registration as JSON, or null to clear it}, sealed before it is decided","properties":{"hook":{"description":"The registration as JSON, or null"}}}}}`),
+		Examples: []json.RawMessage{json.RawMessage(`{"hook":{"url":"https://axiom.example.com/hooks/cx/…","events":["job.finished"],"registered":true}}`)},
+		Events:   []string{EventHookChanged},
+		Seal:     seal(deps, false),
+		Decide: func(d live.Decision) ([]live.NewEvent, []live.Problem) {
+			c, p := managed(d)
+			if p != nil {
+				return nil, p
+			}
+			var a struct {
+				Hook    *HookState                 `json:"hook"`
+				Secrets map[string]json.RawMessage `json:"secrets"`
+			}
+			if err := json.Unmarshal(d.Args, &a); err != nil {
+				return nil, []live.Problem{{Message: err.Error()}}
+			}
+			secrets, p := sealedSecrets(a.Secrets)
+			if p != nil {
+				return nil, p
+			}
+			for k, v := range secrets {
+				if k != HookSecret {
+					return nil, []live.Problem{{Path: "secrets." + k, Message: "connection.setHook keeps only the hook secret"}}
+				}
+				if v != nil && !hasSecret(d.Context(), deps(), d.Principal.TenantID, c.ID, k, *v) {
+					return nil, []live.Problem{{Path: "secrets.hook", Message: "the registration was not stored"}}
+				}
+			}
+			if a.Hook != nil {
+				a.Hook.At = time.Now().UTC()
+			}
+			if len(secrets) == 0 {
+				secrets = nil
+			}
+			d.NoUndo("", "a hook registration is the service's")
+			return []live.NewEvent{{Type: EventHookChanged, Data: hookChanged{Hook: a.Hook, Secrets: secrets}}}, nil
+		},
+	})
+	command(live.Command{
 		Descriptor: extensions.Descriptor{ID: "connection.setStatus"}, Title: "Set a connection's status", Internal: true,
 		Description: "Records a connection's status from a call or its event source: error stops it until it is updated; ok with an error records the last error. Committed by the server only.",
 		Args: json.RawMessage(`{"type":"object","properties":{
@@ -303,6 +376,16 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		},
 	})
 	contributeQueries(reg, deps)
+}
+
+// noSystemSecrets refuses arguments naming a secret the server keeps.
+func noSystemSecrets(secrets map[string]*string) []live.Problem {
+	for k := range secrets {
+		if slices.Contains(SystemSecrets, k) {
+			return []live.Problem{{Path: "secrets." + k, Message: "is kept by the server: sign in, or let the hook be registered"}}
+		}
+	}
+	return nil
 }
 
 // managed reads the decided connection and checks manage on it.
@@ -377,9 +460,6 @@ func fieldsFor(d Deps, args features.ServiceArgs, typ string) (connectors.Type, 
 	if err != nil {
 		return connectors.Type{}, Fields{}, []live.Problem{{Path: "type", Message: fmt.Sprintf("the settings schema of %s cannot be read: %v", typ, err)}}
 	}
-	if t.Type.OAuth != nil {
-		f = f.WithOAuth()
-	}
 	return t.Type, f, nil
 }
 
@@ -424,6 +504,9 @@ func decideCreate(deps Deps, reg *extensions.Registry, d live.Decision) ([]live.
 	}
 	secrets, p := sealedSecrets(a.Secrets)
 	if p != nil {
+		return nil, p
+	}
+	if p := noSystemSecrets(secrets); p != nil {
 		return nil, p
 	}
 	set := map[string]string{}
@@ -480,9 +563,14 @@ func decideUpdate(deps Deps, reg *extensions.Registry, d live.Decision) ([]live.
 			settings[k] = v
 		}
 	}
-	set := maps.Clone(c.Secrets)
-	if set == nil {
-		set = map[string]string{}
+	if p := noSystemSecrets(secrets); p != nil {
+		return nil, p
+	}
+	set := map[string]string{}
+	for k, v := range c.Secrets {
+		if !slices.Contains(SystemSecrets, k) { // kept by the server, not the type's schema
+			set[k] = v
+		}
 	}
 	for k, v := range secrets {
 		if v == nil {

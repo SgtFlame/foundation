@@ -139,12 +139,14 @@ func Options(by string, count *Counter) adapter.Options {
 		return &session{by: by, count: count, conn: conn.ID, settings: st}, nil
 	}
 	return adapter.Options{Name: "test-" + by, Types: Types(), Contracts: []connectors.Contract{Contract()},
-		Impls: []adapter.Impl{{Type: "test.echo", Open: open}, {Type: "test.secure", Open: open, Receive: Receiver{}}, {Type: "test.exclusive", Open: open}}}
+		Impls: []adapter.Impl{{Type: "test.echo", Open: open}, {Type: "test.secure", Open: open, Receive: Receiver{}, Register: Hooks}, {Type: "test.exclusive", Open: open}}}
 }
 
 // Settings are a test connection's settings as its session reads them.
 type Settings struct {
 	User, Password string
+	// HookSecret is the signing secret its hook registration gave (26b-2)
+	HookSecret     string
 	Events         int
 	LoseCursorFrom int
 	Push           bool
@@ -191,7 +193,11 @@ type Receiver struct{}
 func (Receiver) Receive(ctx adapter.Context, conn adapter.Connection, cb adapter.Callback) ([]adapter.Event, error) {
 	var st Settings
 	_ = json.Unmarshal(conn.Settings, &st)
-	if err := verify.Verify("hmac-sha256", st.Password, cb.Header, cb.Body, time.Now()); err != nil {
+	secret := st.Password
+	if st.HookSecret != "" {
+		secret = st.HookSecret // the registered hook's (26b-2)
+	}
+	if err := verify.Verify("hmac-sha256", secret, cb.Header, cb.Body, time.Now()); err != nil {
 		return nil, connectors.Errorf(connectors.CodeAuth, "%v", err)
 	}
 	var p struct{ ID string }
@@ -199,6 +205,55 @@ func (Receiver) Receive(ctx adapter.Context, conn adapter.Connection, cb adapter
 		return nil, connectors.Errorf(connectors.CodeInvalid, "the body is not a finished event")
 	}
 	return []adapter.Event{{Contract: ContractRef, Name: "finished", ID: p.ID, Payload: cb.Body}}, nil
+}
+
+// HookService is the fake service test.secure registers its hooks with
+// (26b-2): it records each call.
+type HookService struct {
+	mu    sync.Mutex
+	calls []string
+}
+
+// Hooks is this process's fake service.
+var Hooks = &HookService{}
+
+func (h *HookService) record(format string, a ...any) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.calls = append(h.calls, fmt.Sprintf(format, a...))
+}
+
+// Calls are the calls so far: "register <connection> <url> <events>",
+// "update …", "unregister <connection> <registration>".
+func (h *HookService) Calls() []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]string(nil), h.calls...)
+}
+
+// Reset forgets the calls.
+func (h *HookService) Reset() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.calls = nil
+}
+
+// Register registers a hook, signed with signing-<connection>.
+func (h *HookService) Register(ctx adapter.Context, conn adapter.Connection, url string, events []string) (adapter.Registration, string, error) {
+	h.record("register %s %s %s", conn.ID, url, strings.Join(events, ","))
+	return adapter.Registration{ID: "reg-" + conn.ID}, "signing-" + conn.ID, nil
+}
+
+// Update changes a registration's URL or events.
+func (h *HookService) Update(ctx adapter.Context, conn adapter.Connection, reg adapter.Registration, url string, events []string) (adapter.Registration, string, error) {
+	h.record("update %s %s %s", conn.ID, url, strings.Join(events, ","))
+	return reg, "", nil
+}
+
+// Unregister removes a registration.
+func (h *HookService) Unregister(ctx adapter.Context, conn adapter.Connection, reg adapter.Registration) error {
+	h.record("unregister %s %s", conn.ID, reg.ID)
+	return nil
 }
 
 type session struct {

@@ -10,7 +10,9 @@
 // with OAuth (forge 26a-1) shows who signed it in and Sign in with …
 // (Sign in again once its sign-in expired), which opens the provider in a
 // popup (the connection.signIn call) and hears the callback's result; with
-// popups blocked, the page itself goes and comes back.
+// popups blocked, the page itself goes and comes back. A type that
+// receives callbacks shows its hook (forge 26b-2): registered, the URL to
+// paste into the service when the type registers nothing, or why not.
 
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, Box, Button, Chip, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from '@mui/material'
@@ -219,6 +221,18 @@ export function ConnectionForm(p: RendererProps) {
         </Stack>
       )}
       {!existing && info?.type.oauth && <Alert severity="info">Save it, then sign in.</Alert>}
+      {existing?.hook?.manual && existing.hook.url && (
+        <Alert severity="info">
+          Paste this address into the service's webhook settings, for {existing.hook.events?.join(', ')}:{' '}
+          <Typography component="span" variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{existing.hook.url}</Typography>
+        </Alert>
+      )}
+      {existing?.hook?.registered && (
+        <Typography variant="caption" color="text.secondary">
+          The service sends {existing.hook.events?.join(', ')} to this connection's hook.
+        </Typography>
+      )}
+      {existing?.hook?.error && <Alert severity="warning">The hook is not registered: {existing.hook.error}</Alert>}
       {info && !info.online && <Alert severity="warning">No adapter serves {info.type.meta.title} right now: it can be saved, not tested or used.</Alert>}
       {typeId && (
         <>
