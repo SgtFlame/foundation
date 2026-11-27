@@ -1,0 +1,124 @@
+{
+  "id": "calOccurrence",
+  "name": "Occurrence",
+  "owner": "app:calendar",
+  "description": "One occurrence of an event inside its calendar's window (forge 28e, question 28.7): a one-off has one, a series one per repetition, an exception its own. Written by the app when an event changes and as the window slides; views, free/busy and the tools read these. A person a calendar is shared with as free/busy reads its occurrences (when, busy or free) but not its events, so never their titles.",
+  "titleField": "recurrenceId",
+  "fields": [
+    {
+      "id": "event",
+      "name": "Event",
+      "type": "relation",
+      "description": "The event it is an occurrence of (an exception for an occurrence it replaces)",
+      "relation": {
+        "entity": "calEvent"
+      },
+      "required": true
+    },
+    {
+      "id": "series",
+      "name": "Series",
+      "type": "relation",
+      "description": "The series' master, or the event itself for a one-off",
+      "relation": {
+        "entity": "calEvent"
+      }
+    },
+    {
+      "id": "calendar",
+      "name": "Calendar",
+      "type": "relation",
+      "description": "The calendar",
+      "relation": {
+        "entity": "calCalendar"
+      },
+      "required": true
+    },
+    {
+      "id": "start",
+      "name": "Start",
+      "type": "dateTime",
+      "description": "When it starts",
+      "required": true
+    },
+    {
+      "id": "end",
+      "name": "End",
+      "type": "dateTime",
+      "description": "When it ends, exclusive",
+      "required": true
+    },
+    {
+      "id": "allDay",
+      "name": "All day",
+      "type": "bool",
+      "description": "Whole days"
+    },
+    {
+      "id": "recurrenceId",
+      "name": "Recurrence id",
+      "type": "text",
+      "description": "The start it has in the series (an instant in UTC, or a date for all-day)"
+    },
+    {
+      "id": "status",
+      "name": "Status",
+      "type": "enum",
+      "description": "As the event's",
+      "options": [
+        {
+          "id": "confirmed",
+          "name": "Confirmed"
+        },
+        {
+          "id": "tentative",
+          "name": "Tentative"
+        },
+        {
+          "id": "cancelled",
+          "name": "Cancelled"
+        }
+      ],
+      "default": "confirmed"
+    },
+    {
+      "id": "transparency",
+      "name": "Shows as",
+      "type": "enum",
+      "description": "As the event's",
+      "options": [
+        {
+          "id": "opaque",
+          "name": "Opaque"
+        },
+        {
+          "id": "transparent",
+          "name": "Transparent"
+        }
+      ],
+      "default": "opaque"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "by_calendar_start",
+      "fields": [
+        "calendar",
+        "start"
+      ]
+    },
+    {
+      "id": "by_series",
+      "fields": [
+        "series",
+        "recurrenceId"
+      ]
+    }
+  ],
+  "access": {
+    "read": "principal.kind == 'app' || principal.owner || principal.hasRole('calWriter', record.calendar) || principal.hasRole('calReader', record.calendar) || principal.hasRole('calFreeBusy', record.calendar)",
+    "create": "principal.kind == 'app'",
+    "update": "principal.kind == 'app'",
+    "delete": "principal.kind == 'app'"
+  }
+}

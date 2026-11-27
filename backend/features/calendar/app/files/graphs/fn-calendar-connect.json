@@ -1,0 +1,438 @@
+{
+  "id": "fn-calendar-connect",
+  "name": "Connect outside calendars",
+  "description": "Makes a calendar record, owned by the caller, for each calendar of an outside connection (calendar.events@1) the caller picks (every one when none are named), skipping those already connected; each new calendar is then mirrored in full by the app's sync. Gives the calendars made.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "connection",
+            "type": "string",
+            "description": "The connection's id (a calendar.events@1 connection the caller may use)"
+          },
+          {
+            "id": "calendars",
+            "type": "json",
+            "optional": true,
+            "description": "The outside calendars' ids to connect, as calendar.list gives them; every one when left out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "list",
+      "type": "connector.call",
+      "title": "The connection's calendars",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "contract": "calendar.events@1",
+        "operation": "calendar.list",
+        "outputs": [
+          {
+            "id": "calendars",
+            "name": "Calendars",
+            "type": "json",
+            "description": "The calendars"
+          }
+        ],
+        "connection": true,
+        "effect": "read",
+        "sample": {
+          "calendars": [
+            {
+              "access": "owner",
+              "color": "#3f51b5",
+              "id": "primary",
+              "name": "Tony",
+              "primary": true,
+              "zone": "Europe/London"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "exQuery",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "{where: {connection: connection}, limit: 500}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "existing",
+      "type": "records.query",
+      "title": "Calendars already connected",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "toMake",
+      "type": "data.expression",
+      "title": "The calendars to make",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "let held = map(existing ?? [], string(#.outsideId ?? \"\"));\nlet picked = calendars ?? [];\nfilter(found ?? [], !(#.id in held) \u0026\u0026 (len(picked) == 0 || #.id in picked))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "each",
+      "type": "flow.forEach",
+      "position": {
+        "x": 1360,
+        "y": 0
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "{entity: \"calCalendar\", values: {name: item.name ?? item.id, color: item.color ?? \"\", zone: item.zone ?? \"\", owner: user, connection: connection, outsideId: item.id, syncState: \"behind\"}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "make",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "command": "record.create"
+      }
+    },
+    {
+      "id": "made",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "map(toMake ?? [], ({id: #.id, name: #.name ?? #.id}))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "made",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "refusedMake",
+      "type": "flow.return",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "failed",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "string(error?.message ?? \"the connection's calendars could not be listed\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "refusedList",
+      "type": "flow.return",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "connection"
+      },
+      "to": {
+        "node": "list",
+        "pin": "connection"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "connection"
+      },
+      "to": {
+        "node": "exQuery",
+        "pin": "connection"
+      }
+    },
+    {
+      "from": {
+        "node": "exQuery",
+        "pin": "value"
+      },
+      "to": {
+        "node": "existing",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "existing",
+        "pin": "records"
+      },
+      "to": {
+        "node": "toMake",
+        "pin": "existing"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendars"
+      },
+      "to": {
+        "node": "toMake",
+        "pin": "calendars"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "calendars"
+      },
+      "to": {
+        "node": "toMake",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "list",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "then"
+      },
+      "to": {
+        "node": "each",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "toMake",
+        "pin": "value"
+      },
+      "to": {
+        "node": "each",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "args",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "args",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "connection"
+      },
+      "to": {
+        "node": "args",
+        "pin": "connection"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "body"
+      },
+      "to": {
+        "node": "make",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "make",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "make",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "refusedMake",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "make",
+        "pin": "message"
+      },
+      "to": {
+        "node": "refusedMake",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "toMake",
+        "pin": "value"
+      },
+      "to": {
+        "node": "made",
+        "pin": "toMake"
+      }
+    },
+    {
+      "from": {
+        "node": "made",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "made"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "failed"
+      },
+      "to": {
+        "node": "refusedList",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "error"
+      },
+      "to": {
+        "node": "failed",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "failed",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refusedList",
+        "pin": "error"
+      }
+    }
+  ]
+}

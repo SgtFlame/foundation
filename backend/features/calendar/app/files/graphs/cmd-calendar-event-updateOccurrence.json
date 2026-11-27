@@ -1,0 +1,1211 @@
+{
+  "id": "cmd-calendar-event-updateOccurrence",
+  "name": "calendar.event.updateOccurrence",
+  "description": "Changes one occurrence of a recurring event (the target, the series' master), this one, this and the following, or all: this writes or changes an exception for it; following ends the series just before it and starts a new series from it (Split recurrence), carrying the later exceptions over; all changes the master. set holds the event fields to change (title, start, end, location, …).",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:calendar",
+  "spec": {
+    "command": "event.updateOccurrence",
+    "title": "Change an occurrence of a series",
+    "description": "Changes an occurrence of the target recurring event (its master): recurrenceId names the occurrence, scope this, following or all, set the fields to change (title, start, end, location, description, status, transparency, attendees, videoLink). Its target is the series' master.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "recurrenceId": {
+          "type": "string",
+          "description": "The occurrence's recurrence id (its original start as an instant in UTC, or a date for all-day)"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "this",
+            "following",
+            "all"
+          ],
+          "description": "this occurrence, this and the following, or all of them"
+        },
+        "set": {
+          "type": "object",
+          "description": "The fields to change, such as {\"title\":\"Planning (moved)\",\"start\":\"2026-12-08T10:00:00Z\",\"end\":\"2026-12-08T11:00:00Z\"}"
+        }
+      },
+      "required": [
+        "recurrenceId",
+        "scope",
+        "set"
+      ]
+    },
+    "area": "rec",
+    "targetType": "calEvent",
+    "projection": "records.record",
+    "action": "record.update",
+    "events": [
+      "created",
+      "updated",
+      "deleted"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "excQuery",
+      "type": "data.expression",
+      "title": "The series' exceptions",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "{where: {series: target}, limit: 1000}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "exceptions",
+      "type": "records.query",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "calEvent"
+      }
+    },
+    {
+      "id": "calId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "string(state?.calendar ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "cal",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "zone",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "(state?.zone ?? \"\") != \"\" ? state.zone : (cal?.zone ?? \"\") != \"\" ? cal.zone : \"UTC\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "instant",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "expr": "string(state?.start ?? \"2026-01-01T00:00:00Z\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "local",
+      "type": "time.convert",
+      "position": {
+        "x": 1360,
+        "y": 0
+      }
+    },
+    {
+      "id": "startZoned",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "(state?.allDay ?? false) ? {date: instant[0:10]} : {local: localTime, zone: zone}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "splitRule",
+      "type": "data.expression",
+      "title": "The rule to split (a harmless one when not splitting)",
+      "position": {
+        "x": 340,
+        "y": 600
+      },
+      "config": {
+        "expr": "(args.scope ?? \"\") == \"following\" \u0026\u0026 (state?.rrule ?? \"\") != \"\" ? state.rrule : \"FREQ=DAILY;COUNT=2\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "splitAt",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "expr": "(args.scope ?? \"\") == \"following\" \u0026\u0026 (state?.rrule ?? \"\") != \"\" ? (args.recurrenceId ?? \"\") : ((state?.allDay ?? false) ? instant[0:10] : instant)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "cut",
+      "type": "time.splitRule",
+      "title": "Split the series at the occurrence",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "split",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "expr": "{before: before, beforeEmpty: beforeEmpty, after: after}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "expr": "let m = state;\nlet rid = args.recurrenceId ?? \"\";\nlet scope = args.scope ?? \"\";\nlet allowed = [\"title\", \"start\", \"end\", \"location\", \"description\", \"status\", \"transparency\", \"attendees\", \"videoLink\", \"allDay\", \"zone\"];\nlet set = fromPairs(filter(toPairs(args.set ?? {}), #[0] in allowed));\nlet compact = replace(replace(replace(rid, \"-\", \"\"), \":\", \"\"), \"+\", \"\");\nlet ridStart = len(rid) == 10 ? rid + \"T00:00:00Z\" : rid;\nlet dur = m == nil ? duration(\"0s\") : date(m.end) - date(m.start);\nlet base = m == nil ? {} : {calendar: m.calendar, title: m.title, zone: m.zone, allDay: m.allDay ?? false, status: m.status ?? \"confirmed\", transparency: m.transparency ?? \"opaque\", location: m.location, videoLink: m.videoLink, organizer: m.organizer, attendees: m.attendees, description: m.description};\nlet at = {start: ridStart, end: date(ridStart).Add(dur).UTC().Format(\"2006-01-02T15:04:05Z\")};\nlet exc = find(exceptions ?? [], #.recurrenceId == rid);\nlet whole = scope == \"all\" || (scope == \"following\" \u0026\u0026 cutAt.beforeEmpty);\nlet later = filter(exceptions ?? [], #.recurrenceId \u003e= rid \u0026\u0026 len(#.recurrenceId) == len(rid));\nlet newId = target + \"_f_\" + compact;\n{problem: m == nil ? \"there is no event \" + target\n  : m.series != nil ? \"the target is an exception: send it to its series' master\"\n  : (m.rrule ?? \"\") == \"\" ? \"the event does not repeat: change it with record.update\"\n  : rid == \"\" ? \"give the occurrence's recurrence id\"\n  : !(scope in [\"this\", \"following\", \"all\"]) ? \"the scope is this, following or all\"\n  : len(set) == 0 ? \"set changes nothing\" : \"\",\n exceptionCreate: scope == \"this\" \u0026\u0026 exc == nil ? [{id: target + \"_x_\" + compact, values: fromPairs(concat(toPairs(base), toPairs(at), [[\"series\", target], [\"recurrenceId\", rid]], toPairs(set)))}] : [],\n exceptionUpdate: scope == \"this\" \u0026\u0026 exc != nil ? [{id: exc._id, set: set, expect: exc._seq}]\n   : (scope == \"following\" \u0026\u0026 !cutAt.beforeEmpty ? map(later, ({id: #._id, set: {series: newId}, expect: #._seq})) : []),\n masterUpdate: whole ? [{id: target, set: set, expect: m._seq}]\n   : scope == \"following\" ? [{id: target, set: {rrule: cutAt.before}, expect: m._seq}] : [],\n seriesCreate: scope == \"following\" \u0026\u0026 !cutAt.beforeEmpty ? [{id: newId, values: fromPairs(concat(toPairs(base), toPairs(at), [[\"rrule\", cutAt.after], [\"rdate\", m.rdate], [\"exdate\", m.exdate]], toPairs(set)))}] : []}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 3060,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 3400,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 3060,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 3740,
+        "y": 0
+      }
+    },
+    {
+      "id": "w0list",
+      "type": "data.expression",
+      "position": {
+        "x": 3060,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.exceptionCreate ?? []",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0",
+      "type": "flow.forEach",
+      "title": "create calEvent (exceptionCreate)",
+      "position": {
+        "x": 3740,
+        "y": 200
+      }
+    },
+    {
+      "id": "w0id",
+      "type": "data.expression",
+      "position": {
+        "x": 4080,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w0w",
+      "type": "records.create",
+      "position": {
+        "x": 4420,
+        "y": 0
+      },
+      "config": {
+        "entity": "calEvent"
+      }
+    },
+    {
+      "id": "w0v",
+      "type": "data.expression",
+      "position": {
+        "x": 4080,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.values",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w1list",
+      "type": "data.expression",
+      "position": {
+        "x": 3060,
+        "y": 600
+      },
+      "config": {
+        "expr": "plan.seriesCreate ?? []",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w1",
+      "type": "flow.forEach",
+      "title": "create calEvent (seriesCreate)",
+      "position": {
+        "x": 4080,
+        "y": 400
+      }
+    },
+    {
+      "id": "w1id",
+      "type": "data.expression",
+      "position": {
+        "x": 4420,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w1w",
+      "type": "records.create",
+      "position": {
+        "x": 4760,
+        "y": 0
+      },
+      "config": {
+        "entity": "calEvent"
+      }
+    },
+    {
+      "id": "w1v",
+      "type": "data.expression",
+      "position": {
+        "x": 4420,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.values",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w2list",
+      "type": "data.expression",
+      "position": {
+        "x": 3060,
+        "y": 800
+      },
+      "config": {
+        "expr": "plan.exceptionUpdate ?? []",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w2",
+      "type": "flow.forEach",
+      "title": "update calEvent (exceptionUpdate)",
+      "position": {
+        "x": 4420,
+        "y": 600
+      }
+    },
+    {
+      "id": "w2id",
+      "type": "data.expression",
+      "position": {
+        "x": 4760,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w2w",
+      "type": "records.update",
+      "position": {
+        "x": 5100,
+        "y": 0
+      },
+      "config": {
+        "entity": "calEvent"
+      }
+    },
+    {
+      "id": "w2s",
+      "type": "data.expression",
+      "position": {
+        "x": 4760,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w2x",
+      "type": "data.expression",
+      "position": {
+        "x": 4760,
+        "y": 600
+      },
+      "config": {
+        "expr": "item.expect",
+        "type": "number"
+      }
+    },
+    {
+      "id": "w3list",
+      "type": "data.expression",
+      "position": {
+        "x": 3060,
+        "y": 1000
+      },
+      "config": {
+        "expr": "plan.masterUpdate ?? []",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w3",
+      "type": "flow.forEach",
+      "title": "update calEvent (masterUpdate)",
+      "position": {
+        "x": 4760,
+        "y": 800
+      }
+    },
+    {
+      "id": "w3id",
+      "type": "data.expression",
+      "position": {
+        "x": 5100,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w3w",
+      "type": "records.update",
+      "position": {
+        "x": 5440,
+        "y": 0
+      },
+      "config": {
+        "entity": "calEvent"
+      }
+    },
+    {
+      "id": "w3s",
+      "type": "data.expression",
+      "position": {
+        "x": 5100,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w3x",
+      "type": "data.expression",
+      "position": {
+        "x": 5100,
+        "y": 600
+      },
+      "config": {
+        "expr": "item.expect",
+        "type": "number"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "excQuery",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "excQuery",
+        "pin": "value"
+      },
+      "to": {
+        "node": "exceptions",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "calId",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "calId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cal",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "zone",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "record"
+      },
+      "to": {
+        "node": "zone",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "instant",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "instant",
+        "pin": "value"
+      },
+      "to": {
+        "node": "local",
+        "pin": "instant"
+      }
+    },
+    {
+      "from": {
+        "node": "zone",
+        "pin": "value"
+      },
+      "to": {
+        "node": "local",
+        "pin": "zone"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "startZoned",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "instant",
+        "pin": "value"
+      },
+      "to": {
+        "node": "startZoned",
+        "pin": "instant"
+      }
+    },
+    {
+      "from": {
+        "node": "local",
+        "pin": "local"
+      },
+      "to": {
+        "node": "startZoned",
+        "pin": "localTime"
+      }
+    },
+    {
+      "from": {
+        "node": "zone",
+        "pin": "value"
+      },
+      "to": {
+        "node": "startZoned",
+        "pin": "zone"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "splitRule",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "splitRule",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "splitAt",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "splitAt",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "instant",
+        "pin": "value"
+      },
+      "to": {
+        "node": "splitAt",
+        "pin": "instant"
+      }
+    },
+    {
+      "from": {
+        "node": "startZoned",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cut",
+        "pin": "start"
+      }
+    },
+    {
+      "from": {
+        "node": "splitRule",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cut",
+        "pin": "rrule"
+      }
+    },
+    {
+      "from": {
+        "node": "splitAt",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cut",
+        "pin": "recurrenceId"
+      }
+    },
+    {
+      "from": {
+        "node": "cut",
+        "pin": "before"
+      },
+      "to": {
+        "node": "split",
+        "pin": "before"
+      }
+    },
+    {
+      "from": {
+        "node": "cut",
+        "pin": "beforeEmpty"
+      },
+      "to": {
+        "node": "split",
+        "pin": "beforeEmpty"
+      }
+    },
+    {
+      "from": {
+        "node": "cut",
+        "pin": "after"
+      },
+      "to": {
+        "node": "split",
+        "pin": "after"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "exceptions",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "exceptions"
+      }
+    },
+    {
+      "from": {
+        "node": "split",
+        "pin": "value"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "cutAt"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0v",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0v",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "values"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w1list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "w1",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w1list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w1",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w1",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w1id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w1",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w1w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w1id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w1w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w1",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w1v",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w1v",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w1w",
+        "pin": "values"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w2list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "w1",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "w2",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w2list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w2",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w2",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w2id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w2",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w2w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w2id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w2w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w2",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w2s",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w2s",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w2w",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "w2",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w2x",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w2x",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w2w",
+        "pin": "expect"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w3list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "w2",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "w3",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w3list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w3",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w3",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w3id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w3",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w3w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w3id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w3w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w3",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w3s",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w3s",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w3w",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "w3",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w3x",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w3x",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w3w",
+        "pin": "expect"
+      }
+    }
+  ]
+}

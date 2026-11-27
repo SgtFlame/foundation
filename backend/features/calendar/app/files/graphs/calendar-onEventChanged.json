@@ -1,0 +1,135 @@
+{
+  "id": "calendar-onEventChanged",
+  "name": "An event changed",
+  "description": "Enqueues the sync of the occurrences of the series an event belongs to (the calendar-syncEvent job, keyed by the series), as the app, whenever an event is made, changed or deleted, by a person or by the app's sync of an outside calendar: a one-off's or master's own, an exception's master's.",
+  "kind": "app.trigger",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "records.onChanged",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "entity": "calEvent",
+        "events": [
+          "created",
+          "updated",
+          "deleted"
+        ],
+        "ownChanges": true
+      }
+    },
+    {
+      "id": "master",
+      "type": "data.expression",
+      "title": "The series it belongs to",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "let r = record ?? {};\nlet o = old ?? {};\nlet s = r.series ?? o.series;\nstring(s ?? id)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "inputs",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "{event: master}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "enqueue",
+      "type": "jobs.enqueue",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "graph": "calendar-syncEvent"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "master",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "old"
+      },
+      "to": {
+        "node": "master",
+        "pin": "old"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "master",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "master",
+        "pin": "value"
+      },
+      "to": {
+        "node": "inputs",
+        "pin": "master"
+      }
+    },
+    {
+      "from": {
+        "node": "inputs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "inputs"
+      }
+    },
+    {
+      "from": {
+        "node": "master",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "key"
+      }
+    }
+  ]
+}

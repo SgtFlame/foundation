@@ -1,5 +1,9 @@
 // The Material icons server-described trees may name, by name
 import AddIcon from '@mui/icons-material/Add'
+// Calendar (forge 28g)
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
+import EventIcon from '@mui/icons-material/Event'
+import EventNoteIcon from '@mui/icons-material/EventNote'
 // Infrastructure (forge 20g)
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import DnsIcon from '@mui/icons-material/Dns'
@@ -191,6 +195,9 @@ export const icons: Record<string, ComponentType<SvgIconProps>> = {
   stop: StopIcon,
   pause: PauseIcon,
   cancel: CancelIcon,
+  calendar_month: CalendarMonthIcon,
+  event: EventIcon,
+  event_note: EventNoteIcon,
 }
 
 // An icon by name, as a component for places that take one (the Editors view)

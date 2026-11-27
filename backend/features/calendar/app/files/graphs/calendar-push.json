@@ -1,0 +1,2035 @@
+{
+  "id": "calendar-push",
+  "name": "Push an edit to the outside calendar",
+  "description": "Sends an edit made here to the event's outside calendar, as a job keyed by the event: event.create keyed by the record's id (so a retried job makes one outside event), then the outside id and etag written back; event.update with the etag the edit was based on, and on conflict the outside version kept, the edit recorded as the event's refusedChange and a delta pull enqueued; event.delete for a deleted event. Does nothing for a calendar without a connection.",
+  "kind": "server.action",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "record",
+            "type": "json",
+            "description": "The event as it was after the edit; empty when deleted"
+          },
+          {
+            "id": "old",
+            "type": "json",
+            "description": "The values the edit replaced (the whole record for a delete)"
+          },
+          {
+            "id": "deleted",
+            "type": "bool",
+            "description": "The event was deleted"
+          }
+        ]
+      }
+    },
+    {
+      "id": "eventId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "string((record ?? old)?._id ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "cur",
+      "type": "records.get",
+      "title": "The event now",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "calEvent"
+      }
+    },
+    {
+      "id": "calId",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "string(record?.calendar ?? old?.calendar ?? cur?.calendar ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "cal",
+      "type": "records.get",
+      "title": "Its calendar",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "masterId",
+      "type": "data.expression",
+      "title": "Its series master, for an exception",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "(record?.series ?? \"\") != \"\" ? string(record.series) : eventId",
+        "type": "string"
+      }
+    },
+    {
+      "id": "master",
+      "type": "records.get",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "entity": "calEvent"
+      }
+    },
+    {
+      "id": "clock",
+      "type": "data.now",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "zone",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "(record?.zone ?? \"\") != \"\" ? record.zone : ((cal?.zone ?? \"\") != \"\" ? cal.zone : \"UTC\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "startIn",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "string(record?.start ?? \"1970-01-01T00:00:00Z\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "endIn",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "expr": "string(record?.end ?? record?.start ?? \"1970-01-01T00:00:00Z\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "startConv",
+      "type": "time.convert",
+      "title": "The start in its zone",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "endConv",
+      "type": "time.convert",
+      "title": "The end in its zone",
+      "position": {
+        "x": 2040,
+        "y": 200
+      }
+    },
+    {
+      "id": "payload",
+      "type": "data.expression",
+      "title": "The event as calendar.events@1 takes it",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "expr": "let r = record ?? {};\nlet allDay = r.allDay ?? false;\nlet recurs = (r.rrule ?? \"\") != \"\" || len(r.rdate ?? []) \u003e 0;\nlet isException = (r.series ?? \"\") != \"\" \u0026\u0026 (master?.outsideId ?? \"\") != \"\";\nlet p = {title: r.title ?? \"\",\n  start: allDay ? {date: string(r.start)[0:10]} : {local: startLocal, zone: zone},\n  end: allDay ? {date: string(r.end ?? r.start)[0:10]} : {local: endLocal, zone: zone},\n  recurrence: recurs ? {rrule: r.rrule ?? \"\", rdate: r.rdate ?? [], exdate: r.exdate ?? []} : nil,\n  recurrenceId: isException ? (r.recurrenceId ?? \"\") : nil,\n  seriesId: isException ? master.outsideId : nil,\n  status: r.status ?? \"confirmed\", transparency: r.transparency ?? \"opaque\",\n  location: r.location ?? \"\", videoLink: r.videoLink ?? \"\", description: r.description ?? \"\",\n  organizer: r.organizer, attendees: r.attendees,\n  iCalUID: (r.iCalUID ?? \"\") != \"\" ? r.iCalUID : eventId + \"@axiom\"};\nfromPairs(filter(toPairs(p), #[1] != nil))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "outId",
+      "type": "data.expression",
+      "title": "Its outside id",
+      "position": {
+        "x": 1020,
+        "y": 400
+      },
+      "config": {
+        "expr": "(cur?.outsideId ?? \"\") != \"\" ? string(cur.outsideId) : string(record?.outsideId ?? old?.outsideId ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "etag",
+      "type": "data.expression",
+      "title": "The etag the edit was based on",
+      "position": {
+        "x": 1020,
+        "y": 600
+      },
+      "config": {
+        "expr": "(record?.outsideId ?? \"\") != \"\" ? string(record.etag ?? \"\") : string(cur?.etag ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "kind",
+      "type": "data.expression",
+      "title": "Create, update or delete",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "expr": "let connected = cal != nil \u0026\u0026 (cal.connection ?? \"\") != \"\" \u0026\u0026 (cal.outsideId ?? \"\") != \"\";\n!connected ? \"none\" : ((deleted ?? false) ? (outId != \"\" ? \"delete\" : \"none\") : (outId == \"\" ? \"create\" : \"update\"))",
+        "type": "string"
+      }
+    },
+    {
+      "id": "conn",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 400
+      },
+      "config": {
+        "expr": "string(cal?.connection ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "outCal",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 600
+      },
+      "config": {
+        "expr": "string(cal?.outsideId ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "isCreate",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 400
+      },
+      "config": {
+        "expr": "kind == \"create\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "isUpdate",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 600
+      },
+      "config": {
+        "expr": "kind == \"update\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "isDelete",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 800
+      },
+      "config": {
+        "expr": "kind == \"delete\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "bCreate",
+      "type": "flow.branch",
+      "position": {
+        "x": 2380,
+        "y": 200
+      }
+    },
+    {
+      "id": "bUpdate",
+      "type": "flow.branch",
+      "position": {
+        "x": 2720,
+        "y": 0
+      }
+    },
+    {
+      "id": "bDelete",
+      "type": "flow.branch",
+      "position": {
+        "x": 3060,
+        "y": 0
+      }
+    },
+    {
+      "id": "create",
+      "type": "connector.call",
+      "title": "Create it outside",
+      "position": {
+        "x": 2720,
+        "y": 200
+      },
+      "config": {
+        "contract": "calendar.events@1",
+        "operation": "event.create",
+        "inputs": [
+          {
+            "id": "calendar",
+            "name": "Calendar",
+            "type": "string",
+            "description": "The calendar's id"
+          },
+          {
+            "id": "key",
+            "name": "Key",
+            "type": "string",
+            "description": "Our id for the event, the idempotency key"
+          },
+          {
+            "id": "event",
+            "name": "Event",
+            "type": "json",
+            "description": "An event: a one-off, a recurring series' master (with recurrence) or an exception of one (with recurrenceId and seriesId)"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "id",
+            "name": "Id",
+            "type": "string",
+            "description": "The event's id at the service"
+          },
+          {
+            "id": "etag",
+            "name": "Etag",
+            "type": "string",
+            "description": "Its version at the service; an update names the etag it was based on"
+          },
+          {
+            "id": "calendar",
+            "name": "Calendar",
+            "type": "string",
+            "description": "The calendar's id"
+          },
+          {
+            "id": "title",
+            "name": "Title",
+            "type": "string",
+            "description": "Its title"
+          },
+          {
+            "id": "start",
+            "name": "Start",
+            "type": "json",
+            "description": "A zoned time {local, zone} or an all-day date {date}"
+          },
+          {
+            "id": "end",
+            "name": "End",
+            "type": "json",
+            "description": "A zoned time {local, zone} or an all-day date {date}"
+          },
+          {
+            "id": "recurrence",
+            "name": "Recurrence",
+            "type": "json",
+            "description": "A series' rule"
+          },
+          {
+            "id": "recurrenceId",
+            "name": "RecurrenceId",
+            "type": "string",
+            "description": "For an exception: the start its occurrence would have had (an instant, or a date)"
+          },
+          {
+            "id": "seriesId",
+            "name": "SeriesId",
+            "type": "string",
+            "description": "For an exception: its series' id"
+          },
+          {
+            "id": "status",
+            "name": "Status",
+            "type": "string",
+            "description": "Its status"
+          },
+          {
+            "id": "transparency",
+            "name": "Transparency",
+            "type": "string",
+            "description": "opaque makes its time busy, transparent leaves it free"
+          },
+          {
+            "id": "location",
+            "name": "Location",
+            "type": "string",
+            "description": "Where"
+          },
+          {
+            "id": "videoLink",
+            "name": "VideoLink",
+            "type": "string",
+            "description": "The video call's link"
+          },
+          {
+            "id": "url",
+            "name": "Url",
+            "type": "string",
+            "description": "A link to the event"
+          },
+          {
+            "id": "organizer",
+            "name": "Organizer",
+            "type": "json",
+            "description": "Who organizes it"
+          },
+          {
+            "id": "attendees",
+            "name": "Attendees",
+            "type": "json",
+            "description": "Who is invited and their answers"
+          },
+          {
+            "id": "description",
+            "name": "Description",
+            "type": "string",
+            "description": "Its description as plain text"
+          },
+          {
+            "id": "descriptionHtml",
+            "name": "DescriptionHtml",
+            "type": "string",
+            "description": "Its description as HTML, when the service has one"
+          },
+          {
+            "id": "iCalUID",
+            "name": "ICalUID",
+            "type": "string",
+            "description": "Its iCalendar UID, the same at every service"
+          },
+          {
+            "id": "sequence",
+            "name": "Sequence",
+            "type": "number",
+            "description": "Its iCalendar SEQUENCE"
+          },
+          {
+            "id": "updated",
+            "name": "Updated",
+            "type": "string",
+            "description": "When it last changed, RFC 3339"
+          }
+        ],
+        "connection": true,
+        "effect": "write",
+        "sample": {
+          "attendees": [
+            {
+              "email": "dana@example.com",
+              "response": "needsAction"
+            }
+          ],
+          "calendar": "primary",
+          "end": {
+            "local": "2026-12-03T11:00:00",
+            "zone": "America/New_York"
+          },
+          "etag": "1",
+          "iCalUID": "evt-1@axiom",
+          "id": "evt-1",
+          "organizer": {
+            "email": "tony@example.org"
+          },
+          "start": {
+            "local": "2026-12-03T10:00:00",
+            "zone": "America/New_York"
+          },
+          "status": "confirmed",
+          "title": "Renewal call",
+          "transparency": "opaque"
+        }
+      }
+    },
+    {
+      "id": "madeArgs",
+      "type": "data.expression",
+      "title": "Write back the outside id and etag",
+      "position": {
+        "x": 3060,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"calEvent\", set: {outsideId: id, etag: etag, iCalUID: uid}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "wbCreate",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 3400,
+        "y": 0
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "failCreate",
+      "type": "jobs.fail",
+      "position": {
+        "x": 3060,
+        "y": 400
+      },
+      "config": {
+        "retryable": false
+      }
+    },
+    {
+      "id": "update",
+      "type": "connector.call",
+      "title": "Change it outside",
+      "position": {
+        "x": 3060,
+        "y": 600
+      },
+      "config": {
+        "contract": "calendar.events@1",
+        "operation": "event.update",
+        "inputs": [
+          {
+            "id": "calendar",
+            "name": "Calendar",
+            "type": "string",
+            "description": "The calendar's id"
+          },
+          {
+            "id": "id",
+            "name": "Id",
+            "type": "string",
+            "description": "The event's id"
+          },
+          {
+            "id": "etag",
+            "name": "Etag",
+            "type": "string",
+            "optional": true,
+            "description": "The etag the change was based on; left out, the change is made whatever"
+          },
+          {
+            "id": "set",
+            "name": "Set",
+            "type": "json",
+            "description": "The fields to change, in the event shape"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "id",
+            "name": "Id",
+            "type": "string",
+            "description": "The event's id at the service"
+          },
+          {
+            "id": "etag",
+            "name": "Etag",
+            "type": "string",
+            "description": "Its version at the service; an update names the etag it was based on"
+          },
+          {
+            "id": "calendar",
+            "name": "Calendar",
+            "type": "string",
+            "description": "The calendar's id"
+          },
+          {
+            "id": "title",
+            "name": "Title",
+            "type": "string",
+            "description": "Its title"
+          },
+          {
+            "id": "start",
+            "name": "Start",
+            "type": "json",
+            "description": "A zoned time {local, zone} or an all-day date {date}"
+          },
+          {
+            "id": "end",
+            "name": "End",
+            "type": "json",
+            "description": "A zoned time {local, zone} or an all-day date {date}"
+          },
+          {
+            "id": "recurrence",
+            "name": "Recurrence",
+            "type": "json",
+            "description": "A series' rule"
+          },
+          {
+            "id": "recurrenceId",
+            "name": "RecurrenceId",
+            "type": "string",
+            "description": "For an exception: the start its occurrence would have had (an instant, or a date)"
+          },
+          {
+            "id": "seriesId",
+            "name": "SeriesId",
+            "type": "string",
+            "description": "For an exception: its series' id"
+          },
+          {
+            "id": "status",
+            "name": "Status",
+            "type": "string",
+            "description": "Its status"
+          },
+          {
+            "id": "transparency",
+            "name": "Transparency",
+            "type": "string",
+            "description": "opaque makes its time busy, transparent leaves it free"
+          },
+          {
+            "id": "location",
+            "name": "Location",
+            "type": "string",
+            "description": "Where"
+          },
+          {
+            "id": "videoLink",
+            "name": "VideoLink",
+            "type": "string",
+            "description": "The video call's link"
+          },
+          {
+            "id": "url",
+            "name": "Url",
+            "type": "string",
+            "description": "A link to the event"
+          },
+          {
+            "id": "organizer",
+            "name": "Organizer",
+            "type": "json",
+            "description": "Who organizes it"
+          },
+          {
+            "id": "attendees",
+            "name": "Attendees",
+            "type": "json",
+            "description": "Who is invited and their answers"
+          },
+          {
+            "id": "description",
+            "name": "Description",
+            "type": "string",
+            "description": "Its description as plain text"
+          },
+          {
+            "id": "descriptionHtml",
+            "name": "DescriptionHtml",
+            "type": "string",
+            "description": "Its description as HTML, when the service has one"
+          },
+          {
+            "id": "iCalUID",
+            "name": "ICalUID",
+            "type": "string",
+            "description": "Its iCalendar UID, the same at every service"
+          },
+          {
+            "id": "sequence",
+            "name": "Sequence",
+            "type": "number",
+            "description": "Its iCalendar SEQUENCE"
+          },
+          {
+            "id": "updated",
+            "name": "Updated",
+            "type": "string",
+            "description": "When it last changed, RFC 3339"
+          }
+        ],
+        "connection": true,
+        "effect": "write",
+        "sample": {
+          "attendees": [
+            {
+              "email": "dana@example.com",
+              "response": "needsAction"
+            }
+          ],
+          "calendar": "primary",
+          "end": {
+            "local": "2026-12-03T11:00:00",
+            "zone": "America/New_York"
+          },
+          "etag": "1",
+          "iCalUID": "evt-1@axiom",
+          "id": "evt-1",
+          "organizer": {
+            "email": "tony@example.org"
+          },
+          "start": {
+            "local": "2026-12-03T10:00:00",
+            "zone": "America/New_York"
+          },
+          "status": "confirmed",
+          "title": "Renewal call",
+          "transparency": "opaque"
+        }
+      }
+    },
+    {
+      "id": "movedArgs",
+      "type": "data.expression",
+      "title": "Write back the new etag",
+      "position": {
+        "x": 3400,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"calEvent\", set: {etag: etag, refusedChange: nil}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "wbUpdate",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 3740,
+        "y": 0
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "conflict",
+      "type": "data.expression",
+      "position": {
+        "x": 3400,
+        "y": 400
+      },
+      "config": {
+        "expr": "string(error?.code ?? \"\") == \"conflict\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "bConflict",
+      "type": "flow.branch",
+      "position": {
+        "x": 3740,
+        "y": 200
+      }
+    },
+    {
+      "id": "refusedArgs",
+      "type": "data.expression",
+      "title": "Record the refused edit",
+      "position": {
+        "x": 3400,
+        "y": 600
+      },
+      "config": {
+        "expr": "{entity: \"calEvent\", set: {refusedChange: {set: payload, at: string(clock), reason: string(error?.message ?? \"\")}}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refuse",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 4080,
+        "y": 0
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "pullInputs",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "{calendar: calId, full: false}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "pull",
+      "type": "jobs.enqueue",
+      "title": "Pull the outside version",
+      "position": {
+        "x": 4420,
+        "y": 0
+      },
+      "config": {
+        "graph": "calendar-pull"
+      }
+    },
+    {
+      "id": "notFound",
+      "type": "data.expression",
+      "position": {
+        "x": 3400,
+        "y": 800
+      },
+      "config": {
+        "expr": "string(error?.code ?? \"\") == \"notFound\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "bNotFound",
+      "type": "flow.branch",
+      "position": {
+        "x": 4080,
+        "y": 200
+      }
+    },
+    {
+      "id": "failUpdate",
+      "type": "jobs.fail",
+      "position": {
+        "x": 4420,
+        "y": 200
+      },
+      "config": {
+        "retryable": false
+      }
+    },
+    {
+      "id": "remove",
+      "type": "connector.call",
+      "title": "Delete it outside",
+      "position": {
+        "x": 3400,
+        "y": 1000
+      },
+      "config": {
+        "contract": "calendar.events@1",
+        "operation": "event.delete",
+        "inputs": [
+          {
+            "id": "calendar",
+            "name": "Calendar",
+            "type": "string",
+            "description": "The calendar's id"
+          },
+          {
+            "id": "id",
+            "name": "Id",
+            "type": "string",
+            "description": "The event's id"
+          },
+          {
+            "id": "etag",
+            "name": "Etag",
+            "type": "string",
+            "optional": true,
+            "description": "The etag the delete was based on; refused as conflict when it moved"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "deleted",
+            "name": "Deleted",
+            "type": "bool",
+            "description": "Whether there was an event to delete"
+          }
+        ],
+        "connection": true,
+        "effect": "write",
+        "sample": {
+          "deleted": true
+        }
+      }
+    },
+    {
+      "id": "done",
+      "type": "flow.return",
+      "position": {
+        "x": 3400,
+        "y": 1200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "kind",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "doneMade",
+      "type": "flow.return",
+      "position": {
+        "x": 3740,
+        "y": 400
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "kind",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "doneMoved",
+      "type": "flow.return",
+      "position": {
+        "x": 4080,
+        "y": 400
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "kind",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "doneRefused",
+      "type": "flow.return",
+      "position": {
+        "x": 4760,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "kind",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "doneGone",
+      "type": "flow.return",
+      "position": {
+        "x": 4420,
+        "y": 400
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "kind",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "doneRemoved",
+      "type": "flow.return",
+      "position": {
+        "x": 3740,
+        "y": 600
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "kind",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "record"
+      },
+      "to": {
+        "node": "eventId",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "old"
+      },
+      "to": {
+        "node": "eventId",
+        "pin": "old"
+      }
+    },
+    {
+      "from": {
+        "node": "eventId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cur",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "record"
+      },
+      "to": {
+        "node": "calId",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "old"
+      },
+      "to": {
+        "node": "calId",
+        "pin": "old"
+      }
+    },
+    {
+      "from": {
+        "node": "cur",
+        "pin": "record"
+      },
+      "to": {
+        "node": "calId",
+        "pin": "cur"
+      }
+    },
+    {
+      "from": {
+        "node": "calId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cal",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "record"
+      },
+      "to": {
+        "node": "masterId",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "eventId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "masterId",
+        "pin": "eventId"
+      }
+    },
+    {
+      "from": {
+        "node": "masterId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "master",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "record"
+      },
+      "to": {
+        "node": "zone",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "record"
+      },
+      "to": {
+        "node": "zone",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "record"
+      },
+      "to": {
+        "node": "startIn",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "record"
+      },
+      "to": {
+        "node": "endIn",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "startIn",
+        "pin": "value"
+      },
+      "to": {
+        "node": "startConv",
+        "pin": "instant"
+      }
+    },
+    {
+      "from": {
+        "node": "zone",
+        "pin": "value"
+      },
+      "to": {
+        "node": "startConv",
+        "pin": "zone"
+      }
+    },
+    {
+      "from": {
+        "node": "endIn",
+        "pin": "value"
+      },
+      "to": {
+        "node": "endConv",
+        "pin": "instant"
+      }
+    },
+    {
+      "from": {
+        "node": "zone",
+        "pin": "value"
+      },
+      "to": {
+        "node": "endConv",
+        "pin": "zone"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "record"
+      },
+      "to": {
+        "node": "payload",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "master",
+        "pin": "record"
+      },
+      "to": {
+        "node": "payload",
+        "pin": "master"
+      }
+    },
+    {
+      "from": {
+        "node": "startConv",
+        "pin": "local"
+      },
+      "to": {
+        "node": "payload",
+        "pin": "startLocal"
+      }
+    },
+    {
+      "from": {
+        "node": "endConv",
+        "pin": "local"
+      },
+      "to": {
+        "node": "payload",
+        "pin": "endLocal"
+      }
+    },
+    {
+      "from": {
+        "node": "zone",
+        "pin": "value"
+      },
+      "to": {
+        "node": "payload",
+        "pin": "zone"
+      }
+    },
+    {
+      "from": {
+        "node": "eventId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "payload",
+        "pin": "eventId"
+      }
+    },
+    {
+      "from": {
+        "node": "cur",
+        "pin": "record"
+      },
+      "to": {
+        "node": "outId",
+        "pin": "cur"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "record"
+      },
+      "to": {
+        "node": "outId",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "old"
+      },
+      "to": {
+        "node": "outId",
+        "pin": "old"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "record"
+      },
+      "to": {
+        "node": "etag",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "cur",
+        "pin": "record"
+      },
+      "to": {
+        "node": "etag",
+        "pin": "cur"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "record"
+      },
+      "to": {
+        "node": "kind",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "deleted"
+      },
+      "to": {
+        "node": "kind",
+        "pin": "deleted"
+      }
+    },
+    {
+      "from": {
+        "node": "outId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "kind",
+        "pin": "outId"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "record"
+      },
+      "to": {
+        "node": "conn",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "record"
+      },
+      "to": {
+        "node": "outCal",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "kind",
+        "pin": "value"
+      },
+      "to": {
+        "node": "isCreate",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "kind",
+        "pin": "value"
+      },
+      "to": {
+        "node": "isUpdate",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "kind",
+        "pin": "value"
+      },
+      "to": {
+        "node": "isDelete",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "bCreate",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "isCreate",
+        "pin": "value"
+      },
+      "to": {
+        "node": "bCreate",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "bCreate",
+        "pin": "true"
+      },
+      "to": {
+        "node": "create",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "conn",
+        "pin": "value"
+      },
+      "to": {
+        "node": "create",
+        "pin": "connection"
+      }
+    },
+    {
+      "from": {
+        "node": "outCal",
+        "pin": "value"
+      },
+      "to": {
+        "node": "create",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "eventId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "create",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "payload",
+        "pin": "value"
+      },
+      "to": {
+        "node": "create",
+        "pin": "event"
+      }
+    },
+    {
+      "from": {
+        "node": "create",
+        "pin": "then"
+      },
+      "to": {
+        "node": "wbCreate",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "eventId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "wbCreate",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "create",
+        "pin": "id"
+      },
+      "to": {
+        "node": "madeArgs",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "create",
+        "pin": "etag"
+      },
+      "to": {
+        "node": "madeArgs",
+        "pin": "etag"
+      }
+    },
+    {
+      "from": {
+        "node": "create",
+        "pin": "iCalUID"
+      },
+      "to": {
+        "node": "madeArgs",
+        "pin": "uid"
+      }
+    },
+    {
+      "from": {
+        "node": "madeArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "wbCreate",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "wbCreate",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "doneMade",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "wbCreate",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "doneMade",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "kind",
+        "pin": "value"
+      },
+      "to": {
+        "node": "doneMade",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "create",
+        "pin": "failed"
+      },
+      "to": {
+        "node": "failCreate",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "create",
+        "pin": "error"
+      },
+      "to": {
+        "node": "failCreate",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "bCreate",
+        "pin": "false"
+      },
+      "to": {
+        "node": "bUpdate",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "isUpdate",
+        "pin": "value"
+      },
+      "to": {
+        "node": "bUpdate",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "bUpdate",
+        "pin": "true"
+      },
+      "to": {
+        "node": "update",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "conn",
+        "pin": "value"
+      },
+      "to": {
+        "node": "update",
+        "pin": "connection"
+      }
+    },
+    {
+      "from": {
+        "node": "outCal",
+        "pin": "value"
+      },
+      "to": {
+        "node": "update",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "outId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "update",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "etag",
+        "pin": "value"
+      },
+      "to": {
+        "node": "update",
+        "pin": "etag"
+      }
+    },
+    {
+      "from": {
+        "node": "payload",
+        "pin": "value"
+      },
+      "to": {
+        "node": "update",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "update",
+        "pin": "then"
+      },
+      "to": {
+        "node": "wbUpdate",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "eventId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "wbUpdate",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "update",
+        "pin": "etag"
+      },
+      "to": {
+        "node": "movedArgs",
+        "pin": "etag"
+      }
+    },
+    {
+      "from": {
+        "node": "movedArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "wbUpdate",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "wbUpdate",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "doneMoved",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "wbUpdate",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "doneMoved",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "kind",
+        "pin": "value"
+      },
+      "to": {
+        "node": "doneMoved",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "update",
+        "pin": "failed"
+      },
+      "to": {
+        "node": "bConflict",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "update",
+        "pin": "error"
+      },
+      "to": {
+        "node": "conflict",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "conflict",
+        "pin": "value"
+      },
+      "to": {
+        "node": "bConflict",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "bConflict",
+        "pin": "true"
+      },
+      "to": {
+        "node": "refuse",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "eventId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refuse",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "payload",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refusedArgs",
+        "pin": "payload"
+      }
+    },
+    {
+      "from": {
+        "node": "clock",
+        "pin": "time"
+      },
+      "to": {
+        "node": "refusedArgs",
+        "pin": "clock"
+      }
+    },
+    {
+      "from": {
+        "node": "update",
+        "pin": "error"
+      },
+      "to": {
+        "node": "refusedArgs",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "refusedArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refuse",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "refuse",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "pull",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refuse",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "pull",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "calId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pullInputs",
+        "pin": "calId"
+      }
+    },
+    {
+      "from": {
+        "node": "pullInputs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pull",
+        "pin": "inputs"
+      }
+    },
+    {
+      "from": {
+        "node": "calId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pull",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "pull",
+        "pin": "then"
+      },
+      "to": {
+        "node": "doneRefused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "kind",
+        "pin": "value"
+      },
+      "to": {
+        "node": "doneRefused",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "bConflict",
+        "pin": "false"
+      },
+      "to": {
+        "node": "bNotFound",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "update",
+        "pin": "error"
+      },
+      "to": {
+        "node": "notFound",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "notFound",
+        "pin": "value"
+      },
+      "to": {
+        "node": "bNotFound",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "bNotFound",
+        "pin": "true"
+      },
+      "to": {
+        "node": "doneGone",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "kind",
+        "pin": "value"
+      },
+      "to": {
+        "node": "doneGone",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "bNotFound",
+        "pin": "false"
+      },
+      "to": {
+        "node": "failUpdate",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "update",
+        "pin": "error"
+      },
+      "to": {
+        "node": "failUpdate",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "bUpdate",
+        "pin": "false"
+      },
+      "to": {
+        "node": "bDelete",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "isDelete",
+        "pin": "value"
+      },
+      "to": {
+        "node": "bDelete",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "bDelete",
+        "pin": "true"
+      },
+      "to": {
+        "node": "remove",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "conn",
+        "pin": "value"
+      },
+      "to": {
+        "node": "remove",
+        "pin": "connection"
+      }
+    },
+    {
+      "from": {
+        "node": "outCal",
+        "pin": "value"
+      },
+      "to": {
+        "node": "remove",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "outId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "remove",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "remove",
+        "pin": "then"
+      },
+      "to": {
+        "node": "doneRemoved",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "remove",
+        "pin": "failed"
+      },
+      "to": {
+        "node": "doneRemoved",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "kind",
+        "pin": "value"
+      },
+      "to": {
+        "node": "doneRemoved",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "bDelete",
+        "pin": "false"
+      },
+      "to": {
+        "node": "done",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "kind",
+        "pin": "value"
+      },
+      "to": {
+        "node": "done",
+        "pin": "kind"
+      }
+    }
+  ]
+}

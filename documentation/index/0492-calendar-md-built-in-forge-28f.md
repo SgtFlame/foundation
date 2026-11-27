@@ -1,0 +1,1 @@
+| [Calendar.md](Calendar.md) › *Built in forge 28f* | Two-way sync with outside calendars (forge 28f): `calendar.connect`, the pull and push jobs, mirroring by outside id and `iCalUID`, conflicts kept in `refusedChange`, catching up daily and after an expired cursor |
