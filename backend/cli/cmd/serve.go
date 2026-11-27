@@ -159,6 +159,7 @@ import (
 	infraapply "github.com/SgtFlame/foundation/backend/features/infra/apply"
 	"github.com/SgtFlame/foundation/backend/features/infra/infratest"
 	infranodes "github.com/SgtFlame/foundation/backend/features/infra/nodes"
+	infraproviders "github.com/SgtFlame/foundation/backend/features/infra/providers/builtin"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	kblive "github.com/SgtFlame/foundation/backend/features/kb/live"
@@ -757,6 +758,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		workspace.Contribute(registry, func() workspace.Deps { return workspaceDeps }) // workspace.*, workspace.list (forge 16a)
 		game.Contribute(registry, func() game.Deps { return gameDeps })                // game.* worlds, game.editTerrain, game.describeWorld (forge 360 V1)
 		infra.Contribute(registry, func() infra.Deps { return infraDeps })             // infra.config.* configurations and versions (forge 22a)
+		infraproviders.Contribute(registry)                                            // the provider types: infra.lxd (forge 22g)
 		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
 		var infraNodeDeps infranodes.Deps
 		infranodes.Contribute(registry, func() infranodes.Deps { return infraNodeDeps }) // Ensure host, instance, unit, packages, Wait healthy, Remove (forge 22e)
@@ -1497,8 +1499,8 @@ func targetFrom(raw string) (logging.Target, error) {
 // serves, with their metadata (forge 07b); an external adapter binary
 // serves its own with adapter.Serve.
 func connectorImpls() adapter.Options {
-	return adapter.Options{Name: "server", Types: []connectors.Type{infratest.Type()}, Contracts: []connectors.Contract{infra.ComputeContract(), infratest.ControlContract()},
-		Impls: []adapter.Impl{infratest.Default.Impl()}} // the Infrastructure test server (forge 22c)
+	return adapter.Options{Name: "server", Types: append(infraproviders.Types(), infratest.Type()), Contracts: []connectors.Contract{infra.ComputeContract(), infratest.ControlContract()},
+		Impls: append(infraproviders.Impls(), infratest.Default.Impl())} // the Infrastructure test server (forge 22c)
 }
 
 // knownServices are every service's wire name (forge 21g-1).
