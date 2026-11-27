@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { forgeAction, ironFrom, limeFor, partsFrom, smeltFraction, smeltLeft } from './Forge.ts'
+import { forgeAction, forgeSpec, ironFrom, limeFor, partsFrom, smeltFraction, smeltLeft } from './Forge.ts'
 
 const pack = { dust: 0, rock: 0, ore: 3, iron: 0, capacity: 4 }
 
@@ -41,4 +41,11 @@ test('V33: limestone burns into lime, cement takes lime, and coal fuels the forg
   assert.equal(limeFor(1.2), 3)
   // a fuelled load is done twice as fast
   assert.equal(smeltLeft({ ore: 1, at: 0, kind: 'limestone', rate: 2 }, 0), 15_000)
+})
+
+test('a refinery takes loads of up to 8 m³ (V35)', () => {
+  const p = { dust: 0, rock: 0, minerals: { ferrite: 3 }, capacity: 4 }
+  assert.deepEqual(forgeAction(null, p, 0), { kind: 'smelt', ore: 2, what: 'ferrite', fuel: false })
+  assert.deepEqual(forgeAction(null, p, 0, forgeSpec('refinehouse')), { kind: 'smelt', ore: 3, what: 'ferrite', fuel: false })
+  assert.equal(forgeSpec('cabin').rate, 1)
 })

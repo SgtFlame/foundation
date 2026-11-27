@@ -20,7 +20,7 @@ import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../sto
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
-import { ASHBY_LINE, ASHBY_SENSE, ashbyReady, isAshby, remnantAt, remnantSpots, TRACK_LINE, TRACK_REACH, TRACK_SENSE, trackPrints, trackReady } from '../story/Ashby.ts'
+import { TOLD_LINE, ASHBY_LINE, ASHBY_SENSE, ashbyReady, isAshby, remnantAt, remnantSpots, TRACK_LINE, TRACK_REACH, TRACK_SENSE, trackPrints, trackReady } from '../story/Ashby.ts'
 import { WELL_LINE, WELL_REACH, WELL_SENSE, WELL_WARD_LINE, wellReady, wellSpot } from '../story/Well.ts'
 import { bankSageReady, bankSageSpot, FARM_WARD_LINE, FARM_WARDED_NIGHT, HEARTH_REACH, HEARTH_WARD_LINE, hearthStonesReady, hearthWarded, hearthWardMissing, hearthWardReady, nextHearthWard, SAGE_LINE, SAGE_REACH, wardSpots } from '../story/HearthWard.ts'
 import { TRIED_DOOR_LINE, TRIED_LINE, TRIED_LOST, TRIED_NIGHT, triedReady } from '../story/Tried.ts'
@@ -449,7 +449,9 @@ export class AreaViewport {
   talkTo(id: string): boolean {
     const n = this.area.npcs?.[id]
     // S15: after the foretold night Wenlan has his thanks to give
-    const after = n?.dialogue === 'farmer' && this.story?.done.defended ? this.dialogues['farmer-thanks'] : undefined
+    // S30: back from Ashby, he hears what is left of it
+    const ashby = n?.dialogue === 'farmer' && this.story?.done.ashby && !this.story.done.told ? this.dialogues['farmer-ashby'] : undefined
+    const after = ashby ?? (n?.dialogue === 'farmer' && this.story?.done.defended ? this.dialogues['farmer-thanks'] : undefined)
     const d = after ?? (n?.dialogue ? this.dialogues[n.dialogue] : undefined)
     if (!n || !d) return false
     if (d.id === 'farmer' && this.story?.done.sleep && !this.story.done.reading) return this.openReading('Wenlan Harrow')
@@ -1778,6 +1780,12 @@ export class AreaViewport {
     if (this.story && was === VETERAN.id && !this.story.done.companion) {
       this.reach('companion')
       this.say(`${VETERAN.name}, ${VETERAN.title}, picks up his pike and falls in a step behind you. In a fight he takes the flank. On the road he nods at the rise by the signpost: "Nine stones up there. The old folk say they wake when the little moon is full."`)
+      return
+    }
+    // S30: word of Ashby goes up the road to Hawk's Rest
+    if (this.story && was === 'farmer-ashby' && !this.story.done.told) {
+      this.reach('told')
+      this.say(TOLD_LINE)
       return
     }
     // S15: the knot of the last sheaf, Wenlan's thanks

@@ -7,7 +7,7 @@
   "spec": {
     "command": "game.takeIngots",
     "title": "Take iron from a forge",
-    "description": "Takes what a cabin's forge has made into the sender's pack (V20); the target is the cabin's id. The forge gives 0.8 m³ of iron for each m³ of ore once its time is up (45 s a m³ since game.smelt), and is empty again. V30: a load of a mineral or rock gives its components instead (parts: plates, wire, solarCell, nozzle, cell or cement, counts that take no room) once 60 s a m³ (30 s for rock) are up. Refused for a ship that is not a cabin, a forge with nothing in it or still working, or a pack without room for iron.",
+    "description": "Takes what a cabin's forge has made into the sender's pack (V20); the target is the cabin's id. The forge gives 0.8 m³ of iron for each m³ of ore once its time is up (45 s a m³ since game.smelt), and is empty again. V30: a load of a mineral or rock gives its components instead (parts: plates, wire, solarCell, nozzle, cell or cement, counts that take no room) once 60 s a m³ (30 s for rock) are up. Refused for a ship that is not a cabin, a forge with nothing in it or still working, or a pack without room for iron. V35: a refinery's too.",
     "args": {
       "type": "object",
       "properties": {}
@@ -96,7 +96,7 @@
         "y": 150
       },
       "config": {
-        "expr": "let f = ship?.forge; let r = {ferrite: [\"plate\", 8, 60000], malachite: [\"wire\", 10, 60000], silica: [\"solarCell\", 4, 60000], wolframite: [\"nozzle\", 3, 60000], spodumene: [\"cell\", 4, 60000], rock: [\"cement\", 6, 30000], limestone: [\"lime\", 6, 30000]}; let k = f?.kind ?? \"\"; let ms = k == \"\" ? 45000 : r[k][2]; let left = f == nil ? 0 : f.ore * ms / (f?.rate ?? 1) - (now().UnixMilli() - f.at); let held = (pack?.dust ?? 0) + (pack?.rock ?? 0) + (pack?.ore ?? 0) + (pack?.iron ?? 0) + sum(values(pack?.minerals ?? {})); !found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a forge\" : f == nil ? \"the forge is empty: put ore, a mineral or rock in with game.smelt\" : left > 0 ? \"the forge is still smelting: \" + string(int(ceil(left / 1000))) + \" s left\" : k == \"\" && held + f.ore * 0.8 > 4.0001 ? \"your pack has no room for the iron\" : \"\"",
+        "expr": "let f = ship?.forge; let r = {ferrite: [\"plate\", 8, 60000], malachite: [\"wire\", 10, 60000], silica: [\"solarCell\", 4, 60000], wolframite: [\"nozzle\", 3, 60000], spodumene: [\"cell\", 4, 60000], rock: [\"cement\", 6, 30000], limestone: [\"lime\", 6, 30000]}; let k = f?.kind ?? \"\"; let ms = k == \"\" ? 45000 : r[k][2]; let left = f == nil ? 0 : f.ore * ms / (f?.rate ?? 1) - (now().UnixMilli() - f.at); let held = (pack?.dust ?? 0) + (pack?.rock ?? 0) + (pack?.ore ?? 0) + (pack?.iron ?? 0) + sum(values(pack?.minerals ?? {})); !found ? \"there is no cabin \" + target : !(ship.design in [\"cabin\", \"refinehouse\"]) ? \"only a cabin or a refinery has a forge\" : f == nil ? \"the forge is empty: put ore, a mineral or rock in with game.smelt\" : left > 0 ? \"the forge is still smelting: \" + string(int(ceil(left / 1000))) + \" s left\" : k == \"\" && held + f.ore * 0.8 > 4.0001 ? \"your pack has no room for the iron\" : \"\"",
         "type": "string"
       }
     },

@@ -1,7 +1,7 @@
 import { padCharge, padUnder } from '../ship/Pad.ts'
 import { BAY_TOP, bayNear, clamped, needsBay } from '../ship/Bay.ts'
 import { blockCost, costLine, pay, shortOf, type Cost } from '../ship/Blueprint.ts'
-import { forgeAction, FUEL_COAL, FUEL_RATE, limeFor, msPer, PART_NAMES, type ForgeKind, type ForgeState, type Part } from '../craft/Forge.ts'
+import { forgeAction, forgeSpec, FUEL_COAL, FUEL_RATE, limeFor, msPer, PART_NAMES, type ForgeKind, type ForgeState, type Part } from '../craft/Forge.ts'
 import { DRIVE_CIRCUITS, DRIVE_IRON, DRIVE_MS, DRIVE_ORE, FAB_IRON, FAB_MS, FAB_ORE, fabAction, JUMP_CHARGE, KIT_CIRCUITS, KIT_IRON, KIT_MS, MAX_BOOST, type FabItem, type FabState } from '../craft/Fabricator.ts'
 import { canJump, jumpTarget } from '../ship/Jump.ts'
 import * as THREE from 'three/webgpu'
@@ -1592,14 +1592,20 @@ export class VoxelViewport {
     b.charge = padCharge(b.charge, dt)
   }
 
+  // V35: a refinery's kilns take bigger loads, faster
+  private forgeSpecOf(id: string) {
+    return forgeSpec(this.shipLayer.ships().find((s) => s.id === id)?.design)
+  }
+
   private forgeOf(id: string): ForgeState | null {
     return this.shipLayer.ships().find((s) => s.id === id)?.forge ?? null
   }
 
   private forgeHint(): string {
     if (!this.nearForge) return ''
-    const a = forgeAction(this.forgeOf(this.nearForge), this.carried, Date.now())
-    if (a.kind === 'smelt') return `U: put ${a.ore.toFixed(2)} m³ of ${a.what} in the forge · `
+    const a = forgeAction(this.forgeOf(this.nearForge), this.carried, Date.now(), this.forgeSpecOf(this.nearForge))
+    const kilns = this.shipLayer.ships().find((s) => s.id === this.nearForge)?.design === 'refinehouse'
+    if (a.kind === 'smelt') return `U: put ${a.ore.toFixed(2)} m³ of ${a.what} in ${kilns ? "the refinery's kilns" : 'the forge'} · `
     if (a.kind === 'wait') return `The forge is working: ${a.seconds} s left · `
     if (a.kind === 'take') return `U: take ${a.iron.toFixed(2)} m³ of iron from the forge · `
     if (a.kind === 'takeParts') return `U: take ${a.count} ${PART_NAMES[a.part]} from the forge · `
@@ -1704,7 +1710,7 @@ export class VoxelViewport {
 
   // V20: U at the forge puts ore in, or takes the iron once it is smelted
   forgeAt(id: string): void {
-    const a = forgeAction(this.forgeOf(id), this.carried, Date.now())
+    const a = forgeAction(this.forgeOf(id), this.carried, Date.now(), this.forgeSpecOf(id))
     if (a.kind === 'smelt') {
       const c = this.carried
       if (c) {
@@ -1715,7 +1721,7 @@ export class VoxelViewport {
         if (a.fuel && this.carried) this.carried = { ...this.carried, minerals: { ...this.carried.minerals, coal: Math.max(0, (this.carried.minerals?.coal ?? 0) - FUEL_COAL) } }
       }
       this.opts.onShipIntent?.({ kind: 'smelt', id, what: a.what })
-      const secs = Math.round((a.ore * msPer(a.what)) / (a.fuel ? FUEL_RATE : 1) / 1000)
+      const secs = Math.round((a.ore * msPer(a.what)) / (a.fuel ? FUEL_RATE : 1) / this.forgeSpecOf(id).rate / 1000)
       const said = a.what === 'ore' ? `You shovel ${a.ore.toFixed(2)} m³ of ore into the forge and work the bellows` : a.what === 'rock' ? `You tip ${a.ore.toFixed(2)} m³ of rock and ${limeFor(a.ore)} sacks of lime into the kiln side of the forge to burn for cement` : a.what === 'limestone' ? `You stack ${a.ore.toFixed(2)} m³ of limestone in the kiln to burn into lime` : `You feed ${a.ore.toFixed(2)} m³ of ${a.what} into the forge to refine`
       this.flashHint(`${said}${a.fuel ? '; a shovel of coal under it doubles the heat' : ''}. It will take ${secs} s`)
     } else if (a.kind === 'takeParts') {

@@ -1,0 +1,178 @@
+{
+  "id": "refinehouse",
+  "title": "Refinery",
+  "description": "A refinery (forge 360 V35, the first industry building): a concrete floor, a steel back wall, two kilns and a control block, laid out from its blueprint chip (the refinery-chip contract) anywhere solid. Each concrete block costs 2 bags of cement, each wall block 2 steel plates, each kiln 3 plates and 2 cement, the control block 2 plates and 3 copper wire, each lamp a copper wire. Finished, its kilns refine like a cabin's forge but take loads of up to 8 m\u00b3 and work twice as fast (four times with coal).",
+  "blockSize": 1,
+  "static": true,
+  "chip": true,
+  "blocks": [
+    {
+      "type": "concrete",
+      "at": [
+        -2,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -2,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -2,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "armor",
+      "at": [
+        -2,
+        1,
+        0
+      ]
+    },
+    {
+      "type": "armor",
+      "at": [
+        -1,
+        1,
+        0
+      ]
+    },
+    {
+      "type": "armor",
+      "at": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "type": "armor",
+      "at": [
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "type": "kiln",
+      "at": [
+        -1,
+        1,
+        2
+      ]
+    },
+    {
+      "type": "kiln",
+      "at": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "type": "control",
+      "at": [
+        -2,
+        1,
+        1
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        -2,
+        2,
+        0
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        1,
+        2,
+        0
+      ]
+    }
+  ]
+}

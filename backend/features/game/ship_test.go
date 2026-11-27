@@ -161,7 +161,7 @@ func TestShipDamage(t *testing.T) {
 
 // V6: contracts handed in with a ship at the outpost pay a skill once
 func TestOutpost(t *testing.T) {
-	if c := game.ContractsOf(); len(c.Contracts) != 11 || c.Giver.Name == "" {
+	if c := game.ContractsOf(); len(c.Contracts) != 12 || c.Giver.Name == "" {
 		t.Fatalf("contracts %+v", c)
 	}
 	st := newStack(t)
@@ -851,7 +851,7 @@ func refineParts(t *testing.T, st *stack, world string, parts map[string]int) {
 	ore := map[string]struct {
 		mineral string
 		amount  float64
-	}{"plate": {"ferrite", 0.125}, "wire": {"malachite", 0.1}, "solarCell": {"silica", 0.25}, "nozzle": {"wolframite", 0.334}, "cell": {"spodumene", 0.25}}
+	}{"plate": {"ferrite", 0.125}, "wire": {"malachite", 0.1}, "solarCell": {"silica", 0.25}, "nozzle": {"wolframite", 0.334}, "cell": {"spodumene", 0.25}, "lime": {"limestone", 1.0/6 + 0.0001}}
 	ids := []string{}
 	for part, n := range parts {
 		// V34: a load refines up to 4 components at once, fuelled with coal
@@ -962,4 +962,69 @@ func TestBayFloor(t *testing.T) {
 	st.ok("game.startShip", "k1", map[string]any{"world": world, "design": "cutter", "x": 0, "y": 110, "z": 20, "q": q, "bay": "bay1"})
 	// the older designs stay free of bays
 	st.ok("game.startShip", "s1", map[string]any{"world": world, "design": "prospector", "x": 0, "y": 104, "z": -8, "q": q})
+}
+
+// refineCement burns lime, then rock with it, into n bags of cement (V35)
+func refineCement(t *testing.T, st *stack, world string, n int) {
+	t.Helper()
+	loads := (n + 3) / 4
+	refineParts(t, st, world, map[string]int{"lime": loads * 2})
+	ids := []string{}
+	for n > 0 {
+		k := min(n, 4)
+		n -= k
+		id := fmt.Sprintf("rf%d", st.n)
+		st.n++
+		st.ok("game.startShip", id, map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": float64(st.n%20-10) * 6, "q": []float64{0, 0, 0, 1}})
+		st.ok("game.placeBlock", id, map[string]any{"index": 75})
+		st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": float64(len(ids)%20) * 3, "y": 100, "z": 40, "radius": 1, "took": map[string]any{"dust": 0, "rock": float64(k)/6 + 0.001, "minerals": map[string]any{"coal": 0.1}}})
+		st.ok("game.smelt", id, map[string]any{"what": "rock"})
+		ids = append(ids, id)
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for _, id := range ids {
+		for {
+			r := st.send(1, "game.takeIngots", id, map[string]any{})
+			if r.Common.Code < 300 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("burning cement in %s: %q", id, r.Common.Message)
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+}
+
+// V35: the refinery, the first industry building, from its blueprint chip
+func TestRefinery(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Refinery moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	if r := st.refused("game.startShip", "r1", map[string]any{"world": world, "design": "refinehouse", "x": 0, "y": 102, "z": 20, "q": q}); !strings.Contains(r.Common.Message, "refinery-chip") {
+		t.Fatalf("a refinery without its chip: %q", r.Common.Message)
+	}
+	refineParts(t, st, world, map[string]int{"plate": 6 + 16, "wire": 4 + 5})
+	refineCement(t, st, world, 2+28)
+	st.ok("game.startShip", "s0", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 110, "z": 0, "q": q})
+	st.ok("game.handIn", "s0", map[string]any{"contract": "refinery-chip"})
+	st.ok("game.startShip", "r1", map[string]any{"world": world, "design": "refinehouse", "x": 0, "y": 102, "z": 20, "q": q})
+	st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 100, "z": 50, "radius": 1, "took": map[string]any{"dust": 0, "rock": 0, "minerals": map[string]any{"ferrite": 3, "coal": 0.1}}})
+	if r := st.refused("game.smelt", "r1", map[string]any{"what": "ferrite"}); !strings.Contains(r.Common.Message, "not finished") {
+		t.Fatalf("an unfinished refinery: %q", r.Common.Message)
+	}
+	var last bus.Result
+	for i := 0; i < 21; i++ {
+		last = st.ok("game.placeBlock", "r1", map[string]any{"index": i})
+	}
+	var pack game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), last.Seq, &pack) || pack.Parts["plate"] != 0 || pack.Parts["wire"] != 0 || pack.Parts["cement"] != 0 {
+		t.Fatalf("pack after the refinery %+v", pack)
+	}
+	// a load bigger than a cabin forge takes, at four times the speed with coal
+	res := st.ok("game.smelt", "r1", map[string]any{"what": "ferrite"})
+	var s game.Ship
+	if !st.read(game.ShipsProjector, game.ShipType+".r1", res.Seq, &s) || s.Forge == nil || s.Forge.Ore != 3 || s.Forge.Rate != 4 {
+		t.Fatalf("refinery load %+v", s.Forge)
+	}
 }

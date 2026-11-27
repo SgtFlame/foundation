@@ -100,15 +100,15 @@ interface PackLike {
 
 // V30: what the forge takes next from a pack: ore first, then the
 // refinable mineral the pack holds most of, then rock for cement
-export function nextLoad(pack: PackLike | null): { kind: ForgeKind; load: number } | null {
+export function nextLoad(pack: PackLike | null, cap = FORGE_LOAD): { kind: ForgeKind; load: number } | null {
   if (!pack) return null
-  if ((pack.ore ?? 0) > 0.001) return { kind: 'ore', load: Math.min(pack.ore ?? 0, FORGE_LOAD) }
+  if ((pack.ore ?? 0) > 0.001) return { kind: 'ore', load: Math.min(pack.ore ?? 0, cap) }
   const mins = Object.entries(pack.minerals ?? {})
     .filter(([k, v]) => k in REFINES && (v ?? 0) > 0.001)
     .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
-  if (mins.length) return { kind: mins[0][0] as ForgeKind, load: Math.min(mins[0][1] ?? 0, FORGE_LOAD) }
+  if (mins.length) return { kind: mins[0][0] as ForgeKind, load: Math.min(mins[0][1] ?? 0, cap) }
   // V33: cement takes lime too
-  const rock = Math.min(pack.rock, FORGE_LOAD, (pack.parts?.lime ?? 0) / CEMENT_LIME)
+  const rock = Math.min(pack.rock, cap, (pack.parts?.lime ?? 0) / CEMENT_LIME)
   if (rock >= CEMENT_MIN) return { kind: 'rock', load: Math.floor(rock * 1000) / 1000 }
   return null
 }
@@ -121,7 +121,19 @@ export type ForgeAction =
   | { kind: 'takeParts'; part: Part; count: number }
   | { kind: 'none'; why: string }
 
-export function forgeAction(f: ForgeState | null | undefined, pack: PackLike | null, now: number): ForgeAction {
+// V35: what a building's forge takes: a cabin's 2 m³ at a time, a
+// refinery's kilns 8 m³ twice as fast (the smelt blueprint agrees)
+export interface ForgeSpec {
+  cap: number
+  rate: number
+}
+export const CABIN_FORGE: ForgeSpec = { cap: FORGE_LOAD, rate: 1 }
+export const REFINERY_FORGE: ForgeSpec = { cap: 8, rate: 2 }
+export function forgeSpec(design: string | undefined): ForgeSpec {
+  return design === 'refinehouse' ? REFINERY_FORGE : CABIN_FORGE
+}
+
+export function forgeAction(f: ForgeState | null | undefined, pack: PackLike | null, now: number, spec: ForgeSpec = CABIN_FORGE): ForgeAction {
   if (f) {
     const left = smeltLeft(f, now)
     if (left > 0) return { kind: 'wait', seconds: Math.ceil(left / 1000) }
@@ -132,7 +144,7 @@ export function forgeAction(f: ForgeState | null | undefined, pack: PackLike | n
     if (pack && held + iron > pack.capacity + 1e-4) return { kind: 'none', why: 'your pack has no room for the iron' }
     return { kind: 'take', iron }
   }
-  const next = nextLoad(pack)
+  const next = nextLoad(pack, spec.cap)
   if (!next) return { kind: 'none', why: 'the forge needs ore (the asteroids hold it), a mineral to refine, or rock and lime for cement' }
   return { kind: 'smelt', ore: next.load, what: next.kind, fuel: (pack?.minerals?.coal ?? 0) >= FUEL_COAL }
 }

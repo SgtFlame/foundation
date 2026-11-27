@@ -83,3 +83,7 @@ export const ASHBY_LINE =
 export function isAshby(name: string): boolean {
   return /ashby/i.test(name)
 }
+
+// S30: what the player is left with once Wenlan has heard
+export const TOLD_LINE =
+  'The Brannocks\' boy is already lacing his boots by the door, and Wenlan is writing to Hawk\'s Rest in a slow, careful hand. Old Brannock was taken, not killed. So were two hundred others. Somewhere north of Ashby they are walking still, and some of them have learned the way back.'
