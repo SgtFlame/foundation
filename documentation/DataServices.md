@@ -47,6 +47,14 @@ The tenant database's runtime tables are reached only through their data service
 - The guard lost `connectors/adapter` and `connectors/scripted`; `connectorsservice/impl` joined `connectors` and `connectors/connections` (which answers `cx.resolve` and `cx.status`) as the holders.
 - Not yet: `adapter.Context.Services` (records, files and connections proxies built from the type's manifest, 21f-1); `cx.resolve` checked against the call token rather than headers; the Mail types in their own process (21g-1's harness).
 
+## Built in forge 21e-2
+
+- **A type declares the services its adapter calls**: `connectors.Type.Services`, of `connectors.AdapterServices` (`records`, `files`, `connections`); `CheckType` refuses another name at `services[<i>]`.
+- **`connectors.AdapterPermissions(types...)`** is all an external adapter's NATS user is given: subscribe to its types' calls (`cx.call.*.<type>.>`), `cx.changed.*.*` and `_INBOX.>`; publish to `svc.connectors.>`, `cx.resolve.>`, `cx.status.>`, `_INBOX.>` and the declared services' subjects (`svc.record.>`, `svc.files.>`; connections are resolved on `cx.resolve`, so they add none), and answer the requests it receives. Nothing on `evt.>`, `$JS.>`, `$KV.>`, `$O.>` or another service.
+- **Users in the embedded server**: `natsd.Options.Users` (`natsd.User{Name, Password, Publish, Subscribe}`, may answer requests), with the server's own connections under a user allowed everything; `natsd.StartTestUsers` and `Server.ConnectAs` for tests. `cli nats user --adapter <type>,… [--adapter-services files,…]` mints such a user in a deployment's account and prints its creds file.
+- `connectors` `TestAdapterFencedByNATS`: an adapter under its user serves calls through `svc.connectors`, and NATS refuses it a tenant's event subject, JetStream's API, `svc.identity.*` and `svc.files.*` (its types declare none).
+- Not yet: reading a record through `svc.records` as the call's principal from an adapter (`adapter.Context.Services`, with 21f-1's manifests); the Control Plane issuing adapter users (21h); the Mail test server's walk with its adapter in its own process (21g-1); whether a third party may start a compiled adapter (iteration question 10).
+
 ## The inventory
 
 | Storage | Owner (data service) | Packages allowed a handle | Removed by |
