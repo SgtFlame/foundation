@@ -1,7 +1,7 @@
 import { padCharge, padUnder } from '../ship/Pad.ts'
 import { BAY_TOP, bayNear, clamped, needsBay } from '../ship/Bay.ts'
 import { blockCost, costLine, pay, shortOf, type Cost } from '../ship/Blueprint.ts'
-import { forgeAction, forgeSpec, FUEL_COAL, FUEL_RATE, limeFor, msPer, PART_NAMES, type ForgeKind, type ForgeState, type Part } from '../craft/Forge.ts'
+import { components, forgeAction, forgeSpec, storable, FUEL_COAL, FUEL_RATE, limeFor, msPer, PART_NAMES, type ForgeKind, type ForgeState, type Part } from '../craft/Forge.ts'
 import { DRIVE_CIRCUITS, DRIVE_IRON, DRIVE_MS, DRIVE_ORE, FAB_IRON, FAB_MS, FAB_ORE, fabAction, JUMP_CHARGE, KIT_CIRCUITS, KIT_IRON, KIT_MS, MAX_BOOST, type FabItem, type FabState } from '../craft/Fabricator.ts'
 import { canJump, jumpTarget } from '../ship/Jump.ts'
 import * as THREE from 'three/webgpu'
@@ -89,8 +89,9 @@ export type ShipIntent =
   | { kind: 'forage'; what: 'fish' | 'hunt'; animal?: string; x: number; y: number; z: number } // V12: a fish caught, a grazer hunted
   | { kind: 'sleep'; id: string } // V13: a night in a cabin's bed
   | { kind: 'craft'; id: string; item: string } // V14: a tool made at a cabin's bench
-  | { kind: 'smelt'; id: string; what?: ForgeKind } // V20: ore from the pack put in a cabin's forge (V30: or a mineral or rock to refine)
-  | { kind: 'takeIngots'; id: string } // V20: the forge's iron taken into the pack
+  | { kind: 'smelt'; id: string; what?: ForgeKind; from?: string } // V36: from a storage building; V20: ore from the pack put in a cabin's forge (V30: or a mineral or rock to refine)
+  | { kind: 'takeIngots'; id: string; into?: string } // V20: the forge's iron taken into the pack (V36: or into a storage building)
+  | { kind: 'store' | 'withdraw'; id: string; stock: Record<string, number> } // V36: stock between the pack and a storage building
   | { kind: 'fabricate'; id: string; item: FabItem } // V23: a circuit board (V24: or an ion thruster kit) started at a cabin's fabricator
   | { kind: 'fitKit'; id: string } // V24: an ion thruster kit fitted to a ship
   | { kind: 'fitDrive'; id: string } // V27: a jump drive fitted to a ship
@@ -647,7 +648,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHint()}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.forgeHint()}${this.fabHint()}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.progress?.tools?.scanner ? 'K: scan for ore · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHint()}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.forgeHint()}${this.depotHint()}${this.fabHint()}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.progress?.tools?.scanner ? 'K: scan for ore · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -1405,8 +1406,16 @@ export class VoxelViewport {
       this.updateHint()
     }
     if (forge && input.locked && input.pressed('KeyU')) this.forgeAt(forge)
+    // V36: U at storage puts the pack in, H takes components out
+    const depot = this.walker && !seat && !forge ? this.shipLayer.depotNear(this.walker.pos) : null
+    if (depot !== this.nearDepot) {
+      this.nearDepot = depot
+      this.updateHint()
+    }
+    if (depot && input.locked && input.pressed('KeyU')) this.storeAt(depot)
+    if (depot && input.locked && input.pressed('KeyH')) this.withdrawAt(depot)
     // V23: U at the fabricator, when the forge is not nearer
-    const fab = this.walker && !seat && !forge ? this.shipLayer.fabricatorNear(this.walker.pos) : null
+    const fab = this.walker && !seat && !forge && !depot ? this.shipLayer.fabricatorNear(this.walker.pos) : null
     const fabLine = fab ? this.fabHint() : ''
     if (fab !== this.nearFab || fabLine !== this.fabShown) {
       this.nearFab = fab
@@ -1416,7 +1425,7 @@ export class VoxelViewport {
     if (fab && input.locked && input.pressed('KeyU')) this.fabAt(fab)
     if (fab && input.locked && input.pressed('KeyI')) this.fabAt(fab, 'ionKit')
     if (fab && input.locked && input.pressed('KeyM')) this.fabAt(fab, 'jumpDrive')
-    const bench = this.walker && !seat && !forge && !fab ? this.shipLayer.benchNear(this.walker.pos) : null
+    const bench = this.walker && !seat && !forge && !depot && !fab ? this.shipLayer.benchNear(this.walker.pos) : null
     if (bench !== this.nearBench) {
       this.nearBench = bench
       this.updateHint()
@@ -1592,6 +1601,35 @@ export class VoxelViewport {
     b.charge = padCharge(b.charge, dt)
   }
 
+  // V36: a finished storage building within 30 m of a refinery feeds it
+  private depotFor(id: string | null): ShipState | null {
+    const ships = this.shipLayer.ships()
+    const r = ships.find((s) => s.id === id)
+    if (!r || r.design !== 'refinehouse') return null
+    return ships.find((s) => s.design === 'depot' && s.placed.length >= s.blocks && Math.hypot(s.x - r.x, s.y - r.y, s.z - r.z) <= 30) ?? null
+  }
+
+  // V36: U at storage puts the pack in, H takes its components out
+  private nearDepot: string | null = null
+  private depotHint(): string {
+    if (!this.nearDepot) return ''
+    const stock = this.shipLayer.ships().find((s) => s.id === this.nearDepot)?.stock ?? {}
+    const held = Object.entries(stock).map(([k, v]) => `${Math.round(v * 100) / 100} ${k}`).join(', ')
+    return `Storage holds ${held || 'nothing'} · U: put your pack in · H: take its components · `
+  }
+  storeAt(id: string): void {
+    const stock = storable(this.carried)
+    if (!Object.keys(stock).length) return this.flashHint('Your pack holds nothing to store but coal')
+    this.opts.onShipIntent?.({ kind: 'store', id, stock })
+    this.flashHint(`You stack ${Object.entries(stock).map(([k, v]) => `${v} ${k}`).join(', ')} on the racks`)
+  }
+  withdrawAt(id: string): void {
+    const stock = components(this.shipLayer.ships().find((s) => s.id === id)?.stock ?? {})
+    if (!Object.keys(stock).length) return this.flashHint('The racks hold no components')
+    this.opts.onShipIntent?.({ kind: 'withdraw', id, stock })
+    this.flashHint(`You take ${Object.entries(stock).map(([k, v]) => `${v} ${k}`).join(', ')} off the racks`)
+  }
+
   // V35: a refinery's kilns take bigger loads, faster
   private forgeSpecOf(id: string) {
     return forgeSpec(this.shipLayer.ships().find((s) => s.id === id)?.design)
@@ -1603,7 +1641,7 @@ export class VoxelViewport {
 
   private forgeHint(): string {
     if (!this.nearForge) return ''
-    const a = forgeAction(this.forgeOf(this.nearForge), this.carried, Date.now(), this.forgeSpecOf(this.nearForge))
+    const a = forgeAction(this.forgeOf(this.nearForge), this.carried, Date.now(), this.forgeSpecOf(this.nearForge), this.depotFor(this.nearForge)?.stock)
     const kilns = this.shipLayer.ships().find((s) => s.id === this.nearForge)?.design === 'refinehouse'
     if (a.kind === 'smelt') return `U: put ${a.ore.toFixed(2)} m³ of ${a.what} in ${kilns ? "the refinery's kilns" : 'the forge'} · `
     if (a.kind === 'wait') return `The forge is working: ${a.seconds} s left · `
@@ -1710,8 +1748,14 @@ export class VoxelViewport {
 
   // V20: U at the forge puts ore in, or takes the iron once it is smelted
   forgeAt(id: string): void {
-    const a = forgeAction(this.forgeOf(id), this.carried, Date.now(), this.forgeSpecOf(id))
-    if (a.kind === 'smelt') {
+    const depot = this.depotFor(id)
+    const a = forgeAction(this.forgeOf(id), this.carried, Date.now(), this.forgeSpecOf(id), depot?.stock)
+    if (a.kind === 'smelt' && a.fromStock && depot) {
+      if (a.fuel && this.carried) this.carried = { ...this.carried, minerals: { ...this.carried.minerals, coal: Math.max(0, (this.carried.minerals?.coal ?? 0) - FUEL_COAL) } }
+      this.opts.onShipIntent?.({ kind: 'smelt', id, what: a.what, from: depot.id })
+      const secs = Math.round((a.ore * msPer(a.what)) / (a.fuel ? FUEL_RATE : 1) / this.forgeSpecOf(id).rate / 1000)
+      this.flashHint(`The storage's chute feeds ${a.ore.toFixed(2)} m³ of ${a.what} into the kilns${a.fuel ? ', your coal under them' : ''}. It will take ${secs} s`)
+    } else if (a.kind === 'smelt') {
       const c = this.carried
       if (c) {
         if (a.what === 'ore') this.carried = { ...c, ore: (c.ore ?? 0) - a.ore }
@@ -1724,6 +1768,10 @@ export class VoxelViewport {
       const secs = Math.round((a.ore * msPer(a.what)) / (a.fuel ? FUEL_RATE : 1) / this.forgeSpecOf(id).rate / 1000)
       const said = a.what === 'ore' ? `You shovel ${a.ore.toFixed(2)} m³ of ore into the forge and work the bellows` : a.what === 'rock' ? `You tip ${a.ore.toFixed(2)} m³ of rock and ${limeFor(a.ore)} sacks of lime into the kiln side of the forge to burn for cement` : a.what === 'limestone' ? `You stack ${a.ore.toFixed(2)} m³ of limestone in the kiln to burn into lime` : `You feed ${a.ore.toFixed(2)} m³ of ${a.what} into the forge to refine`
       this.flashHint(`${said}${a.fuel ? '; a shovel of coal under it doubles the heat' : ''}. It will take ${secs} s`)
+    } else if ((a.kind === 'takeParts' || a.kind === 'take') && depot) {
+      // V36: a storage building near takes what the forge made
+      this.opts.onShipIntent?.({ kind: 'takeIngots', id, into: depot.id })
+      this.flashHint(a.kind === 'takeParts' ? `${a.count} ${PART_NAMES[a.part]} go down the chute into storage` : `${a.iron.toFixed(2)} m³ of iron goes down the chute into storage`)
     } else if (a.kind === 'takeParts') {
       const c = this.carried
       if (c) this.carried = { ...c, parts: { ...c.parts, [a.part]: (c.parts?.[a.part] ?? 0) + a.count } }

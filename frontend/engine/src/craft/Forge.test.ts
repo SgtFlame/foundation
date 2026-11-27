@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { forgeAction, forgeSpec, ironFrom, limeFor, partsFrom, smeltFraction, smeltLeft } from './Forge.ts'
+import { components, forgeAction, forgeSpec, storable, ironFrom, limeFor, partsFrom, smeltFraction, smeltLeft } from './Forge.ts'
 
 const pack = { dust: 0, rock: 0, ore: 3, iron: 0, capacity: 4 }
 
@@ -48,4 +48,12 @@ test('a refinery takes loads of up to 8 m³ (V35)', () => {
   assert.deepEqual(forgeAction(null, p, 0), { kind: 'smelt', ore: 2, what: 'ferrite', fuel: false })
   assert.deepEqual(forgeAction(null, p, 0, forgeSpec('refinehouse')), { kind: 'smelt', ore: 3, what: 'ferrite', fuel: false })
   assert.equal(forgeSpec('cabin').rate, 1)
+})
+
+test('storage feeds a refinery and holds the pack (V36)', () => {
+  const p = { dust: 0.5, rock: 0, iron: 1, minerals: { coal: 0.2, ferrite: 0.5 }, parts: { plate: 3 }, capacity: 4 }
+  assert.deepEqual(storable(p), { iron: 1, ferrite: 0.5, plate: 3 })
+  const empty = { dust: 0, rock: 0, minerals: { coal: 0.2 }, capacity: 4 }
+  assert.deepEqual(forgeAction(null, empty, 0, forgeSpec('refinehouse'), { ferrite: 12, rock: 30 }), { kind: 'smelt', ore: 8, what: 'ferrite', fuel: true, fromStock: true })
+  assert.deepEqual(components({ ferrite: 2, plate: 5, iron: 1 }), { plate: 5 })
 })

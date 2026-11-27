@@ -641,6 +641,21 @@ The refinery, the first industry building (360-VoxelRPGDesign.md › *Industry*)
 
 Word of Ashby. Wenlan's `farmer-ashby` talk (once `ashby` is reached) ends in step `told`: the Brannocks' boy runs to Hawk's Rest, and old Brannock, taken the night the player came, is understood to have been taken, not killed (`TOLD_LINE`). Ashby's furrows now run out along the north road: the captives are walked away, never down into the ground (the user's lore).
 
+## Built in V36 (forge 360)
+
+Storage, the second industry building.
+
+- `designs/depot.json` (*Storage*): a static chip of 12 concrete, four `rack`s (3 plates each) and two lamps; its blueprint comes with the refinery's chip or Trade level 2.
+- `game.store {stock}` and `game.withdraw {stock}` move components (by count) and ore, rock, iron, dust and minerals (m³) between the sender's pack and a finished storage building's `stock` (event `stored`, folded into `Ship.Stock`; the pack's change rides on it). A withdrawal must fit the pack.
+- `game.smelt {from}` feeds a refinery's kilns from a finished storage building within 30 m (minerals only, up to 8 m³; the pack still gives the coal), and `game.takeIngots {into}` puts what a forge made into one. Each also emits a `stored` event on the storage: Foundation's *Emit event* (`live.emit`) now takes a `target` pin and a `projection` config, so a command graph commits an event on another target of its type and area in the same batch, the commit expecting that target unchanged (`Decision.Read`).
+- Engine: `storable`, `components`, `stockLoad` and `forgeAction`'s `stock` (`craft/Forge.ts`), `ShipLayer.depotNear`. In the viewport, U at a rack puts the pack in (all but the coal), H takes the components out, and a refinery with storage near is fed from it and puts its output into it.
+- Not built: two kiln lines, the block works.
+- Tests: `TestStorage`, `Forge.test.ts`.
+
+## Built in S31 (forge 375)
+
+The hearth-watch meets: once word of Ashby is sent (`told`), R by Hawk's Rest's hearth (`isHawksRest`) plays the meeting a caption at a time (`story/Council.ts`, `COUNCIL_LINES`: the reeve, Mira from the well, the miller, Corran Vey) and reaches step `council`: double watches, iron grates on the wells, and someone to follow the north road past Ashby. Placeholder people and lines.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

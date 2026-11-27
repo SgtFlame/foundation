@@ -7,17 +7,23 @@
   "spec": {
     "command": "game.takeIngots",
     "title": "Take iron from a forge",
-    "description": "Takes what a cabin's forge has made into the sender's pack (V20); the target is the cabin's id. The forge gives 0.8 m³ of iron for each m³ of ore once its time is up (45 s a m³ since game.smelt), and is empty again. V30: a load of a mineral or rock gives its components instead (parts: plates, wire, solarCell, nozzle, cell or cement, counts that take no room) once 60 s a m³ (30 s for rock) are up. Refused for a ship that is not a cabin, a forge with nothing in it or still working, or a pack without room for iron. V35: a refinery's too.",
+    "description": "Takes what a cabin's forge has made into the sender's pack (V20); the target is the cabin's id. The forge gives 0.8 m³ of iron for each m³ of ore once its time is up (45 s a m³ since game.smelt), and is empty again. V30: a load of a mineral or rock gives its components instead (parts: plates, wire, solarCell, nozzle, cell or cement, counts that take no room) once 60 s a m³ (30 s for rock) are up. Refused for a ship that is not a cabin, a forge with nothing in it or still working, or a pack without room for iron. V35: a refinery's too. V36: into names a finished storage building within 30 m: what the forge made goes into its stock instead of the pack.",
     "args": {
       "type": "object",
-      "properties": {}
+      "properties": {
+        "into": {
+          "type": "string",
+          "description": "V36: a finished storage building within 30 m of the forge that takes what it made instead of the sender's pack"
+        }
+      }
     },
     "area": "game",
     "targetType": "gameShip",
     "projection": "game.ships",
     "action": "game.play",
     "events": [
-      "ingots"
+      "ingots",
+      "stored"
     ]
   },
   "nodes": [
@@ -27,6 +33,15 @@
       "position": {
         "x": 0,
         "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "into",
+            "type": "string",
+            "description": "V36: a finished storage building within 30 m of the forge that takes what it made instead of the sender's pack"
+          }
+        ]
       }
     },
     {
@@ -96,7 +111,7 @@
         "y": 150
       },
       "config": {
-        "expr": "let f = ship?.forge; let r = {ferrite: [\"plate\", 8, 60000], malachite: [\"wire\", 10, 60000], silica: [\"solarCell\", 4, 60000], wolframite: [\"nozzle\", 3, 60000], spodumene: [\"cell\", 4, 60000], rock: [\"cement\", 6, 30000], limestone: [\"lime\", 6, 30000]}; let k = f?.kind ?? \"\"; let ms = k == \"\" ? 45000 : r[k][2]; let left = f == nil ? 0 : f.ore * ms / (f?.rate ?? 1) - (now().UnixMilli() - f.at); let held = (pack?.dust ?? 0) + (pack?.rock ?? 0) + (pack?.ore ?? 0) + (pack?.iron ?? 0) + sum(values(pack?.minerals ?? {})); !found ? \"there is no cabin \" + target : !(ship.design in [\"cabin\", \"refinehouse\"]) ? \"only a cabin or a refinery has a forge\" : f == nil ? \"the forge is empty: put ore, a mineral or rock in with game.smelt\" : left > 0 ? \"the forge is still smelting: \" + string(int(ceil(left / 1000))) + \" s left\" : k == \"\" && held + f.ore * 0.8 > 4.0001 ? \"your pack has no room for the iron\" : \"\"",
+        "expr": "let f = ship?.forge; let r = {ferrite: [\"plate\", 8, 60000], malachite: [\"wire\", 10, 60000], silica: [\"solarCell\", 4, 60000], wolframite: [\"nozzle\", 3, 60000], spodumene: [\"cell\", 4, 60000], rock: [\"cement\", 6, 30000], limestone: [\"lime\", 6, 30000]}; let k = f?.kind ?? \"\"; let ms = k == \"\" ? 45000 : r[k][2]; let left = f == nil ? 0 : f.ore * ms / (f?.rate ?? 1) - (now().UnixMilli() - f.at); let held = (pack?.dust ?? 0) + (pack?.rock ?? 0) + (pack?.ore ?? 0) + (pack?.iron ?? 0) + sum(values(pack?.minerals ?? {})); !found ? \"there is no cabin \" + target : !(ship.design in [\"cabin\", \"refinehouse\"]) ? \"only a cabin or a refinery has a forge\" : f == nil ? \"the forge is empty: put ore, a mineral or rock in with game.smelt\" : left > 0 ? \"the forge is still smelting: \" + string(int(ceil(left / 1000))) + \" s left\" : (into ?? \"\") != \"\" && !(hasDep && dep?.design == \"depot\" && len(dep?.placed ?? []) >= (dep?.blocks ?? 1) && (ship.x - dep.x) ** 2 + (ship.y - dep.y) ** 2 + (ship.z - dep.z) ** 2 <= 30 ** 2) ? \"into names a finished storage building within 30 m of the forge\" : (into ?? \"\") == \"\" && k == \"\" && held + f.ore * 0.8 > 4.0001 ? \"your pack has no room for the iron\" : \"\"",
         "type": "string"
       }
     },
@@ -130,7 +145,7 @@
         "y": 350
       },
       "config": {
-        "expr": "let r = {ferrite: [\"plate\", 8, 60000], malachite: [\"wire\", 10, 60000], silica: [\"solarCell\", 4, 60000], wolframite: [\"nozzle\", 3, 60000], spodumene: [\"cell\", 4, 60000], rock: [\"cement\", 6, 30000], limestone: [\"lime\", 6, 30000]}; let k = ship.forge?.kind ?? \"\"; let iron = k == \"\" ? round(ship.forge.ore * 0.8 * 1000) / 1000 : 0; let n = k == \"\" ? 0 : int(floor(ship.forge.ore * r[k][1] + 0.000001)); k == \"\" ? {world: ship.world, iron: iron, pack: {iron: iron}} : {world: ship.world, iron: 0, parts: fromPairs([[r[k][0], n]]), pack: {parts: fromPairs([[r[k][0], n]])}}",
+        "expr": "let res = (let r = {ferrite: [\"plate\", 8, 60000], malachite: [\"wire\", 10, 60000], silica: [\"solarCell\", 4, 60000], wolframite: [\"nozzle\", 3, 60000], spodumene: [\"cell\", 4, 60000], rock: [\"cement\", 6, 30000], limestone: [\"lime\", 6, 30000]}; let k = ship.forge?.kind ?? \"\"; let iron = k == \"\" ? round(ship.forge.ore * 0.8 * 1000) / 1000 : 0; let n = k == \"\" ? 0 : int(floor(ship.forge.ore * r[k][1] + 0.000001)); k == \"\" ? {world: ship.world, iron: iron, pack: {iron: iron}} : {world: ship.world, iron: 0, parts: fromPairs([[r[k][0], n]]), pack: {parts: fromPairs([[r[k][0], n]])}}); (into ?? \"\") == \"\" ? res : {world: res.world, iron: 0}",
         "type": "json"
       }
     },
@@ -155,6 +170,78 @@
       "config": {
         "path": "args",
         "fix": "put ore, a mineral or rock in the forge with game.smelt, wait until it is done, and make room in your pack for iron"
+      }
+    },
+    {
+      "id": "depKey",
+      "type": "data.expression",
+      "title": "The storage's key",
+      "position": {
+        "x": 250,
+        "y": 600
+      },
+      "config": {
+        "expr": "\"gameShip.\" + ((into ?? \"\") == \"\" ? \"none\" : into)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "dep",
+      "type": "live.readProjection",
+      "title": "Read the storage",
+      "position": {
+        "x": 500,
+        "y": 600
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "useDep",
+      "type": "data.expression",
+      "title": "Whether storage is used",
+      "position": {
+        "x": 1800,
+        "y": 500
+      },
+      "config": {
+        "expr": "(into ?? \"\") != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branchDep",
+      "type": "flow.branch",
+      "position": {
+        "x": 2400,
+        "y": -100
+      }
+    },
+    {
+      "id": "emitDep",
+      "type": "live.emit",
+      "title": "Change the storage",
+      "position": {
+        "x": 2700,
+        "y": -100
+      },
+      "config": {
+        "event": "stored",
+        "projection": "game.ships"
+      }
+    },
+    {
+      "id": "depTake",
+      "type": "data.expression",
+      "title": "What the storage gains",
+      "position": {
+        "x": 2400,
+        "y": 300
+      },
+      "config": {
+        "expr": "let r = {ferrite: \"plate\", malachite: \"wire\", silica: \"solarCell\", wolframite: \"nozzle\", spodumene: \"cell\", rock: \"cement\", limestone: \"lime\"}; let per = {ferrite: 8, malachite: 10, silica: 4, wolframite: 3, spodumene: 4, rock: 6, limestone: 6}; let k = ship.forge?.kind ?? \"\"; {world: ship.world, stock: k == \"\" ? {iron: round(ship.forge.ore * 0.8 * 1000) / 1000} : fromPairs([[r[k], int(floor(ship.forge.ore * per[k] + 0.000001))]])}",
+        "type": "json"
       }
     }
   ],
@@ -327,6 +414,136 @@
       "to": {
         "node": "emit",
         "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "into"
+      },
+      "to": {
+        "node": "depKey",
+        "pin": "into"
+      }
+    },
+    {
+      "from": {
+        "node": "depKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "dep",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "dep",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "dep"
+      }
+    },
+    {
+      "from": {
+        "node": "dep",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "hasDep"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "into"
+      },
+      "to": {
+        "node": "check",
+        "pin": "into"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "into"
+      },
+      "to": {
+        "node": "useDep",
+        "pin": "into"
+      }
+    },
+    {
+      "from": {
+        "node": "emit",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branchDep",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "useDep",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branchDep",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branchDep",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emitDep",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "into"
+      },
+      "to": {
+        "node": "emitDep",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "depTake",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emitDep",
+        "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "depTake",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "into"
+      },
+      "to": {
+        "node": "ingots",
+        "pin": "into"
       }
     }
   ]

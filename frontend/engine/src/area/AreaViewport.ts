@@ -20,6 +20,7 @@ import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../sto
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
+import { COUNCIL_LINE, COUNCIL_LINES, councilReady, isHawksRest } from '../story/Council.ts'
 import { TOLD_LINE, ASHBY_LINE, ASHBY_SENSE, ashbyReady, isAshby, remnantAt, remnantSpots, TRACK_LINE, TRACK_REACH, TRACK_SENSE, trackPrints, trackReady } from '../story/Ashby.ts'
 import { WELL_LINE, WELL_REACH, WELL_SENSE, WELL_WARD_LINE, wellReady, wellSpot } from '../story/Well.ts'
 import { bankSageReady, bankSageSpot, FARM_WARD_LINE, FARM_WARDED_NIGHT, HEARTH_REACH, HEARTH_WARD_LINE, hearthStonesReady, hearthWarded, hearthWardMissing, hearthWardReady, nextHearthWard, SAGE_LINE, SAGE_REACH, wardSpots } from '../story/HearthWard.ts'
@@ -2501,6 +2502,8 @@ export class AreaViewport {
   // R by Hawk's Rest's hearth: rest, and draw the first card
   private rest(): void {
     const st = this.story
+    // S31: after word of Ashby, the hearth-watch meets at Hawk's Rest's hearth
+    if (st && councilReady(st.done) && isHawksRest(this.area.name) && this.nearHearth()) return this.council()
     if (st?.done.foretold && !st.done.defended) return this.waitForDark()
     // S23: once the ward is laid, R at Hawk's Rest waits for the night it is tried
     if (st && triedReady(st.done) && this.blessed()) return this.wardNight()
@@ -2518,6 +2521,19 @@ export class AreaViewport {
     setTimeout(() => {
       if (this.story === st) st.clock = sleep(st.clock)
     }, 4000)
+  }
+
+  // S31: the hearth-watch's meeting, a caption at a time, then the step
+  private council(): void {
+    const st = this.story!
+    COUNCIL_LINES.forEach((line, i) => setTimeout(() => {
+      if (this.story === st) this.say(line)
+    }, i * 7000))
+    setTimeout(() => {
+      if (this.story !== st || st.done.council) return
+      this.reach('council')
+      this.say(COUNCIL_LINE)
+    }, COUNCIL_LINES.length * 7000)
   }
 
   // S14: R by a hearth once the notes foretold the night: the days pass

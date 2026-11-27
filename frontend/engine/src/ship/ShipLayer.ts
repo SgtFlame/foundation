@@ -27,6 +27,7 @@ const COLORS: Record<DesignBlock['type'], number> = {
   clamp: 0xd9a33a,
   kiln: 0x8c3b22, // V35: the refinery's
   control: 0x3f6f8f,
+  rack: 0x8a8f96, // V36: storage's
 }
 
 interface Shown {
@@ -356,10 +357,20 @@ export class ShipLayer {
 
   // V35: a finished refinery's kiln within reach of a point: the building's id
   kilnNear(p: Vec3, reach: number): string | null {
+    return this.finishedNear('kiln', p, reach)
+  }
+
+  // V36: a finished storage building's rack within reach of a point
+  depotNear(p: Vec3, reach = 2.2): string | null {
+    return this.finishedNear('rack', p, reach)
+  }
+
+  // A block of a type in a finished building within reach of a point: the building's id
+  private finishedNear(type: string, p: Vec3, reach: number): string | null {
     for (const s of this.shown.values()) {
       if (s.placed.size < s.design.blocks.length) continue
       for (const b of s.design.blocks) {
-        if (b.type !== 'kiln') continue
+        if (b.type !== type) continue
         const c = blockWorld({ x: s.at.x, y: s.at.y, z: s.at.z, q: [s.q.x, s.q.y, s.q.z, s.q.w] }, b, s.design.blockSize)
         if (Math.hypot(c.x - p.x, c.y - p.y, c.z - p.z) < reach) return s.state.id
       }

@@ -1,0 +1,154 @@
+{
+  "id": "depot",
+  "title": "Storage",
+  "description": "A storage building (forge 360 V36, the second industry building): a concrete floor with four steel racks and two lamps, laid out from its blueprint, which comes with the refinery's chip or Trade level 2. Each concrete block costs 2 bags of cement, each rack 3 steel plates, each lamp a copper wire. Finished, it holds components and materials by the hundred (game.store, game.withdraw), and a refinery within 30 m feeds its kilns from it and puts what it makes into it.",
+  "blockSize": 1,
+  "static": true,
+  "chip": true,
+  "blocks": [
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        3
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        3
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        3
+      ]
+    },
+    {
+      "type": "rack",
+      "at": [
+        -1,
+        1,
+        0
+      ]
+    },
+    {
+      "type": "rack",
+      "at": [
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "type": "rack",
+      "at": [
+        -1,
+        1,
+        1
+      ]
+    },
+    {
+      "type": "rack",
+      "at": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        -1,
+        2,
+        0
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        1,
+        2,
+        0
+      ]
+    }
+  ]
+}

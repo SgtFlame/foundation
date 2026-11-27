@@ -1028,3 +1028,68 @@ func TestRefinery(t *testing.T) {
 		t.Fatalf("refinery load %+v", s.Forge)
 	}
 }
+
+// V36: storage holds stock, feeds a refinery's kilns and takes what they make
+func TestStorage(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Storage moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	refineParts(t, st, world, map[string]int{"plate": 6 + 16 + 12, "wire": 4 + 5 + 2})
+	refineCement(t, st, world, 2+28+24)
+	st.ok("game.startShip", "s0", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 110, "z": 0, "q": q})
+	if r := st.refused("game.startShip", "d1", map[string]any{"world": world, "design": "depot", "x": 10, "y": 102, "z": 20, "q": q}); !strings.Contains(r.Common.Message, "refinery") {
+		t.Fatalf("storage without its blueprint: %q", r.Common.Message)
+	}
+	st.ok("game.handIn", "s0", map[string]any{"contract": "refinery-chip"})
+	st.ok("game.startShip", "r1", map[string]any{"world": world, "design": "refinehouse", "x": 0, "y": 102, "z": 20, "q": q})
+	st.ok("game.startShip", "d1", map[string]any{"world": world, "design": "depot", "x": 10, "y": 102, "z": 20, "q": q})
+	for i := 0; i < 21; i++ {
+		st.ok("game.placeBlock", "r1", map[string]any{"index": i})
+	}
+	if r := st.refused("game.store", "d1", map[string]any{"stock": map[string]any{"plate": 1}}); !strings.Contains(r.Common.Message, "not finished") {
+		t.Fatalf("an unfinished storage: %q", r.Common.Message)
+	}
+	for i := 0; i < 18; i++ {
+		st.ok("game.placeBlock", "d1", map[string]any{"index": i})
+	}
+	st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 100, "z": 50, "radius": 1, "took": map[string]any{"dust": 0, "rock": 0, "minerals": map[string]any{"ferrite": 1.25, "coal": 0.1}}})
+	if r := st.refused("game.store", "d1", map[string]any{"stock": map[string]any{"ferrite": 2}}); !strings.Contains(r.Common.Message, "pack holds only") {
+		t.Fatalf("storing more than the pack: %q", r.Common.Message)
+	}
+	res := st.ok("game.store", "d1", map[string]any{"stock": map[string]any{"ferrite": 1.25}})
+	var d game.Ship
+	var pack game.Pack
+	if !st.read(game.ShipsProjector, game.ShipType+".d1", res.Seq, &d) || d.Stock["ferrite"] != 1.25 || !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Minerals["ferrite"] != 0 {
+		t.Fatalf("stored %+v, pack %+v", d.Stock, pack)
+	}
+	res = st.ok("game.withdraw", "d1", map[string]any{"stock": map[string]any{"ferrite": 1}})
+	d, pack = game.Ship{}, game.Pack{}
+	if !st.read(game.ShipsProjector, game.ShipType+".d1", res.Seq, &d) || d.Stock["ferrite"] != 0.25 || !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Minerals["ferrite"] != 1 {
+		t.Fatalf("withdrawn %+v, pack %+v", d.Stock, pack)
+	}
+	if r := st.refused("game.withdraw", "d1", map[string]any{"stock": map[string]any{"ferrite": 1}}); !strings.Contains(r.Common.Message, "holds only") {
+		t.Fatalf("withdrawing more than stored: %q", r.Common.Message)
+	}
+	// the refinery's kilns are fed from storage, the coal from the pack
+	res = st.ok("game.smelt", "r1", map[string]any{"what": "ferrite", "from": "d1"})
+	var r game.Ship
+	d = game.Ship{}
+	if !st.read(game.ShipsProjector, game.ShipType+".r1", res.Seq, &r) || r.Forge == nil || r.Forge.Ore != 0.25 || r.Forge.Rate != 4 || !st.read(game.ShipsProjector, game.ShipType+".d1", res.Seq, &d) || d.Stock["ferrite"] != 0 {
+		t.Fatalf("fed from storage: forge %+v, stock %+v", r.Forge, d.Stock)
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		res = st.send(1, "game.takeIngots", "r1", map[string]any{"into": "d1"})
+		if res.Common.Code < 300 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("taking into storage: %q", res.Common.Message)
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	d = game.Ship{}
+	if !st.read(game.ShipsProjector, game.ShipType+".d1", res.Seq, &d) || d.Stock["plate"] != 2 {
+		t.Fatalf("made into storage %+v", d.Stock)
+	}
+}
