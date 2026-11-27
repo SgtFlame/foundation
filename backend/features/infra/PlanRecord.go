@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/authz"
 	"strconv"
 	"time"
 
@@ -160,6 +161,17 @@ func sortedKeys[V any](m map[string]V) []string {
 
 // MakePlan plans a version (0: the draft) against the actual state and
 // stores the plan, returning it.
+// headAtLeast reports whether the configuration's head is version n or
+// later, so version n exists.
+func headAtLeast(args features.ServiceArgs, deps Deps, config string, n int) bool {
+	v, ok, err := deps.Store.Get(args.Context(), args.Principal.TenantID, ConfigProjector, ConfigType+"."+config)
+	if err != nil || !ok {
+		return false
+	}
+	var c Config
+	return json.Unmarshal(v.Value, &c) == nil && c.Head >= n
+}
+
 func MakePlan(args features.ServiceArgs, reg *extensions.Registry, deps Deps, config string, version int) (PlanRecord, error) {
 	if config == "" {
 		config = DefaultConfig
@@ -170,7 +182,7 @@ func MakePlan(args features.ServiceArgs, reg *extensions.Registry, deps Deps, co
 	tenant := args.Principal.TenantID
 	if s, ok := deps.Store.(interface {
 		Settle(ctx context.Context, tenant uint64, projector string) error
-	}); ok && version == 0 {
+	}); ok {
 		_ = s.Settle(args.Context(), tenant, ConfigProjector) // read the draft as last committed
 	}
 	var doc Document
@@ -188,7 +200,19 @@ func MakePlan(args features.ServiceArgs, reg *extensions.Registry, deps Deps, co
 		}
 		doc = c.Draft
 	} else {
-		v, ok, err := deps.Store.Get(args.Context(), tenant, VersionProjector, VersionType+"."+VersionID(config, version))
+		// A version committed a moment ago may not be folded yet: its
+		// projector follows the stream on its own, so wait a little for
+		// one the draft's head says exists.
+		key := VersionType + "." + VersionID(config, version)
+		v, ok, err := deps.Store.Get(args.Context(), tenant, VersionProjector, key)
+		for wait := 0; err == nil && !ok && wait < 50 && headAtLeast(args, deps, config, version); wait++ {
+			select {
+			case <-args.Context().Done():
+				return PlanRecord{}, args.Context().Err()
+			case <-time.After(50 * time.Millisecond):
+			}
+			v, ok, err = deps.Store.Get(args.Context(), tenant, VersionProjector, key)
+		}
 		if err != nil {
 			return PlanRecord{}, err
 		}
@@ -307,9 +331,13 @@ func contributePlans(reg *extensions.Registry, deps func() Deps) {
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor:  extensions.Descriptor{ID: "infra.plan", Source: source},
 		Title:       "Plan infrastructure",
-		Description: "Compares a configuration version (0 or left out: the draft) with what exists at the providers and stores a plan: the creations, changes and removals in the order they would run, refusals of what cannot be satisfied (such as a VM where no host can run VMs) and notes. Applying is always of a plan a person has seen. Gives the plan with its id.",
+		Description: "Compares a configuration version (0 or left out: the draft) with what exists at the providers and stores a plan: the creations, changes and removals in the order they would run, refusals of what cannot be satisfied (such as a VM where no host can run VMs) and notes. Applying is always of a plan a person has seen. Gives the plan with its id. It changes nothing at the providers, so it never asks first.",
 		Input:       json.RawMessage(`{"type":"object","properties":{"config":{"type":"string","description":"The configuration, main when left out"},"version":{"type":"integer","minimum":0,"description":"The version to plan; 0 or left out for the draft"}}}`),
 		Effect:      tools.EffectWrite,
+		// Planning only reads the providers and stores a plan record, so it
+		// never asks: a page's handler and the chat may plan freely, and
+		// applying (infra.apply) is what a person decides.
+		Asks: func(json.RawMessage) bool { return false },
 		Run: func(call tools.Call) (tools.Result, error) {
 			a, err := tools.Decode[struct {
 				Config  string
@@ -320,6 +348,10 @@ func contributePlans(reg *extensions.Registry, deps func() Deps) {
 			}
 			if ps := rootOnly(call.Principal); ps != nil {
 				return tools.Result{}, fmt.Errorf("%s", ps[0].Message)
+			}
+			res := authz.Tenant(call.Principal)
+			if err := authz.Check(call.Context(), call.Principal, ActionOperate, res).Err(ActionOperate, res); err != nil {
+				return tools.Result{}, err
 			}
 			rec, err := MakePlan(call.ServiceArgs, reg, deps(), a.Config, a.Version)
 			if err != nil {

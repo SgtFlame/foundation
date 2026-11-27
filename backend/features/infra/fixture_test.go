@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -20,6 +22,7 @@ type stack struct {
 	p   *project.Projections
 	reg *extensions.Registry
 	n   int
+	seq uint64 // the last sequence a command left on the def stream
 }
 
 func newStack(t *testing.T) *stack {
@@ -55,6 +58,9 @@ func (st *stack) must(typ string, a any) bus.Result {
 	if r.Common.Code >= 300 {
 		st.t.Fatalf("%s: %d %s %+v", typ, r.Common.Code, r.Common.Message, r.Problems)
 	}
+	if strings.HasPrefix(typ, "infra.config.") && typ != "infra.config.commit" && r.Seq > st.seq { // the draft's last event
+		st.seq = r.Seq
+	}
 	return r
 }
 
@@ -78,8 +84,18 @@ func (st *stack) get(projector, key string, into any) bool {
 
 func (st *stack) config() infra.Config {
 	st.t.Helper()
+	// Settle can return just before the last fold is visible, so wait for
+	// the draft to reflect the last command sent.
+	v, err := st.p.WaitFor(context.Background(), features.RootTenantID, infra.ConfigProjector, infra.ConfigType+"."+infra.DefaultConfig, st.seq, 5*time.Second)
+	if err != nil {
+		st.t.Fatal(err)
+	}
 	var c infra.Config
-	st.get(infra.ConfigProjector, infra.ConfigType+"."+infra.DefaultConfig, &c)
+	if len(v.Value) > 0 {
+		if err := json.Unmarshal(v.Value, &c); err != nil {
+			st.t.Fatal(err)
+		}
+	}
 	return c
 }
 

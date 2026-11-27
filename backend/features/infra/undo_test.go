@@ -1,7 +1,9 @@
 package infra_test
 
 import (
+	"context"
 	"encoding/json"
+	"github.com/SgtFlame/foundation/backend/features"
 	"testing"
 
 	"github.com/SgtFlame/foundation/backend/features/apps/ops"
@@ -36,6 +38,9 @@ func TestEveryOpUndoes(t *testing.T) {
 		before := draft()
 		st.must(s.typ, s.args)
 		after := draft()
+		if err := st.p.Settle(context.Background(), features.RootTenantID, ops.Projector); err != nil {
+			t.Fatal(err)
+		}
 		entries, err := ops.Entries(operator(7), st.p, ops.NoApp)
 		if err != nil {
 			t.Fatal(err)
@@ -52,7 +57,7 @@ func TestEveryOpUndoes(t *testing.T) {
 		}
 		st.must(s.typ, s.args) // again, so the next step builds on it
 		if draft() != after {
-			t.Fatalf("%s redone differs", s.typ)
+			t.Fatalf("%s redone differs:\n got %s\nwant %s", s.typ, draft(), after)
 		}
 		seen[s.typ] = true
 	}
