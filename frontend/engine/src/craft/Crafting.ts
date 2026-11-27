@@ -21,6 +21,8 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'powerDrill', title: 'powered drill', needs: { ore: 2.5, rock: 1 }, line: 'tears through rock in a 6 m bite, faster than any hand', manual: 'powerDrill', builtOn: 'drill' },
   // V21: the first thing made from the forge's iron
   { id: 'scanner', title: 'ore scanner', needs: { iron: 1, ore: 0.5 }, line: 'K sends a pulse that marks ore within 36 m through the rock' },
+  // V22: the suit's first upgrade (the design: gear answers the environment)
+  { id: 'airTank', title: 'iron air tank', needs: { iron: 1.5, rock: 0.5 }, line: 'doubles the air your suit holds: 8 minutes in vacuum instead of 4' },
 ]
 
 // The recipe the bench offers next: the first not made yet, or null

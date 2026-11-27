@@ -498,4 +498,8 @@ func TestForge(t *testing.T) {
 	if r := st.refused("game.craft", "c1", map[string]any{"item": "scanner"}); !strings.Contains(r.Common.Message, "1 m³ of iron and 0.5 m³ of ore") {
 		t.Fatalf("a scanner from too little: %q", r.Common.Message)
 	}
+	// V22: the suit's iron air tank
+	if r := st.refused("game.craft", "c1", map[string]any{"item": "airTank"}); !strings.Contains(r.Common.Message, "1.5 m³ of iron and 0.5 m³ of rock") {
+		t.Fatalf("an air tank from too little: %q", r.Common.Message)
+	}
 }

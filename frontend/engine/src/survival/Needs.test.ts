@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { eat, FRESH, hungry, NEEDS, stepNeeds, warning } from './Needs.ts'
+import { eat, FRESH, hungry, NEEDS, ratesFor, stepNeeds, warning } from './Needs.ts'
 
 const run = (n = FRESH, breathable: boolean, seconds: number) => {
   let s = n
@@ -31,4 +31,12 @@ test('hunger drains over half an hour; a ration answers it, starving hurts slowl
   assert.ok(s.health < 100 && s.health > 85, JSON.stringify(s))
   assert.match(warning(s, { breathable: true })!, /Starving/)
   assert.equal(warning(FRESH, { breathable: false }), null)
+})
+
+test('an iron air tank doubles the suit\'s air', () => {
+  const plain = stepNeeds(FRESH, { breathable: false }, 60)
+  const tank = stepNeeds(FRESH, { breathable: false }, 60, ratesFor({ airTank: true }))
+  assert.equal(Math.round(100 - plain.air), 25)
+  assert.ok(Math.abs(100 - tank.air - 12.5) < 0.01)
+  assert.equal(ratesFor(undefined), NEEDS)
 })

@@ -16,7 +16,7 @@ import type { EditKind, MoonParams, VoxelEdit } from './Types.ts'
 import { VoxelWorld } from './VoxelWorld.ts'
 import { PLANET } from './Bodies.ts'
 import { available, Fishing, FLEE_RANGE, floatModel, grazerDir, grazerModel, herdOf, HUNT_REACH, SEA_RADIUS, seaMesh, type Grazer } from '../wildlife/Wildlife.ts'
-import { eat, FRESH, hungry, NeedsHud, rounded, stepNeeds, type Needs } from '../survival/Needs.ts'
+import { eat, FRESH, hungry, NeedsHud, ratesFor, rounded, stepNeeds, type Needs } from '../survival/Needs.ts'
 import { countdown, DRONE_HIT, DRONE_SCRAP, dronesOf, shotHits, surgeAt, TURRET_RANGE, TURRET_RELOAD, turretPick, type Drone } from '../surge/Surge.ts'
 import { MANUAL_BLOCK, nearestSalvage, SALVAGE_ORE, salvageKey, wreckSites, type Vec3 as WVec3 } from '../wreck/Wreck.ts'
 import { digLimits, missing, named, nextRecipe, spend, type DigLimits } from '../craft/Crafting.ts'
@@ -1445,9 +1445,10 @@ export class VoxelViewport {
     }
     const before = this.breathable
     this.breathable = this.canBreathe()
-    this.needs = stepNeeds(this.needs, { breathable: this.breathable }, dt)
+    const rates = ratesFor(this.progress?.tools)
+    this.needs = stepNeeds(this.needs, { breathable: this.breathable }, dt, rates)
     if (before !== this.breathable) this.updateHint()
-    this.needsHud.show(this.needs, { breathable: this.breathable })
+    this.needsHud.show(this.needs, { breathable: this.breathable }, rates)
     if (this.needs.health <= 0) this.blackOut()
   }
 
@@ -1464,7 +1465,7 @@ export class VoxelViewport {
   private benchHint(): string {
     if (!this.nearBench) return ''
     const r = nextRecipe(this.progress?.tools, this.progress?.manuals)
-    return !r ? (this.progress?.manuals?.powerDrill ? 'The bench: everything it knows is made · ' : 'The bench: drill, turret and scanner made; a wreck may hold a manual for more · ') : `U: craft ${named(r)} (${Object.entries(r.needs).map(([k, n]) => `${n} m³ ${k}`).join(', ')}) · `
+    return !r ? (this.progress?.manuals?.powerDrill ? 'The bench: everything it knows is made · ' : 'The bench: everything it knows from iron is made; a wreck may hold a manual for more · ') : `U: craft ${named(r)} (${Object.entries(r.needs).map(([k, n]) => `${n} m³ ${k}`).join(', ')}) · `
   }
 
   private forgeOf(id: string): ForgeState | null {

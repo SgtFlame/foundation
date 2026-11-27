@@ -20,6 +20,14 @@ export const NEEDS = {
   healPerSecond: 0.5,
 }
 
+// V22: the suit's needs with the tools a player carries: an iron air tank
+// doubles the air a suit holds in vacuum
+export const AIR_TANK_SECONDS = 480
+
+export function ratesFor(tools: Readonly<Record<string, boolean>> | undefined): typeof NEEDS {
+  return tools?.airTank ? { ...NEEDS, airSeconds: AIR_TANK_SECONDS } : NEEDS
+}
+
 export const FRESH: Needs = { air: 100, fed: 80, health: 100 }
 
 export interface Surroundings {
@@ -102,10 +110,10 @@ export class NeedsHud {
     this.el = el
   }
 
-  show(n: Needs | null, s: Surroundings): void {
+  show(n: Needs | null, s: Surroundings, rates = NEEDS): void {
     this.el.style.display = n ? 'block' : 'none'
     if (!n) return
     for (const k of ['air', 'fed', 'health'] as const) this.bars[k].style.width = `${n[k]}%`
-    this.warn.textContent = warning(n, s) ?? ''
+    this.warn.textContent = warning(n, s, rates) ?? ''
   }
 }

@@ -436,6 +436,14 @@ The hedge-witch's bundles and her moon calendar, from the design's Hawk's Rest (
 - **The moon calendar**: pebbles on the cottage's window sill (`sillSpot`); standing by them says how many nights until the lesser and the greater full moons (`sillLine`, `nextGreaterFull`, the stones' `nextWaking`).
 - `TestStory` gathers a bundle, reaches `bundles` and cooks the tea; `Bundles.test.ts` covers the rest.
 
+## Built in V22 (forge 360)
+
+The iron air tank: the suit's first upgrade (the play design: gear answers the environment; a cheap suit forces short trips).
+
+- `game.craft` knows a fifth recipe, `airTank` (1.5 m³ of iron and 0.5 m³ of rock). The refusal now names every material the item needs, iron first, joined with *and* (`join(filter(…))` in `cmd-game-craft`), so the older messages read as before.
+- Engine: `survival/Needs.ts` `ratesFor(tools)` gives the suit's rates, with `AIR_TANK_SECONDS` (480, twice the plain suit's 240) when the player has the tank; `VoxelViewport` steps the needs and shows the air warning ("Air low: n s left") with them. The bench's hint once everything is made says so.
+- `TestForge` checks the refusal; `Crafting.test.ts` and `Needs.test.ts` the rest.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
