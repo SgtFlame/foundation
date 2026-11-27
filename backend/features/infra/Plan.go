@@ -208,6 +208,10 @@ func capabilities(desired []Resource, actual Actual) []Refusal {
 		}
 	}
 	for _, r := range desired {
+		if r.Refuse != "" {
+			out = append(out, Refusal{Resource: r.ID, Reason: r.Refuse, Fix: "place it on another site, or as the tenant's own runners"})
+			continue
+		}
 		if r.Kind == KindInstance && r.NeedsVMs && !vmHosts[r.Site] {
 			out = append(out, Refusal{Resource: r.ID, Reason: fmt.Sprintf("no host on %s can run VMs", r.Site), Fix: "add a host pool of a size that can run VMs to " + r.Site + ", or make the profile a container"})
 		}

@@ -26,6 +26,9 @@ type Resource struct {
 	DependsOn []string       `json:"dependsOn,omitempty"`
 	NeedsVMs  bool           `json:"needsVms,omitempty"`
 	HoldsData bool           `json:"holdsData,omitempty"`
+	// Refuse is why the expansion already knows the plan cannot satisfy
+	// it (a shared instance on a tenant's own cluster, forge 22k).
+	Refuse string `json:"refuse,omitempty"`
 }
 
 // ResourceKind is one kind of resource, contributed on ResourceKinds by
@@ -56,6 +59,7 @@ const (
 	KindInstance = "instance"
 	KindNatsNode = "natsNode"
 	KindGateway  = "gateway"
+	KindStreams  = "tenantStreams" // where a tenant's JetStream streams live (forge 22k)
 )
 
 // HostID is the resource id of a host pool's i-th host (from 1).
@@ -324,6 +328,7 @@ func expandInstances(doc Document) []Resource {
 	for _, c := range doc.Clusters {
 		clusters[c.Site] = true
 	}
+	dedicated := Dedicated(doc)
 	var out []Resource
 	place := func(id, profile, stack string, sites []SiteCount, vms bool, tenant uint64) {
 		names := []string{profile}
@@ -350,9 +355,13 @@ func expandInstances(doc Document) []Resource {
 						props["kind"] = "vm"
 					}
 				}
+				refuse := ""
+				if owner, ok := dedicated[sc.Site]; ok && owner != tenant {
+					refuse = fmt.Sprintf("site %s's cluster is tenant %d's own", sc.Site, owner)
+				}
 				for i := 1; i <= sc.Count; i++ {
 					out = append(out, Resource{ID: InstanceID(sc.Site, id, name, i), Kind: KindInstance, Site: sc.Site, Props: props, DependsOn: deps,
-						NeedsVMs: prof.Kind == "vm" || vms, HoldsData: true})
+						NeedsVMs: prof.Kind == "vm" || vms, HoldsData: true, Refuse: refuse})
 				}
 			}
 		}
@@ -371,6 +380,53 @@ func expandInstances(doc Document) []Resource {
 	return out
 }
 
+// Dedicated is each site whose cluster is a tenant's own (an override's
+// cluster switch), by site.
+func Dedicated(doc Document) map[string]uint64 {
+	out := map[string]uint64{}
+	for _, o := range doc.Overrides {
+		if sw, err := o.Switches(); err == nil && sw.Cluster != nil && sw.Cluster.Site != "" {
+			if _, ok := out[sw.Cluster.Site]; !ok {
+				out[sw.Cluster.Site] = o.Tenant
+			}
+		}
+	}
+	return out
+}
+
+// StreamsID is the resource placing a tenant's streams.
+func StreamsID(tenant uint64) string { return "streams:" + strconv.FormatUint(tenant, 10) }
+
+// NatsAccountRecord is the infraNatsAccount record a tenant's streams
+// placement writes when the tenant has none yet.
+func NatsAccountRecord(tenant uint64) string {
+	return RecordID("natsAccount:" + strconv.FormatUint(tenant, 10))
+}
+
+// expandStreams places each tenant's streams that an override's streams
+// switch asks for in its site's NATS cluster, once that site's NATS nodes
+// exist.
+func expandStreams(doc Document) []Resource {
+	all, _ := natsSites(doc)
+	var out []Resource
+	seen := map[uint64]bool{}
+	for _, o := range doc.Overrides {
+		sw, err := o.Switches()
+		if err != nil || sw.Streams == nil || sw.Streams.Site == "" || seen[o.Tenant] {
+			continue
+		}
+		seen[o.Tenant] = true
+		site := sw.Streams.Site
+		var deps []string
+		for n := 1; n <= all[site].Count; n++ {
+			deps = append(deps, NatsNodeID(site, n))
+		}
+		out = append(out, Resource{ID: StreamsID(o.Tenant), Kind: KindStreams, Site: site, DependsOn: deps,
+			Props: map[string]any{"tenant": strconv.FormatUint(o.Tenant, 10), "cluster": site}})
+	}
+	return out
+}
+
 func contributeResources(reg *extensions.Registry) {
 	ResourceKinds.Register(reg, ResourceKind{Descriptor: extensions.Descriptor{ID: KindHost, Source: source}, Kind: KindHost, Title: "Host", Order: 10,
 		Compared: []string{"size", "region", "image"}, Expand: expandHosts})
@@ -379,6 +435,8 @@ func contributeResources(reg *extensions.Registry) {
 		Compared: []string{"host", "peers", "gateways", "leafRemotes"}, Expand: expandNatsNodes})
 	ResourceKinds.Register(reg, ResourceKind{Descriptor: extensions.Descriptor{ID: KindGateway, Source: source}, Kind: KindGateway, Title: "Gateway", Order: 24,
 		Compared: []string{"mode"}, Expand: expandGateways})
+	ResourceKinds.Register(reg, ResourceKind{Descriptor: extensions.Descriptor{ID: KindStreams, Source: source}, Kind: KindStreams, Title: "Tenant streams", Order: 26,
+		Compared: []string{"cluster"}, Expand: expandStreams})
 	ResourceKinds.Register(reg, ResourceKind{Descriptor: extensions.Descriptor{ID: KindInstance, Source: source}, Kind: KindInstance, Title: "Instance", Order: 30, HoldsData: true, Expand: expandInstances})
 }
 

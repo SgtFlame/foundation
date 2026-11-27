@@ -562,6 +562,13 @@ func runStep(args features.ServiceArgs, d infranodes.Deps, s infra.Step, account
 			return "", err
 		}
 		return "NATS node " + n.Instance + " is in " + n.Cluster, nil
+	case infra.KindStreams:
+		tenant, cluster := fmt.Sprint(s.Desired["tenant"]), fmt.Sprint(s.Desired["cluster"])
+		rec, err := infranodes.EnsureStreams(args, d, tenant, cluster)
+		if err != nil {
+			return "", err
+		}
+		return "tenant " + tenant + "'s streams are placed in " + cluster + " (" + rec + "); the Control Plane moves them one at a time", nil
 	case infra.KindGateway:
 		// The sites' NATS nodes write the gateways into their cluster
 		// records; this step only says so once they have.

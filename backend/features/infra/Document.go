@@ -128,12 +128,25 @@ type Override struct {
 	Spec   json.RawMessage `json:"spec,omitempty"`
 }
 
-// OverrideSpec is an override's switches (iteration question 7: each a
-// separate switch). Built so far (forge 22k): runners, the tenant's own
-// instances of a profile or stack at sites, in VMs of their own with vm.
+// OverrideSpec is an override's switches (iteration question 7, Tony
+// 2026-11-27: each a separate switch). Built so far (forge 22k): runners,
+// the tenant's own instances of a profile or stack at sites, in VMs of
+// their own with vm; cluster, a site whose cluster is the tenant's alone;
+// streams, the site whose NATS cluster holds the tenant's JetStream
+// streams.
 type OverrideSpec struct {
 	Runners *TenantRunners `json:"runners,omitempty"`
+	Cluster *TenantSite    `json:"cluster,omitempty"`
+	Streams *TenantSite    `json:"streams,omitempty"`
 }
+
+// TenantSite names a site for a switch.
+type TenantSite struct {
+	Site string `json:"site"`
+}
+
+// OverrideShape is the override spec as a problem or tool describes it.
+const OverrideShape = "{runners?: {profile | stack, sites: [{site, count}], vm?}, cluster?: {site}, streams?: {site}}"
 
 // TenantRunners are a tenant's own instances.
 type TenantRunners struct {
@@ -431,15 +444,54 @@ func (d Document) Check() []live.Problem {
 			}
 		}
 	}
+	clusterAt := map[string]bool{}
+	for _, c := range d.Clusters {
+		clusterAt[c.Site] = true
+	}
+	dedicated := map[string]uint64{} // site → the tenant whose own cluster it is
+	streamsOf := map[uint64]string{}
 	for _, o := range d.Overrides {
 		path := fmt.Sprintf("overrides[%s]", o.ID)
+		if sw, err := o.Switches(); err == nil && sw.Streams != nil {
+			if prev, ok := streamsOf[o.Tenant]; ok && prev != sw.Streams.Site {
+				add(path+".spec.streams", fmt.Sprintf("tenant %d's streams are placed at %s by another override", o.Tenant, prev), "")
+			}
+			streamsOf[o.Tenant] = sw.Streams.Site
+		}
 		if o.Tenant == 0 || o.Tenant == features.RootTenantID {
 			add(path+".tenant", "an override names a tenant other than the root tenant", "")
 		}
 		sw, err := o.Switches()
 		if err != nil {
-			add(path+".spec", "the spec is {runners: {profile | stack, sites: [{site, count}], vm}}: "+err.Error(), "")
+			add(path+".spec", "the spec is "+OverrideShape+": "+err.Error(), "")
 			continue
+		}
+		if c := sw.Cluster; c != nil {
+			ref(path+".spec.cluster.site", "sites", c.Site)
+			if c.Site == "" {
+				add(path+".spec.cluster.site", "cluster names the site whose cluster is the tenant's own", "")
+			} else if !clusterAt[c.Site] {
+				add(path+".spec.cluster.site", fmt.Sprintf("site %s has no cluster", c.Site), "add a cluster to "+c.Site)
+			} else if other, ok := dedicated[c.Site]; ok && other != o.Tenant {
+				add(path+".spec.cluster.site", fmt.Sprintf("site %s's cluster is tenant %d's own already", c.Site, other), "")
+			} else {
+				dedicated[c.Site] = o.Tenant
+			}
+			if r := sw.Runners; r != nil {
+				for i, sc := range r.Sites {
+					if sc.Site != c.Site {
+						add(fmt.Sprintf("%s.spec.runners.sites.%d.site", path, i), fmt.Sprintf("the tenant's runners go on its own cluster at %s", c.Site), "")
+					}
+				}
+			}
+		}
+		if st := sw.Streams; st != nil {
+			ref(path+".spec.streams.site", "sites", st.Site)
+			if st.Site == "" {
+				add(path+".spec.streams.site", "streams names the site whose NATS cluster holds the tenant's streams", "")
+			} else if !clusterAt[st.Site] {
+				add(path+".spec.streams.site", fmt.Sprintf("site %s has no cluster, so no NATS", st.Site), "add a cluster to "+st.Site)
+			}
 		}
 		if r := sw.Runners; r != nil {
 			if (r.Stack == "") == (r.Profile == "") {
