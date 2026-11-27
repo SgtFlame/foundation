@@ -65,3 +65,21 @@ A ref is a branch name, a full ref or a commit sha. Paths are from the repositor
 **Events** are polled every `pollSeconds`: the branch heads (`matching-refs/heads/`) against the cursor's (a moved or new branch is `pushed`, its paths from comparing the trees; a new branch's from its last commit), and the 30 pull requests updated last against the newest `updated_at` seen (`pullRequestChanged`). The first look only notes where things are; the cursor is stored with an event. Webhooks come with 26b-2.
 
 **Tests**: `githubtest` is a stand-in for the endpoints above over one repository in memory, behind an `httptest` server (token check, outside pushes, protected branches, injected failures, request counts); the suite runs against it, as do the error mapping and the batch shape of a commit. `TestRealRepository` runs the suite against a real repository when `GIT_GITHUB_REPO=owner/repo` and `GIT_GITHUB_TOKEN` are set; its branches start `suite/` and end with the run's time.
+
+## Built in forge 24c: `git.https`
+
+`git/https` implements `git.repo@1` against any host that speaks git's smart HTTP(S) protocol (Gitea, GitLab, Bitbucket, a self-hosted server), through go-git (`github.com/go-git/go-git/v5`, pinned in `go.mod`), entirely in memory: nothing is cloned to disk. Served by `serve.go`'s in-process adapter with the record files' store (`git.ServerFiles`). It has no `git.review@1`: pull requests are each host's own API (use `git.github` on GitHub).
+
+**Settings**: `url` (the HTTPS clone URL; `http://` is refused unless `Options.AllowHTTP`, tests only), `username` (`git` when left out with a token), `token` (a secret: an access token or password), `pollSeconds` (60, at least 15) and `allowDefaultBranch`. HTTPS only: SSH keys are not supported (question 4 of the plan).
+
+**Limits** are the adapter's `Options.Limits` (`MaxBytes` 200 MB of objects one fetch brings, `MaxFiles` 20000 files in a tree), not a configuration section, since adapters never read configuration; a repository over either is `invalid`.
+
+**Reads**: every call lists the remote's refs (`ls-remote`; the default branch from `HEAD`'s symbolic target, else `main` or `master`), then fetches what it needs into a fresh in-memory repository: a branch or tag one commit deep; a commit sha (or a prefix of at least 7) by fetching every branch `git.KeyDepth` (50) deep and finding it there, else `notFound`. `readTree` pages the commit's flattened tree with `git.List`; `readFile` reads the blob; `compare` diffs the two trees exactly. `check`'s `canWrite` is whether a token is set, since only a push tells.
+
+**Commit**: with a key, the branch's last 50 commits are fetched and searched for its `Axiom-Key` trailer; `expectHead` is checked against the advertised head; the parent is fetched one deep, the blobs and nested trees are written in memory (git's entry order, existing file modes kept), and the commit is pushed **without force**, with go-git's `RequireRemoteRefs` naming the head it was built on, so a branch that moved meanwhile is a `conflict` (as is a racing push's `non-fast-forward`). Changes that change nothing are `unchanged`; a protected branch or a declined pre-receive hook is `invalid`.
+
+**Events**: `pushed` by polling the advertised heads every `pollSeconds` (the first look only notes them), each move's paths from comparing the two commits' trees (the new head's parent when the old one is out of reach). Webhooks come with 26b-2.
+
+**Errors**: refused credentials are `auth`; an unknown repository `notFound`; timeouts and every other transport failure `unavailable`, retryable.
+
+**Tests**: the suite runs against a bare repository in `t.TempDir()` served by git's own `git-http-backend` through `net/http/cgi` behind a basic-auth check (skipped where `git-http-backend` is not installed), with outside pushes made by the `git` command; also wrong tokens, plain http refused, a stale head, a commit on a shallow history checked with `git fsck --strict`, and a sha ref. The plan had the suite run over `gittest` served by smart HTTP; git's own server is used instead, which is also what real hosts run.

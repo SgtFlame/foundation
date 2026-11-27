@@ -1032,3 +1032,7 @@ GitHub through its REST and Git Data APIs ([GitConnector.md](GitConnector.md) �
 
 - give a git type the file store through `git.ServerFiles` in `serve.go`, never the store itself before it exists;
 - test a new HTTP type against a stand-in server in the test, as `githubtest` is, and keep a `TestReal…` that runs the suite against the real service when its credentials are in the environment.
+
+## Forge 24c: `git.https`
+
+Built `features/connectors/git/https`, the `git.https` connector type over go-git (now a direct dependency in `go.mod`): `git.repo@1` against any smart HTTP(S) git host, fetched shallowly into memory per call, commits pushed without force under `RequireRemoteRefs`, `pushed` by polling `ls-remote`; registered in `serve.go` (`githttps.Contribute`, `connectorImpls()`) and in `apps/tools`' `TestMetadata`. Its tests serve a bare repository with `git-http-backend`. Later parts: go-git's protocol clients are global (`client.InstallProtocol` in this package's `init`, two-minute timeout); another package using go-git shares them. Limits are adapter `Options`, not settings. `GitConnector.md` › *Built in forge 24c*.

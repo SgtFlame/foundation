@@ -127,6 +127,7 @@ import (
 	gitconnector "github.com/SgtFlame/foundation/backend/features/connectors/git"
 	gitgithub "github.com/SgtFlame/foundation/backend/features/connectors/git/github"
 	"github.com/SgtFlame/foundation/backend/features/connectors/git/gittest"
+	githttps "github.com/SgtFlame/foundation/backend/features/connectors/git/https"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	connectorsimpl "github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice/impl"
@@ -766,6 +767,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		gitconnector.Contribute(registry)                                              // git.repo@1 and git.review@1 (forge 24a)
 		gittest.Contribute(registry)                                                   // the Git test server connector type (forge 24a)
 		gitgithub.Contribute(registry)                                                 // the git.github connector type (forge 24b)
+		githttps.Contribute(registry)                                                  // the git.https connector type (forge 24c)
 		// gittest.control and gittest.log, for Forge's test server page and forge gittest (forge 24a)
 		gittest.ContributeLive(registry, func() *connectors.Dispatcher { return connectorDeps.Dispatcher })
 		var infraNodeDeps infranodes.Deps
@@ -1516,6 +1518,8 @@ func connectorImpls() adapter.Options {
 	o.Contracts = append(append(o.Contracts, gitconnector.Contracts()...), gittest.ControlContract())
 	o.Types = append(o.Types, gitgithub.Type())
 	o.Impls = append(o.Impls, gittest.Default.Impl(), gitgithub.Impl(gitgithub.Options{Files: gitconnector.ServerFiles}))
+	o.Types = append(o.Types, githttps.Type())
+	o.Impls = append(o.Impls, githttps.Impl(githttps.Options{Files: gitconnector.ServerFiles}))
 	return o
 }
 

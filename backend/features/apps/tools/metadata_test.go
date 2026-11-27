@@ -37,6 +37,7 @@ import (
 	gitconnector "github.com/SgtFlame/foundation/backend/features/connectors/git"
 	gitgithub "github.com/SgtFlame/foundation/backend/features/connectors/git/github"
 	"github.com/SgtFlame/foundation/backend/features/connectors/git/gittest"
+	githttps "github.com/SgtFlame/foundation/backend/features/connectors/git/https"
 	conversationnodes "github.com/SgtFlame/foundation/backend/features/conversation/nodes"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/game"
@@ -115,6 +116,7 @@ func everything(t *testing.T) *extensions.Registry {
 	gitconnector.Contribute(reg)                                                    // forge 24a
 	gittest.Contribute(reg)                                                         // forge 24a
 	gitgithub.Contribute(reg)                                                       // forge 24b
+	githttps.Contribute(reg)                                                        // forge 24c
 	infraproviders.Contribute(reg)                                                  // forge 22g
 	infranodes.Contribute(reg, func() infranodes.Deps { return infranodes.Deps{} }) // forge 22e
 	infraapply.Contribute(reg, func() infraapply.Deps { return infraapply.Deps{} }) // forge 22f
