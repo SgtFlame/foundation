@@ -22,6 +22,8 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice"
 	connectorsproxy "github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice/proxy"
 	conversationproxy "github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice/proxy"
+	"github.com/SgtFlame/foundation/backend/features/events"
+	"github.com/SgtFlame/foundation/backend/features/events/durable"
 	"github.com/SgtFlame/foundation/backend/features/extensions/services/extensionsservice"
 	extensionsproxy "github.com/SgtFlame/foundation/backend/features/extensions/services/extensionsservice/proxy"
 	"github.com/SgtFlame/foundation/backend/features/identity/services/identityservice"
@@ -50,6 +52,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/secrets/services/secretsservice"
 	secretsproxy "github.com/SgtFlame/foundation/backend/features/secrets/services/secretsservice/proxy"
 	"github.com/SgtFlame/foundation/backend/features/services"
+	"github.com/SgtFlame/foundation/backend/features/services/routes"
 	prefabproxy "github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice/proxy"
 	uiproxy "github.com/SgtFlame/foundation/backend/features/ui/services/uiservice/proxy"
 	"github.com/SgtFlame/foundation/backend/features/usage/services/usageservice"
@@ -434,6 +437,17 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			defer loc.Stop()
 			log.Info(ctx, "every service call crosses NATS (--services-loopback)")
 		}
+		if loc.Client != nil {
+			// A routed tenant's calls go to its dedicated servers (forge 21f-2)
+			table := services.NewRoutes()
+			stopRoutes, err := routes.Watch(ctx, nats.JS(), table)
+			if err != nil {
+				return err
+			}
+			defer stopRoutes()
+			loc.Client.Routes = table
+			loc.ServerOptions = append(loc.ServerOptions, services.WithRoutes(table))
+		}
 		// forge 20a-3: with --nats-keys each tenant's streams and buckets
 		// are in its own account; connectors' state stays in APP
 		perTenant, err := natsauth.TenantAccounts(natsOptions, serveNatsKeys)
@@ -739,6 +753,15 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		tenantService := tenantproxy.Use(loc, func() tenantservice.Service { return tenantimpl.CreateService(tenantimpl.WithDB(appDB)) })
 		userService := userproxy.Use(loc, func() userservice.Service { return userimpl.CreateService(userimpl.WithDB(appDB)) })
 		configChanges := config.NewChanges()
+		if loc.Client != nil {
+			// Buses whose publishers and followers may be in other
+			// processes travel over NATS (forge 21f-2)
+			stopBus, err := events.Over(configChanges, nats.Conn(), "config.changes")
+			if err != nil {
+				return err
+			}
+			defer stopBus()
+		}
 		geminiKey := serveGeminiKey
 		if geminiKey == "" {
 			geminiKey = os.Getenv("GEMINI_API_KEY")
@@ -799,6 +822,15 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		})
 
 		fileEvents := volumeservice.NewFileEvents()
+		if loc.Client != nil {
+			// The index must not miss a file: a durable bus, followed only
+			// where the index runs (forge 21f-2)
+			stopFiles, err := durable.Link(ctx, nats.JS(), fileEvents, "kb.files", "bus_kb_files_index", loc.Runs("index"))
+			if err != nil {
+				return err
+			}
+			defer stopFiles()
+		}
 		var kbOpts []kbimpl.Option
 		volumeOpts := []volumeimpl.Option{volumeimpl.WithFileEvents(fileEvents)}
 		collabOpts := []collabimpl.Option{collabimpl.WithFileEvents(fileEvents), collabimpl.WithDocumentKinds(func(kind string) (collabservice.DocumentKind, bool) {
@@ -848,9 +880,17 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		}
 
 		// Every AI call is recorded and priced from the model catalog
+		usageEvents := usage.NewEvents()
+		if loc.Client != nil {
+			stopUsage, err := events.Over(usageEvents, nats.Conn(), "usage.records")
+			if err != nil {
+				return err
+			}
+			defer stopUsage()
+		}
 		recorder := usage.NewRecorder(usage.StoreIn(gdb), func(ctx context.Context) (aisettings.Models, error) {
 			return config.Read[aisettings.Models](configService, features.BackgroundArgs(ctx), aisettings.ModelsID)
-		}, usage.NewEvents(), func(ctx context.Context) (usagesettings.Capture, error) {
+		}, usageEvents, func(ctx context.Context) (usagesettings.Capture, error) {
 			return config.Read[usagesettings.Capture](configService, features.BackgroundArgs(ctx), usagesettings.CaptureID)
 		})
 		defer recorder.Close()

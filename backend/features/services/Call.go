@@ -35,6 +35,9 @@ type Client struct {
 	// Retries is how many times an idempotent call is sent again when no
 	// server answers (3 when 0; -1 for none).
 	Retries int
+	// Routes send a routed tenant's calls to its dedicated servers (forge
+	// 21f-2); nil sends every call to the shared ones.
+	Routes *Routes
 }
 
 // CallOption changes one call.
@@ -60,7 +63,7 @@ func Key(key string) CallOption {
 // service_unavailable when no server answers, 504 service_timeout when the
 // deadline passes, 502 service_bad_reply when the reply does not decode.
 func Call[R any](c *Client, service, op string, args any, opts ...CallOption) R {
-	return call[R](c, Subject(service, op), service, op, args, opts)
+	return call[R](c, "", service, op, args, opts)
 }
 
 // CallAt is Call sent to subject: a WaitSubject, where one process waits
@@ -94,7 +97,7 @@ func call[R any](c *Client, subject, service, op string, args any, opts []CallOp
 	}
 
 	msg, err := c.request(ctx, service, op, args, opts, false)
-	if err == nil {
+	if err == nil && subject != "" {
 		msg.Subject = subject
 	}
 	if err != nil {
@@ -112,15 +115,31 @@ func call[R any](c *Client, subject, service, op string, args any, opts []CallOp
 	if retries == 0 {
 		retries = 3
 	}
+	moved := 0
 	for attempt := 0; ; attempt++ {
 		reply, err := c.NC.RequestMsgWithContext(rctx, msg)
 		switch {
 		case err == nil:
+			var fresh R
+			resp = fresh
 			if derr := Decode(reply.Data, &resp); derr != nil || CommonOf(resp).Code == 0 {
 				if derr == nil {
 					derr = errors.New("the reply has no status")
 				}
 				return finish(Failed(http.StatusBadGateway, CodeBadReply, "The "+service+" service sent a reply that cannot be read."), derr)
+			}
+			// A server whose tenant moved refused the call before running
+			// it: send it again where the routes now say, once they do
+			if CommonOf(resp).ErrorCode == CodeMoved && subject == "" && moved < 8 {
+				moved++
+				select {
+				case <-time.After(time.Duration(25<<min(moved, 5)) * time.Millisecond):
+					msg.Subject = RoutedSubject(c.Routes, service, op, a.Principal.TenantID)
+					attempt--
+					continue
+				case <-rctx.Done():
+					return finish(Timeout(service), rctx.Err())
+				}
 			}
 			return finish(features.ServiceResponse{}, nil)
 		case errors.Is(err, nats.ErrNoResponders):
@@ -220,7 +239,7 @@ func (c *Client) request(ctx context.Context, service, op string, args any, opts
 			h.Principal = &ref
 		}
 	}
-	msg := nats.NewMsg(Subject(service, op))
+	msg := nats.NewMsg(RoutedSubject(c.Routes, service, op, a.Principal.TenantID))
 	h.Set(msg.Header)
 	msg.Data = body
 	return msg, nil

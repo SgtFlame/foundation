@@ -68,6 +68,11 @@ var Allow = []Row{
 	{Package: "features/connectors/services/connectorsservice/impl", Owner: "connectors", Storage: "connector KV and CX streams, for adapters without a handle", Imports: []string{jsImp}},
 	{Package: "features/connectors/connections", Owner: "connectors", Storage: "connector KV", Imports: []string{jsImp}},
 
+	// Buses and routing across processes (21f-2): a durable bus's stream,
+	// and the routes of tenants' calls to dedicated servers.
+	{Package: "features/events/durable", Owner: "events", Storage: "durable buses' streams (BUS_*)", Imports: []string{jsImp}},
+	{Package: "features/services/routes", Owner: "services", Storage: "service routes (KV svc_routes)", Imports: []string{jsImp}},
+
 	// The Control Plane's own account and its database rows (iteration 20):
 	// not tenant storage.
 	{Package: "features/controlplane", Owner: "controlplane", Storage: "control account and desired state"},

@@ -70,7 +70,11 @@ type Server struct {
 	streams cancels
 	// at is the one operation of a server made by ServeAt.
 	at string
-	wg sync.WaitGroup
+	// suffix is the route a dedicated server serves, and routes the table
+	// refusing calls routed elsewhere (forge 21f-2).
+	suffix string
+	routes *Routes
+	wg     sync.WaitGroup
 }
 
 // Serve subscribes to service's calls in its queue group and runs each
@@ -91,7 +95,13 @@ func Serve(nc *nats.Conn, service string, ops map[string]Handler, opts ...Server
 		return nil, log.Wrap(err)
 	}
 	s.cancel = csub
-	sub, err := nc.QueueSubscribe(Prefix+"."+service+".>", Queue(service), func(m *nats.Msg) {
+	// The shared servers take svc.<service>.<op>; a dedicated one
+	// svc.<service>.<suffix>.<op>, so neither sees the other's calls
+	subject, queue := Prefix+"."+service+".*", Queue(service)
+	if s.suffix != "" {
+		subject, queue = Prefix+"."+service+"."+s.suffix+".*", Queue(service)+"."+s.suffix
+	}
+	sub, err := nc.QueueSubscribe(subject, queue, func(m *nats.Msg) {
 		if isCancel(m.Subject) {
 			return
 		}
@@ -194,6 +204,10 @@ func (s *Server) handle(m *nats.Msg) {
 		}
 	}
 	ctx = logging.WithContext(ctx, b)
+	if s.routes != nil && s.at == "" && s.routes.Suffix(s.service, p.TenantID) != s.suffix {
+		s.reply(ctx, m, op, start, failure{Failed(http.StatusServiceUnavailable, CodeMoved, "The service moved; the call is sent again.")})
+		return
+	}
 	if tok != nil {
 		ctx = WithToken(ctx, *tok)
 	}

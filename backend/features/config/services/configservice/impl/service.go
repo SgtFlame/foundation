@@ -350,6 +350,12 @@ func (s *service) Resolved(args features.ServiceArgs, sectionID string) (json.Ra
 
 // changed drops cached values and tells subscribers.
 func (s *service) changed(sectionID, scope string) {
+	s.drop(sectionID)
+	s.changes.Publish(config.Changed{Section: sectionID, Scope: scope})
+}
+
+// drop forgets the cached values of a section.
+func (s *service) drop(sectionID string) {
 	s.mu.Lock()
 	for k := range s.cache {
 		if strings.HasPrefix(k, sectionID+"|") {
@@ -357,5 +363,4 @@ func (s *service) changed(sectionID, scope string) {
 		}
 	}
 	s.mu.Unlock()
-	s.changes.Publish(config.Changed{Section: sectionID, Scope: scope})
 }
