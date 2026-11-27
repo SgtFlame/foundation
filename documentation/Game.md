@@ -528,6 +528,16 @@ Wenlan's hearth ward, and what a warded hearth does on a dark night.
 - `HearthNight` takes `warded`: the stone stirs once (event `settled`) and nothing comes through, so the house holds until dawn. `startHearthNight` sets it from `hearthWarded`.
 - Tests: `story_test` (`farmward`), `HearthWard.test.ts`, `HearthNight.test.ts` (a warded night).
 
+## Built in V27 (forge 360)
+
+The jump drive: the first part made from something the moon's ground does not give.
+
+- **The jump coil**: block 26 of each moon wreck is its drive core (`DRIVE_CORE_BLOCK` in `wreck/Wreck.ts`); salvaging it (`cmd-game-salvage`) also puts a jump coil in the pack (`Pack.Coils`), so a world holds two.
+- **Making it**: `game.fabricate {item: "jumpDrive"}` takes a jump coil, 1 m³ of iron, 1 m³ of ore and 2 circuit boards, and 90 s (`DRIVE_MS` in `craft/Fabricator.ts`, which now has `fabTime(item)`); `game.takeFabricated` puts it in the pack as `drives` (`Pack.Drives`); a finished drive or kit is taken whatever boards the pack holds.
+- **Fitting it**: `game.fitDrive` (`cmd-game-fitDrive`, event `driveFitted`, `Ship.Jump`) fits one from the pack to a powered ship, refused for a cabin, the skiff (no battery), a ship that has one or a pack without one.
+- **Jumping**: `ship/Jump.ts` (`jumpTarget`, `canJump`): from the cockpit, M jumps a ship with a drive and at least half its battery (`JUMP_CHARGE`) to `JUMP_HEIGHT` (60 m) above the other body's top, the planet from the moon and the moon from the planet, spending half its charge; the pilot saves the place with `game.flyShip`, which has never limited distance.
+- Keys: M at the fabricator makes a drive, M by a ship fits it, M in the seat jumps. `TestJumpDrive` checks the coil and the refusals; `Jump.test.ts` and the Fabricator test the rest.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

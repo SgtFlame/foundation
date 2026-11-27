@@ -11,6 +11,8 @@ export const WRECK_IDS = ['k0', 'k1'] as const
 export const SALVAGE_ORE = 0.25 // m³ of ore a block's scrap gives (the server's SalvageOre)
 // V18: the block of each wreck that holds a manual (the server's ManualBlock)
 export const MANUAL_BLOCK = 13
+// V27: the block of each wreck that is its drive core, holding a jump coil
+export const DRIVE_CORE_BLOCK = 26
 export const SALVAGE_REACH = 2.6 // m from a block's centre
 
 export interface Vec3 {

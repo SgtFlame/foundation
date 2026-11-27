@@ -7,7 +7,7 @@
   "spec": {
     "command": "game.salvage",
     "title": "Salvage a wreck",
-    "description": "Tears one block off a derelict skiff on the moon (V15); the target is the world's id. wreck is k0 or k1 and index the block (0 to 26, the skiff's); the scrap goes into the sender's pack as 0.25 m³ of ore, and the block is gone for everyone (game.wrecks). Refused away from the moon, for an unknown wreck or block, one already salvaged, or a full pack. Block 13 of each wreck holds a manual (V18): its salvager gets manual powerDrill (game.player's manuals), which teaches a cabin's bench the powered drill.",
+    "description": "Tears one block off a derelict skiff on the moon (V15); the target is the world's id. wreck is k0 or k1 and index the block (0 to 26, the skiff's); the scrap goes into the sender's pack as 0.25 m³ of ore, and the block is gone for everyone (game.wrecks). Refused away from the moon, for an unknown wreck or block, one already salvaged, or a full pack. Block 13 of each wreck holds a manual (V18): its salvager gets manual powerDrill (game.player's manuals), which teaches a cabin's bench the powered drill. V27: block 26 of each wreck, its drive core, also gives a jump coil.",
     "args": {
       "type": "object",
       "properties": {
@@ -153,7 +153,7 @@
         "y": 150
       },
       "config": {
-        "expr": "let r = (x ** 2 + y ** 2 + z ** 2) ** 0.5; let k = wreck + \".\" + string(int(index)); let held = (pack?.dust ?? 0) + (pack?.rock ?? 0) + (pack?.ore ?? 0) + (pack?.iron ?? 0); r \u003e 130 ? \"the wrecks lie on the moon\" : !(wreck in [\"k0\", \"k1\"]) ? \"there is no wreck \" + wreck : index \u003c 0 || index \u003e 26 || index != int(index) ? \"a wreck's blocks are 0 to 26\" : (state?.salvaged ?? {})[k] ?? false ? \"that block was salvaged already\" : held + 0.25 \u003e 4 ? \"your pack is full: load it into a ship's hold\" : \"\"",
+        "expr": "let r = (x ** 2 + y ** 2 + z ** 2) ** 0.5; let k = wreck + \".\" + string(int(index)); let held = (pack?.dust ?? 0) + (pack?.rock ?? 0) + (pack?.ore ?? 0) + (pack?.iron ?? 0); r > 130 ? \"the wrecks lie on the moon\" : !(wreck in [\"k0\", \"k1\"]) ? \"there is no wreck \" + wreck : index < 0 || index > 26 || index != int(index) ? \"a wreck's blocks are 0 to 26\" : (state?.salvaged ?? {})[k] ?? false ? \"that block was salvaged already\" : held + 0.25 > 4 ? \"your pack is full: load it into a ship's hold\" : \"\"",
         "type": "string"
       }
     },
@@ -187,7 +187,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{wreck: wreck, index: int(index), pack: {ore: 0.25}, manual: int(index) == 13 ? \"powerDrill\" : \"\"}",
+        "expr": "{wreck: wreck, index: int(index), pack: {ore: 0.25, coils: int(index) == 26 ? 1 : 0}, manual: int(index) == 13 ? \"powerDrill\" : \"\"}",
         "type": "json"
       }
     },

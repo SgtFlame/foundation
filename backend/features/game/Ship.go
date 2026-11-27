@@ -41,6 +41,7 @@ const (
 	EventFabricating    = "fabricating" // {world, item, at, pack} (V23: iron and ore from the sender's pack put in this cabin's fabricator at Unix ms at)
 	EventFabricated     = "fabricated"  // {world, item, pack} (V23: the fabricator's work taken into the sender's pack)
 	EventKitFitted      = "kitFitted"   // {world, boost, pack} (V24: an ion thruster kit from the sender's pack fitted to this ship)
+	EventDriveFitted    = "driveFitted" // {world, pack} (V27: a jump drive from the sender's pack fitted to this ship)
 )
 
 // ShipDesign is a premade ship: its blocks in its own grid, x right, y up
@@ -92,7 +93,9 @@ type Ship struct {
 	// V23: a cabin's fabricator: what it is making and since when (Unix ms)
 	Fab *Fab `json:"fab,omitempty"`
 	// V24: what ion thruster kits add to its thrust (0.25 each, at most 0.5)
-	Boost     float64   `json:"boost,omitempty"`
+	Boost float64 `json:"boost,omitempty"`
+	// V27: a jump drive is fitted: it jumps between the moon and the planet
+	Jump      bool      `json:"jump,omitempty"`
 	Seq       uint64    `json:"seq"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -284,6 +287,8 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		s.Fab = &Fab{Item: d.Item, At: d.At}
 	case EventFabricated:
 		s.Fab = nil
+	case EventDriveFitted:
+		s.Jump = true
 	case EventKitFitted:
 		s.Boost = math.Min(0.5, math.Round((s.Boost+d.Boost)*1000)/1000)
 	case EventShipCrewed:
@@ -308,7 +313,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	return json.Marshal(s)
 }
 
-const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron, ore} (m³ in its hold), charge (its battery, 0 to 1), forge {ore, at} (V20: a cabin's forge smelting ore since Unix ms at), fab {item, at} (V23: a cabin's fabricator making a circuit board, or V24 an ion thruster kit, since Unix ms at), boost (V24: what ion thruster kits add to its thrust), seq, updatedAt}"
+const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron, ore} (m³ in its hold), charge (its battery, 0 to 1), forge {ore, at} (V20: a cabin's forge smelting ore since Unix ms at), fab {item, at} (V23: a cabin's fabricator making a circuit board, or V24 an ion thruster kit, since Unix ms at), boost (V24: what ion thruster kits add to its thrust), jump (V27: a jump drive is fitted), seq, updatedAt}"
 
 func without(list []string, v string) []string {
 	out := []string{}

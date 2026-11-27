@@ -45,6 +45,7 @@ export interface ShipState {
   forge?: { ore: number; at: number } // V20: the ore smelting in a cabin's forge
   fab?: { item: string; at: number } // V23: the circuit board a cabin's fabricator is making
   boost?: number // V24: what ion thruster kits add to its thrust
+  jump?: boolean // V27: a jump drive is fitted
   seq: number
   updatedAt?: string
 }

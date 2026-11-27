@@ -612,3 +612,40 @@ func TestBarge(t *testing.T) {
 		t.Fatalf("freighter load %+v", s.Cargo)
 	}
 }
+
+// V27: a wreck's drive core gives a jump coil; the fabricator makes a jump
+// drive from it, and only a powered ship takes one
+func TestJumpDrive(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Jump moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	st.ok("game.startShip", "c1", map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": 0, "q": q})
+	st.ok("game.placeBlock", "c1", map[string]any{"index": 76})
+	st.ok("game.placeBlock", "c1", map[string]any{"index": 77})
+	if r := st.refused("game.fabricate", "c1", map[string]any{"item": "jumpDrive"}); !strings.Contains(r.Common.Message, "jump coil: salvage") {
+		t.Fatalf("a drive without a coil: %q", r.Common.Message)
+	}
+	res := st.ok("game.salvage", world, map[string]any{"wreck": "k0", "index": 26, "x": 40, "y": 90, "z": 0})
+	var pack game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Coils != 1 || pack.Ore != game.SalvageOre {
+		t.Fatalf("pack %+v", pack)
+	}
+	res = st.ok("game.salvage", world, map[string]any{"wreck": "k0", "index": 5, "x": 40, "y": 90, "z": 0})
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Coils != 1 {
+		t.Fatalf("an ordinary block gave a coil: %+v", pack)
+	}
+	if r := st.refused("game.fabricate", "c1", map[string]any{"item": "jumpDrive"}); !strings.Contains(r.Common.Message, "1 m³ of ore and 2 circuit boards") {
+		t.Fatalf("a drive from too little: %q", r.Common.Message)
+	}
+	if r := st.refused("game.fitDrive", "c1", map[string]any{}); !strings.Contains(r.Common.Message, "cabin") {
+		t.Fatalf("a drive on a cabin: %q", r.Common.Message)
+	}
+	st.ok("game.startShip", "s1", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 110, "z": 0, "q": q})
+	if r := st.refused("game.fitDrive", "s1", map[string]any{}); !strings.Contains(r.Common.Message, "no battery") {
+		t.Fatalf("a drive on a skiff: %q", r.Common.Message)
+	}
+	st.ok("game.startShip", "p1", map[string]any{"world": world, "design": "prospector", "x": 0, "y": 110, "z": 8, "q": q})
+	if r := st.refused("game.fitDrive", "p1", map[string]any{}); !strings.Contains(r.Common.Message, "no jump drive") {
+		t.Fatalf("a drive from an empty pack: %q", r.Common.Message)
+	}
+}
