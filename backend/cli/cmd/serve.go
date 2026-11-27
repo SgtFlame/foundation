@@ -156,6 +156,7 @@ import (
 	indexsource "github.com/SgtFlame/foundation/backend/features/index/source"
 	"github.com/SgtFlame/foundation/backend/features/index/store/lancestore"
 	"github.com/SgtFlame/foundation/backend/features/infra"
+	infraapply "github.com/SgtFlame/foundation/backend/features/infra/apply"
 	"github.com/SgtFlame/foundation/backend/features/infra/infratest"
 	infranodes "github.com/SgtFlame/foundation/backend/features/infra/nodes"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
@@ -757,7 +758,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		infra.Contribute(registry, func() infra.Deps { return infraDeps })             // infra.config.* configurations and versions (forge 22a)
 		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
 		var infraNodeDeps infranodes.Deps
-		infranodes.Contribute(registry, func() infranodes.Deps { return infraNodeDeps }) // Ensure host, instance, unit, packages, Wait healthy, Remove (forge 22e)
+		infranodes.Contribute(registry, func() infranodes.Deps { return infraNodeDeps })                                           // Ensure host, instance, unit, packages, Wait healthy, Remove (forge 22e)
+		infraapply.Contribute(registry, func() infraapply.Deps { return infraapply.Deps{Infra: infraDeps, Nodes: infraNodeDeps} }) // infra.apply, its step jobs, infra.drift (forge 22f)
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
 		uihandlers.ContributeLive(registry, func() uiservice.Service { return uiService })
 		confighandlers.ContributeLive(registry, func() configservice.Service { return configLive })
@@ -1149,6 +1151,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		gameDeps = game.Deps{Store: projections}
 		infraDeps = infra.Deps{Bus: liveBus, Store: projections, Compute: infra.DispatcherCompute{D: connectorDispatcher}} // plans read the providers through infra.compute (forge 22d)
 		infraNodeDeps = infranodes.Deps{Bus: liveBus, Data: recordDeps, Compute: infraDeps.Compute}
+		infraDeps.Actual = infraapply.RecordsActual(registry, func() infranodes.Deps { return infraNodeDeps })
 		workbenchcontext.SetWorkspaceNames(func(args features.ServiceArgs, id string) (string, bool) {
 			return workspace.Name(args, projections, id)
 		})

@@ -38,6 +38,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/game"
 	"github.com/SgtFlame/foundation/backend/features/infra"
+	infraapply "github.com/SgtFlame/foundation/backend/features/infra/apply"
 	"github.com/SgtFlame/foundation/backend/features/infra/infratest"
 	infranodes "github.com/SgtFlame/foundation/backend/features/infra/nodes"
 	"github.com/SgtFlame/foundation/backend/features/live"
@@ -107,6 +108,7 @@ func everything(t *testing.T) *extensions.Registry {
 	infra.Contribute(reg, func() infra.Deps { return infra.Deps{} })                // forge 22a
 	infratest.Contribute(reg)                                                       // forge 22c
 	infranodes.Contribute(reg, func() infranodes.Deps { return infranodes.Deps{} }) // forge 22e
+	infraapply.Contribute(reg, func() infraapply.Deps { return infraapply.Deps{} }) // forge 22f
 	connectorstest.Contribute(reg)                                                  // the builtin contracts a test registry has
 	return reg
 }

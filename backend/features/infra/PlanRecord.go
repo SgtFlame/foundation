@@ -42,6 +42,9 @@ type PlanRecord struct {
 	ActualAt  time.Time `json:"actualAt"`
 	CreatedBy string    `json:"createdBy"`
 	CreatedAt time.Time `json:"createdAt"`
+	// Accounts are the version's provider accounts, which its steps name
+	// (their connections' ids, never secrets).
+	Accounts []Account `json:"accounts,omitempty"`
 	PlanResult
 }
 
@@ -75,8 +78,9 @@ type Deps struct {
 	Store   live.Store
 	Compute Compute
 	// Actual gives the actual resources Compute does not (clusters and
-	// instances the Control Plane reports); nil for none.
-	Actual func(args features.ServiceArgs, config string) ([]Resource, error)
+	// instances the Control Plane holds), given the documents being
+	// compared; nil for none.
+	Actual func(args features.ServiceArgs, config string, docs []Document) ([]Resource, error)
 }
 
 // ReadActual gathers what exists for a document: each account's hosts
@@ -136,7 +140,7 @@ func ReadActual(args features.ServiceArgs, deps Deps, config string, docs ...Doc
 		}
 	}
 	if deps.Actual != nil {
-		more, err := deps.Actual(args, config)
+		more, err := deps.Actual(args, config, docs)
 		if err != nil {
 			return Actual{}, err
 		}
@@ -202,7 +206,7 @@ func MakePlan(args features.ServiceArgs, reg *extensions.Registry, deps Deps, co
 	if err != nil {
 		return PlanRecord{}, err
 	}
-	rec := PlanRecord{Config: config, Version: version, ActualAt: time.Now().UTC(), PlanResult: Plan(desired, kinds, act)}
+	rec := PlanRecord{Config: config, Version: version, ActualAt: time.Now().UTC(), Accounts: doc.Normalized().Accounts, PlanResult: Plan(desired, kinds, act)}
 	raw, _ := json.Marshal(map[string]any{"plan": rec})
 	id := strconv.FormatUint(features.NewTSID(), 10)
 	r := deps.Bus.Execute(bus.Request{ServiceArgs: args, ID: "plan-" + id, Type: "infra.plan.record", Target: id, Args: raw})
@@ -240,7 +244,7 @@ func foldPlan(f live.Fold) (json.RawMessage, error) {
 	return json.Marshal(p)
 }
 
-const planFields = "{id, config, version (0: the draft), status (ready, refused, applying, applied, failed, stale), actualAt, createdBy, createdAt, steps: [{id (the resource id), op: create | change | remove, kind, site, account, before, desired, after (step ids it waits for), holdsData, summary}], refusals: [{resource, reason, fix}], notes}"
+const planFields = "{id, config, version (0: the draft), accounts, status (ready, refused, applying, applied, failed, stale), actualAt, createdBy, createdAt, steps: [{id (the resource id), op: create | change | remove, kind, site, account, before, desired, after (step ids it waits for), holdsData, summary}], refusals: [{resource, reason, fix}], notes}"
 
 func contributePlans(reg *extensions.Registry, deps func() Deps) {
 	live.Projectors.Register(reg, live.Projector{
