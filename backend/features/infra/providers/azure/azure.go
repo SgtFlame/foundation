@@ -239,7 +239,9 @@ func (b *Backend) do(ctx context.Context, method, path, version string, q url.Va
 func (b *Backend) sub() string { return "/subscriptions/" + url.PathEscape(b.st.SubscriptionID) }
 
 // Group is a host's resource group.
-func (b *Backend) Group(id string) string { return b.st.ResourceGroupPrefix + "-" + providers.Hostname(id) }
+func (b *Backend) Group(id string) string {
+	return b.st.ResourceGroupPrefix + "-" + providers.Hostname(id)
+}
 
 func (b *Backend) groupPath(id string) string {
 	return b.sub() + "/resourceGroups/" + url.PathEscape(b.Group(id))
@@ -427,7 +429,9 @@ func (b *Backend) Regions(ctx context.Context) ([]providers.Named, error) {
 	return out, nil
 }
 
-func (b *Backend) tags(id string) map[string]string { return map[string]string{HostTag: id, "axiom": "true"} }
+func (b *Backend) tags(id string) map[string]string {
+	return map[string]string{HostTag: id, "axiom": "true"}
+}
 
 // put PUTs a resource and waits for it.
 func (b *Backend) put(ctx context.Context, path, version string, body any, seconds int) (bool, error) {
