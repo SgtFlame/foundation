@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"maps"
 	"slices"
 	"strconv"
@@ -83,6 +84,14 @@ func publishSpec() spec {
 // for a rev.
 func (c *decision) publishCommit(commit string) (string, []live.Problem) {
 	app := c.Target.ID
+	// Without app branches (a server or test that does not contribute
+	// them) no app has commits: a rev is published as before 19c
+	if !branchesHere(c.reg) {
+		if commit != "" {
+			return "", []live.Problem{{Code: "app_commit_not_head", Path: "args.commit", Message: fmt.Sprintf("%s has no commits: app branches are not available here", app), Fix: "publish a rev"}}
+		}
+		return "", nil
+	}
 	store, ok := c.deps.Projections.(branches.Projections)
 	if !ok {
 		return "", problem("", "the app's commits cannot be read here", "")
@@ -371,4 +380,17 @@ func GetVersion(args features.ServiceArgs, store live.Store, app string, version
 // stream.
 type settler interface {
 	Settle(ctx context.Context, tenant uint64, projector string) error
+}
+
+// branchesHere reports whether app branches' projector is contributed.
+func branchesHere(reg *extensions.Registry) bool {
+	if reg == nil {
+		return false
+	}
+	for _, p := range live.Projectors.All(reg) {
+		if p.ID == branches.Projector {
+			return true
+		}
+	}
+	return false
 }

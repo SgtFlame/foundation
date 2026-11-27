@@ -222,7 +222,7 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "forge.check", Source: "apps"}, Title: "Check an app", Effect: tools.EffectRead,
-		Description: "Checks an app's draft as it would be published and exported. errors stop it publishing or running: validation of the manifest and every part, and the blueprints-only check (every reference a primitive or one of the app's, the tenant's or a required app's parts). warnings do not: pages nothing reaches (not home, in the nav or an editor kind, and no part navigates to them), parts of the app nothing uses, and parts and pages with no description. Each has a path and a fix.",
+		Description: "Checks an app's draft as it would be published and exported. errors stop it publishing or running: validation of the manifest and every part, and the blueprints-only check (every reference a primitive or one of the app's, the tenant's or a required app's parts). warnings do not: pages nothing reaches (not home, in the nav or an editor kind, and no part navigates to them), parts of the app nothing uses, and parts and pages with no description. Each has a path and a fix. Installed apps' checks of other apps (manifest tools with checks, such as the Requirements app's sections no part serves) add their warnings, each path starting with the checking tool's name.",
 		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string"},"branch":{"type":"string","description":"The app's branch to check, its parts as the branch has them; main when left out"}},"required":["appId"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
 			a, err := tools.Decode[struct{ AppID, Branch string }](call)
@@ -239,6 +239,7 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 			if !ok {
 				return tools.Result{}, fmt.Errorf("there is no app %q; list them with app.list", a.AppID)
 			}
+			warnings = append(warnings, AppChecks(call, reg, a.AppID, a.Branch)...)
 			return tools.Result{Content: map[string]any{"errors": errs, "warnings": warnings},
 				Summary: fmt.Sprintf("%d errors, %d warnings", len(errs), len(warnings))}, nil
 		},

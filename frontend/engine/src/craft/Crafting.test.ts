@@ -21,15 +21,29 @@ test('the drill digs wider and faster than hands', () => {
 test('the bench offers the drill, then the turret, then nothing', () => {
   assert.equal(nextRecipe(undefined)?.id, 'drill')
   assert.equal(nextRecipe({ drill: true })?.id, 'turret')
-  assert.equal(nextRecipe({ drill: true, turret: true }), null)
+  assert.equal(nextRecipe({ drill: true, turret: true })?.id, 'scanner')
+  assert.equal(nextRecipe({ drill: true, turret: true, scanner: true })?.id, 'airTank')
+  assert.equal(nextRecipe({ drill: true, turret: true, scanner: true, airTank: true }), null)
   const t = RECIPES.find((r) => r.id === 'turret')!
   assert.equal(missing(t, { ore: 2, rock: 1 }, { drill: true }).includes('1.5 m³ of rock'), true)
   assert.deepEqual(spend(t, { ore: 2.25, rock: 1.5, dust: 0 }), { ore: 0.25, rock: 0, dust: 0 })
 })
 
 test('a manual from a wreck teaches the powered drill, built on the hand drill', () => {
-  assert.equal(nextRecipe({ drill: true, turret: true }, {}), null)
+  assert.equal(nextRecipe({ drill: true, turret: true, scanner: true, airTank: true }, {}), null)
   assert.equal(nextRecipe({ drill: true, turret: true }, { powerDrill: true })?.id, 'powerDrill')
   assert.equal(nextRecipe({ turret: true }, { powerDrill: true })?.id, 'drill')
   assert.deepEqual(digLimits({ drill: true, powerDrill: true }), { maxBrush: 6, repeat: 0.07, name: 'powered drill' })
+})
+
+test('the ore scanner takes iron from the forge', () => {
+  const s = RECIPES.find((r) => r.id === 'scanner')!
+  assert.equal(missing(s, { ore: 3, rock: 3 }, {}), 'an ore scanner takes 1 m³ of iron and 0.5 m³ of ore from your pack')
+  assert.equal(missing(s, { ore: 0.5, iron: 1 }, {}), '')
+  assert.deepEqual(spend(s, { ore: 1, iron: 1.25 }), { ore: 0.5, iron: 0.25 })
+})
+
+test('the iron air tank names its iron first', () => {
+  const t = RECIPES.find((r) => r.id === 'airTank')!
+  assert.equal(missing(t, { iron: 1 }, {}), 'an iron air tank takes 1.5 m³ of iron and 0.5 m³ of rock from your pack')
 })

@@ -21,6 +21,7 @@ const COLORS: Record<DesignBlock['type'], number> = {
   bed: 0xa8463a,
   bench: 0x8a6a44,
   forge: 0x5a5a60,
+  fabricator: 0x7c8794,
 }
 
 interface Shown {
@@ -217,6 +218,21 @@ export class ShipLayer {
       g.add(mouth, chimney)
       return g
     }
+    // V23: a fabricator is a grey cabinet with a green-lit screen and a tool arm
+    if (b.type === 'fabricator') {
+      const g = new THREE.Group()
+      mesh.scale.set(0.85, 0.9, 0.7)
+      mesh.position.y = -0.05
+      g.add(mesh)
+      const screen = new THREE.Mesh(this.box, new THREE.MeshBasicMaterial({ color: 0x5cff9c }))
+      screen.scale.set(0.4, 0.22, 0.04)
+      screen.position.set(0, 0.2, 0.37)
+      const arm = new THREE.Mesh(this.box, this.material('armor'))
+      arm.scale.set(0.08, 0.08, 0.4)
+      arm.position.set(0.25, 0.48, 0.1)
+      g.add(screen, arm)
+      return g
+    }
     if (b.type !== 'thruster' || !b.push) return mesh
     // The nozzle opens away from where the thruster pushes
     const g = new THREE.Group()
@@ -331,6 +347,18 @@ export class ShipLayer {
   // V20: a placed forge within reach of a point: the building's id
   forgeNear(p: Vec3, reach = 2.2): string | null {
     return this.blockNear('forge', p, reach)
+  }
+
+  // V23: a placed fabricator within reach of a point: the building's id
+  fabricatorNear(p: Vec3, reach = 1.7): string | null {
+    return this.blockNear('fabricator', p, reach)
+  }
+
+  // Whether a shown ship has a block of a type placed (V23: the cabin's solar panel)
+  hasPlaced(id: string, type: string): boolean {
+    const s = this.shown.get(id)
+    if (!s) return false
+    return s.design.blocks.some((b, i) => b.type === type && s.placed.has(i))
   }
 
   private blockNear(type: string, p: Vec3, reach: number): string | null {

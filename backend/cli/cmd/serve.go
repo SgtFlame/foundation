@@ -564,6 +564,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		authznodes.Contribute(registry)                                                  // Grant role, Revoke role (forge 07j)
 		textnodes.Contribute(registry)                                                   // Text diff, Anchor resolve (forge 18b)
 		appdiff.Contribute(registry)                                                     // Structured diff (forge 19d)
+		branches.ContributeTrigger(registry)                                             // On app branch merged (forge 19f)
 		kbnodes.Contribute(registry, func() collabservice.Service { return collabLive }) // Edit text together (forge 18c)
 		// Parse transcript (forge 18e): parsed in a limited child process
 		textnodes.ContributeTranscripts(registry, func() textnodes.TranscriptDeps {
