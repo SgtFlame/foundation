@@ -21,6 +21,8 @@ const (
 	RepoRef    = "git.repo@1"
 	ReviewID   = "git.review"
 	ReviewRef  = "git.review@1"
+	KeyID      = "git.key"
+	KeyRef     = "git.key@1"
 	EventPush  = "pushed"
 	EventPR    = "pullRequestChanged"
 	Source     = "git"
@@ -244,9 +246,49 @@ func ReviewContract() connectors.Contract {
 	}
 }
 
-// Contracts are git.repo@1 and git.review@1.
+const keyStatus = `{"type":"object","properties":{
+  "unlocked":{"type":"boolean","description":"Whether the key is unlocked in this process now"},
+  "expiresAt":{"type":"string","format":"date-time","description":"When it locks again, while unlocked"},
+  "encrypted":{"type":"boolean","description":"Whether the key needs a passphrase at all; one that does not is always unlocked"}},"required":["unlocked"]}`
+
+// KeyContract is git.key@1 (forge 24f): unlocking a connection's
+// passphrase-protected key for a while. The passphrase is never stored:
+// unlock is a Secret operation, sent only by connection.secretCall, and
+// the type keeps the decrypted key in memory alone.
+func KeyContract() connectors.Contract {
+	return connectors.Contract{
+		ID: KeyID, Version: 1,
+		Meta: connectors.Meta{Title: "Git key", Description: "A git connection's private key, protected by a passphrase that is never stored: a person unlocks it for some minutes, and while it is locked every call on the connection fails with auth (detail locked).", Tags: append([]string{"ssh", "key"}, tags...)},
+		Operations: []connectors.Operation{
+			{
+				ID: "unlock", Title: "Unlock the key", Description: "Opens the connection's key with its passphrase and keeps it open in memory for minutes (15 when left out, at most 60). Only a person's form sends it; a graph or tool cannot.",
+				Effect: connectors.EffectWrite, Secret: true,
+				Args: j(`{"type":"object","properties":{
+  "passphrase":{"type":"string","description":"The key's passphrase"},
+  "minutes":{"type":"integer","minimum":1,"maximum":60,"description":"How long it stays unlocked; 15 when left out"}},"required":["passphrase"]}`),
+				Result:   j(keyStatus),
+				Examples: []connectors.Example{{Args: j(`{"passphrase":"correct horse battery staple","minutes":15}`), Result: j(`{"unlocked":true,"expiresAt":"2026-11-27T18:19:00Z","encrypted":true}`)}},
+				Errors:   []string{connectors.CodeInvalid, connectors.CodeUnavailable},
+			},
+			{
+				ID: "lock", Title: "Lock the key", Description: "Forgets the unlocked key at once.",
+				Effect: connectors.EffectWrite,
+				Args:   j(`{"type":"object","properties":{}}`), Result: j(keyStatus),
+				Examples: []connectors.Example{{Args: j(`{}`), Result: j(`{"unlocked":false,"encrypted":true}`)}},
+			},
+			{
+				ID: "keyStatus", Title: "Whether the key is unlocked", Description: "Tells whether the connection's key is unlocked now and until when.",
+				Effect: connectors.EffectRead,
+				Args:   j(`{"type":"object","properties":{}}`), Result: j(keyStatus),
+				Examples: []connectors.Example{{Args: j(`{}`), Result: j(`{"unlocked":true,"expiresAt":"2026-11-27T18:19:00Z","encrypted":true}`)}},
+			},
+		},
+	}
+}
+
+// Contracts are git.repo@1, git.review@1 and git.key@1.
 func Contracts() []connectors.Contract {
-	return []connectors.Contract{RepoContract(), ReviewContract()}
+	return []connectors.Contract{RepoContract(), ReviewContract(), KeyContract()}
 }
 
 // Contribute registers the git contracts (their types register

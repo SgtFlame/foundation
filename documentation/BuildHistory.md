@@ -1047,3 +1047,7 @@ Built `features/connectors/git/nodes`: *List repository tree*, *Read repository 
 ## Forge 24e: repository mirrors
 
 Built mirrored Volumes (`volumeservice.Marker.Mirror`, read-only through `Check`/`May`, written only by `volumeservice.Mirrors` as a service or app principal of the default tenant, announced on the file events bus) and the *Sync repository mirror* node (`git.mirror`), wired in `serve.go` (`gitMirrors`). Forge's `gitmirror` sample app keeps mirrors in sync on `pushed`. Later parts: write into a mirrored Volume only through `volumeservice.Mirrors`; any new Volume write path must go through `volumeservice.Check(…, "write")` so mirrored Volumes stay read-only. Code files are mirrored but not yet indexed. `GitConnector.md` › *Built in forge 24e*.
+
+## Forge 24f: `git.ssh` and keys that are never stored
+
+Built `features/connectors/git/ssh` (the `git.ssh` type sharing `git.https`' session through `https.NewWith` and `https.Transport`), `git.key@1` (`unlock`, `lock`, `keyStatus`), Secret operations (`connectors.Operation.Secret`, sent only by the `connection.secretCall` live call through `connectors.WithSecretCall`), and the `locked` detail on `auth` errors, which `Connections.Failed` skips. Not yet in `serve.go`. Later parts must: give any operation that takes a secret `Secret: true` and send it only through `connection.secretCall`; never put a passphrase or other secret in a graph, tool or job's args; reuse `https.NewWith` for another git transport. `GitConnector.md` › *Built in forge 24f*.

@@ -4,8 +4,8 @@
 // it needs, shallow, of one ref, into a fresh in-memory repository within
 // the size and file-count limits; a commit is built in memory and pushed
 // without force, so a branch that moved meanwhile refuses it (conflict).
-// Authentication is a username with a token or password; SSH keys are
-// not supported.
+// Authentication is a username with a token or password; git.ssh (forge
+// 24f) shares this session through NewWith with a key of its own.
 package https
 
 import (
@@ -102,9 +102,22 @@ func Impl(o Options) adapter.Impl {
 type Session struct {
 	st     Settings
 	o      Options
-	auth   transport.AuthMethod
+	tr     Transport
 	poll   time.Duration
 	remote *gogit.Remote
+}
+
+// Transport is how a session signs in to its remote: git.https' username
+// and token, or another type's (git.ssh, forge 24f), which shares this
+// session's fetch, commit and watch code.
+type Transport struct {
+	// TypeID names the type in errors.
+	TypeID string
+	// Auth gives the sign-in for one request; its error fails the call
+	// (git.ssh's locked key). Nil signs in as nobody.
+	Auth func() (transport.AuthMethod, error)
+	// CanWrite is what check reports.
+	CanWrite bool
 }
 
 // New makes a session from settings.
@@ -112,20 +125,31 @@ func New(st Settings, o Options) (*Session, error) {
 	if !strings.HasPrefix(st.URL, "https://") && !(o.AllowHTTP && strings.HasPrefix(st.URL, "http://")) {
 		return nil, connectors.Errorf(connectors.CodeInvalid, "the repository URL must start with https://")
 	}
+	tr := Transport{TypeID: TypeID, CanWrite: st.Token != ""}
+	if st.Token != "" || st.Username != "" {
+		user := st.Username
+		if user == "" {
+			user = "git"
+		}
+		auth := &githttp.BasicAuth{Username: user, Password: st.Token}
+		tr.Auth = func() (transport.AuthMethod, error) { return auth, nil }
+	}
+	return NewWith(st, tr, o), nil
+}
+
+// NewWith makes a session that signs in through tr; the URL is the
+// caller's to check.
+func NewWith(st Settings, tr Transport, o Options) *Session {
 	if o.Limits.MaxBytes == 0 {
 		o.Limits.MaxBytes = 200 << 20
 	}
 	if o.Limits.MaxFiles == 0 {
 		o.Limits.MaxFiles = 20000
 	}
-	s := &Session{st: st, o: o, poll: o.Poll}
-	if st.Token != "" || st.Username != "" {
-		user := st.Username
-		if user == "" {
-			user = "git"
-		}
-		s.auth = &githttp.BasicAuth{Username: user, Password: st.Token}
+	if tr.TypeID == "" {
+		tr.TypeID = TypeID
 	}
+	s := &Session{st: st, o: o, tr: tr, poll: o.Poll}
 	if s.poll == 0 {
 		s.poll = time.Duration(max(st.PollSeconds, 15)) * time.Second
 		if st.PollSeconds == 0 {
@@ -133,7 +157,15 @@ func New(st Settings, o Options) (*Session, error) {
 		}
 	}
 	s.remote = gogit.NewRemote(memory.NewStorage(), &config.RemoteConfig{Name: "origin", URLs: []string{st.URL}})
-	return s, nil
+	return s
+}
+
+// auth is the sign-in for one request.
+func (s *Session) auth() (transport.AuthMethod, error) {
+	if s.tr.Auth == nil {
+		return nil, nil
+	}
+	return s.tr.Auth()
 }
 
 func init() {
@@ -155,7 +187,7 @@ func mapErr(err error) error {
 		return ce
 	}
 	switch {
-	case errors.Is(err, transport.ErrAuthenticationRequired), errors.Is(err, transport.ErrAuthorizationFailed):
+	case errors.Is(err, transport.ErrAuthenticationRequired), errors.Is(err, transport.ErrAuthorizationFailed), strings.Contains(err.Error(), "unable to authenticate"):
 		return connectors.Errorf(connectors.CodeAuth, "the host refused the credentials")
 	case errors.Is(err, transport.ErrRepositoryNotFound):
 		return connectors.Errorf(connectors.CodeNotFound, "the host has no such repository")
@@ -173,7 +205,11 @@ func mapErr(err error) error {
 
 // advertised lists the remote's refs and its default branch.
 func (s *Session) advertised(ctx context.Context) (map[string]string, string, error) {
-	refs, err := s.remote.ListContext(ctx, &gogit.ListOptions{Auth: s.auth})
+	auth, err := s.auth()
+	if err != nil {
+		return nil, "", err
+	}
+	refs, err := s.remote.ListContext(ctx, &gogit.ListOptions{Auth: auth})
 	if err != nil {
 		return nil, "", mapErr(err)
 	}
@@ -233,7 +269,11 @@ func (s *Session) fetch(ctx context.Context, refs []string, depth int) (*fetched
 	if len(specs) == 0 {
 		return f, nil
 	}
-	err = repo.FetchContext(ctx, &gogit.FetchOptions{RemoteName: "origin", RefSpecs: specs, Depth: depth, Auth: s.auth, Tags: gogit.NoTags,
+	auth, err := s.auth()
+	if err != nil {
+		return nil, err
+	}
+	err = repo.FetchContext(ctx, &gogit.FetchOptions{RemoteName: "origin", RefSpecs: specs, Depth: depth, Auth: auth, Tags: gogit.NoTags,
 		Progress: sideband.Progress(io.Discard)})
 	if err != nil && !errors.Is(err, gogit.NoErrAlreadyUpToDate) {
 		return nil, mapErr(err)
@@ -373,7 +413,7 @@ func (s *Session) Call(ctx adapter.Context, op string, args json.RawMessage) (js
 		}
 		// Whether a push would be allowed is known only by pushing; a
 		// token given is taken to write
-		return git.Result(map[string]any{"ok": true, "defaultBranch": def, "canWrite": s.st.Token != "", "allowDefaultBranch": s.st.AllowDefaultBranch})
+		return git.Result(map[string]any{"ok": true, "defaultBranch": def, "canWrite": s.tr.CanWrite, "allowDefaultBranch": s.st.AllowDefaultBranch})
 	case "listRefs":
 		var a struct{ Prefix string }
 		if err := git.Unmarshal(args, &a); err != nil {
@@ -478,7 +518,7 @@ func (s *Session) Call(ctx adapter.Context, op string, args json.RawMessage) (js
 		_ = ctx.Accepted(raw)
 		return raw, nil
 	}
-	return nil, connectors.Errorf(connectors.CodeNotSupported, "git.https has no operation %q", op)
+	return nil, connectors.Errorf(connectors.CodeNotSupported, "%s has no operation %q", s.tr.TypeID, op)
 }
 
 func (s *Session) compare(ctx context.Context, base, head string) (git.Comparison, error) {
@@ -605,7 +645,11 @@ func (s *Session) commit(ctx context.Context, a git.CommitArgs, writes []git.Wri
 	// Push without force: refused when the branch moved since the fetch
 	// (or was created by someone else meanwhile)
 	spec := config.RefSpec(sha.String() + ":" + branchRef)
-	err = f.repo.PushContext(ctx, &gogit.PushOptions{RemoteName: "origin", RefSpecs: []config.RefSpec{spec}, Auth: s.auth, Progress: sideband.Progress(io.Discard),
+	auth, err := s.auth()
+	if err != nil {
+		return git.CommitResult{}, err
+	}
+	err = f.repo.PushContext(ctx, &gogit.PushOptions{RemoteName: "origin", RefSpecs: []config.RefSpec{spec}, Auth: auth, Progress: sideband.Progress(io.Discard),
 		RequireRemoteRefs: requireRemote(branchRef, head)})
 	if err != nil && !errors.Is(err, gogit.NoErrAlreadyUpToDate) {
 		return git.CommitResult{}, mapErr(err)

@@ -31,6 +31,18 @@ type Error struct {
 	// RetryAfterMs is how long to wait before retrying, when the service
 	// says (rateLimited's Retry-After).
 	RetryAfterMs int64 `json:"retryAfter,omitempty"`
+	// Detail narrows the code: DetailLocked.
+	Detail string `json:"detail,omitempty"`
+}
+
+// DetailLocked is an auth error from a connection whose key waits to be
+// unlocked (git.ssh, forge 24f): nothing is wrong with the connection, so
+// it is not marked failed.
+const DetailLocked = "locked"
+
+// Locked makes the error of a call on a locked connection.
+func Locked(message string) *Error {
+	return &Error{Code: CodeAuth, Message: message, Detail: DetailLocked}
 }
 
 func (e *Error) Error() string { return e.Code + ": " + e.Message }
