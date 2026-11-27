@@ -1,0 +1,1 @@
+- give any new play state that follows a player a projector keyed `<worldId>.<userId>`, as `game.packs` is.

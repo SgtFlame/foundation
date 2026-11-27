@@ -1,0 +1,1 @@
+| [Infrastructure.md](Infrastructure.md) › *22g, 22l, 22m*, *22k (more)* | (Supersedes the row above.) Also the provider types as Go connector types (`infra.lxd`, `infra.azure`, `infra.digitalocean`) tested with the contract suite against recorded responses (`providers/cassette`), the Fly proof script, and a tenant's own cluster and streams placement |

@@ -1,0 +1,1 @@
+- `src/services/` - backend clients, one per backend service (see above); `src/services/http/` holds the shared axios client and the network capture.

@@ -1,0 +1,12 @@
+23. **Record nodes and the task list** (Forge iteration 3, part 3i, [forge 003i-TaskList.md](../../forge/documentation/plans/003i-TaskList.md)). *Built.* ★ the task list with two users and the chat acceptance ([Records.md](Records.md#built-in-slice-23)).
+    - **Built**:
+      - `records/nodes`: the write nodes for command graphs (*Create record*, *Update record*, *Delete record*, *Add to*, *Remove from*), committing with the command as one batch; *Get record*, *Query* and *Aggregate* in every kind; *On record changed* (an `app.trigger` event);
+      - in `records/data`, `Write` (a record command decided for another target) and `Get`;
+      - in `live/nodes`, the command's `Decision` on its host, `data.query` graphs that run again, debounced, when the records they read change, and *Current user*;
+      - in `ui`, query params bound to view state (`QueryRef.Bind`), `Page.Setup`, `Handle.Query`, and `mui.table` columns with types, checkbox cells (`edit`), option labels and dotted fields;
+      - `live.Apply` copying what it changes, which kept updated rows from reaching pages;
+      - the Hello task list: *Task* seeded on first open, the page `hello/tasks` (`app:hello:tasks`), and its handler, command and query graphs;
+      - the wiring, in Foundation's `serve.go` and Forge's.
+    - **Blockers**: none. 03i had no open questions; four gaps were asked before building (where *Task* comes from, where the list lives, what the rows bind to, how the chat acceptance runs).
+    - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it-6).
+    - **Pending, carried forward**: *Subscribe to records* (with prefab logic, forge 04); a batch's changes in one frame; the `records/data` test flake and Deep's retired model ([plans/Backlog.md](plans/Backlog.md)).

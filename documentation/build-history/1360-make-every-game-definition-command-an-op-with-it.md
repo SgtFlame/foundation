@@ -1,0 +1,1 @@
+- make every game definition command an op with its inverse, with a step in `TestEveryOpUndoes`, and its undo scope in `ops.ParseScope`;

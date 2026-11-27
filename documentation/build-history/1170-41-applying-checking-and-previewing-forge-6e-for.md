@@ -1,0 +1,1 @@
+| 41. Applying, checking and previewing (Forge 6e) | forge 006-AIAuthoring 2 (drafts change without asking) and 06e 1 (`bus.Transact`), 2 (apply over a stale view, reporting changes) and 3 (a manifest role on the draft run's records), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-10), once the Builder uses the tools |

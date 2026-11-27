@@ -1,0 +1,9 @@
+56. **What the mail client needed** (Forge iteration 7, part 7o, [forge MailApp.md](../../forge/documentation/MailApp.md#built-in-part-7o)). *Built* ([RBAC.md](RBAC.md#changed-in-slice-56), [Records.md](Records.md#changed-in-slice-56), [ServerUI.md](ServerUI.md#changed-in-slice-56)).
+    - **Built**:
+      - `authz` and `records`: `principal.owner` in row rules (`authz.IsOwner`); an app's principal grants its own roles on its own records (`Policy.MayGrant`); *Grant role*/*Revoke role* take a user; the *Has role* node (`authz.hasRole`, in command and query graphs too);
+      - `records/data`: `records.search` takes `filter` (with `entity`);
+      - `ui`: `ui.toast`'s action (`action`, `handler`, `payload`, `duration`; `Handle.HandlerName`); a `slot` node's `fill`/`grow`/`sx` style its box, and `mui.box` takes `fill`; `mui.list` items' `count` and `header`; `presence.avatars`' `state`; `doc.markdown`'s `typingIn`/`typingState`;
+      - browser: `live.holdPresence` (several holders of one object's presence, states merged; `usePresence` and `presence.avatars` use it), the toast's action button in `AppHost`, `record.fieldEditor` on a list of files, Mail's icons.
+    - **Blockers**: none. Forge's iteration question 7 (privacy of personal accounts) and 07o question 1 (members' grants, a gap found while reading) answered by the user before building (2026-11-21).
+    - **Decisions to review after seeing it**: in [forge MailApp.md](../../forge/documentation/MailApp.md#decisions-to-review-after-seeing-it-1).
+    - **Deferred failure**: `ui/hello` failed once ([forge 099-Cleanup.md](../../forge/documentation/plans/099-Cleanup.md#foundation-uihello-failed-once)); the large tables' SQL followers log `database is locked` under a burst ([forge 099-Cleanup.md](../../forge/documentation/plans/099-Cleanup.md#foundation-large-tables-database-is-locked-in-the-sql-followers)).

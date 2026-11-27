@@ -1,0 +1,1 @@
+- add a design's hold and refinery indices to `cmd-game-loadShip` and `cmd-game-refineShip` as well as its block count to `cmd-game-startShip`;

@@ -1,0 +1,11 @@
+28. **The Task list demo** (Forge iteration 4, part 4d, [forge 004d-TaskListPrefabs.md](../../forge/documentation/plans/004d-TaskListPrefabs.md)). *Built* ([ServerUI.md](ServerUI.md#built-in-slice-28)).
+    - **Built**:
+      - Hello's task page as `ui.PrefabPage("taskList")`: *Task row* (checkbox, title to rename, due chip, assignee, `actions` slot; raises `toggled` and `renamed`) and *Task list* (heading and count, add form, *Show*, *Sort by* and direction, *Clear done*, a repeat of *Task row* over `records.find`, an empty state), seeded by `prefab.*` commands on first open (`hello/prefabs.go`); the Go render function and the table are gone;
+      - Hello's graphs `taskRow-onToggle`, `taskRow-onRename`, `hello-onTaskToggled` and `hello-onTaskRenamed`; `hello-onEditTask` removed;
+      - prefabs may use built-in graphs (`graphKind` in `ui/prefabs`);
+      - a prefab page takes only the params its prefab declares;
+      - an input given a value by the server can be typed in (`useValue`);
+      - fixes: `ui.Open` holds its queries under the session's lock (a data race), and seeding reads a just-made draft again.
+    - **Blockers**: none. Forge 04d questions 1 (seeded by commands on first open) and 2 (overlays for Go pages only), and 3 (*Sort by* and a direction toggle) and 4 (everything the Go page had, the title renamed in its row), found while reading the plan against the Go page, were asked before building and answered.
+    - **Decisions to review after seeing it**: in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-4).
+    - **Pending, carried forward**: both prefabs built by hand in the Prefab Editor (the demo ran on the seeded ones, with the chip colour changed by hand); clearing the add form after adding; a record scan missing a record rewritten during it ([plans/Backlog.md](plans/Backlog.md)).

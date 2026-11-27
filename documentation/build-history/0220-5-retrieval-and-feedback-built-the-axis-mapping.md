@@ -1,0 +1,27 @@
+5. **Retrieval and feedback.** *Built.* ★ the axis mapping, Top-K and the inspector.
+   - The retrieval engine with the library source; *built* (`features/retrieval`, `retrievalservice.Retrieve`, `POST /retrieval/retrieve`), with the RRF shared with `indexservice.Find` (seam 5: `retrieval.source`, with only `library` so far).
+   - The RAG Search contribution with the two sliders; inline citations; the Context inspector; *built*, with preset chips (`chat.context.presets`), Top-K as segments, citations as chips that open the file at its lines, and a Sources row.
+   - 👍/👎/🚫 with `SegmentFeedback`; *built*, per tenant, with `RoundSegment` recording what each round injected.
+   - A first Dashboard widget, *Usage & cost*; *built*, with `usageservice.Summary`, the Dashboard editor and the `dashboard.widget` point.
+   - Optionally the Markdown Editor's Chat tab, which reuses the same components. *Not built*: left for a later slice (see below).
+   - What slice 5 decided is recorded in [ContextRetrieval.md](ContextRetrieval.md#built-in-slice-5), [ChatCompletion.md](ChatCompletion.md#built-in-slice-5), [Usage.md](Usage.md#built-in-slice-5), [Contributors.md](Contributors.md#built-in-slice-5) and [Configuration.md](Configuration.md#built-in-slice-5).
+   - **Blockers**: none. It had no **Before** questions.
+   - **★ review pending**: the axis mapping, Top-K and the inspector need review with a real model.
+     - The build environment had no Gemini API key. Everything was seen against a local stub of the Gemini API, whose reply always cites `[1][2]`, so how a real model cites (or fails to) is unseen.
+     - Set a key in Settings › AI › Providers, then review. See [ContextRetrieval.md › Verification of slice 5](ContextRetrieval.md#built-in-slice-5).
+     - With only the library source, the Chronicles ↔ Library dial scales every segment alike, so it changes nothing visible until slice 6 adds Chronicle memory.
+   - **Decisions to review after seeing it**:
+     - Feedback is per tenant (MultiTenant 1).
+     - 👎 keeps the round in the window, and 🚫 removes it and takes back its vote (ContextRetrieval 2).
+     - Axis 2 is exponential with B = 4 (ContextRetrieval 1).
+     - Top-K means segments; the sampling overrides wait (ChatCompletion gap 6).
+     - Without a query embedding, retrieval falls back to keywords rather than failing the round.
+     - The context budget is capped at `maxBudgetTokens` (10 000 tokens).
+     - Each round stores everything its inspector shows.
+   - **Pending, carried forward**
+     - The Markdown Editor's Chat tab.
+     - The *Flagged segments* widget and listing 👎 rounds for review.
+     - Pinned items, the volume filter in the popover, and the context budget control.
+     - Hiding Dashboard widgets and saving their layout (`ui.dashboard`), and linking a costly conversation to Chat.
+     - Relocating a citation by its `Head`/`Tail` anchors after the file has changed.
+     - Index titles: a chunk made of several small sections takes the *last* section's heading, so its citation can be titled by a heading near its end (`mergeSmall` in the chunker).

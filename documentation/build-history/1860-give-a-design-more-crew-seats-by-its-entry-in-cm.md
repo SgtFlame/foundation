@@ -1,0 +1,1 @@
+- give a design more crew seats by its entry in `cmd-game-crewShip`'s seat table, and a crew station's work by a check on `ship.crew` in that work's blueprint (refining is the first);

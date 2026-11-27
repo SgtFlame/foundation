@@ -1,0 +1,148 @@
+{
+  "name": "tasks_tracker_board_get",
+  "title": "Get a board",
+  "description": "Reads one board with its lists (or statuses) in order, its labels and its members, to map them to a project's statuses, labels and people.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The board's outside id"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "board": {
+        "type": "object",
+        "description": "A board (a Trello board, an Asana project, a Linear team)",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The board's outside id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Its name"
+          },
+          "url": {
+            "type": "string",
+            "description": "Where it is opened in the tracker"
+          },
+          "archived": {
+            "type": "boolean",
+            "description": "Whether it is archived"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "lists": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "description": "A list or status column of a board",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The list's outside id"
+            },
+            "name": {
+              "type": "string",
+              "description": "Its name, e.g. Doing"
+            },
+            "position": {
+              "type": "number",
+              "description": "Sorts the board's lists, smallest first"
+            },
+            "closed": {
+              "type": "boolean",
+              "description": "Whether it is closed (archived)"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "position"
+          ]
+        },
+        "description": "Its lists or statuses, in order"
+      },
+      "labels": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "description": "A label of a board",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The label's outside id"
+            },
+            "name": {
+              "type": "string",
+              "description": "Its name"
+            },
+            "color": {
+              "type": "string",
+              "description": "Its colour as the tracker names it"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "description": "Its labels"
+      },
+      "members": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "description": "Someone on the board",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The member's outside id"
+            },
+            "name": {
+              "type": "string",
+              "description": "Their full name"
+            },
+            "username": {
+              "type": "string",
+              "description": "Their user name in the tracker"
+            },
+            "email": {
+              "type": "string",
+              "description": "Their email address, when the tracker shows it"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "description": "Its members"
+      }
+    },
+    "required": [
+      "board",
+      "lists",
+      "labels",
+      "members"
+    ]
+  },
+  "annotations": {
+    "title": "Get a board",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

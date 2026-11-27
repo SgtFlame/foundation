@@ -1,0 +1,11 @@
+{
+  "type": "function",
+  "function": {
+    "name": "tasks_tracker_check",
+    "description": "Signs in and changes nothing: whether the connection's credentials work.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+}

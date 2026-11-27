@@ -1,0 +1,62 @@
+{
+  "name": "tasks_tracker_member_list",
+  "title": "List members",
+  "description": "Lists the members of a board, to map them to Axiom's users by email or name.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "board": {
+        "type": "string",
+        "description": "The board's id"
+      }
+    },
+    "required": [
+      "board"
+    ]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "members": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "description": "Someone on the board",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The member's outside id"
+            },
+            "name": {
+              "type": "string",
+              "description": "Their full name"
+            },
+            "username": {
+              "type": "string",
+              "description": "Their user name in the tracker"
+            },
+            "email": {
+              "type": "string",
+              "description": "Their email address, when the tracker shows it"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "description": "The members"
+      }
+    },
+    "required": [
+      "members"
+    ]
+  },
+  "annotations": {
+    "title": "List members",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

@@ -1,0 +1,1 @@
+- add a design as a JSON file in `features/game/designs/` and its id and block count to `cmd-game-startShip`'s checks (the list of designs and the `{skiff: 27}` table);

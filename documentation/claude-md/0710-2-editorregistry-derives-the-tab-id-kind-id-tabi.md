@@ -1,0 +1,1 @@
+2. `EditorRegistry` derives the tab id `<kind>:<id>` (`tabIdOf`); if that tab is open it is focused, otherwise a new tab is added with the object in its `config`. The tab text is the object's `name` if it has one (else `<editor name> <id>`), and its hover text the object's `helpText`.

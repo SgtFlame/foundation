@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "tasks_tracker_member_list",
+    "description": "Lists the members of a board, to map them to Axiom's users by email or name.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "board": {
+          "type": "string",
+          "description": "The board's id"
+        }
+      },
+      "required": [
+        "board"
+      ]
+    }
+  }
+}

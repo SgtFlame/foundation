@@ -1,0 +1,60 @@
+11. **RBAC.** *Built.* ★ the built-in roles and the permission matrix.
+    - The real `authz.Check`, the Role Editor and the Share dialog; *built*:
+      - `features/authz`: the `authz.resourceType` point, built-in roles defined by action classes, custom tenant roles, `RoleGrant` and `AccessAudit` in the application database, and an installed `Policy`;
+      - `authzservice` under `/authz`, and `useCan` in the browser;
+      - Administration › Roles (the matrix, grants and an Access checker), and the Share dialog on Volumes and tenants.
+      - Volumes are checked per Volume, and a *Viewer* opens files read-only.
+    - Tenant and user scopes in Settings; *built*, with read-only sections where you may not write, and the browser reading settings at the user scope.
+    - The moderation queue and Chronicle sharing; *built*: sharing with the tenant at once, or globally after a tenant moderator and then a global moderator approve, into the reserved global tenant (ID 2). The queue is Administration › Moderation.
+    - Slice 10's `Admin` flag became grants, once: flagged users became *Super Administrator*, members *Editor*.
+    - What slice 11 decided is recorded in [RBAC.md](RBAC.md#built-in-slice-11), [MultiTenant.md](MultiTenant.md#built-in-slice-11), [Chronicle.md](Chronicle.md#built-in-slice-11), [Configuration.md](Configuration.md#built-in-slice-11), [Contributors.md](Contributors.md#built-in-slice-11) and [Logging.md](Logging.md#built-in-slice-11).
+    - **Blockers**: none left. Its **Before** questions were answered before building, together with one found while reading the plan:
+      - RBAC 1: as proposed (*Super Administrator* writes the app scope, *Owner* and *Administrator* a tenant's, everyone their own);
+      - RBAC 2: allow-only;
+      - RBAC 5: *Tenant Administrator* manages tenants without reading their content;
+      - RBAC 7 (new): the `Admin` flag becomes *Super Administrator*, and *Application Administrator* is a separate, secrets-only role (Secrets 5 answered with it). New members get *Editor*, and a tenant's creator *Owner*.
+    - **★ review pending**: the roles and the matrix need review by a person, and with more than one tenant in use.
+      - Seen in headless Chromium, light theme only:
+        - the Role Editor: a built-in role's matrix, its grants, a custom role duplicated and saved, the Access checker;
+        - the Tenants editor's *Roles…*, and a Volume's Share dialog;
+        - Settings at App, read-only for an *Editor*, and at User;
+        - a Chronicle shared globally from the entry editor, and the moderation queue;
+        - a *Viewer*'s Markdown file opened read-only.
+      - Also walked through with curl across two tenants, including the global copy found by retrieval in the other tenant.
+      - Not seen in the browser: dark theme, the Tenants editor as a tenant *Administrator* (not a *Tenant Administrator*), a grant expiring, and a read-only viewer handing the writer role to an editor who joins later (covered by the room logic, not by a test).
+      - To review: run `serve` on a copy of your data directory. The first start migrates the `Admin` flag and re-embeds every Chronicle entry, since the entries table gained a column. Then open Administration › Roles, share a Volume with a second user as *Viewer*, and share a Chronicle entry globally with two moderators. See [RBAC.md › Built in slice 11](RBAC.md#built-in-slice-11).
+    - **Decisions to review after seeing it** (each in [RBAC.md](RBAC.md#decisions-to-review-after-seeing-it) and [MultiTenant.md](MultiTenant.md#built-in-slice-11)):
+      - **Roles**:
+        - *Administrator* holds every tenant permission but deleting, so it can grant *Editor* under the no-escalation rule.
+        - Built-in roles are defined by action classes.
+        - Granting or revoking a role needs every permission in it.
+      - **What needs no grant**: personal resources (your conversations and Chronicles, your account, reading settings) need only membership.
+      - **Logs**: `logs.read` needs *Owner* or *Administrator*; every member could read the tenant's logs before.
+      - **Managing grants**: only from within the tenant, and only for members.
+      - **Volumes**:
+        - A Volume grant only adds access: browsing folders needs `kb.read` on the tenant.
+        - A read-only file is enforced by the room dropping the viewer's updates.
+      - **Settings**: the browser reads settings at the user scope.
+      - **Chronicle sharing**:
+        - The global tenant has no row and no members.
+        - The global copy is a snapshot of title and summaries.
+        - The two approvals must come from two people.
+        - Sharing with the tenant needs no approval.
+      - **Audit**: every denied check of a changing action is audited, unthrottled.
+      - **DTOs**: `admin` became `superAdmin`.
+    - **Pending, carried forward**
+      - **From RBAC.md**:
+        - groups (RBAC 3) and custom app-level roles (RBAC 4);
+        - the audit viewer and `PolicyVersion` checks;
+        - shares on files, graphs and Nexuses;
+        - `authz.Filter`;
+        - enforcing `usage.viewAll`, `tool.execute` and `tool.approveWrite`;
+        - adding members without `user.list` (invitations).
+      - **From MultiTenant.md and Chronicle.md**:
+        - flagged segments in the moderation queue;
+        - updating a global copy when its entry changes;
+        - sharing an entry's children;
+        - purging a deleted tenant's data, including its grants' audit.
+      - **Seen while verifying**: the dark-preference contrast issue from slice 7 still applies. The matrix scrolls sideways on narrow editors.
+      - **Building**: the linker can be killed for memory while the vite dev server and `serve` run, even for `--test`. Stop them, or use `GOFLAGS=-ldflags=-s`.
+      - **Carried from slice 10 and earlier**: unchanged; see slices 10 and 8.

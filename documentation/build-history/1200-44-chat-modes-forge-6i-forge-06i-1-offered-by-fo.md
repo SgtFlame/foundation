@@ -1,0 +1,1 @@
+| 44. Chat modes (Forge 6i) | forge 06i 1 (offered by focus, chosen for new conversations), 2 (now) and 3 (nothing hard-coded), answered | the decisions in [ChatCompletion.md](ChatCompletion.md#decisions-to-review-after-seeing-it-2), and rounds in each mode with a real model |

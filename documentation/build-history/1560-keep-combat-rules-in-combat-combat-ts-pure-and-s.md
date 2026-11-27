@@ -1,0 +1,1 @@
+- keep combat rules in `combat/Combat.ts`, pure and seeded, so the Node runner (346) can run the same fight on the server;

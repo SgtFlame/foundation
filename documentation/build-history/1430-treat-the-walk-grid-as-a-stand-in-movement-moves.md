@@ -1,0 +1,1 @@
+- treat the walk grid as a stand-in: movement moves to the server in S4, and Recast replaces the grid when areas get height levels.

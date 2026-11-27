@@ -1,0 +1,1 @@
+| 25. Prefab drafts (Forge 4a) | forge 04 question 3 (answered before) and 04a 1 (access), 2 (per-prop merge), 3 (KV drafts, SQLite versions) and 4 (refuse breaking changes unless allowed), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-1), to review after seeing |

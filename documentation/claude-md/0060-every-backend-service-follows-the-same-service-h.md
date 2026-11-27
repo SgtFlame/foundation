@@ -1,0 +1,1 @@
+Every backend service follows the same service → handler → DTO layout, with a matching frontend client. A feature `<f>` holds one or more services `<s>`; its main service is named after the feature (`<s>` = `<f>`). `kb` (Knowledge Base) is the reference, with two services: `kbservice` and `volumeservice`. For a service `<s>` with an operation `<Op>`:

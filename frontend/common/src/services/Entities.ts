@@ -30,6 +30,7 @@ export interface EntityField {
   relation?: { entity: string; many?: boolean; inverse?: string } // relation; entity 'user' is the tenant's users
   scale?: number // decimal, money
   currency?: string // money
+  scope?: string // rank: the field it orders within (forge 30a)
   items?: EntityField // list
   fields?: EntityField[] // object
   schema?: Record<string, unknown> // json

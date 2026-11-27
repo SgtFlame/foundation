@@ -1,0 +1,1 @@
+- Exports one object named after the service with one method per handler (`KnowledgeBase.openVolume(request)`), returning a `Promise` of the response DTO and throwing `ServiceError` (`status`, `message`, `errorCode`, and the request's `trace`) on a non-2xx status.

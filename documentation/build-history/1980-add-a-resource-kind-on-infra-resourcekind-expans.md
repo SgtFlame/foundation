@@ -1,0 +1,1 @@
+- add a resource kind on `infra.resourceKind` (expansion, compared properties, order, `HoldsData`) and its work in `infraapply.runStep`, rather than special cases in `Plan`;

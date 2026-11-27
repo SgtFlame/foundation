@@ -1,0 +1,1 @@
+- write desired state only through the `infranodes` helpers, by ids from `infranodes.RecordID`, so every step stays idempotent;

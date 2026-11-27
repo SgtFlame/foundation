@@ -1,0 +1,1 @@
+| 48. Scripted connectors (Forge 7d) | forge 07d 1 (no scripted contracts; 050-Workflows) and 2 (exported with the manifest), answered with their proposals | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-2), the Connectors tab once 7e defines contracts |

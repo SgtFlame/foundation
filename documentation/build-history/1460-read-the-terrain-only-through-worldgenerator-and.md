@@ -1,0 +1,1 @@
+- read the terrain only through `WorldGenerator` (and `VoxelWorld.densityAt` for edits), never a `MoonGenerator` alone, since a world has several bodies;

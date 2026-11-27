@@ -1,0 +1,19 @@
+{
+  "name": "tasks.tracker.comment.list",
+  "title": "List comments",
+  "description": "Lists a card's comments, oldest first.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "card": {
+        "type": "string",
+        "description": "The card's id"
+      }
+    },
+    "required": [
+      "card"
+    ]
+  },
+  "effect": "read",
+  "source": "connector"
+}

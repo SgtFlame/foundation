@@ -1,0 +1,1 @@
+- `<Op>Response.go` - the JSON response, embedding `rest.Status` (`message` and `errorCode`, both empty on success), with `<Op>ResponseFrom(<s>service.<Op>Response) <Op>Response` setting `Status: rest.StatusFrom(resp.Common)`. The code travels as the HTTP status, not in the body, and the trace is never in the body.

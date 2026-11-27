@@ -54,6 +54,7 @@ type Field struct {
 	Currency string          `json:"currency,omitempty"` // money: an ISO 4217 code; any when empty
 	Contract string          `json:"contract,omitempty"` // connection: only connections of types implementing it (id@version)
 	Kind     string          `json:"kind,omitempty"`     // principal: the kind of principal its records define (agent, the default)
+	Scope    string          `json:"scope,omitempty"`    // rank: the field whose value it orders within (a task's status); the whole type when empty
 	Items    *Field          `json:"items,omitempty"`    // list: what each item is (its id and name are not used)
 	Fields   []Field         `json:"fields,omitempty"`   // object: its nested fields
 	Schema   json.RawMessage `json:"schema,omitempty"`   // json: the JSON Schema its values follow

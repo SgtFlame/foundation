@@ -1,0 +1,1 @@
+- treat a person of kind `watcher` as a house's hearth-watch.

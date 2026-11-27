@@ -1,0 +1,11 @@
+16. **Entity types** (Forge iteration 3, part 3a, [forge 003a-EntityTypes.md](../../forge/documentation/plans/003a-EntityTypes.md)). *Built.* No ★ of its own: the rename demo is seen in the Data Designer (3c) ([Records.md](Records.md)).
+    - **Built**:
+      - `features/records`: entity types, field types and `records.Check`;
+      - `records/entities`: the `entity.*` commands on the `def` stream, the `records.entity` and `records.entityPublished` projections, the `entity.describe` and `entity.list` queries, and the follower that copies published versions into `records_entity_versions`;
+      - `records/tools`, and `entityservice` under `/records/entities`;
+      - `project.Projections.Follow`;
+      - the `Entities.ts` client;
+      - the wiring, in Foundation's `serve.go` and Forge's.
+    - **Blockers**: none left. Its **Before** questions were answered before building: forge 003-DataModel 5 (drafts in KV, published versions in SQLite) and 8 (a slice per Foundation part).
+    - **Decisions to review after seeing it**: in [Records.md](Records.md#decisions-to-review-after-seeing-it).
+    - **Pending, carried forward**: `entity.delete` and changing a field's type, both decided with the records (forge 03b). *Built in slice 17.*

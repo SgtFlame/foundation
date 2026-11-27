@@ -1,0 +1,1 @@
+- On the 7 GB codespace the linker can be killed for lack of memory while linking `out/cli`, and test binaries while the vite dev server and `serve` run. Link with `GOGC=25 GOFLAGS=-ldflags=-s backend/scripts/build.sh` (see CLAUDE.md › *Building*), or stop the other processes.

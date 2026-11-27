@@ -1,0 +1,27 @@
+6. **Chronicle.** *Built.* ★ the side view and the entry editor.
+   - Entries, the Chronicles side view (this converts `workbench.sideView`), and stage 1, stage 2 and the memory update as Go step functions (seam 3). *Built*: the `chronicle` feature (`chronicleservice`, LanceDB's `entries` table), the side bar as `workbench.sideView` tabs with an Editors view of `workbench.command`s, the Chronicles view, the entry editor, and `chronicle/steps` (`Candidates`, `Match`, `Update`) run by the `chronicle` context provider and the new `chat.roundFollower` point inside `conversationservice.Send`.
+   - The Chronicle source is added to retrieval. *Built*, and RAG Search searches it by default, so the Chronicles ↔ Library dial now has an effect.
+   - What slice 6 decided is recorded in [Chronicle.md](Chronicle.md#built-in-slice-6), [ContextRetrieval.md](ContextRetrieval.md#built-in-slice-6), [ChatCompletion.md](ChatCompletion.md#built-in-slice-6), [Contributors.md](Contributors.md#built-in-slice-6), [Configuration.md](Configuration.md#built-in-slice-6) and [Usage.md](Usage.md#built-in-slice-6).
+   - **Blockers**: none. It had no **Before** questions.
+     - Building: on this 7 GB codespace the linker was killed for lack of memory while linking `out/cli`. `GOGC=25 GOFLAGS=-ldflags=-s backend/scripts/build.sh` links it (no debug symbols); see CLAUDE.md › *Building*.
+   - **★ review pending**: the side view and the entry editor need review with a real model.
+     - The build environment had no Gemini API key. Everything was seen against a local stub of the Gemini API, whose stage 1 picks the first candidates and whose memory update is canned, so how a real model chooses entries, rewrites summaries and proposes entries is unseen.
+     - Set a key in Settings › AI › Providers, chat for a while, then review the Chronicles view, the proposals and the entry editor. See [Chronicle.md › Verification of slice 6](Chronicle.md#built-in-slice-6).
+   - **Decisions to review after seeing it** (each in [Chronicle.md](Chronicle.md#decisions-to-review-after-seeing-it)):
+     - The pipeline runs inside `conversationservice.Send`: stage 1 as the `chronicle` context provider, the memory update as the `chronicle` round follower.
+     - Checked entries are the conversation's settings and active entries the last round's pinned segments, so there is no `ActiveEntry` table.
+     - The memory update proposes new entries for the user to accept, and updates used entries directly, keeping the old summaries to restore.
+     - Without stage 1 (no key, or off), retrieval's order decides.
+     - RAG Search also searches Chronicles, so unchosen entries can still go in, unpinned.
+     - One parent per entry, built-in types in code, titles rather than slugs.
+     - The window default is 15 rounds (was 50).
+     - The side bar is vertical tabs, with an Editors view built from `workbench.command`s.
+     - ContextRetrieval 3 (past rounds as a source) and Chronicle's *Volumes as memory* were not built: both answered *(after seeing)* with "not built" for now.
+   - **Pending, carried forward**
+     - The graph (network) view, and custom entry types with summarizer graphs (slice 7 onwards).
+     - Correcting stage 1 by removing a Chronicle chip.
+     - Saving Chronicles checkboxes at once (today they are stored with the next message) and storing the memory update's line with its round.
+     - Undoing a round's memory changes in one step; editing a past prompt and deleting a round.
+     - The `rounds` retrieval source (ContextRetrieval 3), and caching the query embedding that stage 1 and RAG Search each make.
+     - The Volumes side view (Volumes stays an editor), and the command palette for `workbench.command`.
+     - Carried from slice 5: the Markdown Editor's Chat tab, the *Flagged segments* widget, pinned volume items and the budget control, Dashboard layout, citation relocation, and index titles.

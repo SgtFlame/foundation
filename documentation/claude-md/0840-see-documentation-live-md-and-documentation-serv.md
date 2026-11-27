@@ -1,0 +1,1 @@
+See `documentation/Live.md` and `documentation/ServerUI.md` (slice 13, Forge's iteration 1; atomic batches, slice 22). **Everything multi-user goes through the live core**: change data only by a command and read it only by a query (a subscription); never read once and keep a copy.

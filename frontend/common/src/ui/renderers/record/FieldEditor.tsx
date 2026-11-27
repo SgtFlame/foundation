@@ -219,7 +219,8 @@ export function FieldInput(props: FieldInputProps) {
   const { field, value, onChange, onCommit, problem, disabled } = props
   const label = props.label ?? field.name
   const p = { ...props, label }
-  if (isComputed(field)) {
+  // A rank (a position, forge 30a) is set by record.move, never typed
+  if (isComputed(field) || field.type === 'rank') {
     return (
       <Box>
         <Typography variant="caption" color="text.secondary">{label}</Typography>
