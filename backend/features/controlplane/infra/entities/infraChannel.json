@@ -1,0 +1,13 @@
+{
+  "id": "infraChannel",
+  "owner": "app:infrastructure",
+  "name": "Channel",
+  "description": "A first-party repository channel: the version of each package published to it (forge 20f-2). Kept from the repository each time it is published; a package pin or unit naming the channel moves to a new version only through a rollout.",
+  "titleField": "name",
+  "fields": [
+    {"id": "name", "name": "Name", "type": "text", "description": "stable or candidate", "required": true},
+    {"id": "versions", "name": "Versions", "type": "json", "description": "{package: version} published to the channel"},
+    {"id": "previous", "name": "Previous versions", "type": "json", "description": "{package: version} before the last publish: where instances stay until a rollout moves them"}
+  ],
+  "indexes": []
+}

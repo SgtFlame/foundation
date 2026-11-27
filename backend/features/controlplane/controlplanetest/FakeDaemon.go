@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
@@ -116,4 +117,73 @@ func (f *FakeDaemon) Stop() {
 		_ = f.sub.Unsubscribe()
 		f.sub = nil
 	}
+}
+
+// FakeAgent plays an instance agent for rollouts (forge 20f-2): it beats,
+// and installs what its desired state's pins and units name by reporting
+// facts {packages, units} as the agent does, its units active unless
+// Unhealthy. Hold keeps it from installing anything.
+type FakeAgent struct {
+	C         *ctl.Control
+	Target    ctl.Target
+	Unhealthy atomic.Bool
+	Hold      atomic.Bool
+
+	mu        sync.Mutex
+	installed map[string]string
+}
+
+// Start runs it until ctx ends.
+func (f *FakeAgent) Start(ctx context.Context) {
+	d := &FakeDaemon{C: f.C, Target: f.Target}
+	d.Beat(ctx, ctl.HealthTTL/4)
+	f.mu.Lock()
+	f.installed = map[string]string{}
+	f.mu.Unlock()
+	go func() {
+		defer d.StopBeating()
+		var last string
+		for ctx.Err() == nil {
+			if !f.Hold.Load() {
+				raw, ok, _ := f.C.Desired(ctx, f.Target)
+				var doc struct {
+					Pins  []struct{ Name, Version string }          `json:"pins"`
+					Units []struct{ Name, Package, Version string } `json:"units"`
+				}
+				if ok && json.Unmarshal(raw, &doc) == nil {
+					f.mu.Lock()
+					for _, p := range doc.Pins {
+						f.installed[p.Name] = p.Version
+					}
+					for _, u := range doc.Units {
+						if u.Package != "" {
+							f.installed[u.Package] = u.Version
+						}
+					}
+					state := "active"
+					if f.Unhealthy.Load() {
+						state = "failed"
+					}
+					out, _ := json.Marshal(map[string]any{"packages": f.installed, "units": map[string]string{"axiom-serve@web": state}})
+					f.mu.Unlock()
+					if string(out) != last {
+						if f.C.PutFacts(ctx, f.Target, json.RawMessage(out)) == nil {
+							last = string(out)
+						}
+					}
+				}
+			}
+			select {
+			case <-ctx.Done():
+			case <-time.After(50 * time.Millisecond):
+			}
+		}
+	}()
+}
+
+// Installed is the version of a package it reports.
+func (f *FakeAgent) Installed(pkg string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.installed[pkg]
 }

@@ -12,6 +12,8 @@
     "infraEnrollment",
     "infraNatsAccount",
     "infraNatsCluster",
+    "infraChannel",
+    "infraRollout",
     "infraScript",
     "infraAptSource"
   ],
@@ -29,6 +31,8 @@
         "entity:infraEnrollment.*",
         "entity:infraNatsAccount.*",
         "entity:infraNatsCluster.*",
+        "entity:infraChannel.*",
+        "entity:infraRollout.*",
         "entity:infraScript.*",
         "entity:infraAptSource.*"
       ],
@@ -37,7 +41,7 @@
     {
       "id": "operator",
       "title": "Desired state operator",
-      "description": "Sees desired state and starts, stops and restarts instances and units",
+      "description": "Sees desired state, starts, stops and restarts instances and units, and runs rollouts",
       "actions": [
         "entity:infraHost.read",
         "entity:infraProfile.read",
@@ -47,10 +51,14 @@
         "entity:infraEnrollment.read",
         "entity:infraNatsAccount.read",
         "entity:infraNatsCluster.read",
+        "entity:infraChannel.read",
+        "entity:infraRollout.read",
         "entity:infraScript.read",
         "entity:infraAptSource.read",
         "entity:infraInstance.update",
-        "entity:infraUnit.update"
+        "entity:infraUnit.update",
+        "entity:infraRollout.create",
+        "entity:infraRollout.update"
       ]
     },
     {
@@ -66,6 +74,8 @@
         "entity:infraEnrollment.read",
         "entity:infraNatsAccount.read",
         "entity:infraNatsCluster.read",
+        "entity:infraChannel.read",
+        "entity:infraRollout.read",
         "entity:infraScript.read",
         "entity:infraAptSource.read"
       ]

@@ -53,6 +53,7 @@ type stack struct {
 	ctl  *ctl.Control
 	key  ed25519.PrivateKey
 	keys natsauth.DirKeys
+	deps controlplane.Deps
 	n    atomic.Int64
 }
 
@@ -134,6 +135,7 @@ func newStack(t *testing.T) *stack {
 	}
 	deps := controlplane.Deps{Projections: p, Data: dataDeps, Bus: b, Control: s.ctl, Sweep: 200 * time.Millisecond, ScriptKey: s.key,
 		NatsKeys: s.keys, NatsTrust: nd.Trust, RepoKey: func() string { return "REPO KEY" }}
+	s.deps = deps
 	if err := controlplane.Start(ctx, func() controlplane.Deps { return deps }); err != nil {
 		t.Fatal(err)
 	}

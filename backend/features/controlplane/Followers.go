@@ -62,7 +62,7 @@ func Start(ctx context.Context, deps func() Deps) error {
 		return err
 	}
 	var subjects []string
-	for _, e := range []string{EntityHost, EntityProfile, EntityInstance, EntityUnit, EntityPackagePin, EntityAptSource, EntityNatsCluster} {
+	for _, e := range []string{EntityHost, EntityProfile, EntityInstance, EntityUnit, EntityPackagePin, EntityAptSource, EntityNatsCluster, EntityChannel, EntityRollout} {
 		subjects = append(subjects, "evt."+strconv.FormatUint(features.RootTenantID, 10)+".rec."+e+".>")
 	}
 	err := d.Projections.Follow(ctx, features.RootTenantID, live.AreaRecords, "controlplane.desired", subjects, func(e live.Event) error {
@@ -85,6 +85,8 @@ func Start(ctx context.Context, deps func() Deps) error {
 		return err
 	}
 	go watchFacts(ctx, deps)
+	go sweepRollouts(ctx, deps) // forge 20f-2
+	go watchRepo(ctx, deps)
 	go sweepHealth(ctx, deps)
 	return nil
 }
@@ -139,7 +141,7 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 		return log.Wrap(err)
 	}
 	read := map[string]map[string]map[string]json.RawMessage{}
-	for _, e := range []string{EntityHost, EntityProfile, EntityInstance, EntityUnit, EntityPackagePin, EntityAptSource, EntityNatsCluster} {
+	for _, e := range []string{EntityHost, EntityProfile, EntityInstance, EntityUnit, EntityPackagePin, EntityAptSource, EntityNatsCluster, EntityChannel, EntityRollout} {
 		rs, err := all(ctx, d, e)
 		if err != nil {
 			return err
@@ -178,6 +180,7 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 		for _, u := range read[EntityUnit] {
 			if str(u, "instance") == id {
 				du := desired(u)
+				resolveChannel(read, du, str(u, "package"), id)
 				if str(u, "kind") == "nats" {
 					if n := natsOf(read, d, u); n != nil {
 						du["nats"], _ = json.Marshal(n)
@@ -188,7 +191,9 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 		}
 		for _, p := range read[EntityPackagePin] {
 			if t := str(p, "target"); t == id || (t != "" && t == str(in, "profile")) {
-				pins = append(pins, desired(p))
+				dp := desired(p)
+				resolveChannel(read, dp, str(p, "name"), id)
+				pins = append(pins, dp)
 			}
 		}
 		// The third-party sources its pins name, with whether each is

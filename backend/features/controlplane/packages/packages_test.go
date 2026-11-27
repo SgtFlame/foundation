@@ -62,7 +62,7 @@ func TestPublishAndServe(t *testing.T) {
 	write(t, dir, "dists/stable/InRelease", []byte("index 1"))
 	write(t, dir, "dists/stable/main/binary-amd64/Packages", []byte("Package: axiomd\nVersion: 1.0\n"))
 	p, err := Publish(ctx, cpJS, dir)
-	if err != nil || len(p.Uploaded) != 3 {
+	if err != nil || len(p.Uploaded) != 3 || p.Channels["stable"]["axiomd"] != "1.0" {
 		t.Fatalf("publish %+v %v", p, err)
 	}
 	if code, b := get("/pool/main/axiomd_1.0_amd64.deb"); code != 200 || !bytes.Equal(b, deb) {
@@ -105,6 +105,10 @@ func TestPublishAndServe(t *testing.T) {
 	}
 	if _, b := get("/dists/stable/InRelease"); string(b) != "index 2" {
 		t.Fatalf("the new index: %q", b)
+	}
+	cpStore, _ := cpJS.ObjectStore(ctx, ctl.RepoBucket)
+	if gen, ch, err := Channels(ctx, cpStore); err != nil || gen != p.Generation || ch["stable"]["axiomd"] != "1.1" {
+		t.Fatalf("channels %s %v %v", gen, ch, err)
 	}
 	for i := 0; i < 3; i++ {
 		if _, err := Publish(ctx, cpJS, dir); err != nil {

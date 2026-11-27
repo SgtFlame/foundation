@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
@@ -55,6 +56,8 @@ type Published struct {
 	Generation string   `json:"generation"`
 	Uploaded   []string `json:"uploaded"`
 	Kept       int      `json:"kept"`
+	// Channels are the published channels' versions (forge 20f-2).
+	Channels map[string]map[string]string `json:"channels"`
 }
 
 // Publish uploads a repository directory (pool/ and dists/, as repo.sh
@@ -100,6 +103,15 @@ func Publish(ctx context.Context, js jetstream.JetStream, dir string) (Published
 		}
 		out.Uploaded = append(out.Uploaded, name)
 	}
+	channels, err := channelsOf(dir)
+	if err != nil {
+		return out, err
+	}
+	rawChannels, _ := json.Marshal(channels)
+	if _, err := store.PutBytes(ctx, "gen/"+gen+"/"+ChannelsFile, rawChannels); err != nil {
+		return out, log.Wrapf(err, "upload the channels")
+	}
+	out.Channels = channels
 	if beforePut != nil {
 		if err := beforePut(Current); err != nil {
 			return out, err
@@ -257,4 +269,68 @@ func contentType(p string) string {
 		return "application/pgp-signature"
 	}
 	return "text/plain; charset=utf-8"
+}
+
+// ChannelsFile is the generation's channel → package → version, which a
+// publish derives from its Packages indexes and the control plane keeps as
+// channel records (forge 20f-2).
+const ChannelsFile = "channels.json"
+
+// channelsOf reads a repository directory's Packages indexes: each
+// channel's packages with the last version each lists (repo.sh lists the
+// packages given; give a channel one version of each).
+func channelsOf(dir string) (map[string]map[string]string, error) {
+	out := map[string]map[string]string{}
+	idx, err := filepath.Glob(filepath.Join(dir, "dists", "*", "main", "binary-*", "Packages"))
+	if err != nil {
+		return nil, log.Wrap(err)
+	}
+	sort.Strings(idx)
+	for _, p := range idx {
+		rel, _ := filepath.Rel(filepath.Join(dir, "dists"), p)
+		channel := strings.SplitN(filepath.ToSlash(rel), "/", 2)[0]
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			return nil, log.Wrap(err)
+		}
+		if out[channel] == nil {
+			out[channel] = map[string]string{}
+		}
+		for _, stanza := range strings.Split(string(raw), "\n\n") {
+			var name, version string
+			for _, line := range strings.Split(stanza, "\n") {
+				if v, ok := strings.CutPrefix(line, "Package: "); ok {
+					name = strings.TrimSpace(v)
+				}
+				if v, ok := strings.CutPrefix(line, "Version: "); ok {
+					version = strings.TrimSpace(v)
+				}
+			}
+			if name != "" && version != "" {
+				out[channel][name] = version
+			}
+		}
+	}
+	return out, nil
+}
+
+// Channels reads the current generation and its channels.
+func Channels(ctx context.Context, store jetstream.ObjectStore) (string, map[string]map[string]string, error) {
+	gen, err := store.GetString(ctx, Current)
+	if errors.Is(err, jetstream.ErrObjectNotFound) {
+		return "", nil, nil
+	}
+	if err != nil {
+		return "", nil, log.Wrap(err)
+	}
+	gen = strings.TrimSpace(gen)
+	raw, err := store.GetBytes(ctx, "gen/"+gen+"/"+ChannelsFile)
+	if errors.Is(err, jetstream.ErrObjectNotFound) {
+		return gen, map[string]map[string]string{}, nil
+	}
+	if err != nil {
+		return "", nil, log.Wrap(err)
+	}
+	m := map[string]map[string]string{}
+	return gen, m, log.Wrap(json.Unmarshal(raw, &m))
 }

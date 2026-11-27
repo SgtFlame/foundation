@@ -154,6 +154,9 @@ control account with --keys (serve --nats-keys).`,
 			return err
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "published generation %s: %d files uploaded, %d already there\n", p.Generation, len(p.Uploaded), p.Kept)
+		for ch, versions := range p.Channels {
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s: %v\n", ch, versions)
+		}
 		return nil
 	},
 }

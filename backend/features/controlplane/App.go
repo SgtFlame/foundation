@@ -37,6 +37,8 @@ const (
 	EntityEnrollment  = "infraEnrollment"
 	EntityNatsAcct    = "infraNatsAccount"
 	EntityNatsCluster = "infraNatsCluster"
+	EntityChannel     = "infraChannel"
+	EntityRollout     = "infraRollout"
 	EntityScript      = "infraScript"
 	EntityAptSource   = "infraAptSource"
 )
