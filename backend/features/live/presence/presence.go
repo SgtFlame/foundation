@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SgtFlame/foundation/backend/features/authz"
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	"slices"
 	"strconv"
 	"strings"
@@ -76,9 +77,9 @@ func (p *Presence) bucket(ctx context.Context, tenant uint64) (jetstream.KeyValu
 	if kv := p.buckets[tenant]; kv != nil {
 		return kv, nil
 	}
-	kv, err := p.js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+	kv, err := p.js.CreateOrUpdateKeyValue(ctx, natsd.KV(jetstream.KeyValueConfig{
 		Bucket: fmt.Sprintf("presence_%d", tenant), Description: "Who is in each object", History: 1, TTL: TTL, Storage: jetstream.MemoryStorage,
-	})
+	}))
 	if err != nil {
 		return nil, log.Wrapf(err, "cannot make the presence bucket")
 	}

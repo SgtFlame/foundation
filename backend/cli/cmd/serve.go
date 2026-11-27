@@ -195,6 +195,9 @@ var (
 	serveVaultMount string
 	serveVaultRole  string
 	serveNatsURL    string
+	serveNatsCreds  string
+	serveNatsCA     string
+	serveNatsReps   int
 )
 
 // serveCmd represents the serve command
@@ -346,11 +349,10 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// The live core's event streams, projections, presence and UI
 		// sessions live in NATS JetStream, embedded with no listener unless
 		// --nats-url names an external server (documentation/Live.md)
-		natsURL := serveNatsURL
-		if natsURL == "" {
-			natsURL = os.Getenv("FOUNDATION_NATS_URL")
-		}
-		nats, err := natsd.Start(ctx, natsd.Options{Dir: filepath.Join(dataDir, "nats"), URL: natsURL})
+		// (forge 20a-1: a deployed cluster is several URLs, with a creds
+		// file, a CA and every stream made with --nats-replicas)
+		natsd.SetDefault(natsd.Placement{Replicas: natsd.ReplicasOr(serveNatsReps)})
+		nats, err := natsd.Start(ctx, natsd.Options{Dir: filepath.Join(dataDir, "nats"), URL: serveNatsURL, Creds: serveNatsCreds, CA: serveNatsCA}.WithEnv())
 		if err != nil {
 			return err
 		}
@@ -1060,7 +1062,10 @@ func init() {
 	serveCmd.Flags().StringVar(&serveVaultAddr, "vault-addr", "", "HashiCorp Vault holding the server's secrets, e.g. http://127.0.0.1:8200 (default $FOUNDATION_VAULT_ADDR); serve then starts sealed")
 	serveCmd.Flags().StringVar(&serveVaultMount, "vault-mount", "foundation", "Vault KV v2 mount of the server's secrets")
 	serveCmd.Flags().StringVar(&serveVaultRole, "vault-role-id", "", "the only AppRole role ID an unseal may use (default $FOUNDATION_VAULT_ROLE_ID); without it unseal.sh sends it")
-	serveCmd.Flags().StringVar(&serveNatsURL, "nats-url", "", "an external NATS server with JetStream for the live core, e.g. nats://127.0.0.1:4222 (default $FOUNDATION_NATS_URL); without it NATS runs embedded in <data-dir>/nats")
+	serveCmd.Flags().StringVar(&serveNatsURL, "nats-url", "", "an external NATS server with JetStream for the live core, e.g. nats://127.0.0.1:4222, or a cluster's URLs comma separated (default $FOUNDATION_NATS_URL); without it NATS runs embedded in <data-dir>/nats")
+	serveCmd.Flags().StringVar(&serveNatsCreds, "nats-creds", "", "a NATS credentials file for --nats-url (default $FOUNDATION_NATS_CREDS)")
+	serveCmd.Flags().StringVar(&serveNatsCA, "nats-ca", "", "the deployment's CA certificate for TLS to --nats-url (default $FOUNDATION_NATS_CA)")
+	serveCmd.Flags().IntVar(&serveNatsReps, "nats-replicas", 0, "replicas of every stream, bucket and object store this server makes: 3 on a cluster (default $FOUNDATION_NATS_REPLICAS, else 1)")
 	serveCmd.Flags().StringVar(&serveVLogsURL, "vlogs-url", "", "VictoriaLogs to store logs in, e.g. http://localhost:9428 (default $FOUNDATION_VLOGS_URL); wins over Settings")
 }
 

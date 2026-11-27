@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	"sync"
 	"time"
 
@@ -37,9 +38,9 @@ func (k *KVSessions) bucket(ctx context.Context, tenant uint64) (jetstream.KeyVa
 	if kv := k.buckets[tenant]; kv != nil {
 		return kv, nil
 	}
-	kv, err := k.js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+	kv, err := k.js.CreateOrUpdateKeyValue(ctx, natsd.KV(jetstream.KeyValueConfig{
 		Bucket: fmt.Sprintf("ui_sessions_%d", tenant), Description: "UI sessions' view state", History: 1, TTL: SessionAge, Storage: jetstream.FileStorage,
-	})
+	}))
 	if err != nil {
 		return nil, Log.Wrapf(err, "cannot make the UI sessions bucket")
 	}

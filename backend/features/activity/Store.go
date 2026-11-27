@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	"sync"
 	"time"
 
@@ -34,11 +35,11 @@ func (s *Store) Stream(ctx context.Context, tenant uint64) (jetstream.Stream, er
 	if st != nil {
 		return st, nil
 	}
-	st, err := s.js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+	st, err := s.js.CreateOrUpdateStream(ctx, natsd.Stream(jetstream.StreamConfig{
 		Name: StreamName(tenant), Subjects: []string{Subjects(tenant)}, Storage: jetstream.FileStorage,
 		Retention: jetstream.LimitsPolicy, Discard: jetstream.DiscardOld, MaxAge: MaxHours * time.Hour, MaxMsgsPerSubject: MaxCount,
 		Duplicates: project.Duplicates, AllowMsgTTL: true, AllowDirect: true,
-	})
+	}))
 	if err != nil {
 		return nil, log.Wrapf(err, "cannot make the activity stream %s", StreamName(tenant))
 	}

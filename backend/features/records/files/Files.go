@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	"io"
 	"strconv"
 	"sync"
@@ -53,9 +54,9 @@ func (s *Store) bucket(ctx context.Context, tenant uint64) (jetstream.ObjectStor
 	if b, ok := s.buckets[tenant]; ok {
 		return b, nil
 	}
-	b, err := s.js.CreateOrUpdateObjectStore(ctx, jetstream.ObjectStoreConfig{
+	b, err := s.js.CreateOrUpdateObjectStore(ctx, natsd.Object(jetstream.ObjectStoreConfig{
 		Bucket: Bucket(tenant), Description: "Files of records' file fields", Storage: jetstream.FileStorage,
-	})
+	}))
 	if err != nil {
 		return nil, log.Wrapf(err, "cannot open the file bucket of tenant %d", tenant)
 	}

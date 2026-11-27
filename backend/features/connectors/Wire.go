@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	"slices"
 	"strings"
 	"time"
@@ -129,8 +130,8 @@ const keepAnnouncements = 10 * time.Minute
 func AdaptersKV(ctx context.Context, js jetstream.JetStream) (jetstream.KeyValue, error) {
 	kv, err := js.KeyValue(ctx, AdaptersBucket)
 	if errors.Is(err, jetstream.ErrBucketNotFound) {
-		kv, err = js.CreateKeyValue(ctx, jetstream.KeyValueConfig{Bucket: AdaptersBucket, History: 1, TTL: keepAnnouncements,
-			Description: "Connector adapters' announcements: <type>.<instance>, surface.<surface>.<instance> (forge 07b)"})
+		kv, err = js.CreateKeyValue(ctx, natsd.KV(jetstream.KeyValueConfig{Bucket: AdaptersBucket, History: 1, TTL: keepAnnouncements,
+			Description: "Connector adapters' announcements: <type>.<instance>, surface.<surface>.<instance> (forge 07b)"}))
 		if errors.Is(err, jetstream.ErrBucketExists) {
 			kv, err = js.KeyValue(ctx, AdaptersBucket)
 		}
@@ -160,8 +161,8 @@ type Discovered struct {
 func discoveredKV(ctx context.Context, js jetstream.JetStream, tenant uint64, create bool) (jetstream.KeyValue, error) {
 	kv, err := js.KeyValue(ctx, DiscoveredBucket(tenant))
 	if errors.Is(err, jetstream.ErrBucketNotFound) && create {
-		kv, err = js.CreateKeyValue(ctx, jetstream.KeyValueConfig{Bucket: DiscoveredBucket(tenant), History: 1,
-			Description: "Discovered connector contracts, by connection (forge 07b, 75c)"})
+		kv, err = js.CreateKeyValue(ctx, natsd.KV(jetstream.KeyValueConfig{Bucket: DiscoveredBucket(tenant), History: 1,
+			Description: "Discovered connector contracts, by connection (forge 07b, 75c)"}))
 		if errors.Is(err, jetstream.ErrBucketExists) {
 			kv, err = js.KeyValue(ctx, DiscoveredBucket(tenant))
 		}

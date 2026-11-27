@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	"maps"
 	"os"
 	"slices"
@@ -66,10 +67,10 @@ type tenant struct {
 	id       uint64
 	stream   jetstream.Stream
 	mu       sync.Mutex
-	queues   map[string]bool                      // queues with a worker here
+	queues   map[string]bool                     // queues with a worker here
 	triggers map[string]jetstream.ConsumeContext // trigger consumers consumed here, by area/name
-	outboxes map[live.Area]bool                   // areas whose outbox is followed here
-	wake     chan struct{}                        // a worker freed a slot
+	outboxes map[live.Area]bool                  // areas whose outbox is followed here
+	wake     chan struct{}                       // a worker freed a slot
 	// pending are apps with a trigger that could not start yet (its app's
 	// roles not synced yet, by whichever process syncs them), reconciled
 	// again on each discovery; warned is what was last logged per trigger
@@ -196,11 +197,11 @@ func (r *Runner) tenantOf(id uint64) *tenant {
 // by one runner and removed when it acknowledges it; delayed jobs and
 // schedules are its message schedules.
 func (r *Runner) stream(tenant uint64) (jetstream.Stream, error) {
-	s, err := r.d.Projections.JetStream().CreateOrUpdateStream(r.ctx, jetstream.StreamConfig{
+	s, err := r.d.Projections.JetStream().CreateOrUpdateStream(r.ctx, natsd.Stream(jetstream.StreamConfig{
 		Name: StreamName(tenant), Subjects: []string{Subjects(tenant)}, Storage: jetstream.FileStorage,
 		Retention: jetstream.WorkQueuePolicy, Duplicates: project.Duplicates, AllowDirect: true,
 		AllowMsgSchedules: true, AllowRollup: true,
-	})
+	}))
 	if err != nil {
 		return nil, log.Wrapf(err, "cannot make the job queue %s", StreamName(tenant))
 	}
