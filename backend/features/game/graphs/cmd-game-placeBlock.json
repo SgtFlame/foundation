@@ -7,7 +7,7 @@
   "spec": {
     "command": "game.placeBlock",
     "title": "Place a ship block",
-    "description": "Places one block of a ship, by its index in the ship's design (game.shipDesigns); the target is the ship's id. Blocks may be placed in any order; a thruster pushes, the gyroscope turns and the cockpit seats a pilot only once placed. Refused when the ship does not exist, the index is not one of its design's blocks or the block is already placed.",
+    "description": "Places one block of a ship, by its index in the ship's design (game.shipDesigns); the target is the ship's id. Blocks may be placed in any order; a thruster pushes, the gyroscope turns and the cockpit seats a pilot only once placed. Refused when the ship does not exist, the index is not one of its design's blocks or the block is already placed. V31: a ship of a chip design (the cutter) keeps its block types (Ship.types), and each block costs components taken from the sender's pack (armor 2 plates; cockpit 3 plates and 2 wire; thruster a nozzle, a plate and a wire; gyro 2 plates and 3 wire; battery 2 battery cells and a wire; solar 2 solar cells and a wire; light a wire; cargo 4 plates); refused when the pack is short.",
     "args": {
       "type": "object",
       "properties": {
@@ -81,7 +81,7 @@
         "y": 150
       },
       "config": {
-        "expr": "let n = found && ship.design == \"cabin\" ? max(ship.blocks, 78) : (ship?.blocks ?? 0); !found ? \"there is no ship \" + target : index < 0 || index >= n || int(index) != index ? \"the ship's blocks are 0 to \" + string(n - 1) : index in ship.placed ? \"block \" + string(int(index)) + \" is already placed\" : \"\"",
+        "expr": "let costs = {armor: {plate: 2}, cockpit: {plate: 3, wire: 2}, thruster: {nozzle: 1, plate: 1, wire: 1}, gyro: {plate: 2, wire: 3}, battery: {cell: 2, wire: 1}, solar: {solarCell: 2, wire: 1}, light: {wire: 1}, cargo: {plate: 4}}; let t = found && index >= 0 && int(index) == index && index < len(ship?.types ?? []) ? ship.types[int(index)] : \"\"; let cost = t == \"\" ? {} : (costs[t] ?? {}); let names = sort(keys(cost)); let short = filter(names, ((pack?.parts ?? {})[#] ?? 0) < cost[#]); let n = found && ship.design == \"cabin\" ? max(ship.blocks, 78) : (ship?.blocks ?? 0); !found ? \"there is no ship \" + target : index < 0 || index >= n || int(index) != index ? \"the ship's blocks are 0 to \" + string(n - 1) : index in ship.placed ? \"block \" + string(int(index)) + \" is already placed\" : len(short) > 0 ? \"a \" + t + \" block costs \" + join(map(names, string(int(cost[#])) + \" \" + #), \", \") + \"; your pack is short of \" + join(short, \", \") + \": refine more at a forge\" : \"\"",
         "type": "string"
       }
     },
@@ -115,7 +115,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{world: ship.world, index: int(index)}",
+        "expr": "let costs = {armor: {plate: 2}, cockpit: {plate: 3, wire: 2}, thruster: {nozzle: 1, plate: 1, wire: 1}, gyro: {plate: 2, wire: 3}, battery: {cell: 2, wire: 1}, solar: {solarCell: 2, wire: 1}, light: {wire: 1}, cargo: {plate: 4}}; let t = found && index >= 0 && int(index) == index && index < len(ship?.types ?? []) ? ship.types[int(index)] : \"\"; let cost = t == \"\" ? {} : (costs[t] ?? {}); let names = sort(keys(cost)); let short = filter(names, ((pack?.parts ?? {})[#] ?? 0) < cost[#]); t == \"\" ? {world: ship.world, index: int(index)} : {world: ship.world, index: int(index), pack: {parts: fromPairs(map(names, [#, -cost[#]]))}}",
         "type": "json"
       }
     },
@@ -139,7 +139,40 @@
       },
       "config": {
         "path": "args.index",
-        "fix": "place a block of the ship's outline that is not placed yet"
+        "fix": "place a block of the ship's outline that is not placed yet; a chip design's block needs its components in your pack (game.smelt refines them at a forge)"
+      }
+    },
+    {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 300
+      }
+    },
+    {
+      "id": "packKey",
+      "type": "data.expression",
+      "title": "Pack key",
+      "position": {
+        "x": 300,
+        "y": 400
+      },
+      "config": {
+        "expr": "(ship?.world ?? \"\") + \".\" + user",
+        "type": "string"
+      }
+    },
+    {
+      "id": "pack",
+      "type": "live.readProjection",
+      "title": "Read the sender's pack",
+      "position": {
+        "x": 600,
+        "y": 400
+      },
+      "config": {
+        "projector": "game.packs"
       }
     }
   ],
@@ -292,6 +325,66 @@
       "to": {
         "node": "emit",
         "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "packKey",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "packKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pack",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "pack",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "pack"
+      }
+    },
+    {
+      "from": {
+        "node": "pack",
+        "pin": "value"
+      },
+      "to": {
+        "node": "placed",
+        "pin": "pack"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "placed",
+        "pin": "found"
       }
     }
   ]

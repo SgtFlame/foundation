@@ -1,3 +1,4 @@
+import { blockCost, costLine, pay, shortOf, type Cost } from '../ship/Blueprint.ts'
 import { forgeAction, msPer, PART_NAMES, type ForgeKind, type ForgeState, type Part } from '../craft/Forge.ts'
 import { DRIVE_CIRCUITS, DRIVE_IRON, DRIVE_MS, DRIVE_ORE, FAB_IRON, FAB_MS, FAB_ORE, fabAction, JUMP_CHARGE, KIT_CIRCUITS, KIT_IRON, KIT_MS, MAX_BOOST, type FabItem, type FabState } from '../craft/Fabricator.ts'
 import { canJump, jumpTarget } from '../ship/Jump.ts'
@@ -644,7 +645,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.forgeHint()}${this.fabHint()}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.progress?.tools?.scanner ? 'K: scan for ore · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHint()}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.forgeHint()}${this.fabHint()}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.progress?.tools?.scanner ? 'K: scan for ore · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -827,9 +828,7 @@ export class VoxelViewport {
       // An outline block nearer than the ground is placed rather than dug
       if (this.ghostHit && (!hit || this.ghostHit.distance < hit.distance)) {
         this.brushHit = null
-        if (input.clicked(0)) {
-          this.opts.onShipIntent?.({ kind: 'place', id: this.ghostHit.ship, index: this.ghostHit.index })
-        }
+        if (input.clicked(0)) this.placeGhost()
         input.endStep()
         return
       }
@@ -1526,6 +1525,37 @@ export class VoxelViewport {
     return !r ? (this.progress?.manuals?.powerDrill ? 'The bench: everything it knows is made · ' : 'The bench: everything it knows from iron is made; a wreck may hold a manual for more · ') : `U: craft ${named(r)} (${Object.entries(r.needs).map(([k, n]) => `${n} m³ ${k}`).join(', ')}) · `
   }
 
+  // V31: what the outline block under the cursor costs, for a chip design
+  private ghostCost(): { type: string; cost: Cost; short: Part[] } | null {
+    const g = this.ghostHit
+    if (!g) return null
+    const b = blockCost(this.shipLayer.ships().find((s) => s.id === g.ship)?.types, g.index)
+    return b ? { type: b.type, cost: b.cost, short: shortOf(this.carried?.parts, b.cost) } : null
+  }
+
+  private ghostHint(): string {
+    if (!this.ghostHit) return ''
+    const c = this.ghostCost()
+    if (!c) return 'Left: place this block · '
+    return c.short.length ? `This ${c.type} costs ${costLine(c.cost)}: refine more at a forge · ` : `Left: place this ${c.type} (${costLine(c.cost)}) · `
+  }
+
+  // V20 outline blocks; V31: a chip design's block is paid from the pack
+  placeGhost(): void {
+    const g = this.ghostHit
+    if (!g) return
+    const c = this.ghostCost()
+    if (c && c.short.length) {
+      this.flashHint(`The blueprint wants ${costLine(c.cost)} for this ${c.type}; your pack is short of ${c.short.map((k) => PART_NAMES[k]).join(' and ')}`)
+      return
+    }
+    if (c && this.carried) {
+      this.carried = { ...this.carried, parts: pay(this.carried.parts, c.cost) }
+      this.drawPack()
+    }
+    this.opts.onShipIntent?.({ kind: 'place', id: g.ship, index: g.index })
+  }
+
   private forgeOf(id: string): ForgeState | null {
     return this.shipLayer.ships().find((s) => s.id === id)?.forge ?? null
   }
@@ -1881,9 +1911,9 @@ export class VoxelViewport {
     const rows = list.contracts.map((c) => {
       // the first ship that qualifies, else the first parked, decides the row
       const blocks = (s: ShipState) => this.shipLayer.design(s.design)?.blocks.length ?? 0
-      const ok = parked.find((s) => !handInProblem(c.id, s, this.progress, blocks(s), c))
+      const ok = parked.find((s) => !handInProblem(c.id, s, this.progress, blocks(s), c, this.carried))
       const s = ok ?? parked[0] ?? null
-      return { id: c.id, ship: s?.id ?? '', problem: handInProblem(c.id, s, this.progress, s ? blocks(s) : 0, c) }
+      return { id: c.id, ship: s?.id ?? '', problem: handInProblem(c.id, s, this.progress, s ? blocks(s) : 0, c, this.carried) }
     })
     this.contracts.show(list, rows, this.progress, (id) => {
       const r = rows.find((x) => x.id === id)

@@ -1,0 +1,177 @@
+{
+  "id": "cutter",
+  "title": "Cutter",
+  "description": "A small fast ship built from a design chip (forge 360 V31, ships from blocks): a floor of armour, a cockpit with two lights, a gyroscope, a battery and a solar panel on the deck, and a thruster on every side. Its outline is the chip's blueprint: each block costs components refined at a forge (steel plates, copper wire, tungsten nozzles, battery cells, solar cells), taken from the pack as it is placed. The quartermaster gives the chip for the cutter-chip contract.",
+  "blockSize": 1,
+  "chip": true,
+  "blocks": [
+    {
+      "type": "cockpit",
+      "at": [
+        0,
+        1,
+        -1
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        -1,
+        1,
+        -1
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        1,
+        1,
+        -1
+      ]
+    },
+    {
+      "type": "armor",
+      "at": [
+        -1,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "armor",
+      "at": [
+        0,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "armor",
+      "at": [
+        1,
+        0,
+        -1
+      ]
+    },
+    {
+      "type": "armor",
+      "at": [
+        -1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "armor",
+      "at": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "armor",
+      "at": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "gyro",
+      "at": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "type": "battery",
+      "at": [
+        -1,
+        1,
+        0
+      ]
+    },
+    {
+      "type": "solar",
+      "at": [
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "type": "thruster",
+      "at": [
+        -1,
+        -1,
+        -1
+      ],
+      "push": "up"
+    },
+    {
+      "type": "thruster",
+      "at": [
+        1,
+        -1,
+        -1
+      ],
+      "push": "up"
+    },
+    {
+      "type": "thruster",
+      "at": [
+        0,
+        -1,
+        0
+      ],
+      "push": "up"
+    },
+    {
+      "type": "thruster",
+      "at": [
+        0,
+        0,
+        1
+      ],
+      "push": "forward"
+    },
+    {
+      "type": "thruster",
+      "at": [
+        0,
+        0,
+        -2
+      ],
+      "push": "back"
+    },
+    {
+      "type": "thruster",
+      "at": [
+        -2,
+        0,
+        0
+      ],
+      "push": "right"
+    },
+    {
+      "type": "thruster",
+      "at": [
+        2,
+        0,
+        0
+      ],
+      "push": "left"
+    },
+    {
+      "type": "thruster",
+      "at": [
+        0,
+        2,
+        0
+      ],
+      "push": "down"
+    }
+  ]
+}

@@ -24,6 +24,7 @@ export interface ShipDesign {
   blocks: DesignBlock[]
   static?: boolean // V13: a building, never flown; the walker cannot pass its blocks but for doors
   lift?: number // V25: the share of its holds its stock thrusters lift (kits add their boost), up to full
+  chip?: boolean // V31: laid out from an earned design chip; each block costs components (ship/Blueprint.ts)
 }
 
 // A ship as the server keeps it (game.worldShips)
@@ -42,10 +43,11 @@ export interface ShipState {
   crew?: string[] // V7: the users riding as its crew
   cargo?: { dust: number; rock: number; iron: number; ore?: number } // V4: its hold, m³ (V8: ore)
   charge?: number // V4: its battery, 0 to 1
-  forge?: { ore: number; at: number } // V20: the ore smelting in a cabin's forge
+  forge?: { ore: number; at: number; kind?: 'ore' | 'rock' | 'ferrite' | 'malachite' | 'silica' | 'wolframite' | 'spodumene' } // V20: the ore smelting in a cabin's forge (V30: kind, a mineral or rock refining)
   fab?: { item: string; at: number } // V23: the circuit board a cabin's fabricator is making
   boost?: number // V24: what ion thruster kits add to its thrust
   jump?: boolean // V27: a jump drive is fitted
+  types?: string[] // V31: a chip design's block types by index; each block costs components
   seq: number
   updatedAt?: string
 }

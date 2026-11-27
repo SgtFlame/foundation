@@ -19,8 +19,8 @@
     },
     {
       "id": "cobalt-shipyard",
-      "title": "Cobalt for the shipyard",
-      "description": "The moon has no cobalt. Fly out to an asteroid, dig its blue-grey ore, load it into a ship's hold and bring 2 m³ back to the beacon. The shipyard then builds you a hauler's frame.",
+      "title": "Asteroid ore for the shipyard",
+      "description": "The moon's rock holds almost no ore. Fly out to an asteroid, dig its ore, load it into a ship's hold and bring 2 m³ back to the beacon. The shipyard then builds you a hauler's frame.",
       "skill": "mining",
       "xp": 100,
       "needs": {"ore": 2},
@@ -91,6 +91,15 @@
       "skill": "piloting",
       "xp": 150,
       "needs": {"iron": 2, "jump": true}
+    },
+    {
+      "id": "cutter-chip",
+      "title": "A design chip for the cutter",
+      "description": "Show the quartermaster you can refine: bring 4 steel plates and 2 coils of copper wire in your pack, with a ship parked within 40 m of the beacon. She gives you the cutter's design chip, a blueprint whose blocks you build from components.",
+      "skill": "prospecting",
+      "xp": 80,
+      "needs": {"parts": {"plate": 4, "wire": 2}},
+      "unlocks": "cutter"
     }
   ]
 }

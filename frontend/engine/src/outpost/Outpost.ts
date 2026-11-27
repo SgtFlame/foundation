@@ -16,7 +16,7 @@ export interface ContractList {
     skill: string
     xp: number
     // V8: what the ship must bring, the design the job needs, the design it unlocks
-    needs?: { complete?: boolean; iron?: number; ore?: number; rock?: number; jump?: boolean } // V28: jump, a jump drive fitted
+    needs?: { complete?: boolean; iron?: number; ore?: number; rock?: number; jump?: boolean; parts?: Record<string, number> } // V28: jump, a jump drive fitted; V31: parts, components from the pack
     design?: string
     unlocks?: string
     // V11: a job of the job board, done again and again, and the Trade level it needs
@@ -59,7 +59,7 @@ export function atOutpost(s: ShipState, radius: number, amplitude: number): bool
 const NEEDS: Record<string, ContractList['contracts'][number]['needs']> = { 'first-flight': { complete: true }, 'beacon-iron': { iron: 1 } }
 
 // Why a ship cannot hand in a contract, or '' (the blueprint decides)
-export function handInProblem(id: string, s: ShipState | null, p: Progress | null, blocks: number, c?: ContractList['contracts'][number]): string {
+export function handInProblem(id: string, s: ShipState | null, p: Progress | null, blocks: number, c?: ContractList['contracts'][number], pack?: { parts?: Partial<Record<string, number>> } | null): string {
   if (p?.done[id] && !c?.job) return 'done'
   if (c?.level && (p?.levels.trade ?? 1) < c.level) return `needs Trade level ${c.level}`
   if (!s) return `park a ship within ${OUTPOST_REACH} m of the beacon`
@@ -70,6 +70,8 @@ export function handInProblem(id: string, s: ShipState | null, p: Progress | nul
   if ((s.cargo?.rock ?? 0) < (needs.rock ?? 0)) return `needs ${needs.rock} m³ of rock in the hold`
   if ((s.cargo?.iron ?? 0) < (needs.iron ?? 0)) return `needs ${needs.iron} m³ of iron in the hold`
   if ((s.cargo?.ore ?? 0) < (needs.ore ?? 0)) return `needs ${needs.ore} m³ of ore in the hold`
+  const short = Object.entries(needs.parts ?? {}).filter(([k, n]) => (pack?.parts?.[k] ?? 0) < n)
+  if (short.length) return `needs ${short.map(([k, n]) => `${n} ${k}`).join(' and ')} in your pack`
   return ''
 }
 

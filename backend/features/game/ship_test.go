@@ -1,11 +1,13 @@
 package game_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/game"
+	"github.com/SgtFlame/foundation/backend/features/live/bus"
 )
 
 // V3: a ship is started from a design, its blocks placed, then flown by one pilot at a time
@@ -157,7 +159,7 @@ func TestShipDamage(t *testing.T) {
 
 // V6: contracts handed in with a ship at the outpost pay a skill once
 func TestOutpost(t *testing.T) {
-	if c := game.ContractsOf(); len(c.Contracts) != 10 || c.Giver.Name == "" {
+	if c := game.ContractsOf(); len(c.Contracts) != 11 || c.Giver.Name == "" {
 		t.Fatalf("contracts %+v", c)
 	}
 	st := newStack(t)
@@ -708,4 +710,85 @@ func TestRefine(t *testing.T) {
 	if game.Refines["rock"].Part != "cement" || game.Refines["silica"].Part != "solarCell" {
 		t.Fatalf("refines %+v", game.Refines)
 	}
+}
+
+// V31: the cutter, a chip design: the cutter-chip contract takes components
+// from the pack and unlocks it, and each of its blocks costs components
+func TestCutter(t *testing.T) {
+	d, ok := game.DesignOf("cutter")
+	if !ok || !d.Chip || d.Check() != "" {
+		t.Fatalf("cutter %+v", d)
+	}
+	for _, b := range d.Blocks {
+		if _, ok := game.BlockCosts[b.Type]; !ok {
+			t.Fatalf("no cost for a %s", b.Type)
+		}
+	}
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Cutter moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	if r := st.refused("game.startShip", "k1", map[string]any{"world": world, "design": "cutter", "x": 0, "y": 110, "z": 0, "q": q}); !strings.Contains(r.Common.Message, "design chip") {
+		t.Fatalf("a cutter without its chip: %q", r.Common.Message)
+	}
+	// refine one component in each of seven cabins at once: 4 plates, 3 wire
+	loads := []string{"ferrite", "ferrite", "ferrite", "ferrite", "malachite", "malachite", "malachite"}
+	for i, m := range loads {
+		id := fmt.Sprintf("c%d", i)
+		st.ok("game.startShip", id, map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": float64(i * 6), "q": q})
+		st.ok("game.placeBlock", id, map[string]any{"index": 75})
+		amount := map[string]float64{"ferrite": 0.125, "malachite": 0.1}[m]
+		st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": float64(i * 4), "y": 100, "z": 0, "radius": 1, "took": map[string]any{"dust": 0, "rock": 0, "minerals": map[string]any{m: amount}}})
+		st.ok("game.smelt", id, map[string]any{"what": m})
+	}
+	time.Sleep(7600 * time.Millisecond)
+	var last bus.Result
+	for i := range loads {
+		last = st.ok("game.takeIngots", fmt.Sprintf("c%d", i), map[string]any{})
+	}
+	var pack game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), last.Seq, &pack) || pack.Parts["plate"] != 4 || pack.Parts["wire"] != 3 {
+		t.Fatalf("pack %+v", pack)
+	}
+	// the contract, with a ship parked at the beacon
+	st.ok("game.startShip", "s1", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 110, "z": 0, "q": q})
+	res := st.ok("game.handIn", "s1", map[string]any{"contract": "cutter-chip"})
+	pack = game.Pack{} // a fresh value: unmarshalling keeps map keys the fold deleted
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Parts["plate"] != 0 || pack.Parts["wire"] != 1 {
+		t.Fatalf("pack after the contract %+v", pack)
+	}
+	res = st.ok("game.startShip", "k1", map[string]any{"world": world, "design": "cutter", "x": 0, "y": 110, "z": 8, "q": q})
+	var k game.Ship
+	if !st.read(game.ShipsProjector, game.ShipType+".k1", res.Seq, &k) || k.Blocks != len(d.Blocks) || len(k.Types) != len(d.Blocks) {
+		t.Fatalf("cutter %+v", k)
+	}
+	for i, b := range d.Blocks {
+		if k.Types[i] != b.Type {
+			t.Fatalf("block %d is a %s in the blueprint graph and a %s in designs/cutter.json", i, k.Types[i], b.Type)
+		}
+	}
+	index := func(typ string) int {
+		for i, b := range d.Blocks {
+			if b.Type == typ {
+				return i
+			}
+		}
+		return -1
+	}
+	if r := st.refused("game.placeBlock", "k1", map[string]any{"index": index("armor")}); !strings.Contains(r.Common.Message, "short of plate") {
+		t.Fatalf("armour without plates: %q", r.Common.Message)
+	}
+	if r := st.refused("game.placeBlock", "k1", map[string]any{"index": index("battery")}); !strings.Contains(r.Common.Message, "short of cell") {
+		t.Fatalf("a battery without cells: %q", r.Common.Message)
+	}
+	// the wire left over buys a light
+	res = st.ok("game.placeBlock", "k1", map[string]any{"index": index("light")})
+	pack = game.Pack{}
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Parts["wire"] != 0 {
+		t.Fatalf("a light's wire: %+v", pack)
+	}
+	if r := st.refused("game.placeBlock", "k1", map[string]any{"index": index("light") + 1}); !strings.Contains(r.Common.Message, "short of wire") {
+		t.Fatalf("a second light: %q", r.Common.Message)
+	}
+	// the stock skiff's blocks stay free
+	st.ok("game.placeBlock", "s1", map[string]any{"index": 1})
 }

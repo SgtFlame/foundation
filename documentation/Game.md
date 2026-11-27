@@ -583,6 +583,17 @@ Refining: the second step of *Ships from blocks*. The cabin's forge refines V29'
 - Engine: `craft/Forge.ts` (`nextLoad`: ore first, then the mineral the pack holds most of, then rock of at least `CEMENT_MIN`; `forgeAction` gives `takeParts`; `partsFrom`, `msPer`, `PART_NAMES`). U at the forge loads and takes; the pack line lists the components.
 - Tests: `TestRefine`, `Forge.test.ts`.
 
+## Built in V31 (forge 360)
+
+Blueprints from design chips: the third step of *Ships from blocks*, as the user chose ("blueprints first"). A design earned as a chip lays its outline out as a ghost, and each block costs components (V30) taken from the pack.
+
+- `ShipDesign.Chip` marks such a design; the first is the **cutter** (`designs/cutter.json`, 20 blocks: cockpit, two lights, six armour, gyroscope, battery, solar panel, eight thrusters). `game.startShip` refuses it until the sender's `unlocked.cutter`, and its `started` event carries `types`, the block types by index, kept on the ship (`Ship.Types`; `TestCutter` checks the blueprint's list against the design file).
+- `game.placeBlock` reads the sender's pack for a ship with types: each block costs `game.BlockCosts` (armour 2 plates; cockpit 3 plates and 2 wire; thruster a nozzle, a plate and a wire; gyroscope 2 plates and 3 wire; battery 2 battery cells and a wire; solar panel 2 solar cells and a wire; light a wire; cargo 4 plates), taken with the `placed` event's `pack`, and is refused naming what the pack is short of. Other designs' blocks stay free until free building replaces them.
+- The chip is earned by the outpost's new **cutter-chip** contract: 4 steel plates and 2 copper wire from the sender's pack (`needs.parts`; `game.handIn` reads the pack and its `handedIn` carries the pack's change), paying prospecting and unlocking the cutter.
+- The contract formerly called *Cobalt for the shipyard* is now *Asteroid ore for the shipyard* (its id `cobalt-shipyard` is kept): the user asked not to use cobalt.
+- Engine: `ship/Blueprint.ts` (`BLOCK_COSTS`, `blockCost`, `shortOf`, `costLine`, `pay`, `billFor`); the viewport's outline hint names a chip block's cost, a click on one the pack cannot pay is refused in place, and `handInProblem` checks a contract's parts in the pack.
+- Tests: `TestCutter`, `Blueprint.test.ts`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
