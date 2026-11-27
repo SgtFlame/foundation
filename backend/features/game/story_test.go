@@ -104,4 +104,9 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "stones" || p.Items["starlore"] != 1 {
 		t.Fatalf("stones %+v", p)
 	}
+	// S19: the hedge-witch's cache teaches the yarrow poultice
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "cache", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "cache" || p.Items["hedgecraft"] != 1 {
+		t.Fatalf("cache %+v", p)
+	}
 }

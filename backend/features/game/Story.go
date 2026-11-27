@@ -31,7 +31,7 @@ const (
 
 // StorySteps are the first hour's steps in order (375 › the first hour).
 // S7 adds the first day: the morning's card, foraging and the herbal.
-var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch", "foretold", "watch", "defended", "thanked", "dream", "companion", "stones"}
+var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch", "foretold", "watch", "defended", "thanked", "dream", "companion", "stones", "cache"}
 
 // S10: the step that pays for Wenlan's reading, and the coin it pays
 const (
@@ -49,6 +49,10 @@ const (
 	// lore they give, which makes card readings clearer
 	StepStones = "stones"
 	Starlore   = "starlore"
+	// S19: the hedge-witch's cache at Hawk's Rest, and the hedge-craft
+	// notes in it, which teach the yarrow poultice
+	StepCache  = "cache"
+	Hedgecraft = "hedgecraft"
 )
 
 // StoryItems are what a player may gather in a story (S7: herbs for the herbal).
@@ -134,6 +138,12 @@ func foldStory(f live.Fold) (json.RawMessage, error) {
 			p.Items = map[string]int{}
 		}
 		p.Items[Starlore] = 1
+	}
+	if d.Step == StepCache && !p.Done[StepCache] {
+		if p.Items == nil {
+			p.Items = map[string]int{}
+		}
+		p.Items[Hedgecraft] = 1
 	}
 	if d.Told != "" {
 		p.Told = d.Told

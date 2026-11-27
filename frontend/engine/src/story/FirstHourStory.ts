@@ -48,6 +48,8 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'companion', title: 'Someone to take the flank', how: "The morning after the dream, someone knocks at the cottage door at Hawk's Rest. Answer, and ask them to walk with you." },
   // S18: the Nine Sisters
   { id: 'stones', title: 'The Nine Sisters', how: 'On a night of the lesser full moon (the almanac, M, shows when), stand at the heart of the ring of nine stones by the signpost.' },
+  // S19: the hedge-witch's cache
+  { id: 'cache', title: "The hedge-witch's cache", how: "Back at Hawk's Rest, listen for a draught (hold F to focus your senses) and look by the box bed." },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

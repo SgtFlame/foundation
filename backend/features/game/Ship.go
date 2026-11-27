@@ -27,15 +27,15 @@ const (
 	ShipsProjector = "game.ships"
 	// WorldShipsProjector keeps the same ships keyed <worldId>.<shipId>, for game.worldShips
 	WorldShipsProjector = "game.worldShips"
-	EventShipStarted    = "started" // {world, design, x, y, z, q, blocks}
-	EventBlockPlaced    = "placed"  // {world, index}
-	EventShipFlown      = "flown"   // {world, x, y, z, q, v, pilot, charge?}
-	EventShipLoaded     = "loaded"  // {world, cargo: {dust, rock}, pack: {dust, rock}} (V4: the pack's change, negative)
-	EventShipRefined    = "refined" // {world, rock, iron, charge} (V4: the changes)
-	EventShipDamaged    = "damaged" // {world, blocks} (V5: the indices a crash broke)
-	EventShipCrewed     = "crewed"  // {world, user, aboard} (V7: who boards or leaves the crew seat)
-	EventSlept          = "slept"   // {world} (V13: the sender slept in this cabin's bed: their home)
-	EventCrafted        = "crafted" // {world, item, pack} (V14: the sender crafted a tool at this cabin's bench from their pack)
+	EventShipStarted    = "started"  // {world, design, x, y, z, q, blocks}
+	EventBlockPlaced    = "placed"   // {world, index}
+	EventShipFlown      = "flown"    // {world, x, y, z, q, v, pilot, charge?}
+	EventShipLoaded     = "loaded"   // {world, cargo: {dust, rock}, pack: {dust, rock}} (V4: the pack's change, negative)
+	EventShipRefined    = "refined"  // {world, rock, iron, charge} (V4: the changes)
+	EventShipDamaged    = "damaged"  // {world, blocks} (V5: the indices a crash broke)
+	EventShipCrewed     = "crewed"   // {world, user, aboard} (V7: who boards or leaves the crew seat)
+	EventSlept          = "slept"    // {world} (V13: the sender slept in this cabin's bed: their home)
+	EventCrafted        = "crafted"  // {world, item, pack} (V14: the sender crafted a tool at this cabin's bench from their pack)
 	EventSmelting       = "smelting" // {world, ore, at, pack} (V20: ore from the sender's pack put in this cabin's forge at Unix ms at)
 	EventIngots         = "ingots"   // {world, iron, pack} (V20: the forge's iron taken into the sender's pack; the forge is empty again)
 )
@@ -79,10 +79,10 @@ type Ship struct {
 	Crew []string `json:"crew"`
 	// V4: what its hold carries (m³) and its battery's charge (0 to 1);
 	// a design without power blocks has no charge to keep
-	Cargo     Cargo     `json:"cargo"`
-	Charge    float64   `json:"charge"`
+	Cargo  Cargo   `json:"cargo"`
+	Charge float64 `json:"charge"`
 	// V20: a cabin's forge: the ore smelting in it and since when (Unix ms)
-	Forge *Forge `json:"forge,omitempty"`
+	Forge     *Forge    `json:"forge,omitempty"`
 	Seq       uint64    `json:"seq"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }

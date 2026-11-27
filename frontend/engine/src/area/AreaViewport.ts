@@ -19,10 +19,11 @@ import { dragMarks, drawCard, herbSpots, howl, nextStep, showCard, showHerbal, S
 import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../story/DayCard.ts'
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
+import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
 import { HEART, nextWaking, ringSpot, STARLORE_LINE, starlorePool, stonePoints, STONES_MEMORY, stonesWake } from '../story/Stones.ts'
 import { clarity, ditchSpot, ReadingScene, wenlanAnswer, type Told } from '../story/Reading.ts'
 import { canSleep, CLOCK_START, clockText, FIRST_NIGHT, isDay, nightOf, showAlmanac, sleep, stepClock, type Clock } from '../story/Clock.ts'
-import { BODY_START, BodyHud, breathe, BreathPrompt, humPool, rounded as roundBody, showCooking, stepBody, type Body } from '../story/Hum.ts'
+import { BODY_START, BodyHud, breathe, BreathPrompt, DISHES, humPool, rounded as roundBody, showCooking, stepBody, type Body } from '../story/Hum.ts'
 import { ashPile, buildModel, CharacterModel, interiorShell, material } from './Models.ts'
 import { fit, pieceOf, turned, type AreaDef, type Dialogue, type Npc, type PieceSet, type Placement } from './PieceSet.ts'
 
@@ -243,6 +244,7 @@ export class AreaViewport {
   private stonesAwake: boolean | null = null
   private ringHeart: { x: number; z: number } | null = null
   private ringVisited = false
+  private cacheOpen = false // S19: the cache's notes are being read
   private signature: Point | null = null
   private barnDoor: Point | null = null
   private resumeAt: { area: string; at: Point } | null = null
@@ -1694,13 +1696,17 @@ export class AreaViewport {
       if ((st.items[d.herb] ?? 0) < 1) return
       st.items[d.herb]--
       st.body = cookWith(st.body, d, this.dayEffect())
+      // S19: the yarrow poultice closes the dream's wound at once
+      const closes = d.id === POULTICE.id && !!st.items.wound
+      if (closes) st.items.wound = 0
       const p = this.player()
       st.done.cook = true
       this.ateHot = true
       this.opts.onStory?.({ step: 'cook', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: d.herb, ...this.stateToSave() })
+      if (closes) this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: 'wound', ...this.stateToSave() })
       this.showStory()
-      this.say(`${d.title}. ${d.line}`)
-    })
+      this.say(`${d.title}. ${d.line}${closes ? ' The ache in your side is gone.' : ''}`)
+    }, st.items.hedgecraft ? [...DISHES, POULTICE] : DISHES)
   }
 
   // A fight's cadence spends a Hum, once stillness has been learned
@@ -1937,8 +1943,25 @@ export class AreaViewport {
       }
     }
     this.stepStones(p)
+    this.stepCache(p)
     this.stepSenses(p)
     this.savePlace()
+  }
+
+  // S19: the hedge-witch's cache by the box bed at Hawk's Rest, once the stones have remembered
+  private stepCache(p: { x: number; z: number }): void {
+    const st = this.story!
+    if (!this.blessed() || !cacheReady(st.done) || this.cacheOpen) return
+    const c = cacheSpot(Object.values(this.area.pieces), this.set.cell)
+    if (!c || Math.hypot(p.x - c.x, p.z - c.z) > CACHE_REACH) return
+    this.cacheOpen = true
+    this.path = []
+    showDream(this.container, CACHE_NOTES, () => {
+      this.cacheOpen = false
+      st.items.hedgecraft = 1
+      this.reach('cache')
+      this.say(CACHE_LINE)
+    })
   }
 
   // S18: the Nine Sisters, on the open ground nearest the signpost, once
@@ -2018,6 +2041,10 @@ export class AreaViewport {
   // S12: what there is to smell and hear in the story's area now
   senseSources(): Source[] {
     const st = this.story
+    if (st && this.blessed() && cacheReady(st.done)) {
+      const c = cacheSpot(Object.values(this.area.pieces), this.set.cell)
+      return c ? [{ id: 'cache', ...c, sense: 'sound', text: 'A draught, and a board that knocks hollow', from: 'by the box bed', range: 14 }] : []
+    }
     if (!st || this.area.id !== st.area) return []
     const out: Source[] = []
     if (st.done.howl && !st.done.signature && this.signature) {

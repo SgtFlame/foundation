@@ -2,8 +2,8 @@ package game_test
 
 import (
 	"strings"
-	"time"
 	"testing"
+	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/game"
 )

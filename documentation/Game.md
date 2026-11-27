@@ -410,6 +410,15 @@ The Nine Sisters†, the design's ring of nine lichened standing stones where "t
 - **Remembering**: at the ring's heart on such a night, the ground gives up a memory (`STONES_MEMORY`, shown like a dream): the queen of the First Flight, silver charms in her braids, naming the winter stars for a child and telling her the Wanderer is a world, not a star. It is the new last step **`stones`** (`game.reachStory` takes it), and `game.story`'s `items.starlore` is 1. On other nights the ring says how many nights until the lesser moon is full.
 - **Star lore**: on nights the lesser moon is more than half lit, the Hum pool holds one more (`starlorePool`).
 
+## Built in S19 (forge 375)
+
+The hedge-witch's cache, from the design's Hawk's Rest (a hedge-witch's cottage with a hidden floor cache).
+
+- **Finding it** (`story/Cache.ts`): once the Nine Sisters have remembered (`stones`), the senses layer in the empty cottage at Hawk's Rest hears *a draught, and a board that knocks hollow* by the box bed (`cacheSpot`, `cacheReady`). Walking up to the bed lifts the loose board: the hedge-witch's notes (`CACHE_NOTES`, shown like a dream) and the new last step **`cache`**, with `game.story`'s `items.hedgecraft` 1.
+- **The yarrow poultice** (`POULTICE`): with the notes, C at a hearth also offers a poultice from the yarrow gathered on the first morning (until now unused). It takes 40 Chill off and closes the dream's wound at once (`use: "wound"`), without waiting for a warm night. `showCooking` takes the dishes it offers.
+
+A note from the user on S18 (2026-11-27): in the books the Nine Sisters wake when an Elder is near (Kasimir, Anna, the Stranger); the lesser full moon is a second way to wake them, which does not conflict.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
