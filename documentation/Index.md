@@ -43,3 +43,4 @@ What is built. Each document describes a feature as it works now, with what was 
 | [Game.md](Game.md) › *V8, first part* | A first-hour guide of nine steps worked out from the server's state (forge 360 V8) |
 | [Game.md](Game.md) › *V8, second part* | A drop pod lands a new player by the outpost, and `game.standAt` saves where they stand (forge 360 V8) |
 | [BuildHistory.md](BuildHistory.md) | The plans' dependencies, the seams that broke their cycles, and each tracer-bullet slice with what it decided |
+| [ControlPlane.md](ControlPlane.md) | Forge iteration 20: NATS accounts and credentials as decentralized JWTs, and (as built) the root tenant, the daemons, service identities and software distribution |
