@@ -144,3 +144,31 @@ func newRecord(ctx context.Context, feature, provider, model string, err error, 
 	}
 	return rec
 }
+
+// ImageProvider records every image call of p (forge 35f-7) as a usage
+// record of feature "image", priced from ai.models by its tokens: an
+// image bills as output tokens.
+func ImageProvider(p providers.Images, name string, r *Recorder) providers.Images {
+	return &imageProvider{Images: p, name: name, recorder: r}
+}
+
+type imageProvider struct {
+	providers.Images
+	name     string
+	recorder *Recorder
+}
+
+func (i *imageProvider) GenerateImages(ctx context.Context, in providers.ImageInput) (providers.ImageOutput, error) {
+	start := time.Now()
+	out, err := i.Images.GenerateImages(ctx, in)
+	model := out.Model
+	if model == "" {
+		model = in.Model
+	}
+	rec := newRecord(ctx, "image", i.name, model, err, start)
+	rec.InputTokens, rec.OutputTokens = out.Usage.InputTokens, out.Usage.OutputTokens
+	if i.recorder != nil {
+		i.recorder.Record(ctx, rec, aisettings.Tokens{Input: out.Usage.InputTokens, Output: out.Usage.OutputTokens})
+	}
+	return out, err
+}

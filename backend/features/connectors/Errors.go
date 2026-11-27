@@ -16,10 +16,14 @@ const (
 	CodeRateLimited  = "rateLimited"
 	CodeUnavailable  = "unavailable"
 	CodeNotSupported = "notSupported"
+	// CodeRefused is the service declining on its own policy, such as an
+	// image model's safety refusal (forge 35f-7); trying again with the
+	// same request does not help.
+	CodeRefused = "refused"
 )
 
 // Codes are every error code, in the order they are documented.
-var Codes = []string{CodeAuth, CodeNotFound, CodeConflict, CodeInvalid, CodeRateLimited, CodeUnavailable, CodeNotSupported}
+var Codes = []string{CodeAuth, CodeNotFound, CodeConflict, CodeInvalid, CodeRateLimited, CodeUnavailable, CodeNotSupported, CodeRefused}
 
 // Error is a typed connector error, as a reply carries it. Its
 // Retryable and RetryAfter methods are what the job runner reads
