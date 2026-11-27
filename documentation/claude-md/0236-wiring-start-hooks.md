@@ -1,0 +1,1 @@
+A feature's `wiring.Feature.Start(ctx, wiring.Started{Store, Apps, Bus, Tenants})` runs once the live core and services are up, before requests are served (`wiring.StartAll` in `serve`), for idempotent start work such as seeding a library app in every tenant (forge 30c: `tasks.SeedApp`); it runs in every process at every start.
