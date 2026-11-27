@@ -403,9 +403,12 @@ func contributeConfig(reg *extensions.Registry) {
 		Params:      json.RawMessage(`{"type":"object","properties":{` + configParam + `}}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{}`)},
 		Action:      ActionRead,
-		Run: live.ListOf(VersionProjector, func(f live.Feed) (string, error) {
-			return VersionType + "." + configKey(f) + "-*", nil
-		}),
+		// A KV pattern matches whole tokens only, so every version is
+		// watched and those of other configurations dropped.
+		Run: func(f live.Feed) error {
+			prefix := VersionType + "." + configKey(f) + "-"
+			return live.ListOf(VersionProjector, func(live.Feed) (string, error) { return VersionType + ".*", nil })(prefixFeed{f, prefix})
+		},
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "infra.version", Source: source}, Title: "A configuration version",
@@ -444,4 +447,30 @@ func DecodeDocument(raw json.RawMessage) (Document, error) {
 		return d, err
 	}
 	return d.Normalized(), nil
+}
+
+// prefixFeed passes on only the keys with its prefix.
+type prefixFeed struct {
+	live.Feed
+	prefix string
+}
+
+func (p prefixFeed) Snapshot(data any, pos live.Position) {
+	if m, ok := data.(map[string]json.RawMessage); ok {
+		kept := map[string]json.RawMessage{}
+		for k, v := range m {
+			if strings.HasPrefix(k, p.prefix) {
+				kept[k] = v
+			}
+		}
+		data = kept
+	}
+	p.Feed.Snapshot(data, pos)
+}
+
+func (p prefixFeed) Change(d live.Delta, pos live.Position) {
+	if d.Key != "" && !strings.HasPrefix(d.Key, p.prefix) {
+		d = live.Delta{Op: "reached"}
+	}
+	p.Feed.Change(d, pos)
 }

@@ -13,4 +13,5 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	contributeCompute(reg)
 	contributeResources(reg)
 	contributePlans(reg, deps)
+	contributeDescribe(reg, deps)
 }

@@ -87,6 +87,16 @@ func TestApplyDriftAndRollback(t *testing.T) {
 	// A host vanishes: drift finds it; correct applies the fix, whose
 	// first attempt fails and is resumed.
 	f.control("vanish", m{"host": "west-general-2"})
+	// infra.describe shows it missing, the rest present, by site.
+	top, err := infra.Describe(root(), f.reg, f.infra, "", -1)
+	if err != nil || top.Version != v1 || len(top.Sites) != 1 || top.Counts[infra.StateMissing] != 1 || top.Counts[infra.StatePresent] != 3 {
+		t.Fatalf("describe = %+v %v", top, err)
+	}
+	for _, r := range top.Sites[0].Resources {
+		if (r.ID == "host:west/general/2") != (r.State == infra.StateMissing) {
+			t.Fatalf("%s is %s", r.ID, r.State)
+		}
+	}
 	dr, err := infraapply.CheckDrift(root(), f.reg, f.apply, "")
 	if err != nil || len(dr.Plan.Steps) != 1 || dr.Applied != "" {
 		t.Fatalf("drift = %+v %v", dr, err)

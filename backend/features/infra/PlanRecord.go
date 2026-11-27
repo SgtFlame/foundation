@@ -172,12 +172,11 @@ func headAtLeast(args features.ServiceArgs, deps Deps, config string, n int) boo
 	return json.Unmarshal(v.Value, &c) == nil && c.Head >= n
 }
 
-func MakePlan(args features.ServiceArgs, reg *extensions.Registry, deps Deps, config string, version int) (PlanRecord, error) {
+// LoadDocument reads a configuration's draft (version 0) or one of its
+// versions, waiting a little for a version committed a moment ago.
+func LoadDocument(args features.ServiceArgs, deps Deps, config string, version int) (Document, error) {
 	if config == "" {
 		config = DefaultConfig
-	}
-	if deps.Store == nil || deps.Bus == nil {
-		return PlanRecord{}, fmt.Errorf("planning is not available")
 	}
 	tenant := args.Principal.TenantID
 	if s, ok := deps.Store.(interface {
@@ -185,20 +184,19 @@ func MakePlan(args features.ServiceArgs, reg *extensions.Registry, deps Deps, co
 	}); ok {
 		_ = s.Settle(args.Context(), tenant, ConfigProjector) // read the draft as last committed
 	}
-	var doc Document
 	if version == 0 {
 		v, ok, err := deps.Store.Get(args.Context(), tenant, ConfigProjector, ConfigType+"."+config)
 		if err != nil {
-			return PlanRecord{}, err
+			return Document{}, err
 		}
 		if !ok {
-			return PlanRecord{}, fmt.Errorf("there is no configuration %s", config)
+			return Document{}, fmt.Errorf("there is no configuration %s", config)
 		}
 		var c Config
 		if err := json.Unmarshal(v.Value, &c); err != nil {
-			return PlanRecord{}, err
+			return Document{}, err
 		}
-		doc = c.Draft
+		return c.Draft, nil
 	} else {
 		// A version committed a moment ago may not be folded yet: its
 		// projector follows the stream on its own, so wait a little for
@@ -208,22 +206,35 @@ func MakePlan(args features.ServiceArgs, reg *extensions.Registry, deps Deps, co
 		for wait := 0; err == nil && !ok && wait < 50 && headAtLeast(args, deps, config, version); wait++ {
 			select {
 			case <-args.Context().Done():
-				return PlanRecord{}, args.Context().Err()
+				return Document{}, args.Context().Err()
 			case <-time.After(50 * time.Millisecond):
 			}
 			v, ok, err = deps.Store.Get(args.Context(), tenant, VersionProjector, key)
 		}
 		if err != nil {
-			return PlanRecord{}, err
+			return Document{}, err
 		}
 		if !ok {
-			return PlanRecord{}, fmt.Errorf("there is no version %d", version)
+			return Document{}, fmt.Errorf("there is no version %d", version)
 		}
 		var ver Version
 		if err := json.Unmarshal(v.Value, &ver); err != nil {
-			return PlanRecord{}, err
+			return Document{}, err
 		}
-		doc = ver.Document
+		return ver.Document, nil
+	}
+}
+
+func MakePlan(args features.ServiceArgs, reg *extensions.Registry, deps Deps, config string, version int) (PlanRecord, error) {
+	if config == "" {
+		config = DefaultConfig
+	}
+	if deps.Store == nil || deps.Bus == nil {
+		return PlanRecord{}, fmt.Errorf("planning is not available")
+	}
+	doc, err := LoadDocument(args, deps, config, version)
+	if err != nil {
+		return PlanRecord{}, err
 	}
 	desired, kinds := Expand(reg, doc)
 	act, err := ReadActual(args, deps, config, doc)

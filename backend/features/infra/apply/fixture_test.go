@@ -56,18 +56,6 @@ type fixture struct {
 	n     int
 }
 
-// compute calls the test server's session directly.
-type compute struct{ s adapter.Session }
-
-func (c compute) Call(args features.ServiceArgs, account infra.Account, op string, in any) (json.RawMessage, error) {
-	raw, _ := json.Marshal(in)
-	out, err := c.s.Call(adapter.Context{Context: context.Background(), Args: args, Contract: infra.ComputeRef, Operation: op}, op, raw)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // newFixture is the infrastructure app installed in the root tenant, the
 // nodes and the Infrastructure test server.
 func newFixture(t *testing.T) *fixture {
@@ -137,8 +125,8 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	infraDeps = infranodes.Deps{Bus: b, Data: dataDeps, Compute: compute{sess}}
-	ideps = infra.Deps{Bus: b, Store: p, Compute: compute{sess}, Actual: infraapply.RecordsActual(reg, func() infranodes.Deps { return infraDeps })}
+	infraDeps = infranodes.Deps{Bus: b, Data: dataDeps, Compute: infratest.Compute{Session: sess}}
+	ideps = infra.Deps{Bus: b, Store: p, Compute: infratest.Compute{Session: sess}, Actual: infraapply.RecordsActual(reg, func() infranodes.Deps { return infraDeps })}
 	f := &fixture{t: t, reg: reg, data: dataDeps, deps: infraDeps, sess: sess, types: map[string]cognition.NodeType{},
 		bus: b, p: p, infra: ideps, apply: infraapply.Deps{Infra: ideps, Nodes: infraDeps}}
 	for _, nt := range cognition.Nodes.All(reg) {
@@ -178,7 +166,7 @@ func (f *fixture) record(entity, id string) data.Record {
 }
 
 func (f *fixture) hosts() []infra.ProviderHost {
-	raw, _ := compute{f.sess}.Call(root(), infra.Account{}, "host.list", map[string]any{})
+	raw, _ := infratest.Compute{Session: f.sess}.Call(root(), infra.Account{}, "host.list", map[string]any{})
 	var l struct{ Hosts []infra.ProviderHost }
 	_ = json.Unmarshal(raw, &l)
 	return l.Hosts
