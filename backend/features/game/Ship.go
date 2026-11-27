@@ -42,6 +42,7 @@ const (
 	EventFabricated     = "fabricated"  // {world, item, pack} (V23: the fabricator's work taken into the sender's pack)
 	EventKitFitted      = "kitFitted"   // {world, boost, pack} (V24: an ion thruster kit from the sender's pack fitted to this ship)
 	EventDriveFitted    = "driveFitted" // {world, pack} (V27: a jump drive from the sender's pack fitted to this ship)
+	EventAssembled      = "assembled"   // {world, block, count} (V37: the block works assembled finished blocks into a storage building)
 	EventStored         = "stored"      // {world, stock, pack?} (V36: what a storage building gained or gave, by name, and the sender's pack's change)
 )
 
@@ -67,21 +68,24 @@ type ShipDesign struct {
 // BlockCosts is what each block of a chip design costs in components
 // (V31; the engine's ship/Blueprint.ts and cmd-game-placeBlock agree).
 var BlockCosts = map[string]map[string]float64{
-	"armor":    {"plate": 2},
-	"cockpit":  {"plate": 3, "wire": 2},
-	"thruster": {"nozzle": 1, "plate": 1, "wire": 1},
-	"gyro":     {"plate": 2, "wire": 3},
-	"battery":  {"cell": 2, "wire": 1},
-	"solar":    {"solarCell": 2, "wire": 1},
-	"light":    {"wire": 1},
-	"cargo":    {"plate": 4},
-	"refinery": {"plate": 6, "wire": 4},   // V32
-	"concrete": {"cement": 2},             // V33
-	"deck":     {"plate": 1},              // V34: the bay floor's
-	"clamp":    {"plate": 4, "wire": 2},   // V34
-	"kiln":     {"plate": 3, "cement": 2}, // V35: the refinery's
-	"control":  {"plate": 2, "wire": 3},
-	"rack":     {"plate": 3}, // V36: storage's
+	"armor":     {"plate": 2},
+	"cockpit":   {"plate": 3, "wire": 2},
+	"thruster":  {"nozzle": 1, "plate": 1, "wire": 1},
+	"gyro":      {"plate": 2, "wire": 3},
+	"battery":   {"cell": 2, "wire": 1},
+	"solar":     {"solarCell": 2, "wire": 1},
+	"light":     {"wire": 1},
+	"cargo":     {"plate": 4},
+	"refinery":  {"plate": 6, "wire": 4},   // V32
+	"concrete":  {"cement": 2},             // V33
+	"deck":      {"plate": 1},              // V34: the bay floor's
+	"clamp":     {"plate": 4, "wire": 2},   // V34
+	"kiln":      {"plate": 3, "cement": 2}, // V35: the refinery's
+	"control":   {"plate": 2, "wire": 3},
+	"rack":      {"plate": 3},                         // V36: storage's
+	"assembler": {"plate": 4, "wire": 3, "nozzle": 1}, // V37: the block works'
+	"press":     {"plate": 6, "cement": 2},
+	"arm":       {"plate": 2, "wire": 2, "cell": 1},
 }
 
 // DesignBlock is one block of a design: armor, cockpit, gyro, light,
@@ -232,7 +236,7 @@ func (d ShipDesign) Check() string {
 		switch b.Type {
 		case "cockpit":
 			cockpits++
-		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar", "log", "door", "bed", "bench", "forge", "fabricator", "concrete", "deck", "clamp", "kiln", "control", "rack":
+		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar", "log", "door", "bed", "bench", "forge", "fabricator", "concrete", "deck", "clamp", "kiln", "control", "rack", "assembler", "press", "arm":
 		case "thruster":
 			switch b.Push {
 			case "up", "down", "forward", "back", "left", "right":

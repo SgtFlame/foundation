@@ -184,4 +184,10 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "council" {
 		t.Fatalf("council %+v", p)
 	}
+	// S32: the north road past Ashby, to the ford
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "northroad", "area": farm, "x": 9, "z": 3})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "northroad" {
+		t.Fatalf("northroad %+v", p)
+	}
 }

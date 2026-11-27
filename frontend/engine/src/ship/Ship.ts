@@ -11,7 +11,7 @@ export type Vec3 = { x: number; y: number; z: number }
 export type Quat = [number, number, number, number] // x, y, z, w
 
 export interface DesignBlock {
-  type: 'armor' | 'cockpit' | 'gyro' | 'light' | 'thruster' | 'battery' | 'cargo' | 'refinery' | 'solar' | 'log' | 'door' | 'bed' | 'bench' | 'forge' | 'fabricator' | 'concrete' | 'deck' | 'clamp' | 'kiln' | 'control' | 'rack' // V36: storage's; V35: the refinery's; V34: the bay floor's; V33: the landing pad's; V13: a building's (V14: the bench, V20: the forge, V23: the fabricator)
+  type: 'armor' | 'cockpit' | 'gyro' | 'light' | 'thruster' | 'battery' | 'cargo' | 'refinery' | 'solar' | 'log' | 'door' | 'bed' | 'bench' | 'forge' | 'fabricator' | 'concrete' | 'deck' | 'clamp' | 'kiln' | 'control' | 'rack' | 'assembler' | 'press' | 'arm' // V37: the block works'; V36: storage's; V35: the refinery's; V34: the bay floor's; V33: the landing pad's; V13: a building's (V14: the bench, V20: the forge, V23: the fabricator)
   at: [number, number, number]
   push?: 'up' | 'down' | 'forward' | 'back' | 'left' | 'right'
 }
@@ -53,7 +53,7 @@ export interface ShipState {
   updatedAt?: string
 }
 
-export const BLOCK_MASS: Record<DesignBlock['type'], number> = { armor: 120, cockpit: 200, gyro: 150, light: 20, thruster: 80, battery: 150, cargo: 100, refinery: 300, solar: 30, log: 200, door: 60, bed: 80, bench: 90, forge: 400, fabricator: 250, concrete: 300, deck: 150, clamp: 400, kiln: 500, control: 120, rack: 180 }
+export const BLOCK_MASS: Record<DesignBlock['type'], number> = { armor: 120, cockpit: 200, gyro: 150, light: 20, thruster: 80, battery: 150, cargo: 100, refinery: 300, solar: 30, log: 200, door: 60, bed: 80, bench: 90, forge: 400, fabricator: 250, concrete: 300, deck: 150, clamp: 400, kiln: 500, control: 120, rack: 180, assembler: 450, press: 600, arm: 160 }
 
 // Power (V4, a thin 367): a design with a battery or solar panels runs on
 // power. Thrusters draw by how hard they push, the gyroscope while turning;

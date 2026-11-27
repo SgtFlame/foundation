@@ -109,6 +109,15 @@
       "xp": 120,
       "needs": {"parts": {"plate": 6, "wire": 4, "cement": 2}},
       "unlocks": "refinehouse"
+    },
+    {
+      "id": "blockworks-chip",
+      "title": "A blueprint chip for the block works",
+      "description": "With a refinery and storage running, the quartermaster will trust you with the block works' blueprint: bring 10 steel plates, 6 coils of copper wire and 2 battery cells in your pack, with a ship parked within 40 m of the beacon. The block works assembles components from storage into finished blocks (forge 360 V37).",
+      "skill": "prospecting",
+      "xp": 150,
+      "needs": {"parts": {"plate": 10, "wire": 6, "cell": 2}},
+      "unlocks": "blockworks"
     }
   ]
 }

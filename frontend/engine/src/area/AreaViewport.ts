@@ -21,6 +21,7 @@ import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Reme
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
 import { COUNCIL_LINE, COUNCIL_LINES, councilReady, isHawksRest } from '../story/Council.ts'
+import { NORTH_LINE, NORTH_SENSE, northRoadReady, waymarkAt, waymarkSpots } from '../story/NorthRoad.ts'
 import { TOLD_LINE, ASHBY_LINE, ASHBY_SENSE, ashbyReady, isAshby, remnantAt, remnantSpots, TRACK_LINE, TRACK_REACH, TRACK_SENSE, trackPrints, trackReady } from '../story/Ashby.ts'
 import { WELL_LINE, WELL_REACH, WELL_SENSE, WELL_WARD_LINE, wellReady, wellSpot } from '../story/Well.ts'
 import { bankSageReady, bankSageSpot, FARM_WARD_LINE, FARM_WARDED_NIGHT, HEARTH_REACH, HEARTH_WARD_LINE, hearthStonesReady, hearthWarded, hearthWardMissing, hearthWardReady, nextHearthWard, SAGE_LINE, SAGE_REACH, wardSpots } from '../story/HearthWard.ts'
@@ -2261,6 +2262,61 @@ export class AreaViewport {
         g.position.set(r.x, 0, r.z)
         this.marks.add(g)
       }
+      if (st.done.council) this.drawNorthRoad()
+    }
+  }
+
+  // S32: the north road's waymarks, from the end of Ashby's furrows to the
+  // area's north edge
+  private northSeen = new Set<string>()
+  private waymarks() {
+    const f = remnantSpots(this.area.width, this.area.depth, this.set.cell).find((r) => r.id === 'furrows')!
+    return waymarkSpots(f.x, f.z - 6, 2)
+  }
+  private drawNorthRoad(): void {
+    const dark = new THREE.MeshBasicNodeMaterial({ color: 0x15171c })
+    const wood = new THREE.MeshStandardNodeMaterial({ color: 0x5b4330, roughness: 1 })
+    const rope = new THREE.MeshStandardNodeMaterial({ color: 0xb59a6a, roughness: 1 })
+    const ice = new THREE.MeshStandardNodeMaterial({ color: 0x9fb8c8, roughness: 0.2 })
+    const ws = this.waymarks()
+    // the furrows run on up the road between the waymarks
+    const top = ws.at(-1)!.z
+    const from = ws[0].z + (ws[0].z - top) * 0.25
+    for (let k = -3; k <= 3; k++) {
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(0.12, from - top).rotateX(-Math.PI / 2), dark)
+      f.position.set(ws[0].x - ws[0].side + k * 0.35, 0.04, (from + top) / 2)
+      this.marks.add(f)
+    }
+    for (const w of ws) {
+      const g = new THREE.Group()
+      if (w.id === 'camp') {
+        for (let k = 0; k < 3; k++) g.add(ashPile().translateX(-1.5 + k * 1.5).translateZ(-1.2))
+        for (let k = 0; k < 8; k++) {
+          const h = new THREE.Mesh(new THREE.CircleGeometry(0.35, 10).rotateX(-Math.PI / 2), dark)
+          h.scale.set(1, 1, 2)
+          h.position.set(-2 + (k % 4) * 1.3, 0.03, 0.8 + Math.floor(k / 4) * 1.2)
+          g.add(h)
+        }
+      } else if (w.id === 'post') {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.3, 0.18), wood)
+        post.position.y = 0.65
+        const coil = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.035, 6, 14).rotateX(Math.PI / 2), rope)
+        coil.position.y = 0.8
+        g.add(post, coil)
+      } else if (w.id === 'joined') {
+        for (let k = 0; k < 5; k++) {
+          const f = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 6).rotateX(-Math.PI / 2), dark)
+          f.rotation.y = -0.9
+          f.position.set(2 + k * 0.3, 0.04, -k * 0.2)
+          g.add(f)
+        }
+      } else {
+        const river = new THREE.Mesh(new THREE.PlaneGeometry(9, 2.2).rotateX(-Math.PI / 2), ice)
+        river.position.y = 0.03
+        g.add(river)
+      }
+      g.position.set(w.x, 0, w.z)
+      this.marks.add(g)
     }
   }
 
@@ -2288,6 +2344,19 @@ export class AreaViewport {
         this.reach('ashby')
         this.say(`${r.text} ${ASHBY_LINE}`)
       } else this.say(r.text)
+      return
+    }
+    if (this.area.id !== st.area && isAshby(this.area.name) && northRoadReady(st.done)) {
+      const w = waymarkAt(this.waymarks(), p)
+      if (!w || this.northSeen.has(w.id)) return
+      this.northSeen.add(w.id)
+      if (w.id === 'ford' && this.northSeen.size >= 4) {
+        this.reach('northroad')
+        this.say(`${w.text} ${NORTH_LINE}`)
+      } else if (w.id === 'ford') {
+        this.northSeen.delete('ford')
+        this.say(`${w.text} You have come up the road too fast: go back and look at what you passed.`)
+      } else this.say(w.text)
     }
   }
 
@@ -2434,6 +2503,12 @@ export class AreaViewport {
       return remnantSpots(this.area.width, this.area.depth, this.set.cell)
         .filter((r) => !this.ashbySeen.has(r.id))
         .map((r): Source => (r.id === 'door' ? { id: `ashby-${r.id}`, x: r.x, z: r.z, sense: 'sound', text: 'A door knocking on one hinge', from: 'in the lane', range: 26 } : { id: `ashby-${r.id}`, x: r.x, z: r.z, sense: 'smell', text: r.id === 'table' ? 'Cold ash and old stew' : ASHBY_SENSE, from: 'in the lane', range: 26 }))
+    }
+    if (st && this.area.id !== st.area && isAshby(this.area.name) && northRoadReady(st.done) && !this.set.interior) {
+      // S32: the north road, sensed from the village
+      return this.waymarks()
+        .filter((w) => !this.northSeen.has(w.id))
+        .map((w): Source => ({ id: `north-${w.id}`, x: w.x, z: w.z, sense: w.id === 'ford' ? 'sound' : 'smell', text: w.id === 'ford' ? 'Water running under ice' : NORTH_SENSE, from: 'up the north road', range: 30 }))
     }
     if (!st || this.area.id !== st.area) return []
     const out: Source[] = []

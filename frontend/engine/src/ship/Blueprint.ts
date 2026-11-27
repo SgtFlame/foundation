@@ -27,12 +27,17 @@ export const BLOCK_COSTS: Record<string, Cost> = {
   kiln: { plate: 3, cement: 2 }, // V35: the refinery's
   control: { plate: 2, wire: 3 },
   rack: { plate: 3 }, // V36: storage's
+  assembler: { plate: 4, wire: 3, nozzle: 1 }, // V37: the block works'
+  press: { plate: 6, cement: 2 },
+  arm: { plate: 2, wire: 2, cell: 1 },
 }
 
 // What a block of a ship costs: nothing unless the ship keeps chip types
-export function blockCost(types: readonly string[] | undefined, index: number): { type: string; cost: Cost } | null {
+// (V37: or nothing when the pack carries that block finished)
+export function blockCost(types: readonly string[] | undefined, index: number, blocks?: Partial<Record<string, number>>): { type: string; cost: Cost; finished?: boolean } | null {
   const type = types?.[index]
-  return type ? { type, cost: BLOCK_COSTS[type] ?? {} } : null
+  if (!type) return null
+  return (blocks?.[type] ?? 0) >= 1 ? { type, cost: {}, finished: true } : { type, cost: BLOCK_COSTS[type] ?? {} }
 }
 
 // The parts a pack is short of for a cost, by name

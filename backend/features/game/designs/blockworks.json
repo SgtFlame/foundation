@@ -1,0 +1,154 @@
+{
+  "id": "blockworks",
+  "title": "Block works",
+  "description": "The block works (forge 360 V37, the third industry building): a concrete floor with an assembler, a press, two robot arms and two lamps, laid out from its blueprint chip (the blockworks-chip contract). Each concrete block costs 2 bags of cement, the assembler 4 steel plates, 3 copper wire and a tungsten nozzle, the press 6 plates and 2 cement, each arm 2 plates, 2 wire and a battery cell, each lamp a wire. Finished, it assembles components from a storage building within 30 m into finished blocks kept in that storage (game.assemble), which a chip design's block takes whole in place of its components.",
+  "blockSize": 1,
+  "static": true,
+  "chip": true,
+  "blocks": [
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        1
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        2
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        -1,
+        0,
+        3
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        0,
+        0,
+        3
+      ]
+    },
+    {
+      "type": "concrete",
+      "at": [
+        1,
+        0,
+        3
+      ]
+    },
+    {
+      "type": "assembler",
+      "at": [
+        0,
+        1,
+        1
+      ]
+    },
+    {
+      "type": "press",
+      "at": [
+        -1,
+        1,
+        0
+      ]
+    },
+    {
+      "type": "arm",
+      "at": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "type": "arm",
+      "at": [
+        -1,
+        1,
+        2
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        -1,
+        2,
+        0
+      ]
+    },
+    {
+      "type": "light",
+      "at": [
+        1,
+        2,
+        0
+      ]
+    }
+  ]
+}

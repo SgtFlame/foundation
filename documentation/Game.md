@@ -656,6 +656,21 @@ Storage, the second industry building.
 
 The hearth-watch meets: once word of Ashby is sent (`told`), R by Hawk's Rest's hearth (`isHawksRest`) plays the meeting a caption at a time (`story/Council.ts`, `COUNCIL_LINES`: the reeve, Mira from the well, the miller, Corran Vey) and reaches step `council`: double watches, iron grates on the wells, and someone to follow the north road past Ashby. Placeholder people and lines.
 
+## Built in V37 (forge 360)
+
+The block works, the third industry building.
+
+- `designs/blockworks.json` (*Block works*): a static chip of 12 concrete, an `assembler` (4 plates, 3 wire, a nozzle), a `press` (6 plates, 2 cement), two robot `arm`s (2 plates, 2 wire, a cell each) and two lamps, laid out from the `blockworks-chip` contract (10 plates, 6 wire, 2 cells).
+- `game.assemble {block, count, from}` (1 to 100 of armor, cockpit, thruster, gyro, battery, solar, light, cargo, concrete or deck) at a finished block works takes the block's components times `count` from a finished storage building within 30 m and puts `block:<type>` into its stock (events `assembled` on the works, `stored` on the storage, one batch).
+- Storage keeps finished blocks as `block:<type>`; `game.store`/`game.withdraw` move them to and from `Pack.Blocks` (no room taken). `game.placeBlock` on a chip design's block takes one finished block of its type from the pack, when there is one, in place of its components.
+- Engine: `ship/BlockWorks.ts` (`nextAssembly`: the block the blueprints laid out still want most that storage pays for, at most 10 a press; `wantedBlocks`, `affordable`), `blockCost(types, index, blocks)`, `ShipLayer.assemblerNear`. In the viewport, U at the assembler assembles from storage near it; H at storage takes blocks with the components; a ghost block says *place a finished armor from your pack*.
+- Not built: robot arms placing blocks on a ship themselves (the shipyard, next).
+- Tests: `TestBlockWorks`, `BlockWorks.test.ts`.
+
+## Built in S32 (forge 375)
+
+The north road: once the hearth-watch has met (`council`), Ashby's furrows run on north out of the village (`story/NorthRoad.ts`, `waymarkSpots` from the furrows' end to the area's north edge) past four waymarks: a night camp with no tents, rope cut from a post, a second village's furrows joining, and the ford, where new snow has covered everything. Reaching the ford after the other three reaches step `northroad` (Corran Vey: two villages walked north, *the snow did the rest*); reaching it first sends the player back. The trail goes cold on purpose: per the user's lore the captives were walked away by road, taken not killed, and where they are turned stays off the map. Placeholder lines.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

@@ -161,7 +161,7 @@ func TestShipDamage(t *testing.T) {
 
 // V6: contracts handed in with a ship at the outpost pay a skill once
 func TestOutpost(t *testing.T) {
-	if c := game.ContractsOf(); len(c.Contracts) != 12 || c.Giver.Name == "" {
+	if c := game.ContractsOf(); len(c.Contracts) != 13 || c.Giver.Name == "" {
 		t.Fatalf("contracts %+v", c)
 	}
 	st := newStack(t)
@@ -1091,5 +1091,57 @@ func TestStorage(t *testing.T) {
 	d = game.Ship{}
 	if !st.read(game.ShipsProjector, game.ShipType+".d1", res.Seq, &d) || d.Stock["plate"] != 2 {
 		t.Fatalf("made into storage %+v", d.Stock)
+	}
+}
+
+// V37: the block works assembles blocks from the components in storage, and a
+// finished block is placed without its components
+func TestBlockWorks(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Block moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	refineParts(t, st, world, map[string]int{"plate": 6 + 12, "wire": 4 + 2})
+	refineCement(t, st, world, 2+24)
+	st.ok("game.startShip", "s0", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 110, "z": 0, "q": q})
+	st.ok("game.handIn", "s0", map[string]any{"contract": "refinery-chip"})
+	st.ok("game.startShip", "d1", map[string]any{"world": world, "design": "depot", "x": 10, "y": 102, "z": 20, "q": q})
+	for i := 0; i < 18; i++ {
+		st.ok("game.placeBlock", "d1", map[string]any{"index": i})
+	}
+	if r := st.refused("game.startShip", "b1", map[string]any{"world": world, "design": "blockworks", "x": 0, "y": 102, "z": 30, "q": q}); !strings.Contains(r.Common.Message, "blockworks-chip") {
+		t.Fatalf("block works without its blueprint: %q", r.Common.Message)
+	}
+	refineParts(t, st, world, map[string]int{"plate": 10 + 14, "wire": 6 + 9, "cell": 2 + 2, "nozzle": 1})
+	refineCement(t, st, world, 26)
+	st.ok("game.handIn", "s0", map[string]any{"contract": "blockworks-chip"})
+	st.ok("game.startShip", "b1", map[string]any{"world": world, "design": "blockworks", "x": 0, "y": 102, "z": 30, "q": q})
+	for i := 0; i < 18; i++ {
+		st.ok("game.placeBlock", "b1", map[string]any{"index": i})
+	}
+	refineParts(t, st, world, map[string]int{"plate": 4})
+	st.ok("game.store", "d1", map[string]any{"stock": map[string]any{"plate": 4}})
+	if r := st.refused("game.assemble", "b1", map[string]any{"block": "armor", "count": 3, "from": "d1"}); !strings.Contains(r.Common.Message, "plate") {
+		t.Fatalf("assembling without the components: %q", r.Common.Message)
+	}
+	if r := st.refused("game.assemble", "d1", map[string]any{"block": "armor", "count": 1, "from": "d1"}); !strings.Contains(r.Common.Message, "block works") {
+		t.Fatalf("assembling outside the block works: %q", r.Common.Message)
+	}
+	res := st.ok("game.assemble", "b1", map[string]any{"block": "armor", "count": 2, "from": "d1"})
+	var d game.Ship
+	if !st.read(game.ShipsProjector, game.ShipType+".d1", res.Seq, &d) || d.Stock["block:armor"] != 2 || d.Stock["plate"] != 0 {
+		t.Fatalf("assembled %+v", d.Stock)
+	}
+	res = st.ok("game.withdraw", "d1", map[string]any{"stock": map[string]any{"block:armor": 2}})
+	var pack game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Blocks["armor"] != 2 {
+		t.Fatalf("withdrawn blocks %+v", pack.Blocks)
+	}
+	plates := pack.Parts["plate"]
+	// a refinery's armor (index 12) takes a finished block, not plates
+	st.ok("game.startShip", "r1", map[string]any{"world": world, "design": "refinehouse", "x": 20, "y": 102, "z": 40, "q": q})
+	res = st.ok("game.placeBlock", "r1", map[string]any{"index": 12})
+	pack = game.Pack{}
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Blocks["armor"] != 1 || pack.Parts["plate"] != plates {
+		t.Fatalf("placed from a block: blocks %+v, plates %v → %v", pack.Blocks, plates, pack.Parts["plate"])
 	}
 }

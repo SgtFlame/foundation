@@ -74,6 +74,8 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'told', title: 'Word of Ashby', how: 'Back at the farmstead, click Wenlan and tell him what you found in Ashby.' },
   // S31: the hearth-watch meets
   { id: 'council', title: 'The hearth-watch meets', how: "Go up the road to Hawk's Rest and press R by its hearth: the hearth-watch comes to hear about Ashby." },
+  // S32: the north road past Ashby
+  { id: 'northroad', title: 'The north road', how: "Take the road back to Ashby and follow the furrows north out of the village: a camp, a post, other furrows, and the ford where they end." },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the
