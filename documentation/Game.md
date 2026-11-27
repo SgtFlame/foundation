@@ -564,6 +564,16 @@ The well ward: the threshold nobody warded, warded.
 - At the well's rim with both, the ward is laid (`WELL_WARD_LINE` in `story/Well.ts`); the frost ring gives way to sage round the rim and five stones, four on it and one on the windlass beam.
 - Tests: `story_test` (`wellward`), `HearthWard.test.ts`, the step order in `FirstHourStory.test.ts`.
 
+## Built in V29 (forge 360)
+
+Minerals in the ground: the first step of the user's *Ships from blocks* (forge `360-VoxelRPGDesign.md`), ships made from mined and refined materials rather than unlocked whole.
+
+- `voxel/Types.ts`: six minerals as materials 4 to 9 (`MINERALS`, `mineralMaterial`, `mineralOf`, `MINERAL_TINT`): ferrite, silica and ice on the moon (`MOON_MINERALS`), malachite, wolframite and spodumene on the asteroids (`ASTEROID_MINERALS`, beside V8's generic ore); `MoonParams.minerals` gives each a share of the rock, veined by its own noise in `MoonGenerator.rockOrOre`.
+- The mesher gives each vertex a `mineral` attribute (tint and weight); `terrainMaterial` tints the rock's grain toward it, so veins show on outcrops and in dug walls.
+- `VoxelWorld.contentsOf` counts minerals by name; a dig's `took.minerals` goes to `cmd-game-editTerrain`, which keeps only the six names, bounds them by the sphere and the pack's room (minerals count against it), and adds them to the pack (`Pack.Minerals`, m³ by name).
+- Mining: `HARDNESS.mineral` (4), and the work ring and label name the main mineral in its colour (`mineralsIn`, `workFor`). The scanner (K) finds minerals as well as ore, in pockets per kind, marked in each mineral's colour.
+- Tests: `TestMinerals`, `Bodies.test.ts` (which minerals each body holds), `Mining.test.ts`, `Scanner.test.ts`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

@@ -35,7 +35,9 @@ type Pack struct {
 	Kits     float64 `json:"kits"`     // V24: ion thruster kits from the fabricator, a count
 	Coils    float64 `json:"coils"`    // V27: jump coils salvaged from the wrecks' drive cores, a count
 	Drives   float64 `json:"drives"`   // V27: jump drives from the fabricator, a count
-	Capacity float64 `json:"capacity"`
+	// V29: minerals dug, m³ by name (ferrite, silica, ice, malachite, wolframite, spodumene)
+	Minerals map[string]float64 `json:"minerals,omitempty"`
+	Capacity float64            `json:"capacity"`
 }
 
 // PackKey is a player's pack's key in game.packs.
@@ -74,15 +76,16 @@ func contributePacks(reg *extensions.Registry) {
 			}
 			var d struct {
 				Pack *struct {
-					Dust float64 `json:"dust"`
-					Rock float64 `json:"rock"`
-					Ore  float64 `json:"ore"`
-					Food float64 `json:"food"`
-					Iron float64 `json:"iron"`
-					Circ float64 `json:"circuits"`
-					Kits float64 `json:"kits"`
-					Coil float64 `json:"coils"`
-					Driv float64 `json:"drives"`
+					Dust float64            `json:"dust"`
+					Rock float64            `json:"rock"`
+					Ore  float64            `json:"ore"`
+					Food float64            `json:"food"`
+					Iron float64            `json:"iron"`
+					Circ float64            `json:"circuits"`
+					Kits float64            `json:"kits"`
+					Coil float64            `json:"coils"`
+					Driv float64            `json:"drives"`
+					Mins map[string]float64 `json:"minerals"`
 				} `json:"pack"`
 			}
 			if err := json.Unmarshal(f.Event.Data, &d); err != nil {
@@ -101,13 +104,21 @@ func contributePacks(reg *extensions.Registry) {
 			p.Kits = round(p.Kits + d.Pack.Kits)
 			p.Coils = round(p.Coils + d.Pack.Coil)
 			p.Drives = round(p.Drives + d.Pack.Driv)
+			for k, v := range d.Pack.Mins {
+				if p.Minerals == nil {
+					p.Minerals = map[string]float64{}
+				}
+				if p.Minerals[k] = round(p.Minerals[k] + v); p.Minerals[k] == 0 {
+					delete(p.Minerals, k)
+				}
+			}
 			p.Capacity = PackCapacity
 			return json.Marshal(p)
 		},
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.pack", Source: source}, Title: "My pack",
-		Description: fmt.Sprintf("What the caller carries in a world: {dust, rock, ore, iron (V20: smelted at a forge), capacity} in m³, food in rations circuits (V23: circuit boards from a fabricator, a count) kits (V24: ion thruster kits), coils (V27: jump coils from the wrecks) and drives (V27: jump drives) (an empty pack holds %g m³), then each change as they dig and fill", PackCapacity),
+		Description: fmt.Sprintf("What the caller carries in a world: {dust, rock, ore, iron (V20: smelted at a forge), capacity} in m³, food in rations circuits (V23: circuit boards from a fabricator, a count) kits (V24: ion thruster kits), coils (V27: jump coils from the wrecks) and drives (V27: jump drives), minerals (V29: m³ by name) (an empty pack holds %g m³), then each change as they dig and fill", PackCapacity),
 		Params:      json.RawMessage(`{"type":"object","properties":{"world":{"type":"string","description":"The world's id"}},"required":["world"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"world":"w123"}`)},
 		Action:      "game.read",

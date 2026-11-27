@@ -1,5 +1,5 @@
 import { SAMPLES } from './ChunkSampler.ts'
-import { CHUNK_SIZE, MATERIAL_ORE, MATERIAL_ROCK, MATERIAL_SOIL, type ChunkMesh } from './Types.ts'
+import { CHUNK_SIZE, MATERIAL_ORE, MATERIAL_ROCK, MATERIAL_SOIL, MINERAL_TINT, mineralOf, type ChunkMesh, type Mineral } from './Types.ts'
 
 // Surface nets over one chunk's samples: one vertex per cell the surface
 // crosses, placed at the mean of the crossings on the cell's edges, and one
@@ -36,6 +36,7 @@ export function surfaceNets(density: Float32Array, material: Uint8Array, voxelSi
   const pos: number[] = []
   const nrm: number[] = []
   const rock: number[] = []
+  const mins: number[] = []
   const d = new Float64Array(8)
   const sIdx = (i: number, j: number, k: number) => i + S * (j + S * k)
 
@@ -49,6 +50,8 @@ export function surfaceNets(density: Float32Array, material: Uint8Array, voxelSi
         let rocky = 0
         let ore = 0
         let soil = 0
+        let mineral: Mineral | null = null
+        let mineralCount = 0
         for (let c = 0; c < 8; c++) {
           const s = sIdx(mi + CORNERS[c][0], mj + CORNERS[c][1], mk + CORNERS[c][2])
           const v = density[s]
@@ -61,6 +64,15 @@ export function surfaceNets(density: Float32Array, material: Uint8Array, voxelSi
               rocky++
               ore++
             } else if (material[s] === MATERIAL_SOIL) soil++
+            else {
+              // V29: a mineral is rock, tinted
+              const m = mineralOf(material[s])
+              if (m) {
+                rocky++
+                mineral = m
+                mineralCount++
+              }
+            }
           }
         }
         if (mask === 0 || mask === 255) continue
@@ -96,6 +108,8 @@ export function surfaceNets(density: Float32Array, material: Uint8Array, voxelSi
         // 0 (dust) to 1 (rock), then on to 2 (ore), and below 0 to -1 for
         // soil (V9): one attribute for four
         rock.push((rocky + ore - soil) / solid)
+        const tint = mineral ? MINERAL_TINT[mineral] : [0, 0, 0]
+        mins.push(tint[0], tint[1], tint[2], mineralCount / solid)
       }
     }
   }
@@ -141,6 +155,7 @@ export function surfaceNets(density: Float32Array, material: Uint8Array, voxelSi
     positions: new Float32Array(pos),
     normals: new Float32Array(nrm),
     rock: new Float32Array(rock),
+    mineral: new Float32Array(mins),
     indices: vertexCount < 65536 ? new Uint16Array(idx) : new Uint32Array(idx),
   }
 }

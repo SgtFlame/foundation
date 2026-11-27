@@ -23,8 +23,8 @@ import { countdown, DRONE_HIT, DRONE_SCRAP, dronesOf, shotHits, surgeAt, TURRET_
 import { DRIVE_CORE_BLOCK, MANUAL_BLOCK, nearestSalvage, SALVAGE_ORE, salvageKey, wreckSites, type Vec3 as WVec3 } from '../wreck/Wreck.ts'
 import { digLimits, missing, named, nextRecipe, spend, type DigLimits } from '../craft/Crafting.ts'
 import { scan, scanLine, SCAN_COOLDOWN, SCAN_SHOW } from '../craft/Scanner.ts'
-import { MATERIAL_ORE } from './Types.ts'
-import { Hold, secondsFor, spotKey, toolPower, workFor, type Contents } from '../craft/Mining.ts'
+import { MATERIAL_ORE, MINERAL_TINT, mineralOf, type Mineral } from './Types.ts'
+import { Hold, mineralsIn, secondsFor, spotKey, toolPower, workFor, type Contents } from '../craft/Mining.ts'
 
 // What the player asks for; the host sends it to the server, which decides
 export interface EditIntent {
@@ -35,7 +35,7 @@ export interface EditIntent {
   radius: number
   // What a dig took (m³ by material) or a fill needs, as this viewport
   // reckons it from the terrain it has; the server bounds it (V2)
-  took?: { dust: number; rock: number; ore?: number }
+  took?: { dust: number; rock: number; ore?: number; minerals?: Record<string, number> }
   needs?: number
 }
 
@@ -48,6 +48,7 @@ export interface Carried {
   iron?: number // V20: smelted at a cabin's forge
   circuits?: number // V23: circuit boards from a cabin's fabricator, a count
   kits?: number // V24: ion thruster kits
+  minerals?: Partial<Record<Mineral, number>> // V29: minerals, m³ by name
   coils?: number // V27: jump coils from the wrecks' drive cores
   drives?: number // V27: jump drives
   capacity: number
@@ -728,8 +729,8 @@ export class VoxelViewport {
     if (c) {
       const ore = c.ore ?? 0
       const iron = c.iron ?? 0
-      const total = c.dust + c.rock + ore + iron
-      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}${iron > 0 ? ` · iron ${iron.toFixed(2)}` : ''}${(c.circuits ?? 0) > 0 ? ` · circuits ${c.circuits}` : ''}${(c.kits ?? 0) > 0 ? ` · ion kits ${c.kits}` : ''}${(c.coils ?? 0) > 0 ? ` · jump coils ${c.coils}` : ''}${(c.drives ?? 0) > 0 ? ` · jump drives ${c.drives}` : ''}${(c.food ?? 0) > 0 ? ` · food ${c.food}` : ''}`)
+      const total = c.dust + c.rock + ore + iron + Object.values(c.minerals ?? {}).reduce((s: number, v) => s + (v ?? 0), 0)
+      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}${iron > 0 ? ` · iron ${iron.toFixed(2)}` : ''}${(c.circuits ?? 0) > 0 ? ` · circuits ${c.circuits}` : ''}${(c.kits ?? 0) > 0 ? ` · ion kits ${c.kits}` : ''}${(c.coils ?? 0) > 0 ? ` · jump coils ${c.coils}` : ''}${(c.drives ?? 0) > 0 ? ` · jump drives ${c.drives}` : ''}${Object.entries(c.minerals ?? {}).map(([k, v]) => ` · ${k} ${(v ?? 0).toFixed(2)}`).join('')}${(c.food ?? 0) > 0 ? ` · food ${c.food}` : ''}`)
     }
     if (w && !this.riding && !this.pod.falling) {
       const g = Math.hypot(w.gravity.x, w.gravity.y, w.gravity.z)
@@ -870,7 +871,8 @@ export class VoxelViewport {
     const done = this.mining.step(dt, key, work, toolPower(tools))
     if (main) {
       const left = (1 - this.mining.fraction) * secondsFor(spot.has, tools)
-      const color = main === 'ore' ? '#5fd3ff' : main === 'rock' ? '#c9b48a' : '#e8e2d6'
+      const tint = (MINERAL_TINT as Record<string, [number, number, number]>)[main]
+      const color = tint ? `rgb(${tint.map((c) => Math.round(Math.min(1, c * 1.2) * 255)).join(',')})` : main === 'ore' ? '#5fd3ff' : main === 'rock' ? '#c9b48a' : '#e8e2d6'
       this.workRing.style.display = 'block'
       this.workRing.style.background = `conic-gradient(${color} ${Math.round(this.mining.fraction * 360)}deg, rgba(255,255,255,0.18) 0)`
       this.workLabel.style.display = 'block'
@@ -1138,12 +1140,14 @@ export class VoxelViewport {
     this.scanCool = SCAN_COOLDOWN
     const found = scan((x, y, z) => {
       const [d, m] = this.world.sampleAt(x, y, z)
-      return d < 0 && m === MATERIAL_ORE
+      return d < 0 ? (m === MATERIAL_ORE ? 'ore' : mineralOf(m)) : null
     }, at)
     this.clearScan()
     for (const p of found) {
       const size = 0.5 + Math.min(1.5, p.cells * 0.12)
-      const mat = new THREE.MeshBasicNodeMaterial({ color: 0x4fd6ff, transparent: true, opacity: 0.95, depthTest: false, wireframe: true })
+      const tint = (MINERAL_TINT as Record<string, [number, number, number]>)[p.kind]
+      const color = tint ? new THREE.Color(Math.min(1, tint[0] * 1.3), Math.min(1, tint[1] * 1.3), Math.min(1, tint[2] * 1.3)) : new THREE.Color(0x4fd6ff)
+      const mat = new THREE.MeshBasicNodeMaterial({ color, transparent: true, opacity: 0.95, depthTest: false, wireframe: true })
       const m = new THREE.Mesh(new THREE.OctahedronGeometry(size, 0), mat)
       m.renderOrder = 10
       m.position.set(p.x, p.y, p.z)
@@ -2083,7 +2087,7 @@ export class VoxelViewport {
       y: c.y,
       z: c.z,
       radius,
-      ...(kind === 'dig' ? { took: { dust: r2(has.dust), rock: r2(has.rock), ...(has.ore > 0 ? { ore: r2(has.ore) } : {}) } } : { needs: r2(has.empty) }),
+      ...(kind === 'dig' ? { took: { dust: r2(has.dust), rock: r2(has.rock), ...(has.ore > 0 ? { ore: r2(has.ore) } : {}), ...(mineralsIn(has).total > 0 ? { minerals: Object.fromEntries(Object.entries(has.minerals ?? {}).map(([k, v]) => [k, r2(v)])) } : {}) } } : { needs: r2(has.empty) }),
     })
   }
 

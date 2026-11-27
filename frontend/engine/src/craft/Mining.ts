@@ -1,3 +1,4 @@
+import type { Mineral } from '../voxel/Types.ts'
 // Working the ground over time (forge 360, the user's direction of
 // 2026-11-26: "use a tool to harvest resources over time by holding down
 // the action button", as in Space Engineers and 7 Days to Die). On foot,
@@ -12,10 +13,23 @@ export interface Contents {
   dust: number
   rock: number
   ore: number
+  // V29: minerals, m³ by name
+  minerals?: Partial<Record<Mineral, number>>
+}
+
+// V29: all the minerals in some contents, and the one there is most of
+export function mineralsIn(c: Contents): { total: number; main: Mineral | null } {
+  let total = 0
+  let main: Mineral | null = null
+  for (const [k, v] of Object.entries(c.minerals ?? {}) as [Mineral, number][]) {
+    total += v
+    if (!main || v > (c.minerals?.[main] ?? 0)) main = k
+  }
+  return { total, main }
 }
 
 // Work per m³ of each material
-export const HARDNESS = { dust: 1, rock: 3, ore: 5 } as const
+export const HARDNESS = { dust: 1, rock: 3, ore: 5, mineral: 4 } as const
 
 // Work per second each tool brings: bare hands, then the drills
 export function toolPower(tools: Readonly<Record<string, boolean>> | undefined): number {
@@ -23,8 +37,10 @@ export function toolPower(tools: Readonly<Record<string, boolean>> | undefined):
 }
 
 // The work a bite takes, and what it is mostly made of (for the HUD)
-export function workFor(c: Contents): { work: number; main: keyof Contents | null } {
-  const work = c.dust * HARDNESS.dust + c.rock * HARDNESS.rock + c.ore * HARDNESS.ore
+export function workFor(c: Contents): { work: number; main: 'dust' | 'rock' | 'ore' | Mineral | null } {
+  const m = mineralsIn(c)
+  const work = c.dust * HARDNESS.dust + c.rock * HARDNESS.rock + c.ore * HARDNESS.ore + m.total * HARDNESS.mineral
+  if (m.main && m.total >= c.ore && m.total >= c.rock && m.total >= c.dust) return { work, main: m.main }
   const main = c.dust + c.rock + c.ore <= 0 ? null : c.ore >= c.rock && c.ore >= c.dust ? 'ore' : c.rock >= c.dust ? 'rock' : 'dust'
   return { work, main }
 }

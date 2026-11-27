@@ -9,7 +9,31 @@ export const MATERIAL_ROCK = 1
 export const MATERIAL_ORE = 2
 // V9: the living soil of a planet with air, where the moon has dust
 export const MATERIAL_SOIL = 3
-export const MATERIAL_COUNT = 4
+// V29: minerals, veins in the rock by body (forge 360's *Ships from blocks*):
+// the moon's ferrite, silica and ice; the asteroids' malachite, wolframite
+// and spodumene. Each is rock to dig, counted by its own name.
+export const MATERIAL_FERRITE = 4
+export const MATERIAL_SILICA = 5
+export const MATERIAL_ICE = 6
+export const MATERIAL_MALACHITE = 7
+export const MATERIAL_WOLFRAMITE = 8
+export const MATERIAL_SPODUMENE = 9
+export const MATERIAL_COUNT = 10
+
+export const MINERALS = ['ferrite', 'silica', 'ice', 'malachite', 'wolframite', 'spodumene'] as const
+export type Mineral = (typeof MINERALS)[number]
+// A mineral's material id, and back
+export const mineralMaterial = (m: Mineral): number => MATERIAL_FERRITE + MINERALS.indexOf(m)
+export const mineralOf = (material: number): Mineral | null => MINERALS[material - MATERIAL_FERRITE] ?? null
+// Each mineral's colour on the ground (linear RGB)
+export const MINERAL_TINT: Record<Mineral, [number, number, number]> = {
+  ferrite: [0.62, 0.26, 0.16],
+  silica: [0.86, 0.84, 0.74],
+  ice: [0.7, 0.86, 1],
+  malachite: [0.18, 0.55, 0.33],
+  wolframite: [0.12, 0.12, 0.14],
+  spodumene: [0.86, 0.62, 0.66],
+}
 
 // The chunk grid: CHUNK_SIZE cells along each axis
 export const CHUNK_SIZE = 32
@@ -35,6 +59,8 @@ export interface MoonParams {
   asteroids?: number
   // How much of the rock is ore, 0 to 1 (V8): none on the moon itself
   ore?: number
+  // V29: the minerals in this body's rock, each the share of rock it veins, 0 to 1
+  minerals?: Partial<Record<Mineral, number>>
   // Soil in place of dust (V9): a planet with air
   soil?: boolean
 }
@@ -84,5 +110,7 @@ export interface ChunkMesh {
   normals: Float32Array
   // Rock fraction of each vertex, 0 (dust) to 1 (rock)
   rock: Float32Array
+  // V29: each vertex's mineral tint and its weight (r, g, b, w); w 0 for none
+  mineral: Float32Array
   indices: Uint16Array | Uint32Array
 }

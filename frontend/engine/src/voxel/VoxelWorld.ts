@@ -3,7 +3,7 @@ import { WorldGenerator } from './Bodies.ts'
 import { applyEdits, editTouchesChunk } from './ChunkSampler.ts'
 import type { MeshResult } from './MeshProtocol.ts'
 import { terrainMaterial } from './TerrainMaterial.ts'
-import { CHUNK_SIZE, chunkKey, MATERIAL_ORE, MATERIAL_ROCK, type ChunkMesh, type MoonParams, type VoxelEdit } from './Types.ts'
+import { CHUNK_SIZE, chunkKey, MATERIAL_ORE, MATERIAL_ROCK, mineralOf, type Mineral, type ChunkMesh, type MoonParams, type VoxelEdit } from './Types.ts'
 import { WorkerPool } from './WorkerPool.ts'
 
 interface Chunk {
@@ -189,10 +189,10 @@ export class VoxelWorld {
 
   // How much solid ground (m³, by material) and empty space a sphere
   // holds now: what a dig there would take and a fill would need
-  contentsOf(cx: number, cy: number, cz: number, r: number): { dust: number; rock: number; ore: number; empty: number } {
+  contentsOf(cx: number, cy: number, cz: number, r: number): { dust: number; rock: number; ore: number; empty: number; minerals: Partial<Record<Mineral, number>> } {
     const step = this.params.voxelSize
     const cell = step * step * step
-    const out = { dust: 0, rock: 0, ore: 0, empty: 0 }
+    const out = { dust: 0, rock: 0, ore: 0, empty: 0, minerals: {} as Partial<Record<Mineral, number>> }
     this.gen.beginRegion(cx - r, cy - r, cz - r, cx + r, cy + r, cz + r)
     try {
       for (let z = cz - r + step / 2; z < cz + r; z += step) {
@@ -203,6 +203,7 @@ export class VoxelWorld {
             if (d >= 0) out.empty += cell
             else if (m === MATERIAL_ROCK) out.rock += cell
             else if (m === MATERIAL_ORE) out.ore += cell
+            else if (mineralOf(m)) out.minerals[mineralOf(m)!] = (out.minerals[mineralOf(m)!] ?? 0) + cell
             else out.dust += cell
           }
         }
@@ -329,6 +330,7 @@ export class VoxelWorld {
     g.setAttribute('position', new THREE.BufferAttribute(m.positions, 3))
     g.setAttribute('normal', new THREE.BufferAttribute(m.normals, 3))
     g.setAttribute('rock', new THREE.BufferAttribute(m.rock, 1))
+    g.setAttribute('mineral', new THREE.BufferAttribute(m.mineral, 4))
     g.setIndex(new THREE.BufferAttribute(m.indices, 1))
     g.computeBoundingSphere()
     g.computeBoundingBox()

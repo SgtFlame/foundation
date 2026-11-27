@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { asteroidsOf, MOON_GRAVITY, WorldGenerator } from './Bodies.ts'
 import { sampleChunk } from './ChunkSampler.ts'
-import { CHUNK_SIZE, DEFAULT_MOON, MATERIAL_ORE } from './Types.ts'
+import { CHUNK_SIZE, DEFAULT_MOON, MATERIAL_ORE, mineralOf } from './Types.ts'
 
 const params = { ...DEFAULT_MOON, seed: 7, asteroids: 3 }
 
@@ -110,4 +110,23 @@ test('the planet with air lies a short flight away, its ground soil and its pull
   // and halfway there nothing much pulls
   const mid = w.gravity(PLANET.x / 2, 0, 0, { x: 0, y: 0, z: 0 })
   assert.ok(Math.hypot(mid.x, mid.y, mid.z) < 0.01)
+})
+
+test('the moon veins ferrite, silica and ice; the asteroids malachite, wolframite and spodumene (V29)', () => {
+  const w = new WorldGenerator({ ...DEFAULT_MOON })
+  const seen = (b: (typeof w.bodies)[number]) => {
+    const out = new Set<string>()
+    for (let i = 0; i < 4000; i++) {
+      const t = i * 2.399
+      const r = b.radius * 0.6
+      const x = b.x + r * Math.cos(t) * Math.sin(i * 0.37)
+      const y = b.y + r * Math.cos(i * 0.37)
+      const z = b.z + r * Math.sin(t) * Math.sin(i * 0.37)
+      const m = mineralOf(b.gen.material(x, y, z, -10))
+      if (m) out.add(m)
+    }
+    return out
+  }
+  assert.deepEqual([...seen(w.bodies[0])].sort(), ['ferrite', 'ice', 'silica'])
+  assert.deepEqual([...seen(w.bodies.find((b) => b.kind === 'asteroid')!)].sort(), ['malachite', 'spodumene', 'wolframite'])
 })

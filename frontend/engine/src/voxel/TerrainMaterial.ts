@@ -21,7 +21,11 @@ export function terrainMaterial(): THREE.MeshStandardNodeMaterial {
     texture(t, p.yz).mul(w.x).add(texture(t, p.zx).mul(w.y)).add(texture(t, p.xy).mul(w.z))
   // the attribute runs -1 (soil) to 0 (dust) to 1 (rock) to 2 (ore)
   const a = attribute('rock', 'float')
-  mat.colorNode = mix(mix(mix(tri(dust), tri(rock), clamp(a, 0, 1)), tri(ore), clamp(a.sub(1), 0, 1)), tri(soil), clamp(a.negate(), 0, 1))
+  const base = mix(mix(mix(tri(dust), tri(rock), clamp(a, 0, 1)), tri(ore), clamp(a.sub(1), 0, 1)), tri(soil), clamp(a.negate(), 0, 1))
+  // V29: a mineral tints the rock's grain toward its colour, by its weight
+  const m = attribute('mineral', 'vec4')
+  const grain = tri(rock).rgb.mul(2.4)
+  mat.colorNode = mix(base.rgb, m.rgb.mul(grain), clamp(m.w.mul(1.4), 0, 1))
   mat.roughness = 0.95
   mat.metalness = 0
   return mat

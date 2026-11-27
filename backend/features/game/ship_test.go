@@ -653,3 +653,18 @@ func TestJumpDrive(t *testing.T) {
 		t.Fatalf("the jump trial without a drive: %q", r.Common.Message)
 	}
 }
+
+// V29: minerals dug go into the pack by name, count against its room, and
+// unknown names are dropped
+func TestMinerals(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Mineral moon"}).Target
+	res := st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 100, "z": 0, "radius": 1, "took": map[string]any{"dust": 0.5, "rock": 0.5, "minerals": map[string]any{"ferrite": 0.8, "silica": 0.2, "gold": 1}}})
+	var pack game.Pack
+	if !st.read(game.PacksProjector, game.PackKey(world, 1), res.Seq, &pack) || pack.Minerals["ferrite"] != 0.8 || pack.Minerals["silica"] != 0.2 || len(pack.Minerals) != 2 || pack.Rock != 0.5 {
+		t.Fatalf("pack %+v", pack)
+	}
+	if r := st.refused("game.editTerrain", world, map[string]any{"kind": "dig", "x": 0, "y": 100, "z": 4, "radius": 1, "took": map[string]any{"dust": 0, "rock": 0, "minerals": map[string]any{"ice": 2.5}}}); !strings.Contains(r.Common.Message, "pack is full") {
+		t.Fatalf("minerals past the pack's room: %q", r.Common.Message)
+	}
+}

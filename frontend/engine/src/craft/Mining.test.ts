@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { Hold, secondsFor, spotKey, toolPower, workFor } from './Mining.ts'
+import { Hold, mineralsIn, secondsFor, spotKey, toolPower, workFor } from './Mining.ts'
 
 test('harder ground takes longer, and better tools go faster', () => {
   assert.deepEqual(workFor({ dust: 1, rock: 0, ore: 0 }), { work: 1, main: 'dust' })
@@ -23,4 +23,11 @@ test('a hold fills on one spot, starts over on another, and is done once', () =>
   assert.equal(h.fraction, 0)
   assert.equal(h.step(1, 'c', 0, 1.5), false)
   assert.equal(spotKey({ x: 1.1, y: 0, z: -0.2 }, 0.5), spotKey({ x: 1.0, y: 0.1, z: -0.1 }, 0.5))
+})
+
+test('minerals are mined harder than rock, and the main one names the work (V29)', () => {
+  const w = workFor({ dust: 0, rock: 0.2, ore: 0, minerals: { wolframite: 0.5, malachite: 0.1 } })
+  assert.equal(w.main, 'wolframite')
+  assert.ok(Math.abs(w.work - (0.2 * 3 + 0.6 * 4)) < 1e-9)
+  assert.deepEqual(mineralsIn({ dust: 0, rock: 0, ore: 0 }), { total: 0, main: null })
 })
