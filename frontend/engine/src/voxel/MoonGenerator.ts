@@ -1,5 +1,5 @@
 import { Simplex3, mulberry32 } from './Noise.ts'
-import { MATERIAL_DUST, MATERIAL_SOIL, MATERIAL_ORE, MATERIAL_ROCK, type MoonParams } from './Types.ts'
+import { MATERIAL_DUST, MATERIAL_SOIL, MATERIAL_ORE, MATERIAL_ROCK, MINERALS, mineralMaterial, type MoonParams } from './Types.ts'
 
 interface Crater {
   // Unit direction from the moon's centre
@@ -185,7 +185,15 @@ export class MoonGenerator {
   // Veins of ore run through the rock of a body that has any (V8)
   private rockOrOre(x: number, y: number, z: number): number {
     const ore = this.params.ore ?? 0
-    if (ore <= 0) return MATERIAL_ROCK
-    return this.detail.noise(x * 0.15 + 50, y * 0.15, z * 0.15) > 1 - 2 * ore ? MATERIAL_ORE : MATERIAL_ROCK
+    if (ore > 0 && this.detail.noise(x * 0.15 + 50, y * 0.15, z * 0.15) > 1 - 2 * ore) return MATERIAL_ORE
+    // V29: each mineral veins the rock by its own noise, offset per mineral
+    const minerals = this.params.minerals
+    if (minerals) {
+      for (let i = 0; i < MINERALS.length; i++) {
+        const share = minerals[MINERALS[i]] ?? 0
+        if (share > 0 && this.detail.noise(x * 0.12 + 91 * (i + 1), y * 0.12 - 37 * i, z * 0.12 + 13 * i) > 1 - 2 * share) return mineralMaterial(MINERALS[i])
+      }
+    }
+    return MATERIAL_ROCK
   }
 }

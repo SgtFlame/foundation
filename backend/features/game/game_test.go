@@ -7,6 +7,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
 	"math"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -243,7 +244,7 @@ func TestPack(t *testing.T) {
 	before := p
 	st.read(game.TerrainProjector, game.TerrainType+"."+id, d.Seq, &game.Terrain{})
 	st.read(game.PacksProjector, game.PackKey(id, 1), c.Seq, &p)
-	if p != before {
+	if !reflect.DeepEqual(p, before) {
 		t.Fatalf("an editor's fill changed the pack: %+v", p)
 	}
 	// Another player's pack is their own

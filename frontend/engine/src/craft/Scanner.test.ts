@@ -16,3 +16,9 @@ test('a pulse gathers ore into pockets, nearest first', () => {
   assert.equal(scan(() => false, { x: 0, y: 0, z: 0 }).length, 0)
   assert.match(scanLine([]), /no ore/)
 })
+
+test('a pulse keeps each mineral in its own pockets and names them (V29)', () => {
+  const found = scan((x) => (x < 0 ? 'ferrite' : x < 6 ? 'silica' : null), { x: 0, y: 0, z: 0 }, 10)
+  assert.ok(found.some((p) => p.kind === 'ferrite') && found.some((p) => p.kind === 'silica'))
+  assert.match(scanLine(found), /ferrite|silica/)
+})

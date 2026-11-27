@@ -58,7 +58,9 @@ export function asteroidsOf(params: MoonParams): Body[] {
       craterMaxRadius: r * 0.45,
       dustDepth: 0.6,
       // V8: the asteroids carry the ore the moon lacks
-      ore: 0.6,
+      ore: 0.5,
+      // V29: and the minerals of thrusters, wiring and batteries
+      minerals: ASTEROID_MINERALS,
     })
     out.push(body('asteroid', s * Math.cos(a) * d, u * d, s * Math.sin(a) * d, r, gen))
   }
@@ -94,6 +96,10 @@ function body(kind: Body['kind'], x: number, y: number, z: number, radius: numbe
 // The world's terrain: every body's density joined. It has the
 // generator's surface for the chunk sampler (params, beginRegion,
 // density, material, endRegion).
+// V29: the minerals in each body's rock, as shares of it
+export const MOON_MINERALS: MoonParams['minerals'] = { ferrite: 0.14, silica: 0.12, ice: 0.08 }
+export const ASTEROID_MINERALS: MoonParams['minerals'] = { malachite: 0.2, wolframite: 0.15, spodumene: 0.12 }
+
 export class WorldGenerator {
   readonly params: MoonParams
   readonly bodies: Body[]
@@ -102,7 +108,7 @@ export class WorldGenerator {
 
   constructor(params: MoonParams) {
     this.params = params
-    const moon = new MoonGenerator(params)
+    const moon = new MoonGenerator({ minerals: MOON_MINERALS, ...params })
     this.bodies = [body('moon', 0, 0, 0, params.radius, moon), ...asteroidsOf(params), planetOf(params)]
     this.active = this.bodies
   }

@@ -22,6 +22,6 @@ self.onmessage = (ev: MessageEvent<MeshJob>) => {
   const mesh = samples.uniform ? null : surfaceNets(samples.density, samples.material, job.params.voxelSize)
   const t2 = performance.now()
   const result: MeshResult = { id: job.id, key: job.key, version: job.version, mesh, sampleMs: t1 - t0, meshMs: t2 - t1 }
-  const transfer: Transferable[] = mesh ? [mesh.positions.buffer, mesh.normals.buffer, mesh.rock.buffer, mesh.indices.buffer] : []
+  const transfer: Transferable[] = mesh ? [mesh.positions.buffer, mesh.normals.buffer, mesh.rock.buffer, mesh.mineral.buffer, mesh.indices.buffer] : []
   ;(self as unknown as DedicatedWorkerGlobalScope).postMessage(result, transfer)
 }
