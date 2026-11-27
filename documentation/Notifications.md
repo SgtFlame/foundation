@@ -34,3 +34,12 @@ Both delegate to the records queries with their params fixed to the caller, so t
 - an anonymous principal cannot notify.
 
 **Not built yet.** The sources that turn Requirements mentions and Mail's review queue into notifications (Forge graphs, with 26e-2). Retention (purging read notifications after the `notifications` section's `keepDays`). The check that an app notifies only people who may read the subject.
+
+## Built in forge 26e-2
+
+The notification centre, in `frontend/common/src/notifications/`:
+- **The bell** (`NotificationBell.tsx`) sits in the workbench's side bar, above the Workspaces menu. Its badge is `notifications.count`, and it opens a panel of the caller's latest 30 notifications (`notifications.mine`), unread ones marked with a dot. Opening one follows its `workbench:` link through the subject openers (`openWorkbenchLink`) and marks it read (`record.update` on the notification, as its recipient). *Mark all read* calls `notifications.readAll`.
+- **New notifications** arriving while the page is open show a toast with an *Open* button. While the tab is hidden, they show as a browser notification instead, once the person has allowed it from the panel's *Notify me while this tab is hidden*. Those waiting when the page opens are not toasted.
+- The logic (`notificationText.ts`: what is new, how long ago, reading the count) is tested by `yarn test`.
+
+Not built yet: a per-person setting for which kinds notify, the Requirements and Mail sources, and Forge's *Notification list* and *Inbox view* prefabs.
