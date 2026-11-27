@@ -1,0 +1,143 @@
+{
+  "name": "tasks_tracker_card_move",
+  "title": "Move a card",
+  "description": "Moves a card to a list (status), at a position among its cards; the end when position is left out. Given version, refused with conflict once the card moved on.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The card's outside id"
+      },
+      "list": {
+        "type": "string",
+        "description": "The list's id"
+      },
+      "position": {
+        "type": "number",
+        "description": "A position between its new neighbours'; the end when left out"
+      },
+      "version": {
+        "type": "string",
+        "description": "The version the move was made against"
+      }
+    },
+    "required": [
+      "id",
+      "list"
+    ]
+  },
+  "outputSchema": {
+    "type": "object",
+    "description": "A card, issue or task as the tracker reports it",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The card's outside id"
+      },
+      "key": {
+        "type": "string",
+        "description": "Our task id it was created with (card.create's key), when we made it"
+      },
+      "board": {
+        "type": "string",
+        "description": "Its board's id"
+      },
+      "list": {
+        "type": "string",
+        "description": "Its list or status's id"
+      },
+      "title": {
+        "type": "string",
+        "description": "Its title"
+      },
+      "description": {
+        "type": "string",
+        "description": "Its description, in Markdown"
+      },
+      "assignees": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "The ids of the members it is assigned to"
+      },
+      "due": {
+        "type": "string",
+        "description": "When it is due, RFC 3339 or YYYY-MM-DD; empty when none"
+      },
+      "start": {
+        "type": "string",
+        "description": "When it starts, RFC 3339 or YYYY-MM-DD; empty when none"
+      },
+      "labels": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "The ids of its labels"
+      },
+      "checklist": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "description": "A checklist item",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The item's outside id; left out for a new one"
+            },
+            "text": {
+              "type": "string",
+              "description": "What is to be done"
+            },
+            "done": {
+              "type": "boolean",
+              "description": "Whether it is done"
+            }
+          },
+          "required": [
+            "text",
+            "done"
+          ]
+        },
+        "description": "Its checklist items, in order"
+      },
+      "position": {
+        "type": "number",
+        "description": "Sorts its list's cards, smallest first"
+      },
+      "archived": {
+        "type": "boolean",
+        "description": "Whether it is archived (closed)"
+      },
+      "version": {
+        "type": "string",
+        "description": "The tracker's version of the card, changed by every change; card.update's version"
+      },
+      "updatedAt": {
+        "type": "string",
+        "description": "When it last changed, RFC 3339, by the tracker's clock"
+      },
+      "url": {
+        "type": "string",
+        "description": "Where it is opened in the tracker"
+      }
+    },
+    "required": [
+      "id",
+      "board",
+      "list",
+      "title",
+      "version",
+      "updatedAt"
+    ]
+  },
+  "annotations": {
+    "title": "Move a card",
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false
+  }
+}

@@ -1,0 +1,1 @@
+- `impl/factory.go` - `CreateService(opts ...Option) <s>service.Service` returns a singleton built on first call. Configuration has defaults and is overridden only through `Option` functions named `With<Setting>` (e.g. `WithRoot`); options passed after the first call are ignored.

@@ -1,0 +1,1 @@
+| [ChatCompletion.md](ChatCompletion.md) | The Markdown Editor's Chat tab and editing documents with the AI; agents as modes; editing a user bubble; chip corrections; sampling overrides; renaming and deleting conversations; three open questions |

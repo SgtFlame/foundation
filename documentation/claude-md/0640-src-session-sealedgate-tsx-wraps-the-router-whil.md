@@ -1,0 +1,1 @@
+- `src/session/SealedGate.tsx` wraps the router: while `GET /bootstrap/status` says `sealed` or `starting` it shows the sealed page (polling every 3 seconds) instead of the app.

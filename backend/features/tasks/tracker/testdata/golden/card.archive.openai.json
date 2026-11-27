@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "tasks_tracker_card_archive",
+    "description": "Archives (closes) a card; archiving an archived card gives it unchanged.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The card's outside id"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  }
+}

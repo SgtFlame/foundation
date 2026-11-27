@@ -1,0 +1,1 @@
+| [Infrastructure.md](Infrastructure.md) | Infrastructure as Code (forge 22a to 22f): versioned configurations in the root tenant, semantic diffs and YAML export, the `infra.compute@1` contract and the Infrastructure test server, plans, the infrastructure nodes, and applies as leaderless jobs with approvals, resume and drift |

@@ -361,6 +361,9 @@ func commandSpecs() []spec {
 				change := Change{Values: map[string]json.RawMessage{}, Old: map[string]json.RawMessage{}}
 				for id, v := range a.Set {
 					out, ps := c.value(id, v, "args.set."+id)
+					if ps == nil {
+						ps = c.notRank(id, "args.set."+id)
+					}
 					problems = append(problems, ps...)
 					if ps == nil && !same(out, c.record[id]) {
 						change.Values[id] = orNull(out)
@@ -420,6 +423,8 @@ func commandSpecs() []spec {
 				return []live.NewEvent{{Type: EventUpdated, Data: Change{Values: map[string]json.RawMessage{f.ID: orNull(out)}, Old: map[string]json.RawMessage{f.ID: orNull(c.record[f.ID])}}}}, nil
 			},
 		},
+		moveSpec(),
+		rebalanceSpec(),
 		listSpec("record.addTo", "Add to a list", EventAdded,
 			"Adds items to a multiEnum, tags, list or to-many relation field, keeping what is there: two people adding at once both keep theirs. Items already there are left."),
 		listSpec("record.removeFrom", "Remove from a list", EventRemoved,

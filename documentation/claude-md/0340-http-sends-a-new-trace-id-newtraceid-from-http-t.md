@@ -1,0 +1,1 @@
+- `http` sends a new trace ID (`newTraceId()` from `http/trace.ts`) as `X-Trace-Id` on every request, kept in `config.traceId`; DevTools' http log records carry it as their `trace`.

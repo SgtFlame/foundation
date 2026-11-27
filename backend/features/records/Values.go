@@ -176,6 +176,15 @@ func checkValue(f Field, v any) (any, error) {
 			return nil, want("a connection id (digits, as a string)", v)
 		}
 		return s, nil
+	case "rank":
+		s, ok := v.(string)
+		if !ok {
+			return nil, want("a rank", v)
+		}
+		if err := CheckRank(s); err != nil {
+			return nil, err
+		}
+		return s, nil
 	case "user":
 		s, _ := v.(string)
 		if _, err := strconv.ParseUint(s, 10, 64); err != nil {
@@ -291,6 +300,9 @@ func Convert(from, to Field, raw json.RawMessage) (json.RawMessage, error) {
 		}
 		fromItem, _ := ItemOf(from)
 		return Convert(fromItem, to, must(json.Marshal(items[0])))
+	}
+	if to.Type == "rank" {
+		return rankOf(from, v)
 	}
 	text := textOf(from, v)
 	var c any = text

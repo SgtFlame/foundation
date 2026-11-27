@@ -1,0 +1,1 @@
+| 23. Record nodes and the task list (Forge 3i) | none in the plan; gaps 03i 1 (Hello seeds *Task*), 2 (its own tab), 3 (rows bind `records.find`) and 4 (a real model for the chat), answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-6), to review after seeing |

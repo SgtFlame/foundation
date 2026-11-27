@@ -1,0 +1,649 @@
+{
+  "id": "cmd-game-armBuild",
+  "name": "game.armBuild",
+  "description": "Decides a shipyard's robot arms placing a ship's blocks from finished blocks in storage.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.armBuild",
+    "title": "Build a ship with the shipyard's arms",
+    "description": "The shipyard's robot arms (forge 360 V38, design shipyard) place up to 8 blocks of a cutter, hauler, freighter or barge laid out on a bay within 25 m of the shipyard; the target is the shipyard's id. Each block placed takes one finished block of its type (block:<type>, from the block works, game.assemble) from a finished storage building within 30 m of the shipyard (from), in the ship's block order. Refused for anything but a finished shipyard, a ship of another design, too far or finished, no storage near, or storage holding none of the finished blocks the ship still needs.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "ship": {
+          "type": "string",
+          "description": "The ship being built: a cutter, hauler, freighter or barge laid out on a bay within 25 m"
+        },
+        "from": {
+          "type": "string",
+          "description": "The finished storage building within 30 m holding finished blocks (block:<type>)"
+        }
+      },
+      "required": [
+        "ship",
+        "from"
+      ]
+    },
+    "area": "game",
+    "targetType": "gameShip",
+    "projection": "game.ships",
+    "action": "game.play",
+    "events": [
+      "armsWorked",
+      "armPlaced",
+      "stored"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "title": "On game.armBuild",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "ship",
+            "type": "string",
+            "description": "The ship to build"
+          },
+          {
+            "id": "from",
+            "type": "string",
+            "description": "The storage building"
+          }
+        ]
+      }
+    },
+    {
+      "id": "yardKey",
+      "type": "data.expression",
+      "title": "The shipyard's key",
+      "position": {
+        "x": 250,
+        "y": 0
+      },
+      "config": {
+        "expr": "\"gameShip.\" + target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "yard",
+      "type": "live.readProjection",
+      "title": "Read the shipyard",
+      "position": {
+        "x": 500,
+        "y": 0
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "shipKey",
+      "type": "data.expression",
+      "title": "The ship's key",
+      "position": {
+        "x": 250,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"gameShip.\" + ((ship ?? \"\") == \"\" ? \"none\" : ship)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "sh",
+      "type": "live.readProjection",
+      "title": "Read the ship",
+      "position": {
+        "x": 500,
+        "y": 200
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "depKey",
+      "type": "data.expression",
+      "title": "The storage's key",
+      "position": {
+        "x": 250,
+        "y": 400
+      },
+      "config": {
+        "expr": "\"gameShip.\" + ((from ?? \"\") == \"\" ? \"none\" : from)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "dep",
+      "type": "live.readProjection",
+      "title": "Read the storage",
+      "position": {
+        "x": 500,
+        "y": 400
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "picks",
+      "type": "data.expression",
+      "title": "The blocks the arms place",
+      "position": {
+        "x": 800,
+        "y": 300
+      },
+      "config": {
+        "expr": "let ty = shipVal?.types ?? []; let pl = shipVal?.placed ?? []; let have = store?.stock ?? {}; let un = filter(map(ty, ({i: #index, t: #})), !(.i in pl)); let ok = filter(map(un, let e = #; let k = #index; ({i: e.i, t: e.t, ok: len(filter(un[0:k], .t == e.t)) < (have[\"block:\" + e.t] ?? 0)})), .ok); ok[0:min(8, len(ok))]",
+        "type": "json"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why the arms cannot work, or nothing",
+      "position": {
+        "x": 1100,
+        "y": 200
+      },
+      "config": {
+        "expr": "let d2 = (shipVal == nil || yardVal == nil) ? 0 : (shipVal.x - yardVal.x) * (shipVal.x - yardVal.x) + (shipVal.y - yardVal.y) * (shipVal.y - yardVal.y) + (shipVal.z - yardVal.z) * (shipVal.z - yardVal.z); let s2 = (store == nil || yardVal == nil) ? 0 : (store.x - yardVal.x) * (store.x - yardVal.x) + (store.y - yardVal.y) * (store.y - yardVal.y) + (store.z - yardVal.z) * (store.z - yardVal.z); !found ? \"there is no shipyard \" + target : yardVal.design != \"shipyard\" ? \"only a shipyard's arms build ships\" : len(yardVal.placed) < yardVal.blocks ? \"the shipyard is not finished\" : !shipFound ? \"there is no ship \" + (ship ?? \"\") : shipVal.world != yardVal.world || !(shipVal.design in [\"cutter\", \"hauler\", \"freighter\", \"barge\"]) ? \"the arms build a cutter, hauler, freighter or barge laid out on a bay in the yard\" : d2 > 625 ? \"that ship is laid out more than 25 m from the shipyard: lay it out on a bay in the yard\" : len(shipVal.placed) >= shipVal.blocks ? \"that ship is finished\" : !hasDep || store.design != \"depot\" || len(store.placed) < store.blocks ? \"the arms take finished blocks from a finished storage building: name it as from\" : s2 > 900 ? \"that storage is more than 30 m from the shipyard\" : len(picks) == 0 ? \"storage holds no finished blocks this ship still needs: assemble them at the block works\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Nothing in the way",
+      "position": {
+        "x": 1350,
+        "y": 200
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "title": "Can the arms work?",
+      "position": {
+        "x": 1550,
+        "y": 0
+      },
+      "config": {}
+    },
+    {
+      "id": "worked",
+      "type": "data.expression",
+      "title": "What the arms did",
+      "position": {
+        "x": 1350,
+        "y": -200
+      },
+      "config": {
+        "expr": "{world: yardVal.world, ship: ship, count: len(picks)}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "title": "The arms worked",
+      "position": {
+        "x": 1800,
+        "y": -200
+      },
+      "config": {
+        "event": "armsWorked"
+      }
+    },
+    {
+      "id": "placedEvt",
+      "type": "data.expression",
+      "title": "The blocks placed",
+      "position": {
+        "x": 1550,
+        "y": -350
+      },
+      "config": {
+        "expr": "{world: shipVal.world, indices: map(picks, .i)}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emitShip",
+      "type": "live.emit",
+      "title": "Place the ship's blocks",
+      "position": {
+        "x": 2050,
+        "y": -200
+      },
+      "config": {
+        "event": "armPlaced",
+        "projection": "game.ships"
+      }
+    },
+    {
+      "id": "depTake",
+      "type": "data.expression",
+      "title": "The blocks taken from storage",
+      "position": {
+        "x": 1800,
+        "y": -450
+      },
+      "config": {
+        "expr": "let ts = map(picks, .t); {world: yardVal.world, stock: fromPairs(map(ts, let t = #; [\"block:\" + t, -len(filter(ts, # == t))]))}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emitDep",
+      "type": "live.emit",
+      "title": "Change the storage",
+      "position": {
+        "x": 2300,
+        "y": -200
+      },
+      "config": {
+        "event": "stored",
+        "projection": "game.ships"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "title": "Refuse",
+      "position": {
+        "x": 1800,
+        "y": 150
+      },
+      "config": {
+        "path": "args",
+        "fix": "finish the shipyard, lay out a cutter, hauler, freighter or barge on a bay within 25 m of it, assemble its blocks at the block works into a storage building within 30 m (game.assemble), and name the ship and the storage"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "yardKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "yardKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "yard",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "ship"
+      },
+      "to": {
+        "node": "shipKey",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "shipKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "sh",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "from"
+      },
+      "to": {
+        "node": "depKey",
+        "pin": "from"
+      }
+    },
+    {
+      "from": {
+        "node": "depKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "dep",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "sh",
+        "pin": "value"
+      },
+      "to": {
+        "node": "picks",
+        "pin": "shipVal"
+      }
+    },
+    {
+      "from": {
+        "node": "dep",
+        "pin": "value"
+      },
+      "to": {
+        "node": "picks",
+        "pin": "store"
+      }
+    },
+    {
+      "from": {
+        "node": "yard",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "yardVal"
+      }
+    },
+    {
+      "from": {
+        "node": "yard",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "check",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "sh",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "shipVal"
+      }
+    },
+    {
+      "from": {
+        "node": "sh",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "shipFound"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "ship"
+      },
+      "to": {
+        "node": "check",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "dep",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "store"
+      }
+    },
+    {
+      "from": {
+        "node": "dep",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "hasDep"
+      }
+    },
+    {
+      "from": {
+        "node": "picks",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "picks"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "yard",
+        "pin": "value"
+      },
+      "to": {
+        "node": "worked",
+        "pin": "yardVal"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "ship"
+      },
+      "to": {
+        "node": "worked",
+        "pin": "ship"
+      }
+    },
+    {
+      "from": {
+        "node": "picks",
+        "pin": "value"
+      },
+      "to": {
+        "node": "worked",
+        "pin": "picks"
+      }
+    },
+    {
+      "from": {
+        "node": "worked",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "emit",
+        "pin": "then"
+      },
+      "to": {
+        "node": "emitShip",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "ship"
+      },
+      "to": {
+        "node": "emitShip",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "sh",
+        "pin": "value"
+      },
+      "to": {
+        "node": "placedEvt",
+        "pin": "shipVal"
+      }
+    },
+    {
+      "from": {
+        "node": "picks",
+        "pin": "value"
+      },
+      "to": {
+        "node": "placedEvt",
+        "pin": "picks"
+      }
+    },
+    {
+      "from": {
+        "node": "placedEvt",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emitShip",
+        "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "emitShip",
+        "pin": "then"
+      },
+      "to": {
+        "node": "emitDep",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "from"
+      },
+      "to": {
+        "node": "emitDep",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "yard",
+        "pin": "value"
+      },
+      "to": {
+        "node": "depTake",
+        "pin": "yardVal"
+      }
+    },
+    {
+      "from": {
+        "node": "picks",
+        "pin": "value"
+      },
+      "to": {
+        "node": "depTake",
+        "pin": "picks"
+      }
+    },
+    {
+      "from": {
+        "node": "depTake",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emitDep",
+        "pin": "data"
+      }
+    }
+  ]
+}

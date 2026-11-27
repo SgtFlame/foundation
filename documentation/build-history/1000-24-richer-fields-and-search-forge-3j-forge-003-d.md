@@ -1,0 +1,1 @@
+| 24. Richer fields and search (Forge 3j) | forge 003-DataModel 3 (LanceDB, answered before), 9 (computed values written by events) and 10 (an optional retrieval source), and 035-Docs 1 (ProseMirror JSON), answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-7), to review after seeing |

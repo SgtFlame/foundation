@@ -1,0 +1,28 @@
+13. **The live core and server-driven UI** (Forge iteration 1, [forge 001-ServerUI.md](../../forge/documentation/plans/001-ServerUI.md)). *Built.* ★ the Hello app with two users ([Live.md](Live.md), [ServerUI.md](ServerUI.md)).
+    - **The live core**. *Built* (`features/live`):
+      - embedded NATS JetStream;
+      - commands committing events to a stream per tenant and area, with expected last subject sequences and duplicates dropped by id;
+      - projectors folding events into KV;
+      - queries as subscriptions;
+      - presence in KV;
+      - calls and connection extensions;
+      - the one WebSocket per window, `/api/v1/live`;
+      - in the browser: `live`, `useQuery`, `useCommand`, `usePresence`, `PresenceAvatars` and DevTools › Live.
+    - **Server-driven UI**. *Built* (`features/ui`, `src/ui/`):
+      - component trees with binding tracking and regions;
+      - sessions in NATS KV;
+      - the primitive catalog with metadata, and its MUI, flexlayout and React Flow renderers;
+      - app editor kinds as restorable top-level tabs (`AppHost`);
+      - the Go-written Hello app.
+    - **Moved onto the live connection**: Yjs rooms (as channels), chat's two streams (as calls) and configuration's change events (as the `config.changes` query). Their SSE routes and the room's WebSocket route are gone.
+    - **In Forge**: Axiom's `register.ts`, the Editors view's **Forge** section (*Prefabs* and *Applications*, placeholders), and `serve.go` wired as Foundation's.
+    - What slice 13 decided is recorded in [Live.md](Live.md#built-in-slice-13) and [ServerUI.md](ServerUI.md#built-in-slice-13).
+    - **Blockers**: none left. Its **Before** questions were answered before building:
+      - 001-ServerUI 1: binding tracking;
+      - 2: sessions in NATS KV;
+      - 3: flexlayout arrangements per user and page in settings;
+      - 4: no plain route;
+      - 5: a stream per area;
+      - 6: events kept forever;
+      - 8: Yjs over the live connection now;
+      - 9: chat and configuration off SSE now.

@@ -1,0 +1,1 @@
+| [Game.md](Game.md) › *S3* | Interior piece sets with boundary pieces (the kitchen), doors linked to areas with `game.linkDoor`, people with `game.placeNpc` and dialogues (`game.dialogues`), the talk panel and travel through doors in Play (forge 375 S3) |

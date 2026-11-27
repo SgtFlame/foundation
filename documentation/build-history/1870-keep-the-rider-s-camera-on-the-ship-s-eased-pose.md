@@ -1,0 +1,1 @@
+- keep the rider's camera on the ship's eased pose, so a crew member sees what everyone else sees, not a second simulation.

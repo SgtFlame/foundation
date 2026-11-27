@@ -1,0 +1,1 @@
+- keep secrets out of configurations: `infra.SecretProblems` refuses them on import and export.

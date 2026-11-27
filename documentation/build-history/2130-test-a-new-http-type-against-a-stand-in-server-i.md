@@ -1,0 +1,1 @@
+- test a new HTTP type against a stand-in server in the test, as `githubtest` is, and keep a `TestReal…` that runs the suite against the real service when its credentials are in the environment.

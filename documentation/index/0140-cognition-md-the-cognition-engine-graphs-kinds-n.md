@@ -1,0 +1,1 @@
+| [Cognition.md](Cognition.md) | The Cognition Engine (graphs, kinds, nodes, loops, traced runs, the built-in *Personal* graph, the `Agent` node), drafts edited by several people at once through `bp.*` commands and published, and the Cognition Editor |

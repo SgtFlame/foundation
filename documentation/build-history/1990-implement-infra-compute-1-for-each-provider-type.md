@@ -1,0 +1,1 @@
+- implement `infra.compute@1` for each provider type and pass `contracttest.Run` against recorded responses;

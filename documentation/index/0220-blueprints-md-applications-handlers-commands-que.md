@@ -1,0 +1,1 @@
+| [Blueprints.md](Blueprints.md) | Applications' handlers, commands, queries and actions as Cognition graph kinds, their node families (UI, commands, data, Expression, records), handlers and command and query graphs run from their published versions, tree overlays, and the Hello app's graphs |

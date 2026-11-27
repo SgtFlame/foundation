@@ -1,0 +1,1 @@
+- **Deep's model is retired**: the 🧪 Deep level's default model, `gemini-2.5-pro`, is refused by Gemini as no longer offered to new users (it suggests `gemini-3.1-pro-preview`). The `ai.chat.levels` defaults and the `ai.models` catalog need it replaced. Seen in slice 23.

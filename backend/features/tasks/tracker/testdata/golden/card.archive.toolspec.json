@@ -1,0 +1,19 @@
+{
+  "name": "tasks.tracker.card.archive",
+  "title": "Archive a card",
+  "description": "Archives (closes) a card; archiving an archived card gives it unchanged.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The card's outside id"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  },
+  "effect": "write",
+  "source": "connector"
+}

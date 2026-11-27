@@ -1,0 +1,8 @@
+{
+  "name": "tasks_tracker_check",
+  "description": "Signs in and changes nothing: whether the connection's credentials work.",
+  "input_schema": {
+    "type": "object",
+    "properties": {}
+  }
+}

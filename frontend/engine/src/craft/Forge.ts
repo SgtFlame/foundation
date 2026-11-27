@@ -95,6 +95,7 @@ interface PackLike {
   iron?: number
   minerals?: Partial<Record<string, number>>
   parts?: Partial<Record<string, number>>
+  blocks?: Partial<Record<string, number>> // V37: finished blocks
   capacity: number
 }
 
@@ -169,10 +170,12 @@ export function storable(pack: PackLike | null): Record<string, number> {
   for (const k of ['ore', 'rock', 'iron'] as const) if ((pack[k] ?? 0) > 0.0005) out[k] = Math.round((pack[k] ?? 0) * 1000) / 1000
   for (const [k, v] of Object.entries(pack.minerals ?? {})) if (k !== 'coal' && (v ?? 0) > 0.0005) out[k] = Math.round((v ?? 0) * 1000) / 1000
   for (const [k, v] of Object.entries(pack.parts ?? {})) if ((v ?? 0) > 0) out[k] = v ?? 0
+  for (const [k, v] of Object.entries(pack.blocks ?? {})) if ((v ?? 0) > 0) out[`block:${k}`] = v ?? 0 // V37
   return out
 }
 
-// V36: what H at storage takes: the components it holds (they take no room)
+// V36: what H at storage takes: the components it holds (they take no room;
+// V37: nor do finished blocks, block:<type>)
 export function components(stock: Readonly<Record<string, number>>): Record<string, number> {
-  return Object.fromEntries(Object.entries(stock).filter(([k, v]) => k in PART_NAMES && v > 0))
+  return Object.fromEntries(Object.entries(stock).filter(([k, v]) => (k in PART_NAMES || k.startsWith('block:')) && v > 0))
 }

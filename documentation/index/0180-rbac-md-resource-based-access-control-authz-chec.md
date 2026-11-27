@@ -1,0 +1,1 @@
+| [RBAC.md](RBAC.md) | Resource-based access control: `authz.Check` over role grants, built-in and custom roles, the Role Editor and the Share dialog; agent principals and roles granted on one record (slice 51) |

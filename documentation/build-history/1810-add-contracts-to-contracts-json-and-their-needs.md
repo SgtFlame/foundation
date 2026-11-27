@@ -1,0 +1,1 @@
+- add contracts to `contracts.json` and their needs to `cmd-game-handIn` and `handInProblem` together, so the panel and the blueprint agree;

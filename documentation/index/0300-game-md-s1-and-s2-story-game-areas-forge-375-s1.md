@@ -1,0 +1,1 @@
+| [Game.md](Game.md) › *S1 and S2* | Story game areas (forge 375 S1, S2): piece sets with edge fit rules, areas edited by `game.*` ops, `game.describeArea`, the area viewport with code-built models, night lights and the moons' phases, Play on a walk grid |

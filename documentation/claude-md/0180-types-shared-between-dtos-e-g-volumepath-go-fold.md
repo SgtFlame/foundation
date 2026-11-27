@@ -1,0 +1,1 @@
+- Types shared between DTOs (e.g. `VolumePath.go`, `FolderEntry.go`) get their own file with their own conversion. A DTO package may reuse another's shared types (`volumedto` uses `kbdto.VolumePath`).

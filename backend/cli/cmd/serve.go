@@ -100,11 +100,6 @@ import (
 	authznodes "github.com/SgtFlame/foundation/backend/features/authz/nodes"
 	"github.com/SgtFlame/foundation/backend/features/authz/rest/authzhandlers"
 	authzimpl "github.com/SgtFlame/foundation/backend/features/authz/services/authzservice/impl"
-	"github.com/SgtFlame/foundation/backend/features/calendar"
-	"github.com/SgtFlame/foundation/backend/features/calendar/caltest"
-	"github.com/SgtFlame/foundation/backend/features/calendar/ical"
-	calendarnodes "github.com/SgtFlame/foundation/backend/features/calendar/nodes"
-	calendarsettings "github.com/SgtFlame/foundation/backend/features/calendar/settings"
 	"github.com/SgtFlame/foundation/backend/features/chronicle"
 	chroniclecontext "github.com/SgtFlame/foundation/backend/features/chronicle/context"
 	chroniclenodes "github.com/SgtFlame/foundation/backend/features/chronicle/nodes"
@@ -130,10 +125,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	gitconnector "github.com/SgtFlame/foundation/backend/features/connectors/git"
-	gitgithub "github.com/SgtFlame/foundation/backend/features/connectors/git/github"
 	"github.com/SgtFlame/foundation/backend/features/connectors/git/gittest"
-	githttps "github.com/SgtFlame/foundation/backend/features/connectors/git/https"
-	gitnodes "github.com/SgtFlame/foundation/backend/features/connectors/git/nodes"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	connectorsimpl "github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice/impl"
@@ -251,6 +243,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/usage/rest/usagehandlers"
 	usageimpl "github.com/SgtFlame/foundation/backend/features/usage/services/usageservice/impl"
 	usagesettings "github.com/SgtFlame/foundation/backend/features/usage/settings"
+	"github.com/SgtFlame/foundation/backend/features/wiring"
 	workbenchcontext "github.com/SgtFlame/foundation/backend/features/workbench/context"
 	"github.com/SgtFlame/foundation/backend/features/workspace"
 	"github.com/gin-gonic/gin"
@@ -770,48 +763,12 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		infra.Contribute(registry, func() infra.Deps { return infraDeps })             // infra.config.* configurations and versions (forge 22a)
 		infraproviders.Contribute(registry)                                            // the provider types: infra.lxd (forge 22g)
 		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
-		gitconnector.Contribute(registry)                                              // git.repo@1 and git.review@1 (forge 24a)
-		gittest.Contribute(registry)                                                   // the Git test server connector type (forge 24a)
-		gitgithub.Contribute(registry)                                                 // the git.github connector type (forge 24b)
-		githttps.Contribute(registry)                                                  // the git.https connector type (forge 24c)
-		// gittest.control and gittest.log, for Forge's test server page and forge gittest (forge 24a)
-		gittest.ContributeLive(registry, func() *connectors.Dispatcher { return connectorDeps.Dispatcher })
-		// The git nodes and tools (forge 24d): through the dispatcher, as the caller
-		var gitMirrors gitnodes.MirrorStore // the mirrored Volumes (forge 24e), set once the file events exist
-		gitNodeDeps := func() gitnodes.Deps {
-			d := gitnodes.Deps{Mirrors: gitMirrors, Repositories: func(a features.ServiceArgs) ([]gitnodes.Repository, error) {
-				views, err := connections.List(a, connectionDeps, "", gitconnector.RepoRef)
-				out := make([]gitnodes.Repository, 0, len(views))
-				for _, v := range views {
-					out = append(out, gitnodes.Repository{ID: v.ID, Name: v.Name, Type: v.Type, Status: v.Status, Settings: v.Settings})
-				}
-				return out, err
-			}}
-			if connectorDeps.Dispatcher != nil {
-				d.Call = connectorDeps.Dispatcher.Call
-			}
-			return d
+		// Features wired from their own files in features/wiring (calendar,
+		// tasks, …): a new feature adds a file there, not lines here
+		var gitMirrors volumeservice.Mirrors // the mirrored Volumes (forge 24e), set once the file events exist
+		if err := wiring.ContributeAll(registry, &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Mirrors: &gitMirrors}); err != nil {
+			return err
 		}
-		gitnodes.Contribute(registry, gitNodeDeps)
-		gitnodes.ContributeTools(registry, gitNodeDeps)
-		// Calendar (forge 28): the calendar section, the time and iCalendar
-		// nodes (.ics parsed in a limited child process), calendar.events@1
-		// and the Calendar test server
-		calendarsettings.Contribute(registry)
-		calendarnodes.Contribute(registry)
-		calendarnodes.ContributeIcal(registry, func() calendarnodes.IcalDeps {
-			d := calendarnodes.IcalDeps{}
-			if exe, err := os.Executable(); err == nil {
-				d.Read = ical.Child(exe)
-			}
-			if transcriptFiles != nil {
-				d.Open = transcriptFiles.Open
-			}
-			return d
-		})
-		calendar.Contribute(registry)
-		caltest.Contribute(registry)
-		caltest.ContributeLive(registry, func() connections.Deps { return connectionDeps }) // caltest.call, for forge caltest
 		var infraNodeDeps infranodes.Deps
 		infranodes.Contribute(registry, func() infranodes.Deps { return infraNodeDeps }) // Ensure host, instance, unit, packages, Wait healthy, Remove (forge 22e)
 		var infraOutbox func(features.ServiceArgs, live.Area) error
@@ -1556,17 +1513,7 @@ func targetFrom(raw string) (logging.Target, error) {
 func connectorImpls() adapter.Options {
 	o := adapter.Options{Name: "server", Types: append(infraproviders.Types(), infratest.Type()), Contracts: []connectors.Contract{infra.ComputeContract(), infratest.ControlContract()},
 		Impls: append(infraproviders.Impls(), infratest.Default.Impl())} // the Infrastructure test server (forge 22c)
-	// The git connector's types (forge 24)
-	o.Types = append(o.Types, gittest.Type())
-	o.Contracts = append(append(o.Contracts, gitconnector.Contracts()...), gittest.ControlContract())
-	o.Types = append(o.Types, gitgithub.Type())
-	o.Impls = append(o.Impls, gittest.Default.Impl(), gitgithub.Impl(gitgithub.Options{Files: gitconnector.ServerFiles}))
-	o.Types = append(o.Types, githttps.Type())
-	o.Impls = append(o.Impls, githttps.Impl(githttps.Options{Files: gitconnector.ServerFiles}))
-	// The Calendar test server (forge 28c)
-	o.Types = append(o.Types, caltest.Type())
-	o.Contracts = append(o.Contracts, calendar.EventsContract(), caltest.ControlContract())
-	o.Impls = append(o.Impls, caltest.Default.Impl())
+	wiring.Adapters(&o) // features' own types (features/wiring)
 	return o
 }
 

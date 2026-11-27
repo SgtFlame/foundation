@@ -1,0 +1,1 @@
+| 52. The relational projection (Forge 7k) | forge 07k 1 (GORM and portable SQL; full-text search behind `data.Searcher` on LanceDB, the user's answer) and 2 (a consumer per database, a gap found while reading, answered with its proposal) | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-8), the Data Designer's *Large table* switch |
