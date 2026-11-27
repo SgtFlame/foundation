@@ -3,6 +3,7 @@ package chroniclesteps
 import (
 	"context"
 	"encoding/json"
+	"gorm.io/gorm"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -62,6 +63,7 @@ func (f *fakeRetriever) Retrieve(args retrievalservice.RetrieveArgs) retrievalse
 }
 
 type fixture struct {
+	db        *gorm.DB
 	steps     Steps
 	chat      *fakeChat
 	retriever *fakeRetriever
@@ -78,7 +80,8 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 	f := &fixture{chat: &fakeChat{replies: map[string]string{}}, retriever: &fakeRetriever{}, entries: map[string]chronicle.Entry{}}
-	f.steps = Steps{DB: gdb, Chat: f.chat, Retriever: func() retrievalservice.Service { return f.retriever },
+	f.db = gdb
+	f.steps = Steps{Memory: chronicle.MemoryIn(gdb), Chat: f.chat, Retriever: func() retrievalservice.Service { return f.retriever },
 		Config: sections{
 			aisettings.StagesID: `{"match": "fast", "memory": "nope"}`,
 			aisettings.LevelsID: `{"levels": [{"id": "fast"}, {"id": "standard", "default": true}]}`,
@@ -120,7 +123,7 @@ func TestCandidates(t *testing.T) {
 	f := newFixture(t)
 	// The previous round chose Engine
 	p := features.LocalPrincipal()
-	f.steps.DB.Create(&retrieval.RoundSegment{Tenanted: db.TenantOf(p), RoundID: 41, SourceID: SourceID, SegmentKey: strconv.FormatUint(f.id("Engine"), 10), Pinned: true})
+	f.db.Create(&retrieval.RoundSegment{Tenanted: db.TenantOf(p), RoundID: 41, SourceID: SourceID, SegmentKey: strconv.FormatUint(f.id("Engine"), 10), Pinned: true})
 	f.retriever.ids = []uint64{f.id("Byron"), f.id("Maybe"), f.id("Engine")}
 
 	got, err := f.steps.Candidates(CandidatesIn{ServiceArgs: f.args(), Text: "who?", Window: []conversation.Round{{Model: db.Model{ID: 40}}, {Model: db.Model{ID: 41}}},
@@ -205,14 +208,18 @@ func TestUpdate(t *testing.T) {
 		t.Fatalf("changes %+v", changes)
 	}
 	var byron chronicle.Entry
-	f.steps.DB.First(&byron, f.id("Byron"))
+	f.db.First(&byron, f.id("Byron"))
 	if byron.ShortSummary != "About Byron." {
 		t.Errorf("an unused entry was updated: %+v", byron)
 	}
 	var records []chronicle.EntryRound
-	f.steps.DB.Order("id").Find(&records)
+	f.db.Order("id").Find(&records)
 	if len(records) != 2 || records[0].Action != chronicle.ActionUpdated || records[0].RoundID != 99 ||
 		!strings.Contains(records[0].Previous, `"shortSummary":"About Ada."`) || records[1].Action != chronicle.ActionCreated {
 		t.Errorf("records %+v", records)
 	}
+}
+
+func (f *fakeRetriever) VoteOnce(retrievalservice.VoteOnceArgs) retrievalservice.VoteOnceResponse {
+	return retrievalservice.VoteOnceResponse{}
 }

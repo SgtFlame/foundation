@@ -20,6 +20,7 @@ type Service interface {
 	FieldNames(args FieldNamesArgs) FieldNamesResponse
 	FieldValues(args FieldValuesArgs) FieldValuesResponse
 	Streams(args StreamsArgs) StreamsResponse
+	//svc:stream
 	Tail(args TailArgs) *TailRequest
 	Ingest(args IngestArgs) IngestResponse
 	// SetUserLevel turns full logging for one user on (Level "debug") for

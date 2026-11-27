@@ -6,6 +6,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
+	"github.com/SgtFlame/foundation/backend/features/services"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 )
 
@@ -23,6 +24,18 @@ func (s *service) Answer(args conversationservice.AnswerArgs) conversationservic
 	if len(args.Result) > 0 && !json.Valid(args.Result) {
 		return conversationservice.AnswerResponse{Common: *args.Fail(http.StatusBadRequest, log.Code("bad_result").New("the result is not valid JSON"))}
 	}
+	if s.waitingFor(args.RoundID, args.CallID) == nil && s.calls != nil {
+		// The round may wait in another process (forge 21c).
+		resp := services.CallAt[conversationservice.AnswerResponse](s.calls, answerSubject(args.RoundID, args.CallID), Service, args)
+		if resp.Common.ErrorCode != services.CodeUnavailable {
+			return resp
+		}
+	}
+	return s.deliver(args)
+}
+
+// deliver hands an answer to a call waiting in this process.
+func (s *service) deliver(args conversationservice.AnswerArgs) conversationservice.AnswerResponse {
 	w := s.waitingFor(args.RoundID, args.CallID)
 	if w == nil || w.owner.TenantID != args.Principal.TenantID || w.owner.UserID != args.Principal.UserID {
 		return conversationservice.AnswerResponse{Common: *args.Fail(http.StatusNotFound, log.Code("call_not_waiting").With("roundId", args.RoundID, "callId", args.CallID).New("that tool call is not waiting for an answer"))}

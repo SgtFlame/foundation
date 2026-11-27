@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 
 	"github.com/SgtFlame/foundation/backend/features"
-	"github.com/SgtFlame/foundation/backend/features/chronicle"
 	"github.com/SgtFlame/foundation/backend/features/chronicle/steps"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -26,7 +25,7 @@ var log = logging.In("chronicle")
 
 // Deps are what the follower needs, once it exists.
 type Deps struct {
-	Steps chroniclesteps.Steps // its DB flags entries
+	Steps chroniclesteps.Steps // its Memory flags entries
 }
 
 // Contribute registers the provider and the follower. deps returns what
@@ -50,12 +49,10 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 // flag marks the entries a round made or changed for review when the round
 // is 🚫 ignored: they are kept, but may hold what the user wants forgotten.
 func flag(args features.ServiceArgs, round conversation.Round, to retrieval.Feedback, deps Deps) {
-	if to != retrieval.FeedbackIgnore || deps.Steps.DB == nil {
+	if to != retrieval.FeedbackIgnore || deps.Steps.Memory == nil {
 		return
 	}
-	gdb := deps.Steps.DB.WithContext(args.Context())
-	ids := gdb.Model(&chronicle.EntryRound{}).Select("entry_id").Where("tenant_id = ? AND round_id = ?", round.TenantID, round.ID)
-	if err := chronicle.Owned(gdb, args.Principal).Model(&chronicle.Entry{}).Where("id IN (?)", ids).UpdateColumn("review", true).Error; err != nil {
+	if err := deps.Steps.Memory.Flag(args, round.ID); err != nil {
 		log.With("roundId", round.ID).Error(args.Context(), err, "cannot flag the entries round %d changed", round.ID)
 	}
 }

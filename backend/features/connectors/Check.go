@@ -199,6 +199,11 @@ func CheckType(t Type, contract func(ref string) (Contract, bool)) []Problem {
 	if t.Source != SourceBuiltin && t.Source != SourceScripted {
 		c.add("source", "must be builtin or scripted, not %q", t.Source)
 	}
+	for i, svc := range t.Services {
+		if !slices.Contains(AdapterServices, svc) {
+			c.add(fmt.Sprintf("services[%d]", i), "%q is not a service an adapter may call: one of %s", svc, strings.Join(AdapterServices, ", "))
+		}
+	}
 	if len(t.Contracts) == 0 && !t.Discovers {
 		c.add("contracts", "names no contract, and does not discover one")
 	}

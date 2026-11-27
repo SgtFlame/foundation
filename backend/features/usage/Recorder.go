@@ -9,7 +9,6 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ai/settings"
 	"github.com/SgtFlame/foundation/backend/features/logging"
 	"github.com/SgtFlame/foundation/backend/features/usage/settings"
-	"gorm.io/gorm"
 )
 
 var log = logging.In("usage")
@@ -23,7 +22,7 @@ type CaptureSettings func(ctx context.Context) (usagesettings.Capture, error)
 // Recorder prices records and writes them in batches from one goroutine, so
 // recording never blocks a reply. Close flushes what is queued.
 type Recorder struct {
-	db      *gorm.DB
+	store   Store
 	prices  Prices
 	events  *Events
 	capture CaptureSettings
@@ -48,8 +47,8 @@ const (
 
 // NewRecorder starts the writer. prices, events and capture may be nil; with
 // no capture settings, nothing is captured.
-func NewRecorder(gdb *gorm.DB, prices Prices, events *Events, capture CaptureSettings) *Recorder {
-	r := &Recorder{db: gdb, prices: prices, events: events, capture: capture, queue: make(chan entry, queueSize), done: make(chan struct{})}
+func NewRecorder(store Store, prices Prices, events *Events, capture CaptureSettings) *Recorder {
+	r := &Recorder{store: store, prices: prices, events: events, capture: capture, queue: make(chan entry, queueSize), done: make(chan struct{})}
 	go r.run()
 	return r
 }
@@ -168,15 +167,12 @@ func (r *Recorder) write(batch []entry) {
 			captures = append(captures, *e.capture)
 		}
 	}
-	err := r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&records).Error; err != nil {
-			return err
+	for i := range records {
+		if records[i].ID == 0 {
+			records[i].ID = features.NewTSID()
 		}
-		if len(captures) > 0 {
-			return tx.Create(&captures).Error
-		}
-		return nil
-	})
+	}
+	err := r.store.Append(context.Background(), records, captures)
 	if err != nil {
 		log.With("records", len(records)).Error(context.Background(), err, "cannot store %d usage records", len(records))
 		return
@@ -198,10 +194,10 @@ func (r *Recorder) purge() {
 		log.Error(ctx, err, "cannot read the capture settings; captures are not purged")
 		return
 	}
-	res := r.db.Where("created_at < ?", time.Now().Add(-settings.Retention())).Delete(&Capture{})
-	if res.Error != nil {
-		log.Error(ctx, res.Error, "cannot purge expired captures")
-	} else if res.RowsAffected > 0 {
-		log.With("captures", res.RowsAffected).Info(ctx, "purged %d expired captures", res.RowsAffected)
+	n, err := r.store.PurgeCaptures(ctx, time.Now().Add(-settings.Retention()))
+	if err != nil {
+		log.Error(ctx, err, "cannot purge expired captures")
+	} else if n > 0 {
+		log.With("captures", n).Info(ctx, "purged %d expired captures", n)
 	}
 }

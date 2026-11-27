@@ -14,6 +14,24 @@ import (
 // every segment.
 type Service interface {
 	Retrieve(args RetrieveArgs) RetrieveResponse
+	// VoteOnce counts a verdict ("up" or "down") on segments tenant-wide,
+	// once per Key (retrieval.VoteOnce; retrieval.vote on the tenant), for
+	// the retrieval.vote tool and node in any process (forge 21d-2). Cast
+	// says whether it counted. Only Go code calls it.
+	//svc:idempotent
+	VoteOnce(args VoteOnceArgs) VoteOnceResponse
+}
+
+type VoteOnceArgs struct {
+	features.ServiceArgs
+	Key      string
+	Segments []retrieval.SegmentRef
+	Verdict  string
+}
+
+type VoteOnceResponse struct {
+	Common features.ServiceResponse
+	Cast   bool
 }
 
 type RetrieveArgs struct {

@@ -264,7 +264,7 @@ func Follow(args features.ServiceArgs, deps Deps) error {
 	}
 	tenant := args.Principal.TenantID
 	t := live.Target{Area: live.AreaDefinitions, Type: TargetType, ID: "*"}
-	return deps.Projections.Follow(args.Context(), tenant, live.AreaDefinitions, Follower, []string{t.Subjects(tenant)}, func(e live.Event) error {
+	return deps.Projections.Follow(args.Context(), tenant, live.AreaDefinitions, db.Named(Follower, deps.DB), []string{t.Subjects(tenant)}, func(e live.Event) error {
 		var c change
 		if err := json.Unmarshal(e.Data, &c); err != nil {
 			return fmt.Errorf("cannot read the install: %w", err)

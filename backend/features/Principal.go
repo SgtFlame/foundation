@@ -53,6 +53,10 @@ type Principal struct {
 	// caller or the host's dispatch, never from a model or a tool's
 	// arguments; work an agent starts keeps it (authz.AsAgent).
 	MemoryOf uint64
+	// Service names the service a service principal works for (forge
+	// 21b), for the audit and the logs; empty for background work that
+	// names none.
+	Service string
 }
 
 // ReachKeys is the principal's reach as record keys ("<entity>:<id>").
@@ -101,6 +105,12 @@ func BackgroundArgs(ctx context.Context) ServiceArgs {
 	return ServiceArgs{Ctx: ctx, Principal: ServicePrincipal(LocalTenantID)}
 }
 
+// ServicePrincipalFor is background work of service for tenant (forge
+// 21b): a service principal that says which service acted.
+func ServicePrincipalFor(tenant uint64, service string) Principal {
+	return Principal{Kind: PrincipalService, TenantID: tenant, Service: service}
+}
+
 // AppPrincipal is an installed app's principal in tenant (forge 07a).
 func AppPrincipal(tenant uint64, app string) Principal {
 	return Principal{Kind: PrincipalApp, TenantID: tenant, App: app}
@@ -121,6 +131,10 @@ func (p Principal) String() string {
 		return "app:" + p.App
 	case PrincipalAgent:
 		return "agent:" + strconv.FormatUint(p.AgentID, 10)
+	case PrincipalService:
+		if p.Service != "" {
+			return "service:" + p.Service
+		}
 	}
 	return string(p.Kind)
 }
@@ -138,14 +152,16 @@ type PrincipalRef struct {
 	Reach string `json:"reach,omitempty"`
 	// MemoryOf is an agent run's memory owner (forge 15a), kept likewise.
 	MemoryOf uint64 `json:"memoryOf,string,omitempty"`
+	// Service is a service principal's service (forge 21b).
+	Service string `json:"service,omitempty"`
 }
 
 // Ref is the principal as data.
 func (p Principal) Ref() PrincipalRef {
-	return PrincipalRef{Kind: p.Kind, UserID: p.UserID, App: p.App, AgentID: p.AgentID, OnBehalfOf: p.OnBehalfOf, Reach: p.Reach, MemoryOf: p.MemoryOf}
+	return PrincipalRef{Kind: p.Kind, UserID: p.UserID, App: p.App, AgentID: p.AgentID, OnBehalfOf: p.OnBehalfOf, Reach: p.Reach, MemoryOf: p.MemoryOf, Service: p.Service}
 }
 
 // In is the principal a reference names in tenant.
 func (r PrincipalRef) In(tenant uint64) Principal {
-	return Principal{Kind: r.Kind, UserID: r.UserID, TenantID: tenant, App: r.App, AgentID: r.AgentID, OnBehalfOf: r.OnBehalfOf, Reach: r.Reach, MemoryOf: r.MemoryOf}
+	return Principal{Kind: r.Kind, UserID: r.UserID, TenantID: tenant, App: r.App, AgentID: r.AgentID, OnBehalfOf: r.OnBehalfOf, Reach: r.Reach, MemoryOf: r.MemoryOf, Service: r.Service}
 }

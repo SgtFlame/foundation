@@ -16,6 +16,7 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/nats-io/nuid"
 )
 
 var log = logging.In("live").Tags("nats")
@@ -37,7 +38,23 @@ type Options struct {
 	// Listen, when set (e.g. "127.0.0.1:4222"), lets other processes
 	// connect to the embedded server; empty listens nowhere.
 	Listen string
+	// Users, when set, make the embedded server ask every connection for
+	// a user (forge 21e-2: an external adapter fenced by its permissions);
+	// the server's own connections use a user allowed everything.
+	Users []User
+	own   []nats.Option // the server's own user's, when Users are set
 }
+
+// User is a user of the embedded server with the subjects it may publish
+// and subscribe to (NATS wildcards); a user may always answer the
+// requests it receives.
+type User struct {
+	Name, Password     string
+	Publish, Subscribe []string
+}
+
+// ownUser is the embedded server's own user when Users are set.
+const ownUser = "foundation"
 
 // Server is a connection to NATS JetStream, embedded or external.
 type Server struct {
@@ -81,6 +98,20 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 		NoSigs:     true,
 		NoLog:      true,
 	}
+	var own []nats.Option
+	if len(opts.Users) > 0 {
+		pass := nuid.Next()
+		so.Users = append(so.Users, &server.User{Username: ownUser, Password: pass})
+		for _, u := range opts.Users {
+			so.Users = append(so.Users, &server.User{Username: u.Name, Password: u.Password, Permissions: &server.Permissions{
+				Publish:   &server.SubjectPermission{Allow: u.Publish},
+				Subscribe: &server.SubjectPermission{Allow: u.Subscribe},
+				Response:  &server.ResponsePermission{MaxMsgs: 1},
+			}})
+		}
+		own = []nats.Option{nats.UserInfo(ownUser, pass)}
+		opts.own = own
+	}
 	if opts.Listen != "" {
 		host, port, err := splitHostPort(opts.Listen)
 		if err != nil {
@@ -97,7 +128,7 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 		ns.Shutdown()
 		return nil, log.Errorf("the embedded NATS server did not start")
 	}
-	nc, err := nats.Connect("", nats.InProcessServer(ns), nats.Name("foundation"))
+	nc, err := nats.Connect("", append([]nats.Option{nats.InProcessServer(ns), nats.Name("foundation")}, own...)...)
 	if err != nil {
 		ns.Shutdown()
 		return nil, log.Wrapf(err, "connect to the embedded NATS server")
@@ -133,13 +164,22 @@ func (s *Server) JS() jetstream.JetStream { return s.js }
 // the embedded server, else to the external one's URL.
 func (s *Server) Connect(name string) (*nats.Conn, error) {
 	if s.ns != nil {
-		return nats.Connect("", nats.InProcessServer(s.ns), nats.Name(name))
+		return nats.Connect("", append([]nats.Option{nats.InProcessServer(s.ns), nats.Name(name)}, s.opts.own...)...)
 	}
 	url := s.opts.URL
 	if url == "" {
 		url = s.nc.ConnectedUrl()
 	}
 	return nats.Connect(url, s.opts.connectOptions(name)...)
+}
+
+// ConnectAs opens a connection to the embedded server as one of its
+// Users, as an external process holding that user would.
+func (s *Server) ConnectAs(name, user, password string, opts ...nats.Option) (*nats.Conn, error) {
+	if s.ns == nil {
+		return nil, log.Errorf("only the embedded server has users")
+	}
+	return nats.Connect("", append([]nats.Option{nats.InProcessServer(s.ns), nats.Name(name), nats.UserInfo(user, password)}, opts...)...)
 }
 
 // ClientURL is where another process connects: the embedded server's
@@ -203,3 +243,16 @@ func StartTest(t testing.TB) *Server {
 // describes takes (its name, creds, CA and reconnects), for tools that
 // connect without JetStream.
 func ConnectOptions(o Options, name string) []nats.Option { return o.connectOptions(name) }
+
+// StartTestUsers is StartTest with users the server asks connections
+// for (forge 21e-2); Conn and Connect use a user allowed everything, and
+// ConnectAs one of these.
+func StartTestUsers(t testing.TB, users ...User) *Server {
+	t.Helper()
+	s, err := Start(context.Background(), Options{Dir: t.TempDir(), Users: users})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	return s
+}

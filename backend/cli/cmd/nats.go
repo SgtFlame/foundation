@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"os"
 	"path/filepath"
 
@@ -122,7 +123,18 @@ var natsUserCmd = &cobra.Command{
 		if a == nil {
 			return fmt.Errorf("no account %s", natsAccount)
 		}
-		u, err := a.NewUser(natsUser, natsauth.Everything, 0)
+		perms := natsauth.Everything
+		if len(natsAdapterTypes) > 0 {
+			// An external connector adapter's user (forge 21e-2): its types'
+			// calls, svc.connectors and the services they declare, no more
+			var types []connectors.Type
+			for _, id := range natsAdapterTypes {
+				types = append(types, connectors.Type{ID: id, Services: natsAdapterServices})
+			}
+			p := connectors.AdapterPermissions(types...)
+			perms = natsauth.Permissions{Pub: p.Publish, Sub: p.Subscribe, Responses: true}
+		}
+		u, err := a.NewUser(natsUser, perms, 0)
 		if err != nil {
 			return err
 		}
@@ -132,6 +144,8 @@ var natsUserCmd = &cobra.Command{
 }
 
 var natsTenant uint64
+
+var natsAdapterTypes, natsAdapterServices []string
 
 var natsTenantCmd = &cobra.Command{
 	Use:   "tenant",
@@ -246,6 +260,8 @@ func init() {
 	}
 	natsUserCmd.Flags().StringVar(&natsAccount, "account", natsauth.App, "the account")
 	natsUserCmd.Flags().StringVar(&natsUser, "name", "serve", "the user's name")
+	natsUserCmd.Flags().StringSliceVar(&natsAdapterTypes, "adapter", nil, "mint an external connector adapter's user, fenced to these connector types (forge 21e-2)")
+	natsUserCmd.Flags().StringSliceVar(&natsAdapterServices, "adapter-services", nil, "the services the adapter's types declare: records, files, connections")
 	natsCmd.AddCommand(natsInitCmd, natsUserCmd)
 
 	for _, c := range []*cobra.Command{natsReplicasCmd, natsTenantAddCmd, natsPlaceCmd} {

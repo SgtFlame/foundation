@@ -40,3 +40,11 @@ func asFor(ctx context.Context, p features.Principal, action, resource string) (
 	}
 	return as, allowed
 }
+
+// HasAs reports whether ctx decides user checks by a role (WithAs). Such a
+// context cannot travel to another process, since the role's Covers is a
+// function (forge 21b): services.Call refuses it.
+func HasAs(ctx context.Context) bool {
+	as, _ := ctx.Value(asKey{}).(*As)
+	return as != nil
+}

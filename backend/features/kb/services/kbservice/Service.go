@@ -5,6 +5,7 @@ import (
 )
 
 type Service interface {
+	//svc:stream
 	OpenVolumeAsync(args OpenVolumeArgs) *OpenVolumeRequest
 	OpenVolume(args OpenVolumeArgs) OpenVolumeResponse
 }

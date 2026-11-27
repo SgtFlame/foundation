@@ -3,6 +3,8 @@ package chroniclenodes
 import (
 	"context"
 	"encoding/json"
+	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
+	"gorm.io/gorm"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -65,6 +67,7 @@ func (f *fakeRetriever) Retrieve(retrievalservice.RetrieveArgs) retrievalservice
 }
 
 type fixture struct {
+	db      *gorm.DB
 	steps   chroniclesteps.Steps
 	chat    *fakeChat
 	engine  *engine.Engine
@@ -91,7 +94,8 @@ func newFixture(t *testing.T) *fixture {
 		f.entries[name] = e
 	}
 	retriever := &fakeRetriever{ids: []uint64{f.entries["Engine"].ID, f.entries["Byron"].ID}}
-	f.steps = chroniclesteps.Steps{DB: gdb, Chat: f.chat, Retriever: func() retrievalservice.Service { return retriever },
+	f.db = gdb
+	f.steps = chroniclesteps.Steps{Memory: chronicle.MemoryIn(gdb), Chat: f.chat, Retriever: func() retrievalservice.Service { return retriever },
 		Config: sections{
 			aisettings.StagesID: `{"match": "fast", "memory": "fast"}`,
 			aisettings.LevelsID: `{"levels": [{"id": "fast"}, {"id": "standard", "default": true}]}`,
@@ -101,7 +105,7 @@ func newFixture(t *testing.T) *fixture {
 	conversationnodes.Contribute(reg)
 	toolsnodes.Contribute(reg, func() toolsnodes.Deps { return toolsnodes.Deps{Chat: f.chat, Registry: reg} })
 	Contribute(reg, func() Deps { return Deps{Steps: f.steps} })
-	f.engine = engine.New(gdb, reg, sections{"chat": `{"systemPrompt": "Be kind.", "titleLevel": "fast"}`})
+	f.engine = engine.New(traces.In(gdb), reg, sections{"chat": `{"systemPrompt": "Be kind.", "titleLevel": "fast"}`})
 	return f
 }
 
@@ -284,7 +288,7 @@ func TestPersonalWithMemoryOff(t *testing.T) {
 // and changes no memory entry.
 func TestRunModeRunsPersonalHeadless(t *testing.T) {
 	f := newFixture(t)
-	gdb := f.steps.DB
+	gdb := f.db
 	if err := db.Migrate(gdb, tools.Models()...); err != nil {
 		t.Fatal(err)
 	}
@@ -298,11 +302,13 @@ func TestRunModeRunsPersonalHeadless(t *testing.T) {
 	reg := extensions.NewRegistry()
 	cognitionnodes.Contribute(reg)
 	conversationnodes.Contribute(reg)
-	deps := func() toolsnodes.Deps { return toolsnodes.Deps{Chat: f.chat, Registry: reg, Config: cfg, DB: gdb} }
+	deps := func() toolsnodes.Deps {
+		return toolsnodes.Deps{Chat: f.chat, Registry: reg, Config: cfg, Calls: conversation.CallsIn(gdb)}
+	}
 	toolsnodes.Contribute(reg, deps)
 	conversationnodes.ContributeRunMode(reg, deps)
 	Contribute(reg, func() Deps { return Deps{Steps: f.steps} })
-	e := engine.New(gdb, reg, cfg)
+	e := engine.New(traces.In(gdb), reg, cfg)
 
 	g := cognition.Graph{ID: "ask", Kind: cognition.KindFunction,
 		Nodes: []cognition.Node{
@@ -363,4 +369,8 @@ func TestRunModeRunsPersonalHeadless(t *testing.T) {
 	if len(after) != len(before) {
 		t.Errorf("%d entries, want %d: Run mode proposed some", len(after), len(before))
 	}
+}
+
+func (f *fakeRetriever) VoteOnce(retrievalservice.VoteOnceArgs) retrievalservice.VoteOnceResponse {
+	return retrievalservice.VoteOnceResponse{}
 }

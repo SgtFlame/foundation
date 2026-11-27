@@ -2,6 +2,7 @@ package impl
 
 import (
 	"errors"
+	"github.com/SgtFlame/foundation/backend/features/services"
 	"net/http"
 	"sync"
 
@@ -29,6 +30,11 @@ type service struct {
 	// workspaceList lists the caller's workspaces (forge 16d); nil lists
 	// conversations without them
 	workspaceList conversation.WorkspaceList
+
+	// calls, when set, sends an answer to the process whose round waits
+	// for it, and callOpts serve the answers sent here (forge 21c).
+	calls    *services.Client
+	callOpts []services.ServerOption
 
 	mu      sync.Mutex
 	waiting map[string]*waiting // tool calls rounds are paused on, by waitKey

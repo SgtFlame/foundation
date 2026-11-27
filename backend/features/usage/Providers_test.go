@@ -49,7 +49,7 @@ func TestRecordsArePricedAndAttributed(t *testing.T) {
 	events := NewEvents()
 	published := 0
 	events.Subscribe(func(Record) { published++ })
-	r := NewRecorder(gdb, prices, events, nil)
+	r := NewRecorder(StoreIn(gdb), prices, events, nil)
 
 	args := features.ServiceArgs{Principal: features.LocalPrincipal(), Meta: features.Meta{Level: "fast", ConversationID: 7}}
 	chat := ChatProvider(fakeChat{}, "fake", r)
@@ -104,7 +104,7 @@ func TestCapturedCallsKeepTheirText(t *testing.T) {
 		t.Fatal(err)
 	}
 	on := true
-	r := NewRecorder(gdb, nil, nil, func(context.Context) (usagesettings.Capture, error) {
+	r := NewRecorder(StoreIn(gdb), nil, nil, func(context.Context) (usagesettings.Capture, error) {
 		return usagesettings.Capture{Enabled: on, RetentionHours: 24}, nil
 	})
 	args := features.ServiceArgs{Principal: features.LocalPrincipal()}

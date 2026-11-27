@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -72,7 +73,9 @@ func setup(t *testing.T) *fixture {
 		"chat":       `{"systemPrompt": "Be helpful."}`,
 		"chat.modes": `{"modes": [{"id": "personal", "label": "Personal", "icon": "🧠", "graphRef": "chatModeTemplate", "default": true}]}`,
 	}
-	toolsnodes.Contribute(reg, func() toolsnodes.Deps { return toolsnodes.Deps{DB: gdb, Registry: reg, Config: cfg} })
+	toolsnodes.Contribute(reg, func() toolsnodes.Deps {
+		return toolsnodes.Deps{Calls: conversation.CallsIn(gdb), Registry: reg, Config: cfg}
+	})
 	f := &fixture{t: t, reg: reg}
 	var draftDeps drafts.Deps
 	drafts.Contribute(reg, func() drafts.Deps { return draftDeps })
@@ -81,7 +84,7 @@ func setup(t *testing.T) *fixture {
 	srv := natsd.StartTest(t)
 	f.p = project.New(srv.JS(), reg)
 	t.Cleanup(f.p.Close)
-	f.engine = engine.New(gdb, reg, cfg)
+	f.engine = engine.New(traces.In(gdb), reg, cfg)
 	f.engine.SetSource(drafts.Source{Store: f.p})
 	draftDeps = drafts.Deps{Engine: f.engine, Projections: f.p}
 	f.bus = bus.New(f.p)

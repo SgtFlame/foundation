@@ -25,7 +25,6 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/retrieval"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 	"github.com/SgtFlame/foundation/backend/features/tools/settings"
-	"gorm.io/gorm"
 )
 
 // Node type IDs.
@@ -45,7 +44,7 @@ const TypeToolSet = "ToolSet"
 
 // Deps are what the nodes run with, created after the registry.
 type Deps struct {
-	DB       *gorm.DB
+	Calls    tools.CallStore // where the Agent node's tool calls are kept (forge 21d-2)
 	Chat     chatservice.Service
 	Config   config.Reader
 	Registry *extensions.Registry // where the tools are
@@ -409,7 +408,7 @@ func runAgent(x *cognition.Exec, in cognition.Values, d Deps) (cognition.Values,
 	args := chatservice.CompleteArgs{ServiceArgs: sa, Level: cfg.Level, System: system,
 		Messages: []chatservice.Message{{Role: chatservice.RoleUser, Content: prompt}}}
 	m.Apply(&args)
-	out := tools.Loop{DB: d.DB, Chat: d.Chat}.Run(tools.RunArgs{
+	out := tools.Loop{Calls: d.Calls, Chat: d.Chat}.Run(tools.RunArgs{
 		CompleteArgs: args,
 		Tools:        offered,
 		Settings:     settings,

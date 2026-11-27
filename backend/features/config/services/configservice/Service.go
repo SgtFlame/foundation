@@ -16,11 +16,29 @@ import (
 // secret.
 type Service interface {
 	config.Reader
+	//svc:local
 	Sections(args SectionsArgs) SectionsResponse
 	Get(args GetArgs) GetResponse
 	Set(args SetArgs) SetResponse
 	Reset(args ResetArgs) ResetResponse
+	//svc:stream
 	Watch(args WatchArgs) *WatchRequest
+	// Resolve is Resolved for a process that does not run the config
+	// service (forge 21g-1): Go callers only, with no handler, so it is
+	// reached only over NATS with a call token; the proxy's Resolved
+	// sends it.
+	//svc:idempotent
+	Resolve(args ResolveArgs) ResolveResponse
+}
+
+type ResolveArgs struct {
+	features.ServiceArgs
+	Section string
+}
+
+type ResolveResponse struct {
+	Common features.ServiceResponse
+	Value  json.RawMessage
 }
 
 // A Scope names a layer relative to the principal: "app", or the principal's

@@ -16,9 +16,9 @@ import (
 	kblive "github.com/SgtFlame/foundation/backend/features/kb/live"
 	kbnodes "github.com/SgtFlame/foundation/backend/features/kb/nodes"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
+	"github.com/SgtFlame/foundation/backend/features/retrieval/services/retrievalservice"
 	textnodes "github.com/SgtFlame/foundation/backend/features/text/nodes"
 	"github.com/SgtFlame/foundation/backend/features/workspace"
-	"gorm.io/gorm"
 	"slices"
 	"strings"
 	"testing"
@@ -63,7 +63,7 @@ func everything(t *testing.T) *extensions.Registry {
 	chroniclenodes.Contribute(reg, func() chroniclenodes.Deps { return chroniclenodes.Deps{} })
 	toolsnodes.Contribute(reg, func() toolsnodes.Deps { return toolsnodes.Deps{} })
 	conversationnodes.ContributeRunMode(reg, func() toolsnodes.Deps { return toolsnodes.Deps{} })
-	retrievaltools.Contribute(reg, func() *gorm.DB { return nil })
+	retrievaltools.Contribute(reg, func() retrievalservice.Service { return nil })
 	if err := uicomponents.Contribute(reg); err != nil {
 		t.Fatal(err)
 	}

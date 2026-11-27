@@ -15,7 +15,9 @@ import (
 	"github.com/nats-io/nkeys"
 )
 
-// serve units (forge 20d-2): an infraUnit of kind serve runs as
+// serve units (forge 20d-2; since 21g-2 the unit is Type=notify: serve
+// reports READY=1 once every service it reaches answers, so the unit is
+// active only when it serves): an infraUnit of kind serve runs as
 // axiom-serve@<unit>, from one template unit. Before each start the
 // oneshot axiom-serve-creds@<unit> runs `axiomd unit-credentials <unit>`,
 // which asks this agent over its local socket; the agent asks the issuer
@@ -30,6 +32,9 @@ After=axiom-serve-creds@%i.service network-online.target
 Wants=network-online.target
 
 [Service]
+Type=notify
+NotifyAccess=main
+TimeoutStartSec=15min
 LoadCredential=nats.creds:/run/axiomd/units/%i/nats.creds
 LoadCredential=nats-urls:/run/axiomd/units/%i/nats-urls
 LoadCredential=vault-role-id:/run/axiomd/units/%i/vault-role-id
