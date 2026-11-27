@@ -17,6 +17,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -91,6 +92,16 @@ func (p *Projections) JetStreamFor(ctx context.Context, tenant uint64) (jetstrea
 		return p.js, nil
 	}
 	return p.acc.For(ctx, tenant)
+}
+
+// ConnFor is the NATS connection of tenant's account, for core NATS
+// subjects such as ephemeral signals (forge 26d-1).
+func (p *Projections) ConnFor(ctx context.Context, tenant uint64) (*nats.Conn, error) {
+	js, err := p.JetStreamFor(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	return js.Conn(), nil
 }
 
 // Registry is the registry the projectors come from.

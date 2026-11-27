@@ -17,7 +17,6 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/records"
 	"github.com/SgtFlame/foundation/backend/features/records/data"
 	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 )
 
 // EphemeralQuery follows one ephemeral topic's signals (forge 26d-1).
@@ -45,7 +44,7 @@ type Signal struct {
 
 // conns gives the NATS connection of a tenant's account.
 type conns interface {
-	JetStreamFor(ctx context.Context, tenant uint64) (jetstream.JetStream, error)
+	ConnFor(ctx context.Context, tenant uint64) (*nats.Conn, error)
 }
 
 func connOf(ctx context.Context, store any, tenant uint64) (*nats.Conn, error) {
@@ -53,11 +52,7 @@ func connOf(ctx context.Context, store any, tenant uint64) (*nats.Conn, error) {
 	if !ok {
 		return nil, log.Code("no_nats").New("there is no NATS connection for ephemeral signals")
 	}
-	js, err := c.JetStreamFor(ctx, tenant)
-	if err != nil {
-		return nil, err
-	}
-	return js.Conn(), nil
+	return c.ConnFor(ctx, tenant)
 }
 
 // ephemeralAccess checks that args' principal may read or write (write)
