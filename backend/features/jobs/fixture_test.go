@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/apps/branches"
 	"github.com/SgtFlame/foundation/backend/features/cognition/traces"
 	"path/filepath"
 	"slices"
@@ -135,6 +136,7 @@ func setup(t *testing.T, s jobs.Settings) *fixture {
 		dataDeps   data.Deps
 		prefabDeps prefabs.Deps
 		appDeps    manifests.Deps
+		branchDeps branches.Deps
 		installDep installs.Deps
 		jobDeps    jobs.Deps
 		jobNodes   jobsnodes.Deps
@@ -146,6 +148,7 @@ func setup(t *testing.T, s jobs.Settings) *fixture {
 	recordsnodes.Contribute(reg, func() data.Deps { return dataDeps })
 	prefabs.Contribute(reg, func() prefabs.Deps { return prefabDeps })
 	manifests.Contribute(reg, func() manifests.Deps { return appDeps })
+	branches.Contribute(reg, func() branches.Deps { return branchDeps }) // app branches (forge 19a), which app.publish reads
 	installs.Contribute(reg, func() installs.Deps { return installDep })
 	jobs.Contribute(reg, func() jobs.Deps { return jobDeps })
 	jobsnodes.Contribute(reg, func() jobsnodes.Deps { return jobNodes })
@@ -170,6 +173,7 @@ func setup(t *testing.T, s jobs.Settings) *fixture {
 	entityDeps = entities.Deps{Projections: p, DB: gdb, OnPublish: func(args features.ServiceArgs) error { return data.Follow(args, dataDeps) }}
 	prefabDeps = prefabs.Deps{Projections: p, DB: gdb}
 	appDeps = manifests.Deps{Projections: p, DB: gdb}
+	branchDeps = branches.Deps{Projections: p}
 	installDep = installs.Deps{Projections: p, DB: gdb, Nodes: nodeDeps}
 	f.bus.Resolve = installs.CommandFor(func() installs.Deps { return installDep }, livenodes.CommandFor(func() livenodes.Deps { return nodeDeps }))
 	f.subs.Resolve = installs.QueryFor(func() installs.Deps { return installDep }, livenodes.QueryFor(func() livenodes.Deps { return nodeDeps }))

@@ -306,6 +306,37 @@ func Lock(ctx context.Context, js jetstream.JetStream, tenant uint64, connection
 	}
 }
 
+// TryLock tries once to take a connection's exclusive lock: held is false
+// while another holds it (forge 21e-1: the connectors service's Lock).
+func TryLock(ctx context.Context, js jetstream.JetStream, tenant uint64, connection, holder string) (rev uint64, held bool, err error) {
+	kv, err := KV(ctx, js, natsd.KV(jetstream.KeyValueConfig{Bucket: LocksBucket(tenant), History: 1, TTL: LockTTL,
+		Description: "Locks on connections of exclusive types: <connection> (forge 07c)"}))
+	if err != nil {
+		return 0, false, err
+	}
+	rev, err = kv.Create(ctx, connection, []byte(holder))
+	if errors.Is(err, jetstream.ErrKeyExists) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return rev, true, nil
+}
+
+// Unlock gives back a lock TryLock took at rev.
+func Unlock(ctx context.Context, js jetstream.JetStream, tenant uint64, connection string, rev uint64) error {
+	kv, err := KV(ctx, js, natsd.KV(jetstream.KeyValueConfig{Bucket: LocksBucket(tenant), History: 1, TTL: LockTTL,
+		Description: "Locks on connections of exclusive types: <connection> (forge 07c)"}))
+	if err != nil {
+		return err
+	}
+	if err := kv.Delete(ctx, connection, jetstream.LastRevision(rev)); err != nil && !errors.Is(err, jetstream.ErrKeyNotFound) && !isWrongSequence(err) {
+		return err
+	}
+	return nil
+}
+
 // EventID is a connector event's id: its id fields' values joined by |,
 // in the order the event names them, or a hash of the contract, event and
 // payload when a field is missing (or the event names none).

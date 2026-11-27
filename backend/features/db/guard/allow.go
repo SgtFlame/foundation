@@ -62,11 +62,11 @@ var Allow = []Row{
 	{Package: "features/apps/branches", Owner: "live", Storage: "branch histories read from the def streams", Imports: []string{jsImp}},
 	{Package: "features/jobs", Owner: "jobs", Storage: "job work queues and schedules", Imports: []string{jsImp}},
 
-	// Connectors (21e-1).
+	// Connectors (21e-1): the adapter runtime and scripted connectors keep
+	// their books through connectors.Books, held by these alone.
 	{Package: "features/connectors", Owner: "connectors", Storage: "connector KV (cx_*)", Imports: []string{jsImp}},
-	{Package: "features/connectors/adapter", Owner: "connectors", Storage: "connector KV", Until: "21e-1", Imports: []string{jsImp}},
+	{Package: "features/connectors/services/connectorsservice/impl", Owner: "connectors", Storage: "connector KV and CX streams, for adapters without a handle", Imports: []string{jsImp}},
 	{Package: "features/connectors/connections", Owner: "connectors", Storage: "connector KV", Imports: []string{jsImp}},
-	{Package: "features/connectors/scripted", Owner: "connectors", Storage: "connector KV", Until: "21e-1", Imports: []string{jsImp}},
 
 	// The Control Plane's own account and its database rows (iteration 20):
 	// not tenant storage.

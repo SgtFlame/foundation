@@ -28,6 +28,9 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/config/services/configservice"
 	configproxy "github.com/SgtFlame/foundation/backend/features/config/services/configservice/proxy"
 	configserver "github.com/SgtFlame/foundation/backend/features/config/services/configservice/server"
+	"github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice"
+	connectorsproxy "github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice/proxy"
+	connectorsserver "github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice/server"
 	"github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice"
 	conversationproxy "github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice/proxy"
 	conversationserver "github.com/SgtFlame/foundation/backend/features/conversation/services/conversationservice/server"
@@ -225,6 +228,30 @@ var Services = []services.Spec{
 		Proxy: func(c *services.Client) any { return configproxy.New(c) },
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return configserver.Serve(nc, svc.(configservice.Service), opts...)
+		},
+	},
+	{
+		Name:      "connectors",
+		Interface: reflect.TypeOf((*connectorsservice.Service)(nil)).Elem(),
+		Ops: []services.OpSpec{
+			{Name: "Announce", Idempotent: true},
+			{Name: "Withdraw", Idempotent: true},
+			{Name: "Announcements", Idempotent: true},
+			{Name: "PutDiscovered", Idempotent: true},
+			{Name: "LedgerPut", Idempotent: true},
+			{Name: "TryLock"},
+			{Name: "Unlock", Idempotent: true},
+			{Name: "Sources", Stream: true},
+			{Name: "LeaseCreate"},
+			{Name: "LeaseUpdate"},
+			{Name: "LeaseDelete", Idempotent: true},
+			{Name: "Cursor", Idempotent: true},
+			{Name: "PutCursor", Idempotent: true},
+			{Name: "Publish", Idempotent: true},
+		},
+		Proxy: func(c *services.Client) any { return connectorsproxy.New(c) },
+		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
+			return connectorsserver.Serve(nc, svc.(connectorsservice.Service), opts...)
 		},
 	},
 	{

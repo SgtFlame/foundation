@@ -14,6 +14,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/logging"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nuid"
 )
 
 // Handler runs one operation from its request body with the call's
@@ -63,6 +64,10 @@ type Server struct {
 	sub     *nats.Subscription
 	cancel  *nats.Subscription
 	cancels cancels
+	// streams are the streams in flight, ended by Stop: a stream is
+	// long-lived, so a server stopping hands it back to its caller as lost
+	// rather than waiting for it (forge 21e-1).
+	streams cancels
 	// at is the one operation of a server made by ServeAt.
 	at string
 	wg sync.WaitGroup
@@ -131,11 +136,13 @@ func ServeAt(nc *nats.Conn, subject, service string, handler Handler, opts ...Se
 	return s, nil
 }
 
-// Stop leaves the queue group and waits for calls in flight.
+// Stop leaves the queue group, ends the streams in flight and waits for
+// the calls in flight.
 func (s *Server) Stop() {
 	if s.sub != nil {
 		_ = s.sub.Drain()
 	}
+	s.streams.all()
 	s.wg.Wait()
 	if s.cancel != nil {
 		_ = s.cancel.Unsubscribe()
@@ -213,7 +220,10 @@ func (s *Server) handle(m *nats.Msg) {
 		return
 	}
 	if st, ok := resp.(streamOf); ok {
+		id := nuid.Next()
+		s.streams.add(id, cancel)
 		s.serveStream(ctx, m, op, st.req)
+		s.streams.remove(id)
 		log.With("service", s.service, "op", op, "durationMs", time.Since(start).Milliseconds(), "side", "server").
 			Debug(ctx, "svc.stream %s.%s", s.service, op)
 		return

@@ -71,6 +71,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
+	connectorsimpl "github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/controlplane"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/issuer"
@@ -867,7 +868,10 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		}
 		connectorDeps = connectors.Deps{Registry: connectorRegistry, Dispatcher: connectorDispatcher}
 		connectionDeps = connections.Deps{Projections: projections, Bus: liveBus, Registry: connectorRegistry, Secrets: secretStore, Dispatcher: connectorDispatcher, Config: configService, Extensions: registry}
-		scriptedDeps = scripted.Deps{Store: projections, Engine: cognitionEngine, JS: connectorRegistry.JetStream(), Reg: registry}
+		scriptedDeps = scripted.Deps{Store: projections, Engine: cognitionEngine, Books: connectors.InJetStream(connectorRegistry.JetStream()), Reg: registry}
+		// The connectors' data service (forge 21e-1), served over NATS for
+		// adapters without a JetStream handle by serve --services (21g-1)
+		_ = connectorsimpl.CreateService(connectorsimpl.WithJetStream(connectorRegistry.JetStream()))
 		// Adapters' settings on cx.resolve and their sources' status on
 		// cx.status, in a queue group in every process
 		if err := connections.Serve(ctx, nats.Conn(), func() connections.Deps { return connectionDeps }); err != nil {

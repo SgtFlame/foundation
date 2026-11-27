@@ -436,6 +436,19 @@ func (c *cancels) remove(id string) {
 	delete(c.m, id)
 }
 
+// all cancels every call it holds.
+func (c *cancels) all() {
+	c.mu.Lock()
+	fs := make([]context.CancelFunc, 0, len(c.m))
+	for _, f := range c.m {
+		fs = append(fs, f)
+	}
+	c.mu.Unlock()
+	for _, f := range fs {
+		f()
+	}
+}
+
 func (c *cancels) cancel(id string) {
 	c.mu.Lock()
 	f := c.m[id]

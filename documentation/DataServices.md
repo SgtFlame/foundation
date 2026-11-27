@@ -38,6 +38,15 @@ The tenant database's runtime tables are reached only through their data service
 - The guard's 21d-4 rows became owner rows, each naming whose storage it is: the live core's (`live/presence`, `live/nodes`, `activity`, `apps/branches`), `ui`'s sessions and `files`' store.
 - Not yet: `liveservice.Serve` calling `svc.live` when the core is elsewhere (it calls the bus in its own process), presence and activity through `svc.live`, and the test of a `web` process with no JetStream handle serving the Tasks app, a chat round and an upload, which wait for 21g-1's groups and harness.
 
+## Built in forge 21e-1
+
+- **`connectors.Books`** is the bookkeeping an adapter runtime keeps: announcements (`Announce`, `Withdraw`, `Announcements`), discovered contracts, the call ledger, exclusive locks, event sources (`Sources`, a watch with `Ready` once the current ones are in), their leases (`LeaseCreate` failing with `ErrLeaseTaken`, `LeaseUpdate` with `ErrLeaseLost`, `LeaseDelete`), cursors, and events published into `CX_<tenant>`. `connectors.InJetStream(js)` keeps them in the `cx_*` buckets (`connectors.BooksOn(nc)` for a connection's JetStream).
+- **The adapter runtime holds no JetStream handle**: `adapter.Options.Books` (default `BooksOn(nc)`), and `adapter.Context` writes the ledger and discovered contracts through it; `scripted.Deps.Books` replaces `JS` for its cursors and *Emit connector event*.
+- **`svc.connectors`** (`connectors/services/connectorsservice`, Go only, service principals only, 403 `services_only`) keeps the books for adapters in other processes: `Announce`, `Withdraw`, `Announcements`, `PutDiscovered`, `LedgerPut`, `TryLock`/`Unlock` (the remote `Lock` tries every 250 ms until its context ends), `Sources` (a 21c stream), `LeaseCreate`/`LeaseUpdate` (409 `lease_taken`, `lease_lost`), `LeaseDelete`, `Cursor`, `PutCursor` and `Publish` (400 `bad_event`). `connectorsservice.Remote(svc)` is `connectors.Books` over it: an adapter given it as `Options.Books` announces itself, serves calls, leases and runs event sources through the service (21e-1 question 1: one service).
+- A server stopping now ends its streams in flight (`services.Server.Stop`), so their callers see them lost rather than the server waiting for them.
+- The guard lost `connectors/adapter` and `connectors/scripted`; `connectorsservice/impl` joined `connectors` and `connectors/connections` (which answers `cx.resolve` and `cx.status`) as the holders.
+- Not yet: `adapter.Context.Services` (records, files and connections proxies built from the type's manifest, 21f-1); `cx.resolve` checked against the call token rather than headers; the Mail types in their own process (21g-1's harness).
+
 ## The inventory
 
 | Storage | Owner (data service) | Packages allowed a handle | Removed by |
@@ -56,6 +65,6 @@ The tenant database's runtime tables are reached only through their data service
 | Tenant streams, projections, side buckets | `live` | `live/project`, `live/bus`; `live/presence`, `live/nodes`, `activity`, `ui`, `apps/branches` | stays (others call `svc.live`, 21d-4) |
 | Record files' object stores | `files` (`filesservice`) | `records/files` | stays (others call `svc.files`, 21d-4) |
 | Job work queues and schedules | `jobs` | `jobs` | stays |
-| Connector KV (`cx_*`) | `connectors` | `connectors`, `connections`; `connectors/adapter`, `scripted` | 21e-1 |
+| Connector KV (`cx_*`) | `connectors` (`connectorsservice`) | `connectors`, `connections`, `connectorsservice/impl` | stays (adapters call `svc.connectors`, 21e-1) |
 | The control account and desired state | `controlplane` | `controlplane` and its daemons' packages | stays (not tenant storage) |
 | Opening every store | `serve` | `cli/cmd`, `db`, `live/natsd` | stays |
