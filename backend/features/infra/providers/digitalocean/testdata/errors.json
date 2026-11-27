@@ -1,0 +1,100 @@
+{
+  "provider": "digitalocean",
+  "source": "written from DigitalOcean's API v2 reference: pagination and errors",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/regions",
+        "query": "per_page=200"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "regions": [
+            {
+              "name": "New York 1",
+              "slug": "nyc1",
+              "available": true
+            }
+          ],
+          "links": {
+            "pages": {
+              "next": "https://api.digitalocean.test/v2/regions?page=2&per_page=200",
+              "last": "https://api.digitalocean.test/v2/regions?page=2&per_page=200"
+            }
+          },
+          "meta": {
+            "total": 2
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/regions",
+        "query": "page=2&per_page=200"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "regions": [
+            {
+              "name": "Amsterdam 3",
+              "slug": "ams3",
+              "available": true
+            }
+          ],
+          "links": {
+            "pages": {
+              "prev": "https://api.digitalocean.test/v2/regions?page=1&per_page=200"
+            }
+          },
+          "meta": {
+            "total": 2
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.digitalocean.test/v2/droplets"
+      },
+      "response": {
+        "status": 422,
+        "body": {
+          "id": "unprocessable_entity",
+          "message": "Size is not available in this region."
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/account"
+      },
+      "response": {
+        "status": 401,
+        "body": {
+          "id": "unauthorized",
+          "message": "Unable to authenticate you"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/account"
+      },
+      "response": {
+        "status": 429,
+        "body": {
+          "id": "too_many_requests",
+          "message": "API Rate limit exceeded."
+        }
+      }
+    }
+  ]
+}

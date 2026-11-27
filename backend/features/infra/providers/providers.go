@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
@@ -198,3 +199,25 @@ func normal(h infra.ProviderHost) infra.ProviderHost {
 }
 
 func host(h infra.ProviderHost) (json.RawMessage, error) { return json.Marshal(normal(h)) }
+
+// Hostname is a resource id as a hostname (letters, digits and -, at most
+// 63, not starting with a digit), as providers name machines.
+func Hostname(id string) string {
+	var sb strings.Builder
+	for _, r := range strings.ToLower(id) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
+			sb.WriteRune(r)
+		default:
+			sb.WriteRune('-')
+		}
+	}
+	n := strings.Trim(sb.String(), "-")
+	if len(n) > 63 {
+		n = strings.TrimRight(n[:63], "-")
+	}
+	if n == "" || (n[0] >= '0' && n[0] <= '9') {
+		n = "h-" + n
+	}
+	return n
+}
