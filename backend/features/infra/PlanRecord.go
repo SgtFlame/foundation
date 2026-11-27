@@ -339,7 +339,7 @@ func contributePlans(reg *extensions.Registry, deps func() Deps) {
 			return PlanType + "." + p.ID, nil
 		}, json.RawMessage(`null`)),
 	})
-	tools.Tools.Register(reg, tools.Tool{
+	RegisterToolAndCall(reg, tools.Tool{
 		Descriptor:  extensions.Descriptor{ID: "infra.plan", Source: source},
 		Title:       "Plan infrastructure",
 		Description: "Compares a configuration version (0 or left out: the draft) with what exists at the providers and stores a plan: the creations, changes and removals in the order they would run, refusals of what cannot be satisfied (such as a VM where no host can run VMs) and notes. Applying is always of a plan a person has seen. Gives the plan with its id. It changes nothing at the providers, so it never asks first.",

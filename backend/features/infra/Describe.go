@@ -142,7 +142,7 @@ func Describe(args features.ServiceArgs, reg *extensions.Registry, deps Deps, co
 }
 
 func contributeDescribe(reg *extensions.Registry, deps func() Deps) {
-	tools.Tools.Register(reg, tools.Tool{
+	RegisterToolAndCall(reg, tools.Tool{
 		Descriptor:  extensions.Descriptor{ID: "infra.describe", Source: source},
 		Title:       "Describe infrastructure",
 		Description: "The deployment as its configuration describes it, by site: each resource (host, cluster, instance, and later NATS nodes, units and stacks) with its state against what exists: present, missing (not made yet), changed (made, but differs) or extra (made, no longer desired), plus what cannot be satisfied and notes. version 0 is the draft; left out, the applied version, else the last committed one. Changes nothing.",

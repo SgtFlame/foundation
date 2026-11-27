@@ -56,7 +56,7 @@ func CheckDrift(args features.ServiceArgs, reg *extensions.Registry, d Deps, con
 }
 
 func contributeDrift(reg *extensions.Registry, deps func() Deps) {
-	tools.Tools.Register(reg, tools.Tool{
+	infra.RegisterToolAndCall(reg, tools.Tool{
 		Descriptor:  extensions.Descriptor{ID: "infra.drift", Source: source},
 		Title:       "Check infrastructure drift",
 		Description: "Plans the configuration's applied version against what exists at the providers and in the Control Plane: every step is drift (a host that vanished, an instance changed by hand). When the configuration's onDrift setting is correct, applies that plan at once (removals of what holds data still wait for approval). Gives the plan and the correcting apply's id.",
