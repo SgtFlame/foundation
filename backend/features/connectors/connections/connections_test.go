@@ -1,12 +1,16 @@
 package connections_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,6 +23,8 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connectorstest"
+	"github.com/SgtFlame/foundation/backend/features/connectors/hooks"
+	"github.com/SgtFlame/foundation/backend/features/connectors/hooks/verify"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/live"
@@ -501,3 +507,72 @@ var (
 	_ = adapter.Options{}
 	_ = jetstream.KeyValueConfig{}
 )
+
+// A callback pushed to a connection's hook reaches its trigger once
+// (forge 26b-1): the hook is made when a trigger listens to a callback
+// event, a delivery repeated ten times or sent to two adapter processes at
+// once is one event, a bad signature is refused, and deleting the
+// connection drops the hook.
+func TestCallbacks(t *testing.T) {
+	f := setup(t)
+	f.keep()
+	f.runJobs()
+	f.installWatcher("")
+	f.serve(connectorstest.Options("a", nil))
+	f.serve(connectorstest.Options("b", nil))
+	f.online("test.secure")
+	c := f.create(map[string]any{"type": "test.secure", "name": "Pushed", "owner": "tenant", "settings": map[string]any{"user": "u"},
+		"secrets": map[string]any{"password": "p"}})
+	var h hooks.Hook
+	eventually(t, "the hook made", 5*time.Second, func() bool {
+		var ok bool
+		h, ok, _ = hooks.Of(context.Background(), f.srv.JS(), 1, c.ID)
+		return ok
+	})
+	desc := f.query(args(), "connections.describe", map[string]any{"id": c.ID})
+	eventually(t, "the hook described", 3*time.Second, func() bool { return strings.Contains(desc.json(), hooks.Path+h.ID) })
+	hs := &hooks.Server{NC: f.srv.Conn(), JS: f.srv.JS()}
+	post := func(secret string, body []byte) int {
+		r := httptest.NewRequest(http.MethodPost, hooks.Path+h.ID, bytes.NewReader(body))
+		for k, v := range verify.Sign("hmac-sha256", secret, body, time.Now()) {
+			r.Header[k] = v
+		}
+		w := httptest.NewRecorder()
+		hs.ServeHTTP(w, r)
+		return w.Code
+	}
+	one := []byte(`{"id":"cb_1","jobId":"j-cb1"}`)
+	for i := 0; i < 10; i++ {
+		if code := post("p", one); code != 200 {
+			t.Fatalf("delivery %d: %d", i, code)
+		}
+	}
+	two := []byte(`{"id":"cb_2","jobId":"j-cb2"}`)
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if code := post("p", two); code != 200 {
+				t.Errorf("concurrent delivery: %d", code)
+			}
+		}()
+	}
+	wg.Wait()
+	if code := post("wrong", []byte(`{"id":"cb_3","jobId":"j-cb3"}`)); code != 400 {
+		t.Fatalf("a bad signature: %d", code)
+	}
+	eventually(t, "two hits", 5*time.Second, func() bool { return len(f.hits.all()) >= 2 })
+	time.Sleep(time.Second)
+	if got := f.hits.all(); len(got) != 2 || !slices.Contains(got, any("j-cb1")) || !slices.Contains(got, any("j-cb2")) {
+		t.Fatalf("hits %v, want j-cb1 and j-cb2 once each", got)
+	}
+	f.ok("connection.delete", c.ID, map[string]any{})
+	eventually(t, "the hook dropped", 5*time.Second, func() bool {
+		_, ok, _ := hooks.Of(context.Background(), f.srv.JS(), 1, c.ID)
+		return !ok
+	})
+	if code := post("p", []byte(`{"id":"cb_4","jobId":"j-cb4"}`)); code != 404 {
+		t.Fatalf("a dropped hook: %d", code)
+	}
+}

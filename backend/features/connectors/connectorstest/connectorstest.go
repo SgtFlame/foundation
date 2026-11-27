@@ -1,7 +1,8 @@
 // Package connectorstest is the test contract and builtin test types of
 // the connector registry (forge 07b), for tests only: test.echo@1, served
 // by test.echo (no connection), test.secure (a connection with a secret
-// password and an event source scripted by its settings) and
+// password, an event source scripted by its settings, and callbacks signed
+// hmac-sha256, forge 26b-1) and
 // test.exclusive (the same, one session at a time), all implemented here.
 package connectorstest
 
@@ -15,6 +16,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
+	"github.com/SgtFlame/foundation/backend/features/connectors/hooks/verify"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 )
 
@@ -92,7 +94,7 @@ func Types() []connectors.Type {
 	return []connectors.Type{
 		{ID: "test.echo", Contracts: []string{ContractRef}, NoConnection: true, Source: connectors.SourceBuiltin,
 			Meta: connectors.Meta{Title: "Test echo", Description: "Implements test.echo@1 in Go with no connection. For tests only.", Tags: []string{"test"}}},
-		{ID: "test.secure", Contracts: []string{ContractRef}, Source: connectors.SourceBuiltin, Settings: json.RawMessage(settings),
+		{ID: "test.secure", Contracts: []string{ContractRef}, Source: connectors.SourceBuiltin, Settings: json.RawMessage(settings), Receives: "hmac-sha256",
 			Meta: connectors.Meta{Title: "Test secure echo", Description: "Implements test.echo@1 over a connection with a secret password. For tests only.", Tags: []string{"test"}}},
 		{ID: "test.exclusive", Contracts: []string{ContractRef}, Source: connectors.SourceBuiltin, Settings: json.RawMessage(settings), Exclusive: true,
 			Meta: connectors.Meta{Title: "Test exclusive echo", Description: "Implements test.echo@1 over a connection that allows one session at a time. For tests only.", Tags: []string{"test"}}},
@@ -137,7 +139,7 @@ func Options(by string, count *Counter) adapter.Options {
 		return &session{by: by, count: count, conn: conn.ID, settings: st}, nil
 	}
 	return adapter.Options{Name: "test-" + by, Types: Types(), Contracts: []connectors.Contract{Contract()},
-		Impls: []adapter.Impl{{Type: "test.echo", Open: open}, {Type: "test.secure", Open: open}, {Type: "test.exclusive", Open: open}}}
+		Impls: []adapter.Impl{{Type: "test.echo", Open: open}, {Type: "test.secure", Open: open, Receive: Receiver{}}, {Type: "test.exclusive", Open: open}}}
 }
 
 // Settings are a test connection's settings as its session reads them.
@@ -178,6 +180,25 @@ func (c *SessionCount) Max(conn string) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.max[conn]
+}
+
+// Receiver takes test.secure's callbacks (forge 26b-1): signed
+// hmac-sha256 with the connection's password, each body one finished
+// event's payload.
+type Receiver struct{}
+
+// Receive verifies a callback and gives its event.
+func (Receiver) Receive(ctx adapter.Context, conn adapter.Connection, cb adapter.Callback) ([]adapter.Event, error) {
+	var st Settings
+	_ = json.Unmarshal(conn.Settings, &st)
+	if err := verify.Verify("hmac-sha256", st.Password, cb.Header, cb.Body, time.Now()); err != nil {
+		return nil, connectors.Errorf(connectors.CodeAuth, "%v", err)
+	}
+	var p struct{ ID string }
+	if err := json.Unmarshal(cb.Body, &p); err != nil || p.ID == "" {
+		return nil, connectors.Errorf(connectors.CodeInvalid, "the body is not a finished event")
+	}
+	return []adapter.Event{{Contract: ContractRef, Name: "finished", ID: p.ID, Payload: cb.Body}}, nil
 }
 
 type session struct {

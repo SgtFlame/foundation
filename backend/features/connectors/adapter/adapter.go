@@ -98,7 +98,7 @@ type Impl struct {
 	// connection changes or the adapter stops.
 	Open func(ctx Context, conn Connection) (Session, error)
 	// Receive, for a type with Receives, verifies a callback and turns it
-	// into events (26b; declared, not called in 07b).
+	// into events: the runtime answers cx.receive with it (26b-1).
 	Receive Receiver
 	// Register registers the hook URL with the service (26b; not called).
 	Register Registrar
@@ -158,10 +158,11 @@ type Registration struct {
 
 // Callback is one HTTP request a service pushed to a hook.
 type Callback struct {
-	Method, Path string
-	Header       http.Header
-	Body         []byte
-	ReceivedAt   time.Time
+	Method     string      `json:"method"`
+	Path       string      `json:"path"`
+	Header     http.Header `json:"header"`
+	Body       []byte      `json:"body"`
+	ReceivedAt time.Time   `json:"receivedAt"`
 }
 
 // Surface is an inbound surface (75a): it listens on an outside endpoint
@@ -335,6 +336,17 @@ func (s *server) run(ctx context.Context) error {
 		}
 		for _, subj := range subjects {
 			sub, err := s.nc.QueueSubscribe(subj, connectors.CallQueue(id), s.receive)
+			if err != nil {
+				s.unsubscribe(subs)
+				return err
+			}
+			subs = append(subs, sub)
+		}
+	}
+	// Callbacks hooks received (26b-1), in the type's queue group too
+	for id, subjects := range s.receiveSubjects() {
+		for _, subj := range subjects {
+			sub, err := s.nc.QueueSubscribe(subj, connectors.CallQueue(id), s.receiveCallback)
 			if err != nil {
 				s.unsubscribe(subs)
 				return err

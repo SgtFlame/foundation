@@ -124,6 +124,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
+	"github.com/SgtFlame/foundation/backend/features/connectors/hooks"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	connectorsimpl "github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice/impl"
@@ -1298,6 +1299,14 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		public := router.Group("/api/v1")
 		api := public.Group("", rest.RequireUser())
 		volumes := api.Group("", kbhandlers.InTenant())
+
+		// Connector hooks (forge 26b-1) are outside /api/v1 and its session:
+		// a service proves itself by the signature its connection's type checks
+		hookServer := &hooks.Server{NC: nats.Conn(), JS: connectorRegistry.JetStream(), Limits: func(ctx context.Context) hooks.Limits {
+			l, _ := config.Read[hooks.Limits](configService, features.BackgroundArgs(ctx), hooks.SectionID)
+			return l
+		}}
+		router.POST(hooks.Path+":id", gin.WrapH(hookServer))
 
 		identityHandler := &identityhandlers.IdentityHandler{}
 		identityHandler.Register(public, identityService)

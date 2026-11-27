@@ -21,7 +21,7 @@ var serviceSubjects = map[string][]string{
 
 // AdapterPermissions are what an external adapter serving types needs
 // and all its NATS user is given (forge 21e-2): their calls in their
-// queue groups, connection changes, resolving connections and reporting
+// queue groups, their callbacks (26b-1), connection changes, resolving connections and reporting
 // sources' status, svc.connectors for its books, the services the types
 // declare, and inboxes for replies and stream acks. Nothing on evt.>,
 // $JS.>, $KV.>, $O.> or any other service, so a third party's adapter
@@ -33,6 +33,9 @@ func AdapterPermissions(types ...Type) Permissions {
 	}
 	for _, t := range types {
 		p.Subscribe = append(p.Subscribe, CallSubjects(t.ID))
+		if t.Receives != "" { // its callbacks (forge 26b-1)
+			p.Subscribe = append(p.Subscribe, ReceiveSubjects(t.ID))
+		}
 		for _, svc := range t.Services {
 			p.Publish = append(p.Publish, serviceSubjects[svc]...)
 		}

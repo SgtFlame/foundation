@@ -17,6 +17,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/connectors"
+	"github.com/SgtFlame/foundation/backend/features/connectors/hooks"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
@@ -93,6 +94,29 @@ func revision(c Connection) uint64 {
 	return binary.BigEndian.Uint64(sum[:8])
 }
 
+// receivesAny reports whether t receives callbacks and one of the listened
+// contracts has an event delivered by callback.
+func receivesAny(ctx context.Context, d Deps, tenant uint64, t connectors.Type, listened []string) (bool, error) {
+	if t.Receives == "" {
+		return false, nil
+	}
+	for _, ref := range listened {
+		ci, ok, err := d.Registry.Contract(ctx, tenant, ref)
+		if err != nil {
+			return false, err
+		}
+		if !ok {
+			continue
+		}
+		for _, ev := range ci.Contract.Events {
+			if slices.Contains(ev.Delivery, connectors.DeliveryCallback) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // Reconcile makes the tenant's cx_sources what its installs and
 // connections say.
 func Reconcile(ctx context.Context, d Deps, tenant uint64) error {
@@ -141,6 +165,16 @@ func Reconcile(ctx context.Context, d Deps, tenant uint64) error {
 			continue
 		}
 		slices.Sort(contracts)
+		callbacks, err := receivesAny(ctx, d, tenant, t.Type, contracts)
+		if err != nil {
+			return err
+		}
+		if callbacks {
+			// a trigger listens to its callbacks: it needs its hook (forge 26b-1)
+			if _, err := hooks.Ensure(ctx, d.Projections.JetStream(), tenant, c.ID, c.Type); err != nil {
+				return err
+			}
+		}
 		want[connectors.SourceKey(tenant, c.ID)] = connectors.Source{Tenant: tenant, Connection: c.ID, Type: c.Type, Contracts: contracts,
 			PollInterval: c.Options.PollInterval, Since: c.Options.Since, Revision: revision(c)}
 	}
@@ -284,6 +318,9 @@ func followed(ctx context.Context, d Deps, tenant uint64, e live.Event) error {
 	}
 	if e.Target.Type == TargetType && e.Type == EventDeleted {
 		if err := purgeSecrets(ctx, d, tenant, e.Target.ID); err != nil {
+			return err
+		}
+		if err := hooks.Drop(ctx, d.Projections.JetStream(), tenant, e.Target.ID); err != nil {
 			return err
 		}
 	}

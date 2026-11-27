@@ -124,3 +124,32 @@ const (
 	HeaderKey       = "Cx-Key"       // the idempotency key, when the operation has one
 	HeaderFiles     = "Cx-Files"     // file ids the dispatcher vouches the caller may use, comma separated (forge 07n)
 )
+
+// ReceiveSubject is a callback a hook received for a connection (26b-1):
+// cx.receive.<tenant>.<type>.<connection>, answered by the type's adapter,
+// which verifies it, publishes its events and replies.
+func ReceiveSubject(tenant uint64, typ, connection string) string {
+	return fmt.Sprintf("cx.receive.%d.%s.%s", tenant, Token(typ), connection)
+}
+
+// ReceiveSubjects are every callback for typ, in every tenant.
+func ReceiveSubjects(typ string) string { return fmt.Sprintf("cx.receive.*.%s.*", Token(typ)) }
+
+// TenantReceiveSubjects are the callbacks for typ in one tenant.
+func TenantReceiveSubjects(tenant uint64, typ string) string {
+	return fmt.Sprintf("cx.receive.%d.%s.*", tenant, Token(typ))
+}
+
+// ParseReceiveSubject splits a receive subject into its tenant, type and
+// connection.
+func ParseReceiveSubject(subject string) (uint64, string, string, error) {
+	parts := strings.Split(subject, ".")
+	if len(parts) != 5 || parts[0] != "cx" || parts[1] != "receive" {
+		return 0, "", "", fmt.Errorf("%q is not a receive subject", subject)
+	}
+	var tenant uint64
+	if _, err := fmt.Sscan(parts[2], &tenant); err != nil || tenant == 0 {
+		return 0, "", "", fmt.Errorf("%q names no tenant", subject)
+	}
+	return tenant, FromToken(parts[3]), parts[4], nil
+}
