@@ -25,7 +25,21 @@ func EnsureRootTenant(ctx context.Context, gdb *gorm.DB, owner uint64) (bool, er
 		var t identity.Tenant
 		err := tx.First(&t, features.RootTenantID).Error
 		if err == nil {
-			return nil
+			// Made before anyone signed up (serve --control-plane on a
+			// fresh server, then setup): its owner is user 1 once there
+			// is one, and only while it has no member at all.
+			if owner == 0 {
+				return nil
+			}
+			var members int64
+			if err := tx.Model(&identity.Membership{}).Where("tenant_id = ?", features.RootTenantID).Count(&members).Error; err != nil || members > 0 {
+				return err
+			}
+			var u identity.User
+			if err := tx.First(&u, owner).Error; err != nil {
+				return nil
+			}
+			return addOwner(ctx, tx, owner)
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err

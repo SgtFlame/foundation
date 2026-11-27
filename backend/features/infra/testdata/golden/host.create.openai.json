@@ -1,0 +1,45 @@
+{
+  "type": "function",
+  "function": {
+    "name": "infra_compute_host_create",
+    "description": "Makes a host, and whatever it needs at the provider, under our resource id. A create with an id already made makes nothing and gives the host. It answers at once with the host creating; it becomes running later (host.get, or the host.changed event).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Our resource id for the host, the idempotency key, e.g. west-general-1"
+        },
+        "name": {
+          "type": "string",
+          "description": "Its name at the provider; the id when left out"
+        },
+        "size": {
+          "type": "string",
+          "description": "A size id from size.list"
+        },
+        "image": {
+          "type": "string",
+          "description": "An image id from image.list; the provider's default Ubuntu when left out"
+        },
+        "region": {
+          "type": "string",
+          "description": "A region id from region.list"
+        },
+        "userData": {
+          "type": "string",
+          "description": "Cloud-init user data run at first boot"
+        },
+        "nested": {
+          "type": "boolean",
+          "description": "Whether it must run virtual machines: only sizes with vms are accepted"
+        }
+      },
+      "required": [
+        "id",
+        "size",
+        "region"
+      ]
+    }
+  }
+}

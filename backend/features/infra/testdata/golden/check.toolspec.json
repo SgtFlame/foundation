@@ -1,0 +1,11 @@
+{
+  "name": "infra.compute.check",
+  "title": "Check",
+  "description": "Signs in and lists nothing: whether the connection's credentials work.",
+  "input": {
+    "type": "object",
+    "properties": {}
+  },
+  "effect": "read",
+  "source": "connector"
+}

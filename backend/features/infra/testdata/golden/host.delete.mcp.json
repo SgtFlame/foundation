@@ -1,0 +1,36 @@
+{
+  "name": "infra_compute_host_delete",
+  "title": "Delete a host",
+  "description": "Deletes a host and what was made for it, with its disk. Deleting a host that is gone succeeds, with deleted false.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The host's resource id to delete"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "deleted": {
+        "type": "boolean",
+        "description": "Whether there was a host to delete"
+      }
+    },
+    "required": [
+      "deleted"
+    ]
+  },
+  "annotations": {
+    "title": "Delete a host",
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": false
+  }
+}

@@ -37,6 +37,10 @@ import (
 	conversationnodes "github.com/SgtFlame/foundation/backend/features/conversation/nodes"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/game"
+	"github.com/SgtFlame/foundation/backend/features/infra"
+	infraapply "github.com/SgtFlame/foundation/backend/features/infra/apply"
+	"github.com/SgtFlame/foundation/backend/features/infra/infratest"
+	infranodes "github.com/SgtFlame/foundation/backend/features/infra/nodes"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	livenodes "github.com/SgtFlame/foundation/backend/features/live/nodes"
 	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
@@ -101,8 +105,12 @@ func everything(t *testing.T) *extensions.Registry {
 	connectorsnodes.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
 	connections.Contribute(reg, func() connections.Deps { return connections.Deps{} })
 	scripted.Contribute(reg, func() scripted.Deps { return scripted.Deps{} })
-	game.Contribute(reg, func() game.Deps { return game.Deps{} }) // forge 360 V1
-	connectorstest.Contribute(reg)                                // the builtin contracts a test registry has
+	game.Contribute(reg, func() game.Deps { return game.Deps{} })                   // forge 360 V1
+	infra.Contribute(reg, func() infra.Deps { return infra.Deps{} })                // forge 22a
+	infratest.Contribute(reg)                                                       // forge 22c
+	infranodes.Contribute(reg, func() infranodes.Deps { return infranodes.Deps{} }) // forge 22e
+	infraapply.Contribute(reg, func() infraapply.Deps { return infraapply.Deps{} }) // forge 22f
+	connectorstest.Contribute(reg)                                                  // the builtin contracts a test registry has
 	return reg
 }
 

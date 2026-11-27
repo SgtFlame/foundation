@@ -46,3 +46,4 @@ What is built. Each document describes a feature as it works now, with what was 
 | [ControlPlane.md](ControlPlane.md) | Forge iteration 20: NATS accounts and credentials as decentralized JWTs, and (as built) the root tenant, the daemons, service identities and software distribution |
 | [Services.md](Services.md) | Services over NATS (forge 21): the wire, proxies and servers, so any service can run in any process |
 | [DataServices.md](DataServices.md) | Data services: who owns each table, stream and bucket, and the guard test that keeps it so (forge 21d-1) |
+| [Infrastructure.md](Infrastructure.md) | Infrastructure as Code (forge 22a to 22f): versioned configurations in the root tenant, semantic diffs and YAML export, the `infra.compute@1` contract and the Infrastructure test server, plans, the infrastructure nodes, and applies as leaderless jobs with approvals, resume and drift |

@@ -1,0 +1,13 @@
+{
+  "name": "infra_compute_host_list",
+  "description": "Lists every host this connection made (those with our resource ids), to compare with the configuration.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "region": {
+        "type": "string",
+        "description": "Only hosts in this region; every region when left out"
+      }
+    }
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "name": "infra_compute_host_stop",
+  "title": "Stop a host",
+  "description": "Stops a running host, keeping its disk; stopping a stopped one does nothing.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The host's resource id"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  },
+  "outputSchema": {
+    "type": "object",
+    "description": "A host as the provider reports it",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The host's resource id, as given to host.create"
+      },
+      "providerId": {
+        "type": "string",
+        "description": "The provider's own id for it"
+      },
+      "name": {
+        "type": "string",
+        "description": "Its name at the provider"
+      },
+      "size": {
+        "type": "string",
+        "description": "Its size id (size.list)"
+      },
+      "region": {
+        "type": "string",
+        "description": "Its region id (region.list)"
+      },
+      "image": {
+        "type": "string",
+        "description": "The image it was made from"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "creating",
+          "running",
+          "stopped",
+          "deleting",
+          "gone"
+        ],
+        "description": "Its state"
+      },
+      "nested": {
+        "type": "boolean",
+        "description": "Whether it can run virtual machines"
+      },
+      "addresses": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Its IP addresses, public first"
+      },
+      "facts": {
+        "type": "object",
+        "description": "What else the provider knows, such as its zone"
+      }
+    },
+    "required": [
+      "id",
+      "providerId",
+      "state"
+    ]
+  },
+  "annotations": {
+    "title": "Stop a host",
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false
+  }
+}

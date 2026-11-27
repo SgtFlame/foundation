@@ -155,6 +155,10 @@ import (
 	indeximpl "github.com/SgtFlame/foundation/backend/features/index/services/indexservice/impl"
 	indexsource "github.com/SgtFlame/foundation/backend/features/index/source"
 	"github.com/SgtFlame/foundation/backend/features/index/store/lancestore"
+	"github.com/SgtFlame/foundation/backend/features/infra"
+	infraapply "github.com/SgtFlame/foundation/backend/features/infra/apply"
+	"github.com/SgtFlame/foundation/backend/features/infra/infratest"
+	infranodes "github.com/SgtFlame/foundation/backend/features/infra/nodes"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	kblive "github.com/SgtFlame/foundation/backend/features/kb/live"
@@ -615,6 +619,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var madeDeps made.Deps
 		var workspaceDeps workspace.Deps
 		var gameDeps game.Deps
+		var infraDeps infra.Deps
 		var configLive configservice.Service
 		var chatLive chatservice.Service
 		var conversationLive conversationservice.Service
@@ -622,7 +627,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var transcriptFiles recordsfiles.Files // Parse transcript's files, once the store is made (forge 18e)
 		registry := extensions.NewRegistry()
 		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.Modes, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, tools.Sources, authz.ResourceTypes,
-			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents, connectors.Contracts, connectors.Types, connections.Validators, authz.ContributedRoles)
+			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents, connectors.Contracts, connectors.Types, connections.Validators, authz.ContributedRoles, infra.ResourceKinds)
 		// Each feature declares its resource types and their actions
 		authz.Contribute(registry)
 		authz.ContributeAgents(registry) // agent (forge 07j)
@@ -751,6 +756,14 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		made.Contribute(registry, func() made.Deps { return madeDeps })                // chat.mode.*, chat.modes.made, chat.mode.create|options (forge 15h)
 		workspace.Contribute(registry, func() workspace.Deps { return workspaceDeps }) // workspace.*, workspace.list (forge 16a)
 		game.Contribute(registry, func() game.Deps { return gameDeps })                // game.* worlds, game.editTerrain, game.describeWorld (forge 360 V1)
+		infra.Contribute(registry, func() infra.Deps { return infraDeps })             // infra.config.* configurations and versions (forge 22a)
+		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
+		var infraNodeDeps infranodes.Deps
+		infranodes.Contribute(registry, func() infranodes.Deps { return infraNodeDeps }) // Ensure host, instance, unit, packages, Wait healthy, Remove (forge 22e)
+		var infraOutbox func(features.ServiceArgs, live.Area) error
+		infraapply.Contribute(registry, func() infraapply.Deps {
+			return infraapply.Deps{Infra: infraDeps, Nodes: infraNodeDeps, Outbox: infraOutbox}
+		}) // infra.apply, its step jobs, infra.drift (forge 22f)
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
 		uihandlers.ContributeLive(registry, func() uiservice.Service { return uiService })
 		confighandlers.ContributeLive(registry, func() configservice.Service { return configLive })
@@ -1140,6 +1153,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Modes people made are listed after the chat.modes settings (forge 15h)
 		workspaceDeps = workspace.Deps{Store: projections, Bus: liveBus}
 		gameDeps = game.Deps{Store: projections}
+		infraDeps = infra.Deps{Bus: liveBus, Store: projections, Compute: infra.DispatcherCompute{D: connectorDispatcher}, Services: func() infra.Services { return infra.Services{Specs: catalog.Services, Groups: serviceGroups()} }} // plans read the providers through infra.compute (forge 22d)
+		infraNodeDeps = infranodes.Deps{Bus: liveBus, Data: recordDeps, Compute: infraDeps.Compute}
+		infraDeps.Actual = infraapply.RecordsActual(registry, func() infranodes.Deps { return infraNodeDeps })
 		workbenchcontext.SetWorkspaceNames(func(args features.ServiceArgs, id string) (string, bool) {
 			return workspace.Name(args, projections, id)
 		})
@@ -1156,6 +1172,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		defer jobRunner.Close() // before the projections close
 		jobNodeDeps = jobsnodes.Deps{Runner: jobRunner, Store: projections}
 		branchDeps.Outbox = jobRunner.Outbox // a commit's semantic diff job (forge 19d)
+		infraOutbox = jobRunner.Outbox       // an apply's step jobs (forge 22f)
 		tenantIDs := func() ([]uint64, error) {
 			ids := []uint64{features.LocalTenantID}
 			var rows []uint64
@@ -1480,7 +1497,8 @@ func targetFrom(raw string) (logging.Target, error) {
 // serves, with their metadata (forge 07b); an external adapter binary
 // serves its own with adapter.Serve.
 func connectorImpls() adapter.Options {
-	return adapter.Options{Name: "server"}
+	return adapter.Options{Name: "server", Types: []connectors.Type{infratest.Type()}, Contracts: []connectors.Contract{infra.ComputeContract(), infratest.ControlContract()},
+		Impls: []adapter.Impl{infratest.Default.Impl()}} // the Infrastructure test server (forge 22c)
 }
 
 // knownServices are every service's wire name (forge 21g-1).

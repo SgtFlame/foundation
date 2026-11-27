@@ -117,7 +117,19 @@ func TestRootTenantWithoutOwner(t *testing.T) {
 		t.Fatalf("%d members", n)
 	}
 	if _, err := EnsureRootTenant(context.Background(), gdb, 99); err != nil {
-		t.Fatalf("an existing root tenant ignores the owner: %v", err)
+		t.Fatalf("an existing root tenant ignores a missing owner: %v", err)
+	}
+	// Set up after the root tenant was made: the first user found owns it,
+	// and no one later does by this road.
+	for _, u := range []uint64{20, 21} {
+		if _, err := EnsureRootTenant(context.Background(), gdb, u); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var ms []identity.Membership
+	gdb.Where("tenant_id = ?", features.RootTenantID).Find(&ms)
+	if len(ms) != 1 || ms[0].UserID != 20 {
+		t.Fatalf("members = %+v", ms)
 	}
 }
 

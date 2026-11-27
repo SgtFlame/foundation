@@ -1,0 +1,11 @@
+{
+  "name": "infra.compute.region.list",
+  "title": "List regions",
+  "description": "The regions hosts can be made in.",
+  "input": {
+    "type": "object",
+    "properties": {}
+  },
+  "effect": "read",
+  "source": "connector"
+}
