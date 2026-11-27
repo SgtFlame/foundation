@@ -133,6 +133,7 @@ import (
 	gitgithub "github.com/SgtFlame/foundation/backend/features/connectors/git/github"
 	"github.com/SgtFlame/foundation/backend/features/connectors/git/gittest"
 	githttps "github.com/SgtFlame/foundation/backend/features/connectors/git/https"
+	gitnodes "github.com/SgtFlame/foundation/backend/features/connectors/git/nodes"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	connectorsimpl "github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice/impl"
@@ -775,6 +776,23 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		githttps.Contribute(registry)                                                  // the git.https connector type (forge 24c)
 		// gittest.control and gittest.log, for Forge's test server page and forge gittest (forge 24a)
 		gittest.ContributeLive(registry, func() *connectors.Dispatcher { return connectorDeps.Dispatcher })
+		// The git nodes and tools (forge 24d): through the dispatcher, as the caller
+		gitNodeDeps := func() gitnodes.Deps {
+			d := gitnodes.Deps{Repositories: func(a features.ServiceArgs) ([]gitnodes.Repository, error) {
+				views, err := connections.List(a, connectionDeps, "", gitconnector.RepoRef)
+				out := make([]gitnodes.Repository, 0, len(views))
+				for _, v := range views {
+					out = append(out, gitnodes.Repository{ID: v.ID, Name: v.Name, Type: v.Type, Status: v.Status, Settings: v.Settings})
+				}
+				return out, err
+			}}
+			if connectorDeps.Dispatcher != nil {
+				d.Call = connectorDeps.Dispatcher.Call
+			}
+			return d
+		}
+		gitnodes.Contribute(registry, gitNodeDeps)
+		gitnodes.ContributeTools(registry, gitNodeDeps)
 		// Calendar (forge 28): the calendar section, the time and iCalendar
 		// nodes (.ics parsed in a limited child process), calendar.events@1
 		// and the Calendar test server

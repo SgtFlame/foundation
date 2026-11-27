@@ -81,14 +81,15 @@ func RepoContract() connectors.Contract {
 		Meta: connectors.Meta{Title: "Git repository", Description: "A git repository at a host: list its branches and tags, read its tree and files at any ref, compare two commits, and commit changes to a branch (creating the branch from a base when it is missing). Reports each push to a branch. Use it to read code or documentation, or to publish files (a Hugo page bundle, docs/ Markdown) as a commit on a branch that a pull request then merges.", Tags: tags},
 		Operations: []connectors.Operation{
 			{
-				ID: "check", Title: "Check the connection", Description: "Checks that the connection reaches the repository with its credentials, and gives the repository's default branch.",
+				ID: "check", Title: "Check the connection", Description: "Checks that the connection reaches the repository with its credentials, and gives the repository's default branch and whether the connection allows committing to it.",
 				Effect: connectors.EffectRead,
 				Args:   j(`{"type":"object","properties":{}}`),
 				Result: j(`{"type":"object","properties":{
   "ok":{"type":"boolean","description":"True when the repository answered"},
   "defaultBranch":{"type":"string","description":"The repository's default branch"},
-  "canWrite":{"type":"boolean","description":"True when the credentials may push"}},"required":["ok"]}`),
-				Examples: []connectors.Example{{Args: j(`{}`), Result: j(`{"ok":true,"defaultBranch":"main","canWrite":true}`)}},
+  "canWrite":{"type":"boolean","description":"True when the credentials may push"},
+  "allowDefaultBranch":{"type":"boolean","description":"True when the connection lets the git tools and nodes commit straight to the default branch (its allowDefaultBranch setting); they commit to other branches otherwise"}},"required":["ok"]}`),
+				Examples: []connectors.Example{{Args: j(`{}`), Result: j(`{"ok":true,"defaultBranch":"main","canWrite":true,"allowDefaultBranch":false}`)}},
 				Errors:   []string{connectors.CodeAuth, connectors.CodeNotFound, connectors.CodeUnavailable},
 			},
 			{

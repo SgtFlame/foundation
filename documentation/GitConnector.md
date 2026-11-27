@@ -83,3 +83,21 @@ A ref is a branch name, a full ref or a commit sha. Paths are from the repositor
 **Errors**: refused credentials are `auth`; an unknown repository `notFound`; timeouts and every other transport failure `unavailable`, retryable.
 
 **Tests**: the suite runs against a bare repository in `t.TempDir()` served by git's own `git-http-backend` through `net/http/cgi` behind a basic-auth check (skipped where `git-http-backend` is not installed), with outside pushes made by the `git` command; also wrong tokens, plain http refused, a stale head, a commit on a shallow history checked with `git fsck --strict`, and a sha ref. The plan had the suite run over `gittest` served by smart HTTP; git's own server is used instead, which is also what real hosts run.
+
+## Built in forge 24d: nodes and tools
+
+`git/nodes` (`gitnodes`) gives graphs and the chat the repository operations, calling `git.repo@1` and `git.review@1` through the dispatcher **as their caller** (so a connection's `use` and a user's own connections apply as for *Call connector*). `gitnodes.Deps{Call, Repositories}`: `Call` is the dispatcher's `Call`; `Repositories` lists the connections implementing `git.repo@1` the caller may read (`connections.List`, wired in `serve.go`).
+
+**Nodes** (category *Git*; each `Effects` and `External` with a `Sample`, so sandboxed runs stub them; a typed error leaves by *Error* with `error`, a retryable one fails the run so a job retries it):
+- *List repository tree* (`git.tree`): connection, ref, path, recursive → entries, sha, truncated (pages gathered, at most `MaxTreeEntries`, 10000).
+- *Read repository file* (`git.readFile`): connection, ref, path → content, encoding, file (over 1 MB), sha, size, path.
+- *Commit files* (`git.commit`): connection, branch, message, changes (`[{path, content, encoding} | {path, file} | {path, delete}]`), base, expectHead, author, key → sha, branch, before, created, unchanged, url.
+- *Open pull request* (`git.pullRequest`): connection, head, title, base, body, draft → number, url, state, pullRequest.
+
+**Tools**: `git.repositories` (read; the connections to pass as `connection`), `git.tree` (read, at most 2000 entries), `git.read` (read, text cut at 100 KB), `git.commit` and `git.pullRequest` (`write`: they ask in the chat; an agent's run is decided by its roles, slice 51).
+
+**Keys**: a write is keyed by `gitnodes.Key`: the job's id inside a job (so it is stable across a job's retries, whose runs differ), else the run and round; the node (`Meta.NodeID`) or tool call id; and what is written (connection, branch, message, changes; for a pull request its head and base), so a loop writing different things writes each once and a retry writes nothing new. *Commit files* takes `key` to override it.
+
+**The default branch** (question 5): before a commit the nodes and tools call `check`, whose result now carries the connection's `allowDefaultBranch` (every type reports its setting; the Git test server has the setting too), and refuse a commit to the default branch without it as `invalid`, naming the way out (another branch and a pull request). Direct *Call connector* calls of `commit` are not refused: the rule is the tools' and nodes'.
+
+**Tests**: `go test ./features/connectors/git/nodes` runs the nodes and tools against the Git test server behind a `Caller` (retried commits by run and by job, the default branch with and without the setting, trees, files, a pull request opened once, a retryable failure failing the run); `apps/tools`' `TestMetadata` covers their metadata.

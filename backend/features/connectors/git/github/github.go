@@ -328,7 +328,7 @@ func (s *Session) Call(ctx adapter.Context, op string, args json.RawMessage) (js
 		if err != nil {
 			return nil, err
 		}
-		return git.Result(map[string]any{"ok": true, "defaultBranch": r.DefaultBranch, "canWrite": r.Permissions.Push})
+		return git.Result(map[string]any{"ok": true, "defaultBranch": r.DefaultBranch, "canWrite": r.Permissions.Push, "allowDefaultBranch": s.st.AllowDefaultBranch})
 	case "listRefs":
 		var a struct{ Prefix string }
 		if err := git.Unmarshal(args, &a); err != nil {

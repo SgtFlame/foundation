@@ -373,7 +373,7 @@ func (s *Session) Call(ctx adapter.Context, op string, args json.RawMessage) (js
 		}
 		// Whether a push would be allowed is known only by pushing; a
 		// token given is taken to write
-		return git.Result(map[string]any{"ok": true, "defaultBranch": def, "canWrite": s.st.Token != ""})
+		return git.Result(map[string]any{"ok": true, "defaultBranch": def, "canWrite": s.st.Token != "", "allowDefaultBranch": s.st.AllowDefaultBranch})
 	case "listRefs":
 		var a struct{ Prefix string }
 		if err := git.Unmarshal(args, &a); err != nil {

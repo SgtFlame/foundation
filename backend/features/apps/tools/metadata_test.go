@@ -43,6 +43,7 @@ import (
 	gitgithub "github.com/SgtFlame/foundation/backend/features/connectors/git/github"
 	"github.com/SgtFlame/foundation/backend/features/connectors/git/gittest"
 	githttps "github.com/SgtFlame/foundation/backend/features/connectors/git/https"
+	gitnodes "github.com/SgtFlame/foundation/backend/features/connectors/git/nodes"
 	conversationnodes "github.com/SgtFlame/foundation/backend/features/conversation/nodes"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/game"
@@ -128,11 +129,13 @@ func everything(t *testing.T) *extensions.Registry {
 	calendar.Contribute(reg)                                                                             // forge 28c
 	caltest.Contribute(reg)                                                                              // forge 28c
 
-	gitconnector.Contribute(reg)                                              // forge 24a
-	gittest.Contribute(reg)                                                   // forge 24a
-	gitgithub.Contribute(reg)                                                 // forge 24b
-	githttps.Contribute(reg)                                                  // forge 24c
-	gittest.ContributeLive(reg, func() *connectors.Dispatcher { return nil }) // gittest.control and gittest.log (forge 24a)
+	gitconnector.Contribute(reg)                                                   // forge 24a
+	gittest.Contribute(reg)                                                        // forge 24a
+	gitgithub.Contribute(reg)                                                      // forge 24b
+	githttps.Contribute(reg)                                                       // forge 24c
+	gitnodes.Contribute(reg, func() gitnodes.Deps { return gitnodes.Deps{} })      // forge 24d
+	gitnodes.ContributeTools(reg, func() gitnodes.Deps { return gitnodes.Deps{} }) // forge 24d
+	gittest.ContributeLive(reg, func() *connectors.Dispatcher { return nil })      // gittest.control and gittest.log (forge 24a)
 	return reg
 }
 

@@ -37,7 +37,8 @@ const (
 )
 
 const settings = `{"type":"object","properties":{
-  "defaultBranch":{"type":"string","title":"Default branch","description":"The branch a fresh repository starts with; main when left out"}}}`
+  "defaultBranch":{"type":"string","title":"Default branch","description":"The branch a fresh repository starts with; main when left out"},
+  "allowDefaultBranch":{"type":"boolean","title":"Allow commits to the default branch","description":"Let the git tools and nodes commit straight to the default branch; otherwise they commit to another branch"}}}`
 
 // Type is the test server's connector type.
 func Type() connectors.Type {
@@ -319,7 +320,8 @@ func (r *repo) resolve(ref string) (*commit, error) {
 func (s *Server) Impl() adapter.Impl {
 	return adapter.Impl{Type: TypeID, Open: func(ctx adapter.Context, conn adapter.Connection) (adapter.Session, error) {
 		var st struct {
-			DefaultBranch string `json:"defaultBranch"`
+			DefaultBranch      string `json:"defaultBranch"`
+			AllowDefaultBranch bool   `json:"allowDefaultBranch"`
 		}
 		_ = json.Unmarshal(conn.Settings, &st)
 		s.mu.Lock()
@@ -331,7 +333,7 @@ func (s *Server) Impl() adapter.Impl {
 		}
 		s.seed(r)
 		s.mu.Unlock()
-		return &session{s: s, tenant: ctx.Tenant(), conn: conn.ID}, nil
+		return &session{s: s, tenant: ctx.Tenant(), conn: conn.ID, allowDefault: st.AllowDefaultBranch}, nil
 	}}
 }
 
@@ -344,6 +346,8 @@ type session struct {
 	s      *Server
 	tenant uint64
 	conn   string
+	// allowDefault is the connection's allowDefaultBranch, given by check
+	allowDefault bool
 }
 
 func (x *session) Close() error { return nil }
@@ -458,7 +462,7 @@ func (x *session) Call(ctx adapter.Context, op string, args json.RawMessage) (js
 	defer x.s.mu.Unlock()
 	switch op {
 	case "check":
-		return git.Result(map[string]any{"ok": true, "defaultBranch": r.def, "canWrite": true})
+		return git.Result(map[string]any{"ok": true, "defaultBranch": r.def, "canWrite": true, "allowDefaultBranch": x.allowDefault})
 	case "listRefs":
 		var a struct{ Prefix string }
 		if err := git.Unmarshal(args, &a); err != nil {
