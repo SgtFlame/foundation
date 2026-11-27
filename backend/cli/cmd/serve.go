@@ -70,6 +70,10 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
+	"github.com/SgtFlame/foundation/backend/features/controlplane"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/issuer"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/natsauth"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
 	"github.com/SgtFlame/foundation/backend/features/conversation/made"
 	conversationnodes "github.com/SgtFlame/foundation/backend/features/conversation/nodes"
@@ -179,22 +183,28 @@ import (
 )
 
 var (
-	serveAddr       string
-	serveKBRoot     string
-	serveDataDir    string
-	serveDB         string
-	serveAppDB      string
-	serveGeminiKey  string
-	serveEmbedModel string
-	serveEmbedDims  int
-	serveChatModel  string
-	serveLogFormat  string
-	serveLogLevel   string
-	serveVLogsURL   string
-	serveVaultAddr  string
-	serveVaultMount string
-	serveVaultRole  string
-	serveNatsURL    string
+	serveAddr         string
+	serveKBRoot       string
+	serveDataDir      string
+	serveDB           string
+	serveAppDB        string
+	serveGeminiKey    string
+	serveEmbedModel   string
+	serveEmbedDims    int
+	serveChatModel    string
+	serveLogFormat    string
+	serveLogLevel     string
+	serveVLogsURL     string
+	serveVaultAddr    string
+	serveVaultMount   string
+	serveVaultRole    string
+	serveNatsURL      string
+	serveNatsCreds    string
+	serveNatsCA       string
+	serveNatsReps     int
+	serveNatsKeys     string
+	serveNatsPlaces   string
+	serveControlPlane bool
 )
 
 // serveCmd represents the serve command
@@ -346,15 +356,32 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// The live core's event streams, projections, presence and UI
 		// sessions live in NATS JetStream, embedded with no listener unless
 		// --nats-url names an external server (documentation/Live.md)
-		natsURL := serveNatsURL
-		if natsURL == "" {
-			natsURL = os.Getenv("FOUNDATION_NATS_URL")
+		// (forge 20a-1: a deployed cluster is several URLs, with a creds
+		// file, a CA and every stream made with --nats-replicas)
+		natsd.SetDefault(natsd.Placement{Replicas: natsd.ReplicasOr(serveNatsReps)})
+		// forge 20a-4: tenants placed in a cluster of the supercluster
+		if places, err := natsd.ParsePlacements(natsd.PlacementsOr(serveNatsPlaces)); err != nil {
+			return err
+		} else if len(places) > 0 {
+			natsd.SetTenantPlacements(func(t uint64) (natsd.Placement, bool) { p, ok := places[t]; return p, ok })
 		}
-		nats, err := natsd.Start(ctx, natsd.Options{Dir: filepath.Join(dataDir, "nats"), URL: natsURL})
+		natsOptions := natsd.Options{Dir: filepath.Join(dataDir, "nats"), URL: serveNatsURL, Creds: serveNatsCreds, CA: serveNatsCA}.WithEnv()
+		nats, err := natsd.Start(ctx, natsOptions)
 		if err != nil {
 			return err
 		}
 		defer nats.Close() // drained after the HTTP server has shut down
+		// forge 20a-3: with --nats-keys each tenant's streams and buckets
+		// are in its own account; connectors' state stays in APP
+		perTenant, err := natsauth.TenantAccounts(natsOptions, serveNatsKeys)
+		if err != nil {
+			return err
+		}
+		var natsAccounts natsd.Accounts
+		if perTenant != nil {
+			natsAccounts = perTenant
+			defer perTenant.Close()
+		}
 
 		// The index's and Chronicle's stores are opened first: retrieval's
 		// library and chronicle sources search them
@@ -449,6 +476,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		authz.Contribute(registry)
 		authz.ContributeAgents(registry) // agent (forge 07j)
 		identity.ContributeAccess(registry)
+		controlplane.ContributeAccess(registry) // infra, pinned to the root tenant (forge 20b-1)
 		config.ContributeAccess(registry)
 		logs.ContributeAccess(registry)
 		usage.ContributeAccess(registry)
@@ -588,6 +616,20 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			return err
 		}
 		authz.Install(policy)
+		if serveControlPlane {
+			// forge 20b-1: the root tenant, its Owner user 1 when it exists
+			owner := uint64(0)
+			var firsts int64
+			if err := appDB.Model(&identity.User{}).Where("id = ?", features.LocalUserID).Count(&firsts).Error; err != nil {
+				return err
+			}
+			if firsts > 0 {
+				owner = features.LocalUserID
+			}
+			if _, err := controlplane.EnsureRootTenant(ctx, appDB, owner); err != nil {
+				return err
+			}
+		}
 		authzService := authzimpl.CreateService(authzimpl.WithPolicy(policy), authzimpl.WithMembers(func(tenant, user uint64) (bool, error) {
 			var n int64
 			err := appDB.Model(&identity.Membership{}).Where("tenant_id = ? AND user_id = ?", tenant, user).Count(&n).Error
@@ -782,10 +824,12 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 
 		// Commands decide on the projections; queries are subscriptions
 		projections := project.New(nats.JS(), registry)
+		projections.SetAccounts(natsAccounts)
 		defer projections.Close()
 		liveBus := bus.New(projections)
 		subscriptions := subscribe.New(projections, registry)
 		livePresence = presence.New(nats.JS(), userName)
+		livePresence.SetAccounts(natsAccounts)
 		// Graph drafts are edited by bp.* commands; the engine runs their
 		// published versions
 		cognitionEngine.SetSource(drafts.Source{Store: projections})
@@ -833,6 +877,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		liveSubscriptions = subscriptions
 		recordEmbedder = embedService
 		recordFiles := recordsfiles.New(nats.JS())
+		recordFiles.SetAccounts(natsAccounts)
 		transcriptFiles = recordFiles
 		recordTables, err := recordsdata.NewTables(gdb, projections) // large tables in the tenant database (forge 07k)
 		if err != nil {
@@ -907,16 +952,78 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		go jobRunner.Start(tenantIDs)
 		// What people do by hand, followed in every tenant: each process
 		// shares the followers' consumers (forge 15c)
-		activityDeps = activity.Deps{Projections: projections, Store: activity.NewStore(nats.JS()), Config: configService, Bus: liveBus}
+		activityStore := activity.NewStore(nats.JS())
+		activityStore.SetAccounts(natsAccounts)
+		activityDeps = activity.Deps{Projections: projections, Store: activityStore, Config: configService, Bus: liveBus}
 		go activityRecorder.Start(ctx, tenantIDs)
 		activity.WatchSettings(ctx, configChanges, func() activity.Deps { return activityDeps })
 		// Every process keeps cx_sources, the connections a trigger listens
 		// to, which adapters' instances lease and run (forge 07c)
 		go connections.Start(ctx, func() connections.Deps { return connectionDeps }, tenantIDs)
+		if serveControlPlane {
+			// forge 20b-2: the infrastructure app in the root tenant, and
+			// the followers between its records and the control account
+			// (its own account with --nats-keys)
+			control := &ctl.Control{NC: nats.Conn(), JS: nats.JS()}
+			var natsDesired controlplane.Deps // forge 20e: NATS accounts and nodes from records
+			ctlConn, err := natsauth.AccountConn(natsOptions, serveNatsKeys, natsauth.Control, "serve-ctl")
+			if err != nil {
+				return err
+			}
+			if ctlConn != nil {
+				defer ctlConn.Close()
+				control = &ctl.Control{NC: ctlConn.Conn(), JS: ctlConn.JS()}
+				// forge 20c-1: daemons enroll here, their users signed
+				// by the control account's key
+				keys, err := natsauth.Load(natsauth.DirKeys(natsauth.KeysDir(serveNatsKeys)))
+				if err != nil {
+					return err
+				}
+				if err := control.Ensure(ctx); err != nil {
+					return err
+				}
+				if _, err := ctl.ServeEnroll(ctx, control, keys.Account(natsauth.Control)); err != nil {
+					return err
+				}
+				// a system user pushes accounts: tenant accounts from their
+				// records (forge 20e) and the issuer's revocations (20h)
+				sys, err := natsauth.SysConn(natsOptions, serveNatsKeys, "serve-ctl-sys")
+				if err != nil {
+					return err
+				}
+				defer sys.Close()
+				natsDesired = controlplane.Deps{NatsKeys: natsauth.DirKeys(natsauth.KeysDir(serveNatsKeys)), NatsSys: sys, NatsTrust: keys.Trust}
+				// forge 20h: the credential issuer, with Vault for the
+				// units' SecretIDs
+				if boot.Vault() {
+					iss := &issuer.Issuer{C: control, D: keys, Sys: sys, Vault: boot.Client()}
+					if err := iss.Serve(ctx); err != nil {
+						return err
+					}
+				}
+			}
+			if err := controlplane.SeedApp(features.BackgroundArgs(ctx), projections, appService, liveBus); err != nil {
+				return err
+			}
+			// forge 20c-3: the root tenant's script signing key, kept with
+			// the deployment's keys (else in the data directory)
+			scriptKey, err := ctl.LoadOrMakeSigningKey(controlplane.ScriptKeyPath(natsauth.KeysDir(serveNatsKeys), dataDir))
+			if err != nil {
+				return err
+			}
+			controlDeps := controlplane.Deps{Projections: projections, Data: recordDeps, Bus: liveBus, Control: control, ScriptKey: scriptKey,
+				NatsKeys: natsDesired.NatsKeys, NatsSys: natsDesired.NatsSys, NatsTrust: natsDesired.NatsTrust,
+				RepoKey: controlplane.RepoKeyFile(natsauth.KeysDir(serveNatsKeys))}
+			if err := controlplane.Start(ctx, func() controlplane.Deps { return controlDeps }); err != nil {
+				return err
+			}
+		}
 		// Scripted connector types (forge 07d), served in this process too
 		go scripted.Serve(ctx, nats.Conn(), func() scripted.Deps { return scriptedDeps }, tenantIDs, scripted.Options{})
+		uiSessions := ui.NewKVSessions(nats.JS())
+		uiSessions.SetAccounts(natsAccounts)
 		prefabService := prefabimpl.CreateService(prefabimpl.WithPrefabs(prefabDeps), prefabimpl.WithRegistry(registry), prefabimpl.WithSubscriptions(liveSubscriptions))
-		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(ui.NewKVSessions(nats.JS())), uiimpl.WithRecorder(activityRecorder),
+		uiService = uiimpl.CreateService(uiimpl.WithRegistry(registry), uiimpl.WithBus(liveBus), uiimpl.WithSubscriptions(subscriptions), uiimpl.WithStore(uiSessions), uiimpl.WithRecorder(activityRecorder),
 			uiimpl.WithGraphs(uinodes.Runner{Deps: func() uinodes.Deps { return uiNodeDeps }}))
 		liveService := liveimpl.CreateService(liveimpl.WithBus(liveBus), liveimpl.WithSubscriptions(subscriptions), liveimpl.WithPresence(livePresence), liveimpl.WithRegistry(registry),
 			liveimpl.WithMaxSubscriptions(func() int {
@@ -1061,7 +1168,13 @@ func init() {
 	serveCmd.Flags().StringVar(&serveVaultAddr, "vault-addr", "", "HashiCorp Vault holding the server's secrets, e.g. http://127.0.0.1:8200 (default $FOUNDATION_VAULT_ADDR); serve then starts sealed")
 	serveCmd.Flags().StringVar(&serveVaultMount, "vault-mount", "foundation", "Vault KV v2 mount of the server's secrets")
 	serveCmd.Flags().StringVar(&serveVaultRole, "vault-role-id", "", "the only AppRole role ID an unseal may use (default $FOUNDATION_VAULT_ROLE_ID); without it unseal.sh sends it")
-	serveCmd.Flags().StringVar(&serveNatsURL, "nats-url", "", "an external NATS server with JetStream for the live core, e.g. nats://127.0.0.1:4222 (default $FOUNDATION_NATS_URL); without it NATS runs embedded in <data-dir>/nats")
+	serveCmd.Flags().StringVar(&serveNatsURL, "nats-url", "", "an external NATS server with JetStream for the live core, e.g. nats://127.0.0.1:4222, or a cluster's URLs comma separated (default $FOUNDATION_NATS_URL); without it NATS runs embedded in <data-dir>/nats")
+	serveCmd.Flags().StringVar(&serveNatsCreds, "nats-creds", "", "a NATS credentials file for --nats-url (default $FOUNDATION_NATS_CREDS)")
+	serveCmd.Flags().StringVar(&serveNatsCA, "nats-ca", "", "the deployment's CA certificate for TLS to --nats-url (default $FOUNDATION_NATS_CA)")
+	serveCmd.Flags().StringVar(&serveNatsKeys, "nats-keys", "", "the deployment's NATS keys (cli nats init): each tenant's streams and buckets then live in its own account, made with cli nats tenant add (default $FOUNDATION_NATS_KEYS)")
+	serveCmd.Flags().BoolVar(&serveControlPlane, "control-plane", false, "make the root tenant (id 3, Infrastructure), the only tenant that holds infrastructure, with user 1 its Owner")
+	serveCmd.Flags().StringVar(&serveNatsPlaces, "nats-placements", "", "tenants placed in clusters of the supercluster, as <tenant>=<cluster>,… (default $FOUNDATION_NATS_PLACEMENTS)")
+	serveCmd.Flags().IntVar(&serveNatsReps, "nats-replicas", 0, "replicas of every stream, bucket and object store this server makes: 3 on a cluster (default $FOUNDATION_NATS_REPLICAS, else 1)")
 	serveCmd.Flags().StringVar(&serveVLogsURL, "vlogs-url", "", "VictoriaLogs to store logs in, e.g. http://localhost:9428 (default $FOUNDATION_VLOGS_URL); wins over Settings")
 }
 

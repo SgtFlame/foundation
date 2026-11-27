@@ -73,6 +73,12 @@ const (
 // in to it: it has no row and no members.
 const GlobalTenantID uint64 = 2
 
+// RootTenantID is the reserved root tenant (forge 20b-1), *Infrastructure*,
+// the only tenant that may hold infrastructure: a real row made when the
+// control plane is set up (controlplane.EnsureRootTenant), never by
+// setup, never deleted.
+const RootTenantID uint64 = 3
+
 // LocalPrincipal is the implicit user of single-user mode, who holds Super
 // Administrator (identity.Bootstrap grants it).
 func LocalPrincipal() Principal {

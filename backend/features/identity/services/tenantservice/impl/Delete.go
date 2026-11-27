@@ -21,6 +21,10 @@ func (s *service) Delete(args tenantservice.DeleteArgs) tenantservice.DeleteResp
 		return tenantservice.DeleteResponse{Common: *args.Fail(http.StatusConflict,
 			log.Code("default_tenant").Public("The default tenant cannot be deleted").New("the default tenant cannot be deleted"))}
 	}
+	if args.TenantID == features.RootTenantID {
+		return tenantservice.DeleteResponse{Common: *args.Fail(http.StatusConflict,
+			log.Code("root_tenant").Public("The root tenant cannot be deleted").New("the root tenant cannot be deleted"))}
+	}
 	if _, f := s.find(args.ServiceArgs, args.TenantID); f != nil {
 		return tenantservice.DeleteResponse{Common: *f}
 	}

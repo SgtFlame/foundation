@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+echo "apt-mark $*" >> "$FAKE_STATE/calls"
+mkdir -p "$FAKE_STATE/held"
+case "$1" in
+  hold) touch "$FAKE_STATE/held/$2" ;;
+  unhold) rm -f "$FAKE_STATE/held/$2" ;;
+esac

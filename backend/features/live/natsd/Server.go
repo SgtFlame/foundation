@@ -6,7 +6,9 @@ package natsd
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -22,8 +24,16 @@ var log = logging.In("live").Tags("nats")
 type Options struct {
 	// Dir holds JetStream's data, <data-dir>/nats in serve.
 	Dir string
-	// URL connects to an external NATS server instead of embedding one.
+	// URL connects to an external NATS server instead of embedding one;
+	// a deployed cluster is several URLs, comma separated (forge 20a-1).
 	URL string
+	// Creds is a NATS credentials file (a user JWT and its seed) for an
+	// external server; CA is the deployment's CA certificate for TLS.
+	Creds string
+	// CredsData is a creds file's text, in place of Creds (a user minted
+	// in memory, forge 20b-2).
+	CredsData []byte
+	CA        string
 	// Listen, when set (e.g. "127.0.0.1:4222"), lets other processes
 	// connect to the embedded server; empty listens nowhere.
 	Listen string
@@ -31,20 +41,37 @@ type Options struct {
 
 // Server is a connection to NATS JetStream, embedded or external.
 type Server struct {
-	ns *server.Server // nil for an external server
-	nc *nats.Conn
-	js jetstream.JetStream
+	ns   *server.Server // nil for an external server
+	nc   *nats.Conn
+	js   jetstream.JetStream
+	opts Options
+}
+
+// connectOptions are the options every connection to an external server
+// uses: its credentials and CA, and reconnecting forever.
+func (o Options) connectOptions(name string) []nats.Option {
+	opts := []nats.Option{nats.Name(name), nats.MaxReconnects(-1)}
+	if o.Creds != "" {
+		opts = append(opts, nats.UserCredentials(o.Creds))
+	}
+	if len(o.CredsData) > 0 {
+		opts = append(opts, nats.UserJWTAndSeed(splitCreds(o.CredsData)))
+	}
+	if o.CA != "" {
+		opts = append(opts, nats.RootCAs(o.CA))
+	}
+	return opts
 }
 
 // Start starts the embedded server (or connects to opts.URL) and waits
 // until JetStream is ready.
 func Start(ctx context.Context, opts Options) (*Server, error) {
 	if opts.URL != "" {
-		nc, err := nats.Connect(opts.URL, nats.Name("foundation"), nats.MaxReconnects(-1))
+		nc, err := nats.Connect(opts.URL, opts.connectOptions("foundation")...)
 		if err != nil {
 			return nil, log.Wrapf(err, "connect to NATS at %s", opts.URL)
 		}
-		return connected(nil, nc)
+		return connected(nil, nc, opts)
 	}
 	so := &server.Options{
 		ServerName: "foundation",
@@ -75,7 +102,7 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 		ns.Shutdown()
 		return nil, log.Wrapf(err, "connect to the embedded NATS server")
 	}
-	s, err := connected(ns, nc)
+	s, err := connected(ns, nc, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +110,7 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 	return s, nil
 }
 
-func connected(ns *server.Server, nc *nats.Conn) (*Server, error) {
+func connected(ns *server.Server, nc *nats.Conn, opts Options) (*Server, error) {
 	js, err := jetstream.New(nc)
 	if err != nil {
 		nc.Close()
@@ -92,7 +119,7 @@ func connected(ns *server.Server, nc *nats.Conn) (*Server, error) {
 		}
 		return nil, log.Wrap(err)
 	}
-	return &Server{ns: ns, nc: nc, js: js}, nil
+	return &Server{ns: ns, nc: nc, js: js, opts: opts}, nil
 }
 
 // Conn is the core NATS connection, for plain subjects.
@@ -108,7 +135,11 @@ func (s *Server) Connect(name string) (*nats.Conn, error) {
 	if s.ns != nil {
 		return nats.Connect("", nats.InProcessServer(s.ns), nats.Name(name))
 	}
-	return nats.Connect(s.nc.ConnectedUrl(), nats.Name(name), nats.MaxReconnects(-1))
+	url := s.opts.URL
+	if url == "" {
+		url = s.nc.ConnectedUrl()
+	}
+	return nats.Connect(url, s.opts.connectOptions(name)...)
 }
 
 // ClientURL is where another process connects: the embedded server's
@@ -150,9 +181,16 @@ func StartTestListening(t testing.TB) *Server {
 }
 
 // StartTest starts an embedded server in a temporary directory, closed
-// when the test ends.
+// when the test ends. With $FOUNDATION_TEST_NATS_CLUSTER set to a node
+// count (3), it connects to a fresh cluster of that many nodes instead and
+// makes everything with that many replicas, so any package's tests run
+// against deployed NATS (forge 20a-1).
 func StartTest(t testing.TB) *Server {
 	t.Helper()
+	if n, err := strconv.Atoi(os.Getenv("FOUNDATION_TEST_NATS_CLUSTER")); err == nil && n > 0 {
+		SetDefault(Placement{Replicas: n})
+		return StartTestCluster(t, n).Connect()
+	}
 	s, err := Start(context.Background(), Options{Dir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
@@ -160,3 +198,8 @@ func StartTest(t testing.TB) *Server {
 	t.Cleanup(s.Close)
 	return s
 }
+
+// ConnectOptions are the options a connection to the deployment as o
+// describes takes (its name, creds, CA and reconnects), for tools that
+// connect without JetStream.
+func ConnectOptions(o Options, name string) []nats.Option { return o.connectOptions(name) }

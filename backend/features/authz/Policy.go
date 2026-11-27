@@ -175,6 +175,9 @@ func (pol *Policy) decide(ctx context.Context, p features.Principal, action, res
 		return Decision{Allowed: true, Reason: "every signed-in user may"}
 	}
 	path := Split(resource)
+	if typ.Tenant != 0 && (len(path) == 0 || path[0] != Resource("tenant", typ.Tenant)) {
+		return Decision{Reason: fmt.Sprintf("%s is held only in tenant %d", action, typ.Tenant)}
+	}
 	if act.Apps && p.Kind == features.PrincipalApp && len(path) > 0 && path[0] == Resource("tenant", p.TenantID) {
 		return Decision{Allowed: true, Reason: "every app may in its tenant"}
 	}
@@ -241,6 +244,9 @@ func (pol *Policy) allowing(ctx context.Context, p features.Principal, typ Resou
 			continue
 		}
 		grant := Split(g.Resource)
+		if typ.Tenant != 0 && (len(grant) == 0 || grant[0] != Resource("tenant", typ.Tenant)) {
+			continue // a pinned type is reached only by grants in its tenant
+		}
 		held := Held{Grant: g, Role: role}
 		if !Covers(grant, path) {
 			// A grant on one record reaches records of its scope's types

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ const (
 // resumes a session's view state.
 type KVSessions struct {
 	js      jetstream.JetStream
+	acc     natsd.Accounts
 	mu      sync.Mutex
 	buckets map[uint64]jetstream.KeyValue
 }
@@ -37,9 +39,13 @@ func (k *KVSessions) bucket(ctx context.Context, tenant uint64) (jetstream.KeyVa
 	if kv := k.buckets[tenant]; kv != nil {
 		return kv, nil
 	}
-	kv, err := k.js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+	js, err := natsd.For(ctx, k.acc, k.js, tenant)
+	if err != nil {
+		return nil, Log.Wrap(err)
+	}
+	kv, err := js.CreateOrUpdateKeyValue(ctx, natsd.KV(jetstream.KeyValueConfig{
 		Bucket: fmt.Sprintf("ui_sessions_%d", tenant), Description: "UI sessions' view state", History: 1, TTL: SessionAge, Storage: jetstream.FileStorage,
-	})
+	}))
 	if err != nil {
 		return nil, Log.Wrapf(err, "cannot make the UI sessions bucket")
 	}
@@ -89,3 +95,7 @@ func (k *KVSessions) Delete(ctx context.Context, tenant uint64, id string) error
 	}
 	return nil
 }
+
+// SetAccounts keeps each tenant's data in its own NATS account (forge
+// 20a-3); before it is called every tenant uses the store's JetStream.
+func (x *KVSessions) SetAccounts(a natsd.Accounts) { x.acc = a }

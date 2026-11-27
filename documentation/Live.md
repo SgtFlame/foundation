@@ -229,3 +229,13 @@ Every committed event carries **`command`**, the command type that committed it 
 
 ## Changed in forge 18a
 - ***Reject*** takes an optional `code` config, the rejection's error code in place of `command_rejected` (`live.Problem.Code`), for a caller to test, such as Forge's `requirements.commit` refusing with `head_moved`.
+
+## Built in forge 20a-1: Deployed NATS
+
+The first part of the Control Plane (forge `documentation/plans/020a-1-DeployedNATS.md`): `serve` runs against an external, clustered JetStream as its deployed mode. Embedded NATS stays the default for development (forge 20, question 10).
+
+- **Connecting**: `--nats-url` takes a cluster's URLs comma separated; `--nats-creds` (a credentials file) and `--nats-ca` (the deployment's CA for TLS) join it, each defaulting to `$FOUNDATION_NATS_URL`, `$FOUNDATION_NATS_CREDS`, `$FOUNDATION_NATS_CA` (`natsd.Options{URL, Creds, CA}.WithEnv()`). `Server.Connect` opens further connections with the same options.
+- **Replicas in one place**: `natsd.Placement{Replicas, Cluster, Tags}` is the process's placement (`natsd.SetDefault`, from `--nats-replicas` or `$FOUNDATION_NATS_REPLICAS`, else 1). Every stream, KV bucket and object store config passes through `natsd.Stream`, `natsd.KV` or `natsd.Object`, which fill replicas and placement the config leaves unset; `TestNoRawStreamConfig` fails on a config made without them. An existing event stream keeps its replica count on first use; `cli nats replicas --set 3` (`natsd.SetReplicas`) raises every stream, bucket and object store when a deployment grows into a cluster.
+- **One maker per stream**: `Projections.Stream` lets one goroutine make a stream while others wait, since on a cluster each create is a round of the meta group and a hundred at once time out.
+- **Losing a node** needed no other change: commits retried on a timeout are settled by expected sequences and `Nats-Msg-Id`, and every consumer reconnects.
+- **Tests**: `natsd.StartTestCluster(t, n)` starts an in-process cluster on loopback ports, with `Stop(i)`/`Restart(i)` per node; `TestClusterSurvivesANode` commits with expected sequences while the stream leader and then another node are down. Any package's tests run against a three-node cluster with `FOUNDATION_TEST_NATS_CLUSTER=3 go test ./…`, which makes `natsd.StartTest` connect to a fresh cluster with three replicas (the live core's bus suite passes that way).

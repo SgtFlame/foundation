@@ -1,0 +1,42 @@
+{
+  "id": "infraScript",
+  "owner": "app:infrastructure",
+  "name": "Script",
+  "description": "A bash script daemons may run, signed by the root tenant's key once saved and named by its content hash",
+  "titleField": "title",
+  "fields": [
+    {
+      "id": "title",
+      "name": "Title",
+      "type": "text",
+      "description": "What the script does, in a few words",
+      "required": true
+    },
+    {
+      "id": "description",
+      "name": "Description",
+      "type": "text",
+      "description": "What the script does and what its arguments file holds"
+    },
+    {
+      "id": "content",
+      "name": "Content",
+      "type": "text",
+      "description": "The script: starts with #!/usr/bin/env bash, then set -euo pipefail; its arguments are a JSON file passed as $1",
+      "required": true
+    },
+    {
+      "id": "hash",
+      "name": "Hash",
+      "type": "text",
+      "description": "Reported: sha256:<hex> of the content once signed and kept, what a script request names"
+    },
+    {
+      "id": "problem",
+      "name": "Problem",
+      "type": "text",
+      "description": "Reported: why the content was not signed"
+    }
+  ],
+  "indexes": []
+}

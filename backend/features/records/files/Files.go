@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	"io"
 	"strconv"
 	"sync"
@@ -33,7 +34,8 @@ const (
 
 // Store is the tenants' file buckets.
 type Store struct {
-	js jetstream.JetStream
+	js  jetstream.JetStream
+	acc natsd.Accounts
 
 	mu      sync.Mutex
 	buckets map[uint64]jetstream.ObjectStore
@@ -53,9 +55,13 @@ func (s *Store) bucket(ctx context.Context, tenant uint64) (jetstream.ObjectStor
 	if b, ok := s.buckets[tenant]; ok {
 		return b, nil
 	}
-	b, err := s.js.CreateOrUpdateObjectStore(ctx, jetstream.ObjectStoreConfig{
+	js, err := natsd.For(ctx, s.acc, s.js, tenant)
+	if err != nil {
+		return nil, log.Wrap(err)
+	}
+	b, err := js.CreateOrUpdateObjectStore(ctx, natsd.Object(jetstream.ObjectStoreConfig{
 		Bucket: Bucket(tenant), Description: "Files of records' file fields", Storage: jetstream.FileStorage,
-	})
+	}))
 	if err != nil {
 		return nil, log.Wrapf(err, "cannot open the file bucket of tenant %d", tenant)
 	}
@@ -155,3 +161,7 @@ func (l *limitReader) Read(p []byte) (int, error) {
 func URL(entity, record, field, id string) string {
 	return "/api/v1/records/files/" + entity + "/" + record + "/" + field + "/" + id
 }
+
+// SetAccounts keeps each tenant's data in its own NATS account (forge
+// 20a-3); before it is called every tenant uses the store's JetStream.
+func (x *Store) SetAccounts(a natsd.Accounts) { x.acc = a }

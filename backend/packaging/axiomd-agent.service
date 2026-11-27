@@ -1,0 +1,12 @@
+[Unit]
+Description=Axiom instance agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/axiomd agent
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

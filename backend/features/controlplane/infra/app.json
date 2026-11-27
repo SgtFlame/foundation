@@ -1,0 +1,84 @@
+{
+  "id": "infrastructure",
+  "name": "Infrastructure",
+  "icon": "dns",
+  "description": "The deployment's desired state as records, installed only in the root tenant: hosts, profiles, instances, units, package pins, enrollments, NATS accounts and clusters, signed scripts and approved apt sources. axiomd daemons read it resolved from the control account; Forge's Infrastructure app shows it.",
+  "entities": [
+    "infraHost",
+    "infraProfile",
+    "infraInstance",
+    "infraUnit",
+    "infraPackagePin",
+    "infraEnrollment",
+    "infraNatsAccount",
+    "infraNatsCluster",
+    "infraChannel",
+    "infraRollout",
+    "infraScript",
+    "infraAptSource"
+  ],
+  "roles": [
+    {
+      "id": "administrator",
+      "title": "Desired state administrator",
+      "description": "Sees and changes all desired state",
+      "actions": [
+        "entity:infraHost.*",
+        "entity:infraProfile.*",
+        "entity:infraInstance.*",
+        "entity:infraUnit.*",
+        "entity:infraPackagePin.*",
+        "entity:infraEnrollment.*",
+        "entity:infraNatsAccount.*",
+        "entity:infraNatsCluster.*",
+        "entity:infraChannel.*",
+        "entity:infraRollout.*",
+        "entity:infraScript.*",
+        "entity:infraAptSource.*"
+      ],
+      "installer": true
+    },
+    {
+      "id": "operator",
+      "title": "Desired state operator",
+      "description": "Sees desired state, starts, stops and restarts instances and units, and runs rollouts",
+      "actions": [
+        "entity:infraHost.read",
+        "entity:infraProfile.read",
+        "entity:infraInstance.read",
+        "entity:infraUnit.read",
+        "entity:infraPackagePin.read",
+        "entity:infraEnrollment.read",
+        "entity:infraNatsAccount.read",
+        "entity:infraNatsCluster.read",
+        "entity:infraChannel.read",
+        "entity:infraRollout.read",
+        "entity:infraScript.read",
+        "entity:infraAptSource.read",
+        "entity:infraInstance.update",
+        "entity:infraUnit.update",
+        "entity:infraRollout.create",
+        "entity:infraRollout.update"
+      ]
+    },
+    {
+      "id": "viewer",
+      "title": "Desired state viewer",
+      "description": "Sees desired and reported state",
+      "actions": [
+        "entity:infraHost.read",
+        "entity:infraProfile.read",
+        "entity:infraInstance.read",
+        "entity:infraUnit.read",
+        "entity:infraPackagePin.read",
+        "entity:infraEnrollment.read",
+        "entity:infraNatsAccount.read",
+        "entity:infraNatsCluster.read",
+        "entity:infraChannel.read",
+        "entity:infraRollout.read",
+        "entity:infraScript.read",
+        "entity:infraAptSource.read"
+      ]
+    }
+  ]
+}
