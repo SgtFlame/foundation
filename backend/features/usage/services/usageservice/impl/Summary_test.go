@@ -34,7 +34,15 @@ func TestSummaryBucketsAndGroups(t *testing.T) {
 	if err := gdb.Create(&records).Error; err != nil {
 		t.Fatal(err)
 	}
-	s := &service{db: gdb}
+	real := &service{db: gdb}
+	// The same checks against the real implementation and through its
+	// proxy and server over NATS (forge 21a-1).
+	for name, s := range map[string]usageservice.Service{"real": real, "proxy": viaNATS(t, real)} {
+		t.Run(name, func(t *testing.T) { checkSummary(t, s, day) })
+	}
+}
+
+func checkSummary(t *testing.T, s usageservice.Service, day time.Time) {
 	args := features.ServiceArgs{Principal: features.LocalPrincipal()}
 
 	resp := s.Summary(usageservice.SummaryArgs{ServiceArgs: args, Bucket: "day", GroupBy: "feature"})
