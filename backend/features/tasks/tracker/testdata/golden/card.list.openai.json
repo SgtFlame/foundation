@@ -1,0 +1,33 @@
+{
+  "type": "function",
+  "function": {
+    "name": "tasks_tracker_card_list",
+    "description": "Lists a board's cards a page at a time, each with its version and updatedAt; pass the cursor it gives to get the next page, until it gives none. The pages together hold every card once.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "board": {
+          "type": "string",
+          "description": "The board's id"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "The cursor of the page before; left out for the first"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "description": "Cards per page; 100 when left out"
+        },
+        "archived": {
+          "type": "boolean",
+          "description": "Include archived cards too"
+        }
+      },
+      "required": [
+        "board"
+      ]
+    }
+  }
+}

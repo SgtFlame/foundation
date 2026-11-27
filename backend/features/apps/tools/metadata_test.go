@@ -48,6 +48,8 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/records/entities"
 	recordsnodes "github.com/SgtFlame/foundation/backend/features/records/nodes"
 	retrievaltools "github.com/SgtFlame/foundation/backend/features/retrieval/tools"
+	"github.com/SgtFlame/foundation/backend/features/tasks/tracker"
+	"github.com/SgtFlame/foundation/backend/features/tasks/tracker/trackerfake"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 	toolsnodes "github.com/SgtFlame/foundation/backend/features/tools/nodes"
 	"github.com/SgtFlame/foundation/backend/features/ui"
@@ -109,6 +111,8 @@ func everything(t *testing.T) *extensions.Registry {
 	game.Contribute(reg, func() game.Deps { return game.Deps{} })                   // forge 360 V1
 	infra.Contribute(reg, func() infra.Deps { return infra.Deps{} })                // forge 22a
 	infratest.Contribute(reg)                                                       // forge 22c
+	tracker.Contribute(reg)                                                         // forge 30g
+	trackerfake.Contribute(reg, func() trackerfake.Dispatcher { return nil })       // forge 30g
 	infraproviders.Contribute(reg)                                                  // forge 22g
 	infranodes.Contribute(reg, func() infranodes.Deps { return infranodes.Deps{} }) // forge 22e
 	infraapply.Contribute(reg, func() infraapply.Deps { return infraapply.Deps{} }) // forge 22f

@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "tasks_tracker_card_get",
+    "description": "Reads one card with its version and updatedAt. notFound when the tracker has no such card.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The card's outside id"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  }
+}

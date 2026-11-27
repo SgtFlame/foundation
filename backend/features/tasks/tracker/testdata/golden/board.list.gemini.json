@@ -1,0 +1,13 @@
+{
+  "name": "tasks_tracker_board_list",
+  "description": "Lists the boards (projects) the connection can see.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "archived": {
+        "type": "boolean",
+        "description": "Include archived boards too"
+      }
+    }
+  }
+}

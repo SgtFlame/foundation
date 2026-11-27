@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "tasks_tracker_comment_list",
+    "description": "Lists a card's comments, oldest first.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "card": {
+          "type": "string",
+          "description": "The card's id"
+        }
+      },
+      "required": [
+        "card"
+      ]
+    }
+  }
+}

@@ -217,6 +217,8 @@ import (
 	bootstrapimpl "github.com/SgtFlame/foundation/backend/features/secrets/services/bootstrapservice/impl"
 	secretsimpl "github.com/SgtFlame/foundation/backend/features/secrets/services/secretsservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/secrets/vaultstore"
+	"github.com/SgtFlame/foundation/backend/features/tasks/tracker"
+	"github.com/SgtFlame/foundation/backend/features/tasks/tracker/trackerfake"
 	"github.com/SgtFlame/foundation/backend/features/text"
 	textnodes "github.com/SgtFlame/foundation/backend/features/text/nodes"
 	"github.com/SgtFlame/foundation/backend/features/tools"
@@ -760,6 +762,13 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		infra.Contribute(registry, func() infra.Deps { return infraDeps })             // infra.config.* configurations and versions (forge 22a)
 		infraproviders.Contribute(registry)                                            // the provider types: infra.lxd (forge 22g)
 		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
+		tracker.Contribute(registry)                                                   // the tasks.tracker@1 contract (forge 30g)
+		trackerfake.Contribute(registry, func() trackerfake.Dispatcher {               // the Tasks test server and its control call (forge 30g)
+			if connectorDeps.Dispatcher == nil {
+				return nil
+			}
+			return connectorDeps.Dispatcher
+		})
 		var infraNodeDeps infranodes.Deps
 		infranodes.Contribute(registry, func() infranodes.Deps { return infraNodeDeps }) // Ensure host, instance, unit, packages, Wait healthy, Remove (forge 22e)
 		var infraOutbox func(features.ServiceArgs, live.Area) error
@@ -1499,8 +1508,9 @@ func targetFrom(raw string) (logging.Target, error) {
 // serves, with their metadata (forge 07b); an external adapter binary
 // serves its own with adapter.Serve.
 func connectorImpls() adapter.Options {
-	return adapter.Options{Name: "server", Types: append(infraproviders.Types(), infratest.Type()), Contracts: []connectors.Contract{infra.ComputeContract(), infratest.ControlContract()},
-		Impls: append(infraproviders.Impls(), infratest.Default.Impl())} // the Infrastructure test server (forge 22c)
+	return adapter.Options{Name: "server", Types: append(infraproviders.Types(), infratest.Type(), trackerfake.Type()),
+		Contracts: []connectors.Contract{infra.ComputeContract(), infratest.ControlContract(), tracker.Contract(), trackerfake.ControlContract()},
+		Impls:     append(infraproviders.Impls(), infratest.Default.Impl(), trackerfake.Default.Impl())} // the Infrastructure test server (forge 22c), the Tasks test server (forge 30g)
 }
 
 // knownServices are every service's wire name (forge 21g-1).

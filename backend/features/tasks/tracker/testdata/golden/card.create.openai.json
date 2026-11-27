@@ -1,0 +1,90 @@
+{
+  "type": "function",
+  "function": {
+    "name": "tasks_tracker_card_create",
+    "description": "Makes a card in a list, keyed by our task id: a create with a key already made makes nothing and gives that card.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "Our task id, the idempotency key"
+        },
+        "board": {
+          "type": "string",
+          "description": "The board's id"
+        },
+        "list": {
+          "type": "string",
+          "description": "The list's id (board.get)"
+        },
+        "position": {
+          "type": "number",
+          "description": "Where in the list: a position between its neighbours'; the end when left out"
+        },
+        "title": {
+          "type": "string",
+          "description": "Its title"
+        },
+        "description": {
+          "type": "string",
+          "description": "Its description, in Markdown"
+        },
+        "assignees": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Member ids to assign (member.list)"
+        },
+        "due": {
+          "type": "string",
+          "description": "When it is due, RFC 3339 or YYYY-MM-DD; empty for none"
+        },
+        "start": {
+          "type": "string",
+          "description": "When it starts, RFC 3339 or YYYY-MM-DD; empty for none"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Label ids (board.get)"
+        },
+        "checklist": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "A checklist item",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "The item's outside id; left out for a new one"
+              },
+              "text": {
+                "type": "string",
+                "description": "What is to be done"
+              },
+              "done": {
+                "type": "boolean",
+                "description": "Whether it is done"
+              }
+            },
+            "required": [
+              "text",
+              "done"
+            ]
+          },
+          "description": "The whole checklist, in order"
+        }
+      },
+      "required": [
+        "key",
+        "board",
+        "list",
+        "title"
+      ]
+    }
+  }
+}

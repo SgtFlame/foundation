@@ -1,0 +1,59 @@
+{
+  "name": "tasks_tracker_board_list",
+  "title": "List boards",
+  "description": "Lists the boards (projects) the connection can see.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "archived": {
+        "type": "boolean",
+        "description": "Include archived boards too"
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "boards": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "description": "A board (a Trello board, an Asana project, a Linear team)",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The board's outside id"
+            },
+            "name": {
+              "type": "string",
+              "description": "Its name"
+            },
+            "url": {
+              "type": "string",
+              "description": "Where it is opened in the tracker"
+            },
+            "archived": {
+              "type": "boolean",
+              "description": "Whether it is archived"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "description": "The boards"
+      }
+    },
+    "required": [
+      "boards"
+    ]
+  },
+  "annotations": {
+    "title": "List boards",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

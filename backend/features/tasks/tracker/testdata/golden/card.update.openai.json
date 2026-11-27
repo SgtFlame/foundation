@@ -1,0 +1,86 @@
+{
+  "type": "function",
+  "function": {
+    "name": "tasks_tracker_card_update",
+    "description": "Sets some of a card's fields; fields left out of set are kept. Given version, it is refused with conflict when the card changed since that version, so a sync never overwrites a change it has not seen.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The card's outside id"
+        },
+        "version": {
+          "type": "string",
+          "description": "The version the change was made against; refused with conflict once the card moved on"
+        },
+        "set": {
+          "type": "object",
+          "description": "The fields to change",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Its title"
+            },
+            "description": {
+              "type": "string",
+              "description": "Its description, in Markdown"
+            },
+            "assignees": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Member ids to assign (member.list)"
+            },
+            "due": {
+              "type": "string",
+              "description": "When it is due, RFC 3339 or YYYY-MM-DD; empty for none"
+            },
+            "start": {
+              "type": "string",
+              "description": "When it starts, RFC 3339 or YYYY-MM-DD; empty for none"
+            },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Label ids (board.get)"
+            },
+            "checklist": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "description": "A checklist item",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "The item's outside id; left out for a new one"
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "What is to be done"
+                  },
+                  "done": {
+                    "type": "boolean",
+                    "description": "Whether it is done"
+                  }
+                },
+                "required": [
+                  "text",
+                  "done"
+                ]
+              },
+              "description": "The whole checklist, in order"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "set"
+      ]
+    }
+  }
+}
