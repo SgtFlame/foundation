@@ -239,8 +239,8 @@ func contributeConfig(reg *extensions.Registry) {
 
 	register(live.Command{
 		Descriptor: extensions.Descriptor{ID: "infra.config.settings"}, Title: "Change the configuration's settings",
-		Description: "Sets the configuration's own settings: onDrift, report (the default) or correct, which says what the drift job does when actual state leaves the applied version.",
-		Args:        json.RawMessage(`{"type":"object","properties":{"onDrift":{"type":"string","enum":["report","correct"],"description":"report: only say so; correct: apply the version again"}}}`),
+		Description: "Sets the configuration's own settings, all of them at once: onDrift, report (the default) or correct, which says what the drift job does when actual state leaves the applied version; crossSite, the services a serve unit may call on another site across a gateway.",
+		Args:        json.RawMessage(`{"type":"object","properties":{"onDrift":{"type":"string","enum":["report","correct"],"description":"report: only say so; correct: apply the version again"},"crossSite":{"type":"array","items":{"type":"string"},"description":"Services (wire names) serve units may call on another site, across a gateway; none by default"}}}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"onDrift":"correct"}`)},
 		Events:      []string{EventSettings},
 	}, func(d live.Decision, cfg Config) ([]live.NewEvent, []live.Problem) {
@@ -253,7 +253,7 @@ func contributeConfig(reg *extensions.Registry) {
 		if ps := next.Check(); len(ps) > 0 {
 			return nil, ps
 		}
-		if s == cfg.Draft.Settings {
+		if s.Equal(cfg.Draft.Settings) {
 			d.Undo("")
 			return nil, nil
 		}

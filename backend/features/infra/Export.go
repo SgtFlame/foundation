@@ -60,7 +60,7 @@ func Export(doc Document) (map[string]string, []live.Problem) {
 		return nil
 	}
 	cfg := exportConfig{Accounts: doc.Accounts, Profiles: doc.Profiles, Overrides: doc.Overrides}
-	if doc.Settings != (Settings{}) {
+	if !doc.Settings.Equal(Settings{}) {
 		cfg.Settings = &doc.Settings
 	}
 	if ps := put(fileConfig, cfg); ps != nil {

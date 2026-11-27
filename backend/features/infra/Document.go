@@ -3,6 +3,7 @@ package infra
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -128,7 +129,13 @@ type Override struct {
 // Settings are the configuration's own settings.
 type Settings struct {
 	OnDrift string `json:"onDrift,omitempty"` // report (the default) or correct
+	// CrossSite are the services a serve unit may call on another site,
+	// across a gateway (forge 22i); every other call stays on its site.
+	CrossSite []string `json:"crossSite,omitempty"`
 }
+
+// Equal tells whether two settings are the same.
+func (s Settings) Equal(o Settings) bool { return reflect.DeepEqual(s, o) }
 
 // Kinds are the document's keyed lists, by the name commands use.
 var Kinds = []string{"accounts", "sites", "clusters", "hostPools", "profiles", "stacks", "placements", "overrides"}

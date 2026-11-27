@@ -46,6 +46,9 @@ type PlanRecord struct {
 	// Accounts are the version's provider accounts, which its steps name
 	// (their connections' ids, never secrets).
 	Accounts []Account `json:"accounts,omitempty"`
+	// Units are each profile's serve units' access, from their services'
+	// manifests (forge 22i): what a reviewer sees each unit may do.
+	Units map[string][]UnitAccess `json:"units,omitempty"`
 	PlanResult
 }
 
@@ -82,6 +85,9 @@ type Deps struct {
 	// instances the Control Plane holds), given the documents being
 	// compared; nil for none.
 	Actual func(args features.ServiceArgs, config string, docs []Document) ([]Resource, error)
+	// Services gives the services serve units may name with their
+	// manifests (forge 22i); nil checks no unit.
+	Services func() Services
 }
 
 // ReadActual gathers what exists for a document: each account's hosts
@@ -242,6 +248,13 @@ func MakePlan(args features.ServiceArgs, reg *extensions.Registry, deps Deps, co
 		return PlanRecord{}, err
 	}
 	rec := PlanRecord{Config: config, Version: version, ActualAt: time.Now().UTC(), Accounts: doc.Normalized().Accounts, PlanResult: Plan(desired, kinds, act)}
+	if deps.Services != nil {
+		units, refusals := CheckUnits(doc, deps.Services())
+		rec.Refusals = append(rec.Refusals, refusals...)
+		if len(units) > 0 {
+			rec.Units = units
+		}
+	}
 	raw, _ := json.Marshal(map[string]any{"plan": rec})
 	id := strconv.FormatUint(features.NewTSID(), 10)
 	r := deps.Bus.Execute(bus.Request{ServiceArgs: args, ID: "plan-" + id, Type: "infra.plan.record", Target: id, Args: raw})

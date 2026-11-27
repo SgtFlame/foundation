@@ -1152,7 +1152,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Modes people made are listed after the chat.modes settings (forge 15h)
 		workspaceDeps = workspace.Deps{Store: projections, Bus: liveBus}
 		gameDeps = game.Deps{Store: projections}
-		infraDeps = infra.Deps{Bus: liveBus, Store: projections, Compute: infra.DispatcherCompute{D: connectorDispatcher}} // plans read the providers through infra.compute (forge 22d)
+		infraDeps = infra.Deps{Bus: liveBus, Store: projections, Compute: infra.DispatcherCompute{D: connectorDispatcher}, Services: func() infra.Services { return infra.Services{Specs: catalog.Services, Groups: serviceGroups()} }} // plans read the providers through infra.compute (forge 22d)
 		infraNodeDeps = infranodes.Deps{Bus: liveBus, Data: recordDeps, Compute: infraDeps.Compute}
 		infraDeps.Actual = infraapply.RecordsActual(registry, func() infranodes.Deps { return infraNodeDeps })
 		workbenchcontext.SetWorkspaceNames(func(args features.ServiceArgs, id string) (string, bool) {
