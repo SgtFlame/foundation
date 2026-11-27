@@ -36,6 +36,7 @@ const (
 	EntityEnrollment = "infraEnrollment"
 	EntityNatsAcct   = "infraNatsAccount"
 	EntityScript     = "infraScript"
+	EntityAptSource  = "infraAptSource"
 )
 
 //go:embed infra

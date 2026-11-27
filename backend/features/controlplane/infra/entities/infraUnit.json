@@ -77,6 +77,18 @@
       "description": "Its configuration, rendered into its files"
     },
     {
+      "id": "files",
+      "name": "Files",
+      "type": "json",
+      "description": "Files the agent writes for it: [{path, content, mode, owner}], content a Go template over .Config (its config) and .Facts (the instance's facts); a unit file under /etc/systemd/system is one of them"
+    },
+    {
+      "id": "health",
+      "name": "Health checks",
+      "type": "json",
+      "description": "How the agent checks it: [{kind: unit|tcp|http|nats, port, url, intervalSeconds}]"
+    },
+    {
       "id": "status",
       "name": "Status",
       "type": "enum",

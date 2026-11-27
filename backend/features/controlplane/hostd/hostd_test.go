@@ -174,6 +174,9 @@ func TestCreatedOnce(t *testing.T) {
 	if p := e.lxd.Profiles()["axiom-p1"]; p.Config["limits.cpu"] != "2" || p.Config["limits.memory"] != "2GiB" {
 		t.Fatalf("profile %+v", p)
 	}
+	if ud := in.Config["cloud-init.user-data"]; !strings.Contains(ud, "axiomd enroll --from /etc/axiomd/enroll.json") || !strings.Contains(ud, "axiomd-agent.service") {
+		t.Fatalf("the user data does not start the agent:\n%s", ud)
+	}
 	f, err := ReadUserData(in.Config["cloud-init.user-data"])
 	if err != nil {
 		t.Fatal(err)

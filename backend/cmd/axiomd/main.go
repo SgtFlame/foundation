@@ -13,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/SgtFlame/foundation/backend/features/controlplane/agent"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/daemon"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/hostd"
 )
@@ -104,7 +105,6 @@ func run(mode string, args []string) error {
 		}
 		return d.Run(ctx)
 	}
-	// What agent mode does to an instance comes with 20d-1 (packages)
-	d := &daemon.Daemon{Config: c, Facts: daemon.HostFacts}
+	d, _ := agent.New(c) // forge 20d-1: packages, files, units, health
 	return d.Run(ctx)
 }

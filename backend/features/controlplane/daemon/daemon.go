@@ -165,6 +165,8 @@ type Daemon struct {
 	Reconcile func(ctx context.Context, desired json.RawMessage) error
 	// Facts are reported on start and whenever they change.
 	Facts func(ctx context.Context) map[string]any
+	// Units are each unit's health, sent with every heartbeat (forge 20d-1).
+	Units func(ctx context.Context) map[string]string
 	// Handlers are verbs beyond reconcile.
 	Handlers map[string]Handler
 	// Period is the reconcile pass's (5 min, jittered), Beat the
@@ -292,7 +294,11 @@ func (d *Daemon) beat(ctx context.Context) {
 				}
 			}
 		}
-		_ = d.c.Beat(ctx, d.target, ctl.Health{Status: "up"})
+		h := ctl.Health{Status: "up"}
+		if d.Units != nil {
+			h.Units = d.Units(ctx)
+		}
+		_ = d.c.Beat(ctx, d.target, h)
 		select {
 		case <-ctx.Done():
 			return

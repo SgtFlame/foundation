@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+name="${!#}"
+[[ -f "$FAKE_STATE/pkg/$name" ]] || { echo "dpkg-query: no packages found matching $name" >&2; exit 1; }
+printf '%s' "$(cat "$FAKE_STATE/pkg/$name")"

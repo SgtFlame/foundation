@@ -314,11 +314,30 @@ func (h *Host) one(ctx context.Context, i Instance, p Profile, have map[string]l
 	return nil
 }
 
-// UserData is the cloud-init that hands an instance its enrollment
-// file; installing and starting the agent's package comes with 20d-1.
+// AgentUnit is the agent's systemd unit, written by cloud-init.
+const AgentUnit = `[Unit]
+Description=Axiom instance agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/axiomd agent
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+`
+
+// UserData is the cloud-init that hands an instance its enrollment file
+// and its agent's unit, installs axiomd when the image lacks it (from the
+// first-party repository once 20f-1 serves it; development pushes the
+// binary), enrolls and starts the agent (forge 20d-1).
 func UserData(f daemon.EnrollFile) string {
 	raw, _ := json.Marshal(f)
-	return "#cloud-config\nwrite_files:\n  - path: /etc/axiomd/enroll.json\n    permissions: '0600'\n    content: " + string(mustJSON(string(raw))) + "\n"
+	return "#cloud-config\nwrite_files:\n  - path: /etc/axiomd/enroll.json\n    permissions: '0600'\n    content: " + string(mustJSON(string(raw))) + "\n" +
+		"  - path: /etc/systemd/system/axiomd-agent.service\n    permissions: '0644'\n    content: " + string(mustJSON(AgentUnit)) + "\n" +
+		"runcmd:\n  - [sh, -c, " + string(mustJSON("command -v axiomd >/dev/null || apt-get install -y axiomd; axiomd enroll --from /etc/axiomd/enroll.json && systemctl daemon-reload && systemctl enable --now axiomd-agent")) + "]\n"
 }
 
 func mustJSON(s string) []byte {
@@ -333,8 +352,9 @@ func ReadUserData(s string) (daemon.EnrollFile, error) {
 	if !ok {
 		return f, log.Code("no_enroll_file").Errorf("no enrollment file in the user data")
 	}
+	line, _, _ := strings.Cut(after, "\n")
 	var text string
-	if err := json.Unmarshal([]byte(strings.TrimSpace(after)), &text); err != nil {
+	if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &text); err != nil {
 		return f, log.Wrap(err)
 	}
 	return f, log.Wrap(json.Unmarshal([]byte(text), &f))

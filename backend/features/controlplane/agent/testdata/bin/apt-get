@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# A fake apt-get (forge 20d-1 tests): packages are files in $FAKE_STATE/pkg,
+# what the repositories offer is $FAKE_STATE/repo/<name> (versions, newest last).
+set -euo pipefail
+echo "apt-get $*" >> "$FAKE_STATE/calls"
+mkdir -p "$FAKE_STATE/pkg" "$FAKE_STATE/held"
+cmd="$1"; shift
+case "$cmd" in
+  update) exit 0 ;;
+  install)
+    for a in "$@"; do
+      case "$a" in -*) continue ;; esac
+      name="${a%%=*}"; ver=""
+      [[ "$a" == *=* ]] && ver="${a#*=}"
+      [[ -f "$FAKE_STATE/repo/$name" ]] || { echo "E: Unable to locate package $name"; exit 100; }
+      if [[ -z "$ver" ]]; then ver="$(tail -n1 "$FAKE_STATE/repo/$name")"; fi
+      grep -qx "$ver" "$FAKE_STATE/repo/$name" || { echo "E: Version '$ver' for '$name' was not found"; exit 100; }
+      echo "$ver" > "$FAKE_STATE/pkg/$name"
+    done ;;
+  remove)
+    for a in "$@"; do
+      case "$a" in -*) continue ;; esac
+      rm -f "$FAKE_STATE/pkg/$a"
+    done ;;
+  *) echo "fake apt-get: $cmd"; exit 1 ;;
+esac

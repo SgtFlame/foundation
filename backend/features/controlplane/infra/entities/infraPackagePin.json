@@ -22,7 +22,7 @@
       "id": "source",
       "name": "Source",
       "type": "enum",
-      "description": "The first-party repository or the Ubuntu archive",
+      "description": "The first-party repository, the Ubuntu archive, or an approved third-party source",
       "options": [
         {
           "id": "firstParty",
@@ -31,6 +31,10 @@
         {
           "id": "ubuntu",
           "name": "Ubuntu"
+        },
+        {
+          "id": "thirdParty",
+          "name": "ThirdParty"
         }
       ],
       "default": "firstParty"
@@ -46,6 +50,15 @@
       "name": "Channel",
       "type": "text",
       "description": "The channel, when no version is pinned"
+    },
+    {
+      "id": "repository",
+      "name": "Repository",
+      "type": "relation",
+      "description": "For a third-party pin: the apt source it installs from",
+      "relation": {
+        "entity": "infraAptSource"
+      }
     }
   ],
   "indexes": []

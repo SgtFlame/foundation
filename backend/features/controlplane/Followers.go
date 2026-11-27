@@ -47,7 +47,7 @@ func Start(ctx context.Context, deps func() Deps) error {
 		return err
 	}
 	var subjects []string
-	for _, e := range []string{EntityHost, EntityProfile, EntityInstance, EntityUnit, EntityPackagePin} {
+	for _, e := range []string{EntityHost, EntityProfile, EntityInstance, EntityUnit, EntityPackagePin, EntityAptSource} {
 		subjects = append(subjects, "evt."+strconv.FormatUint(features.RootTenantID, 10)+".rec."+e+".>")
 	}
 	err := d.Projections.Follow(ctx, features.RootTenantID, live.AreaRecords, "controlplane.desired", subjects, func(e live.Event) error {
@@ -121,7 +121,7 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 		return log.Wrap(err)
 	}
 	read := map[string]map[string]map[string]json.RawMessage{}
-	for _, e := range []string{EntityHost, EntityProfile, EntityInstance, EntityUnit, EntityPackagePin} {
+	for _, e := range []string{EntityHost, EntityProfile, EntityInstance, EntityUnit, EntityPackagePin, EntityAptSource} {
 		rs, err := all(ctx, d, e)
 		if err != nil {
 			return err
@@ -167,9 +167,20 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 				pins = append(pins, desired(p))
 			}
 		}
+		// The third-party sources its pins name, with whether each is
+		// approved (forge 20d-1): the agent writes only approved ones
+		var sources []map[string]json.RawMessage
+		seen := map[string]bool{}
+		for _, p := range pins {
+			if sid := str(p, "repository"); sid != "" && !seen[sid] && read[EntityAptSource][sid] != nil {
+				seen[sid] = true
+				sources = append(sources, desired(read[EntityAptSource][sid]))
+			}
+		}
 		sortByID(units)
 		sortByID(pins)
-		docs[ctl.Target{Kind: ctl.KindInstance, ID: id}] = map[string]any{"instance": doc, "profile": profile, "units": units, "pins": pins}
+		sortByID(sources)
+		docs[ctl.Target{Kind: ctl.KindInstance, ID: id}] = map[string]any{"instance": doc, "profile": profile, "units": units, "pins": pins, "sources": sources}
 	}
 	for t, doc := range docs {
 		if d.ScriptKey != nil {
