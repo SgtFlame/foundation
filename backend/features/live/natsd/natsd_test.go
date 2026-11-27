@@ -164,7 +164,7 @@ func TestClusterSurvivesANode(t *testing.T) {
 
 	leader := st.CachedInfo().Cluster.Leader
 	for i := 0; i < c.Size(); i++ {
-		if fmt.Sprintf("n%d", i) == leader {
+		if c.NodeName(i) == leader {
 			c.Stop(i)
 			publish(5)
 			c.Restart(i)

@@ -200,6 +200,7 @@ var (
 	serveNatsCA     string
 	serveNatsReps   int
 	serveNatsKeys   string
+	serveNatsPlaces string
 )
 
 // serveCmd represents the serve command
@@ -354,6 +355,12 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// (forge 20a-1: a deployed cluster is several URLs, with a creds
 		// file, a CA and every stream made with --nats-replicas)
 		natsd.SetDefault(natsd.Placement{Replicas: natsd.ReplicasOr(serveNatsReps)})
+		// forge 20a-4: tenants placed in a cluster of the supercluster
+		if places, err := natsd.ParsePlacements(natsd.PlacementsOr(serveNatsPlaces)); err != nil {
+			return err
+		} else if len(places) > 0 {
+			natsd.SetTenantPlacements(func(t uint64) (natsd.Placement, bool) { p, ok := places[t]; return p, ok })
+		}
 		natsOptions := natsd.Options{Dir: filepath.Join(dataDir, "nats"), URL: serveNatsURL, Creds: serveNatsCreds, CA: serveNatsCA}.WithEnv()
 		nats, err := natsd.Start(ctx, natsOptions)
 		if err != nil {
@@ -1087,6 +1094,7 @@ func init() {
 	serveCmd.Flags().StringVar(&serveNatsCreds, "nats-creds", "", "a NATS credentials file for --nats-url (default $FOUNDATION_NATS_CREDS)")
 	serveCmd.Flags().StringVar(&serveNatsCA, "nats-ca", "", "the deployment's CA certificate for TLS to --nats-url (default $FOUNDATION_NATS_CA)")
 	serveCmd.Flags().StringVar(&serveNatsKeys, "nats-keys", "", "the deployment's NATS keys (cli nats init): each tenant's streams and buckets then live in its own account, made with cli nats tenant add (default $FOUNDATION_NATS_KEYS)")
+	serveCmd.Flags().StringVar(&serveNatsPlaces, "nats-placements", "", "tenants placed in clusters of the supercluster, as <tenant>=<cluster>,… (default $FOUNDATION_NATS_PLACEMENTS)")
 	serveCmd.Flags().IntVar(&serveNatsReps, "nats-replicas", 0, "replicas of every stream, bucket and object store this server makes: 3 on a cluster (default $FOUNDATION_NATS_REPLICAS, else 1)")
 	serveCmd.Flags().StringVar(&serveVLogsURL, "vlogs-url", "", "VictoriaLogs to store logs in, e.g. http://localhost:9428 (default $FOUNDATION_VLOGS_URL); wins over Settings")
 }

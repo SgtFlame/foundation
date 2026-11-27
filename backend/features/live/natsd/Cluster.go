@@ -28,7 +28,16 @@ type Cluster struct {
 // test ends. Streams made with replicas up to n survive one node stopped.
 func StartTestCluster(t testing.TB, n int) *Cluster {
 	t.Helper()
-	c := &Cluster{t: t, name: fmt.Sprintf("test-%d", time.Now().UnixNano())}
+	c := newTestCluster(t, fmt.Sprintf("test-%d", time.Now().UnixNano()), n, nil)
+	c.startAll()
+	return c
+}
+
+// newTestCluster prepares n nodes named <name>-n<i>, clustered when n > 1;
+// configure adjusts each node's options before it starts.
+func newTestCluster(t testing.TB, name string, n int, configure func(i int, o *server.Options)) *Cluster {
+	t.Helper()
+	c := &Cluster{t: t, name: name}
 	clientPorts, routePorts := freePorts(t, n), freePorts(t, n)
 	var routes []*url.URL
 	for _, p := range routePorts {
@@ -36,8 +45,8 @@ func StartTestCluster(t testing.TB, n int) *Cluster {
 	}
 	dir := t.TempDir()
 	for i := 0; i < n; i++ {
-		c.opts = append(c.opts, &server.Options{
-			ServerName: fmt.Sprintf("n%d", i),
+		o := &server.Options{
+			ServerName: fmt.Sprintf("%s-n%d", name, i),
 			Host:       "127.0.0.1",
 			Port:       clientPorts[i],
 			JetStream:  true,
@@ -49,21 +58,32 @@ func StartTestCluster(t testing.TB, n int) *Cluster {
 			NoSigs:             true,
 			NoLog:              true,
 			Cluster: server.ClusterOpts{
-				Name: c.name,
+				Name: name,
 				Host: "127.0.0.1",
 				Port: routePorts[i],
 			},
 			Routes: routes,
-		})
+		}
+		if configure != nil {
+			configure(i, o)
+		}
+		c.opts = append(c.opts, o)
 		c.nodes = append(c.nodes, nil)
 	}
+	return c
+}
+
+func (c *Cluster) startAll() {
+	c.t.Helper()
 	for i := range c.opts {
 		c.start(i)
 	}
-	t.Cleanup(c.Shutdown)
+	c.t.Cleanup(c.Shutdown)
 	c.WaitReady()
-	return c
 }
+
+// Name is the cluster's name, as a Placement's Cluster names it.
+func (c *Cluster) Name() string { return c.name }
 
 func (c *Cluster) start(i int) {
 	c.t.Helper()
@@ -185,3 +205,6 @@ func freePorts(t testing.TB, n int) []int {
 	}
 	return ports
 }
+
+// NodeName is node i's server name, as a stream's leader names it.
+func (c *Cluster) NodeName(i int) string { return c.opts[i].ServerName }

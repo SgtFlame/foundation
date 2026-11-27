@@ -8,6 +8,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/controlplane/natsauth"
 	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/spf13/cobra"
 )
 
@@ -172,8 +173,60 @@ takes effect without a restart; otherwise add it to trust.conf's preload.`,
 	},
 }
 
+var natsCluster, natsPlaceKeys string
+
+var natsPlaceCmd = &cobra.Command{
+	Use:   "place",
+	Short: "Move a tenant's streams to a cluster of the supercluster",
+	Long: `Move every stream, KV bucket and object store of tenant --tenant to cluster
+--cluster (forge 20a-4), one at a time, waiting until each has every replica
+current there; JetStream moves the messages. A stream already there is left
+alone, so it can be run again. With --keys holding the tenant's account
+(serve --nats-keys) it connects as a user of that account; otherwise with
+--nats-creds. Set the tenant's placement too (serve --nats-placements), or
+streams made later go where JetStream puts them.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		o := natsd.Options{URL: natsURL, Creds: natsCreds, CA: natsCA}.WithEnv()
+		if o.URL == "" {
+			return fmt.Errorf("--nats-url or $%s is needed", natsd.EnvURL)
+		}
+		var js jetstream.JetStream
+		acc, err := natsauth.TenantAccounts(o, natsPlaceKeys)
+		if err != nil {
+			return err
+		}
+		if acc != nil {
+			defer acc.Close()
+			if js, err = acc.For(cmd.Context(), natsTenant); err != nil {
+				return err
+			}
+		} else {
+			s, err := natsd.Start(cmd.Context(), o)
+			if err != nil {
+				return err
+			}
+			defer s.Close()
+			js = s.JS()
+		}
+		moved, err := natsd.Place(cmd.Context(), js, natsTenant, natsd.Placement{Cluster: natsCluster})
+		for _, name := range moved {
+			fmt.Fprintf(cmd.OutOrStdout(), "%s: in cluster %s\n", name, natsCluster)
+		}
+		if err == nil && len(moved) == 0 {
+			fmt.Fprintf(cmd.OutOrStdout(), "every stream of tenant %d is already in cluster %s\n", natsTenant, natsCluster)
+		}
+		return err
+	},
+}
+
 func init() {
 	home, _ := os.UserHomeDir()
+	natsPlaceCmd.Flags().Uint64Var(&natsTenant, "tenant", 0, "the tenant's id")
+	natsPlaceCmd.Flags().StringVar(&natsCluster, "cluster", "", "the cluster to move to")
+	natsPlaceCmd.Flags().StringVar(&natsPlaceKeys, "keys", "", "the deployment's keys, to reach the tenant's own account (default $FOUNDATION_NATS_KEYS)")
+	_ = natsPlaceCmd.MarkFlagRequired("tenant")
+	_ = natsPlaceCmd.MarkFlagRequired("cluster")
+	natsCmd.AddCommand(natsPlaceCmd)
 	natsTenantAddCmd.Flags().Uint64Var(&natsTenant, "tenant", 0, "the tenant's id")
 	_ = natsTenantAddCmd.MarkFlagRequired("tenant")
 	natsTenantCmd.AddCommand(natsTenantAddCmd)
@@ -185,7 +238,7 @@ func init() {
 	natsUserCmd.Flags().StringVar(&natsUser, "name", "serve", "the user's name")
 	natsCmd.AddCommand(natsInitCmd, natsUserCmd)
 
-	for _, c := range []*cobra.Command{natsReplicasCmd, natsTenantAddCmd} {
+	for _, c := range []*cobra.Command{natsReplicasCmd, natsTenantAddCmd, natsPlaceCmd} {
 		c.Flags().StringVar(&natsURL, "nats-url", "", "the cluster's URLs, comma separated (default $FOUNDATION_NATS_URL)")
 		c.Flags().StringVar(&natsCreds, "nats-creds", "", "a credentials file (default $FOUNDATION_NATS_CREDS)")
 		c.Flags().StringVar(&natsCA, "nats-ca", "", "the deployment's CA certificate (default $FOUNDATION_NATS_CA)")
