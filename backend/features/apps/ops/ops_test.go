@@ -352,6 +352,7 @@ func steps() []step {
 		s("entity.setAccess", "task", m{"access": m{"update": "record.assignee == principal.user"}}),
 		s("entity.setStorage", "task", m{"storage": m{"projection": "sql"}}),
 		s("entity.setInfo", "task", m{"name": "Todo", "description": "Something to do"}),
+		s("entity.createUserDefined", "ud_1", m{"name": "Projects", "owner": own, "parent": m{"entity": "task", "id": "t1"}, "fields": []m{{"name": "Name", "type": "text"}}}),
 		s("entity.import", "memo", m{"entity": m{"name": "Memo", "owner": own, "fields": []m{{"id": "text", "name": "text", "type": "text"}}}}),
 		s("entity.import", "memo", m{"entity": m{"name": "Memo", "owner": own, "fields": []m{{"id": "text", "name": "text", "type": "text"}, {"id": "seen", "name": "seen", "type": "bool"}}}}),
 		s("entity.delete", "memo", m{}),
