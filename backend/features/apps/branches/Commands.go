@@ -245,6 +245,7 @@ func specs() []spec {
 			structured, _ := json.Marshal(pd)
 			id := newCommitID(a.App)
 			var mergeParent string
+			var approvals []Approval
 			var after []live.NewEvent
 			if a.Merge != "" {
 				var m Merge
@@ -255,6 +256,8 @@ func specs() []spec {
 					return nil, problem("merge_"+m.Status, "merge", fmt.Sprintf("the merge is %s, not landed", m.Status), "land it with app.merge.complete")
 				}
 				mergeParent = m.SourceHead
+				// The merge was approved for what it lands, so its commit is too
+				approvals = m.Approvals
 				mt := mergeTarget(m.ID)
 				after = append(after, live.NewEvent{Type: EventMergeDone, Target: &mt, Data: map[string]string{"commit": id}})
 				if m.Source != live.Main {
@@ -272,7 +275,7 @@ func specs() []spec {
 			}
 			ct := live.Target{Area: live.AreaDefinitions, Type: CommitType, ID: id}
 			return append(append(events,
-				live.NewEvent{Type: EventCreated, Target: &ct, Data: Commit{ID: id, App: a.App, Branch: name, Parent: rec.Head, MergeParent: mergeParent, Parts: parts, Message: strings.TrimSpace(a.Message), Structured: structured}},
+				live.NewEvent{Type: EventCreated, Target: &ct, Data: Commit{ID: id, App: a.App, Branch: name, Parent: rec.Head, MergeParent: mergeParent, Parts: parts, Message: strings.TrimSpace(a.Message), Structured: structured, Approvals: approvals}},
 				live.NewEvent{Type: EventCommitted, Data: map[string]string{"commit": id}}), after...), nil
 		},
 	}, {

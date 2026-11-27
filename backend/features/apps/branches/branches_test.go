@@ -512,6 +512,9 @@ func TestMerge(t *testing.T) {
 	if c.MergeParent != a.Head || a.Status != branches.StatusMerged || entityDesc() != "From a" {
 		t.Fatalf("after merging a: commit %+v, a %+v, entity %q", c, a, entityDesc())
 	}
+	if !c.Approved {
+		t.Fatalf("the merge commit should carry the merge's approvals: %+v", c)
+	}
 	if m, _ = branches.GetMerge(ctx, f.p, 1, m.ID); m.Status != branches.MergeMerged || m.Commit != main.Head {
 		t.Fatalf("the merge of a: %+v", m)
 	}
@@ -524,6 +527,9 @@ func TestMerge(t *testing.T) {
 	i := slices.IndexFunc(m.Parts, func(p branches.MergePart) bool { return p.Type == "entity" })
 	if !m.Parts[i].Both || m.Parts[i].Conflicts[0].Path != "entity:task.description" {
 		t.Fatalf("the entity's conflict: %+v", m.Parts[i])
+	}
+	if !slices.Contains(m.Waiting, "entities") {
+		t.Fatalf("an open conflict on the entity should wait for its approval: %v", m.Waiting)
 	}
 	f.refused("merge_conflicts", "tasks", "", "app.merge.complete", "", map[string]any{"merge": m.ID})
 	f.ok("tasks", "", "app.merge.resolve", "", map[string]any{"merge": m.ID, "type": "entity", "id": "task", "path": "entity:task.description", "take": "theirs"})

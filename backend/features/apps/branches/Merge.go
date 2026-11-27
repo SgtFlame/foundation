@@ -105,7 +105,12 @@ func (m *Merge) settle() {
 	var pd []PartDiff
 	for _, p := range m.Parts {
 		m.Open += len(p.Conflicts)
-		pd = append(pd, PartDiff{Type: p.Type, ID: p.ID, Changes: p.Changes})
+		// An open conflict needs its part kind approved as much as a change
+		changes := slices.Clone(p.Changes)
+		for _, c := range p.Conflicts {
+			changes = append(changes, diff.Change{Path: c.Path, Kind: "conflict"})
+		}
+		pd = append(pd, PartDiff{Type: p.Type, ID: p.ID, Changes: changes})
 	}
 	raw, _ := json.Marshal(pd)
 	m.Kinds = KindsOf(Commit{Structured: raw})
