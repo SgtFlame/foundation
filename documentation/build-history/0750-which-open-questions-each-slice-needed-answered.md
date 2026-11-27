@@ -1,0 +1,1 @@
+Which open questions each slice needed answered (the open ones are now in each plan's TODO). **Before** means the slice cannot start without the answer. **After seeing** means building on the proposal is fine, and the answer comes once there is something to look at.

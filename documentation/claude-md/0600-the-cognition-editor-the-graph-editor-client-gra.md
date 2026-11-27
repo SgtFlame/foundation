@@ -1,0 +1,1 @@
+- The Cognition Editor (the graph editor client: `GraphEditor`, the canvas, Palette, Explorer, Log Viewer) lives only in Forge since slice 44 (`forge/frontend/axiom/src/editors/cognition/`, see forge's `CLAUDE.md`): Foundation ships the graphs, the engine and `services/Cognition.ts`, not an editor for them. Never add graph-editing UI to `common`.

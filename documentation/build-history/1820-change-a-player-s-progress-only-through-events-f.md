@@ -1,0 +1,1 @@
+- change a player's progress only through events folded by `game.players`, never a second target on a command;

@@ -1,0 +1,1 @@
+- read the terrain's density as a signed distance, negative inside the ground, as the walker does.

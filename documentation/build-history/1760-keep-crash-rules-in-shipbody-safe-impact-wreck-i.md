@@ -1,0 +1,1 @@
+- keep crash rules in `ShipBody` (`SAFE_IMPACT`, `WRECK_IMPACT`) so the server can run them later;

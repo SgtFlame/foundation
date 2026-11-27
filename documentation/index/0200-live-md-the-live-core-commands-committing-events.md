@@ -1,0 +1,1 @@
+| [Live.md](Live.md) | The live core: commands committing events to NATS JetStream (several as one atomic batch), projections in KV, queries as subscriptions, presence, and the one WebSocket per window that carries them, UI sessions, collaboration rooms and chat's calls |

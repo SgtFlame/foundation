@@ -1,0 +1,11 @@
+26. **The template evaluator and instances** (Forge iteration 4, part 4b, [forge 004-Prefabs.md](../../forge/documentation/plans/004-Prefabs.md)). *Built* ([ServerUI.md](ServerUI.md#built-in-slice-26)).
+    - **Built**:
+      - the evaluator in `ui` (`Evaluate.go`, `Template.go`): `repeat` and `when` nodes, slots, nested and pinned (`@n`) instances as regions, bindings scoped to the instance (state, queries and local state at `instances.<key path>`), `=` expressions, `app.*` and `user.*`, problems as `ui.error` in place, definitions and instance queries held by the session (200 at most), `ui.PrefabPage`;
+      - instance handlers (`prefab:<key path>#<name>`), `Handle.Raise`, `Prop`, `Held` and `Subscribe`, lifecycle runs after the tree is sent (`ui.LogicRunner`), unmounting;
+      - in `ui/nodes`, *Raise event*, *Subscribe to records*, *Get prop*, *Get query data*, `RunLogic` and `PrefabHost`;
+      - `ui.CheckPrefab` for the constructs, bindings, expressions and pinned versions; the sx token rule in it and in `ui.Validate`;
+      - `ui.Preview`, the `prefab.preview` tool, `POST /ui/prefabs/preview` and `Prefabs.preview`; published prefabs in `ui.listComponents`, `ui.describeComponent` and `ui.previewTree`;
+      - the wiring (`uitools.Contribute` takes the subscriptions; `prefabimpl.WithRegistry`, `WithSubscriptions`), in Foundation's `serve.go` and Forge's.
+    - **Blockers**: none. Forge 04b questions 1-7 were asked before building and answered with their proposals; forge 04 question 2 (no screenshots in previews) was answered before.
+    - **Decisions to review after seeing it**: in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-2).
+    - **Pending, carried forward**: an instance of a prefab unpublished when its session rendered it waits for the session to reopen; unmount runs when a session closes; `local.*` bound into an instance's props; app settings for `app.*` (forge 05); Hello's task page as a prefab (forge 4d).

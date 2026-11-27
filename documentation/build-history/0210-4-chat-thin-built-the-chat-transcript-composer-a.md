@@ -1,0 +1,18 @@
+4. **Chat, thin.** *Built.* ★ the chat transcript, composer and level toggle.
+   - The AgentOS › Chat editor streams straight from `chatservice`, with no memory; *built*, through the new `conversation` feature's `Send`, with `chatservice` now driven by the chat levels.
+   - `Conversation` and `Round` are persisted, and each round's footer shows its tokens and cost; *built*.
+   - This converts `workbench.editor`, because Chat and Dashboard are new editors. *Built*: every editor is now a contribution. The Dashboard waits for slice 5.
+   - The workbench context store, `useWorkbenchSubject` in the existing editors, and the snapshot sent with `Send` through the `workbench` context provider ([WorkbenchContext.md](WorkbenchContext.md)). Chat can then answer "what is this document about?" with no tools. *Built*, with the snapshot naming what is open (not its content, as proposed).
+   - The opt-in debug capture of prompts and replies (Usage question 2); *built*, with DevTools' Usage tab showing a captured call.
+   - What slice 4 decided is recorded in [ChatCompletion.md](ChatCompletion.md#built-in-slice-4), [WorkbenchContext.md](WorkbenchContext.md#built-in-slice-4), [Contributors.md](Contributors.md#built-in-slice-4), [Usage.md](Usage.md#built-in-slice-4) and [Configuration.md](Configuration.md#built-in-slice-4).
+   - **Blockers**: none. Its one **Before** question (Usage 2) was answered before building.
+   - **★ review pending**: the transcript, composer and level toggle still need review with a real model.
+     - The build environment had no Gemini API key, so a streamed reply, a generated title and a captured call were never seen in the browser. Every round there ended with the 503 "AI provider is not configured" message, as designed.
+     - Set a key in Settings › AI › Providers, then review. See [ChatCompletion.md › Verification of slice 4](ChatCompletion.md#verification-of-slice-4).
+   - **Decisions to review after seeing it**:
+     - Chat lives in a new `conversation` feature rather than `chronicle`. Chronicle's pipeline will run inside its `Send` in slice 6.
+     - Conversations are private to their owner until RBAC.
+     - The context controls' defaults are server sections.
+     - Each round keeps its own copy of its tokens and cost.
+     - The last 50 rounds are sent as plain history until memory arrives.
+     - WorkbenchContext questions 1, 2, 3 and 6 are built on their proposals.

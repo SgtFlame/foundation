@@ -1,0 +1,1 @@
+- **`records/data` tests fail about one run in five** (on HEAD before slice 23 as well): two projections making the same KV bucket at once get `stream name already in use`, and the test that hits it loses records (`TestAScanStopsAtTheLimitAndSaysSo`, `TestACursorWalksEveryPageOnce`). Making a bucket should treat that error as made by the other, and read it. Seen in slice 23.

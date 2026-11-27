@@ -1,0 +1,1 @@
+- **Account page**: linked OIDC identities and user-scope settings ([MultiTenant.md](MultiTenant.md)).

@@ -1,0 +1,1 @@
+What is built. Each document describes a feature as it works now, with what was decided while building it. What remains is in [plans/Index.md](plans/Index.md), and how it was built, slice by slice, is in [BuildHistory.md](BuildHistory.md).

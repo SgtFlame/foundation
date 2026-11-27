@@ -1,0 +1,1 @@
+- keep a door's stand point in its model (`userData.door`), so travel arrives by the door that leads back;

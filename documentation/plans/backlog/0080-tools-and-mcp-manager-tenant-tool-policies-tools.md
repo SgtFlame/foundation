@@ -1,0 +1,1 @@
+- **Tools and MCP manager**: tenant tool policies ([Tools.md](Tools.md)). MCP servers are connections and exposures, planned in Forge's iteration 75.

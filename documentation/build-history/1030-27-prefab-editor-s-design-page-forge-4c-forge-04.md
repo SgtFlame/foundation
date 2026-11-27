@@ -1,0 +1,1 @@
+| 27. Prefab Editor's design page (Forge 4c) | forge 04c 1 (a dry preview session over the draft), 2 (shared preview data) and 3 (no undo), answered | the decisions in [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it-3), to review after seeing |

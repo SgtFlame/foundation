@@ -1,0 +1,1 @@
+- **Tenant and User editors**: invitations and tenant settings ([MultiTenant.md](MultiTenant.md)).

@@ -1,0 +1,1 @@
+An app manifest's `tools` (slice 51, `apps.Tool {name, graph, title, description, effect}`, `app.addTool|updateTool|removeTool`) name the app's own function graphs; installed, a call runs the version's copy as the calling principal (a write asks in the chat, an agent's does not), its input schema from the graph's On call pins.

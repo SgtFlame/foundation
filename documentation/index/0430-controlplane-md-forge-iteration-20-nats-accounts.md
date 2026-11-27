@@ -1,0 +1,1 @@
+| [ControlPlane.md](ControlPlane.md) | Forge iteration 20: NATS accounts and credentials as decentralized JWTs, and (as built) the root tenant, the daemons, service identities and software distribution |

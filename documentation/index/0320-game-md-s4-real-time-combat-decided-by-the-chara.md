@@ -1,0 +1,1 @@
+| [Game.md](Game.md) › *S4* | Real-time combat decided by the character's skills (forge 375 S4): Strike, Pivot and Guard with the cadence, the Hollowed killed only by the neck or the heart, sword or pitchfork, the fight panel |

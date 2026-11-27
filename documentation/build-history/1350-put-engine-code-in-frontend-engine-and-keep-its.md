@@ -1,0 +1,1 @@
+- put engine code in `frontend/engine` and keep its modules free of React and of `common`;

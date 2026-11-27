@@ -1,0 +1,1 @@
+- signal with the book's whistle code (one: the stone moved, two: something came through, three: about to die), never a new code;

@@ -1,0 +1,1 @@
+| 16. Entity types (Forge 3a) | forge 003-DataModel 5 (drafts in KV, published versions in SQLite) and 8 (a slice per part), both answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it), to review after seeing |

@@ -1,0 +1,1 @@
+Infrastructure providers (forge 22g, 22l, 22m) are Go connector types in `features/infra/providers/<name>` over `providers.Backend`, listed in `providers/builtin`, each passing `contracttest` against a cassette (`providers/cassette`; `INFRA_RECORD=1` re-records against a real account).

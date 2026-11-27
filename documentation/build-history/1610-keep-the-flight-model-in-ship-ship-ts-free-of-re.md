@@ -1,0 +1,1 @@
+- keep the flight model in `ship/Ship.ts`, free of rendering, so the Node runner (346) can fly ships on the server;

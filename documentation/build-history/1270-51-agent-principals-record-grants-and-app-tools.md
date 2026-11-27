@@ -1,0 +1,1 @@
+| 51. Agent principals, record grants and app tools (Forge 7j) | forge 07j 1 (record grants) and 2 (agents by whoever may create the record, never above their granter), answered with their proposals | the decisions in [RBAC.md](RBAC.md#decisions-to-review-after-seeing-it-1), the Share dialog with agents once the Agents app uses it |

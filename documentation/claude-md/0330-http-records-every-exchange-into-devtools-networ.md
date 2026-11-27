@@ -1,0 +1,1 @@
+- `http` records every exchange into DevTools' Network tab by default. Opt out per request with `{ capture: false }` in the axios config, or per client with `createHttpClient({ capture: false })`.

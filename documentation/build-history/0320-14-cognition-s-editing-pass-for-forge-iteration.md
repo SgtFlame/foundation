@@ -1,0 +1,30 @@
+14. **Cognition's editing pass** (for Forge iteration 2, [forge 002-Blueprints.md](../../forge/documentation/plans/002-Blueprints.md)). *Built.* ★ two people editing one graph ([Cognition.md](Cognition.md#built-in-slice-14)).
+    - **The model and engine**. *Built*:
+      - graph kinds (`cognition.kind`);
+      - node metadata required (an example, pin descriptions);
+      - implicit conversions (`cognition.conversion`) and `cognition.Catalog`;
+      - execution contexts with Sequence, For each and Loop;
+      - On call and Call graph;
+      - variables, reroutes and comment frames;
+      - published graphs from a `GraphSource`, editable built-ins, loop and call-depth limits, and trace-on-failure.
+    - **Drafts**. *Built* (`cognition/drafts`):
+      - a graph's draft as an aggregate on the `def` stream, changed by thirteen `bp.*` commands;
+      - publishing as an event, with the `cognition.graph` and `cognition.published` projections;
+      - the `cognition.graph` and `cognition.graphs` queries;
+      - `bp.test`, and the catalog tools;
+      - `live.Command.Report`, so a `bp.*` tool returns the draft's problems.
+    - **The Cognition Editor**. *Built*:
+      - editable, over the live query, with optimistic commands and per-user undo;
+      - drag, connect, delete, copy and paste;
+      - the Palette and Variables tabs, and a toolbar with Validate, Publish, Duplicate and Export;
+      - other authors' avatars and selections;
+      - a live Explorer with New and Import;
+      - `GraphEditor`, for Forge's Blueprint Editor.
+    - **Blockers**: none left. Its **Before** questions were answered before building:
+      - forge 002-Blueprints 5: drafts by commands, revising Cognition 2;
+      - 1: kinds in Cognition proper;
+      - 7: versions as events and KV;
+      - 9: two slices.
+    - **★ review pending**: editing with someone else, undo, the Palette, and publishing were seen in headless Chromium with two accounts, but not by a person. To review: run Forge's `serve` and Axiom's `yarn dev`, set up two accounts, and open Forge › Blueprints (or the Cognition side view) in two browsers.
+    - **Decisions to review after seeing it**: in [Cognition.md](Cognition.md#decisions-to-review-after-seeing-it-1).
+    - **Pending, carried forward**: the Prompt Editor, debugging, `Parallel`, Replay, the version picker and diff, collapse to sub-graph, and node-config schema forms ([plans/Cognition.md](plans/Cognition.md#todo)).

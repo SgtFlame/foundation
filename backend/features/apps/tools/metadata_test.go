@@ -1,11 +1,6 @@
 package apptools_test
 
 import (
-	"github.com/SgtFlame/foundation/backend/features/calendar"
-	"github.com/SgtFlame/foundation/backend/features/calendar/caltest"
-	calendarnodes "github.com/SgtFlame/foundation/backend/features/calendar/nodes"
-	calendarsettings "github.com/SgtFlame/foundation/backend/features/calendar/settings"
-
 	"encoding/json"
 	"github.com/SgtFlame/foundation/backend/features/activity"
 	"github.com/SgtFlame/foundation/backend/features/authz"
@@ -53,8 +48,6 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/records/entities"
 	recordsnodes "github.com/SgtFlame/foundation/backend/features/records/nodes"
 	retrievaltools "github.com/SgtFlame/foundation/backend/features/retrieval/tools"
-	"github.com/SgtFlame/foundation/backend/features/tasks/tracker"
-	"github.com/SgtFlame/foundation/backend/features/tasks/tracker/trackerfake"
 	"github.com/SgtFlame/foundation/backend/features/tools"
 	toolsnodes "github.com/SgtFlame/foundation/backend/features/tools/nodes"
 	"github.com/SgtFlame/foundation/backend/features/ui"
@@ -62,6 +55,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/ui/hello"
 	uinodes "github.com/SgtFlame/foundation/backend/features/ui/nodes"
 	"github.com/SgtFlame/foundation/backend/features/ui/prefabs"
+	"github.com/SgtFlame/foundation/backend/features/wiring"
 )
 
 // everything is a registry with every feature's components, node types and
@@ -113,20 +107,17 @@ func everything(t *testing.T) *extensions.Registry {
 	connectorsnodes.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
 	connections.Contribute(reg, func() connections.Deps { return connections.Deps{} })
 	scripted.Contribute(reg, func() scripted.Deps { return scripted.Deps{} })
-	game.Contribute(reg, func() game.Deps { return game.Deps{} })                                        // forge 360 V1
-	infra.Contribute(reg, func() infra.Deps { return infra.Deps{} })                                     // forge 22a
-	infratest.Contribute(reg)                                                                            // forge 22c
-	infraproviders.Contribute(reg)                                                                       // forge 22g
-	infranodes.Contribute(reg, func() infranodes.Deps { return infranodes.Deps{} })                      // forge 22e
-	infraapply.Contribute(reg, func() infraapply.Deps { return infraapply.Deps{} })                      // forge 22f
-	connectorstest.Contribute(reg)                                                                       // the builtin contracts a test registry has
-	calendarsettings.Contribute(reg)                                                                     // forge 28a
-	calendarnodes.Contribute(reg)                                                                        // forge 28a
-	calendarnodes.ContributeIcal(reg, func() calendarnodes.IcalDeps { return calendarnodes.IcalDeps{} }) // forge 28b
-	calendar.Contribute(reg)                                                                             // forge 28c
-	caltest.Contribute(reg)                                                                              // forge 28c
-	tracker.Contribute(reg)                                                                              // forge 30g
-	trackerfake.Contribute(reg, func() trackerfake.Dispatcher { return nil })                            // forge 30g
+	game.Contribute(reg, func() game.Deps { return game.Deps{} })                   // forge 360 V1
+	infra.Contribute(reg, func() infra.Deps { return infra.Deps{} })                // forge 22a
+	infratest.Contribute(reg)                                                       // forge 22c
+	infraproviders.Contribute(reg)                                                  // forge 22g
+	infranodes.Contribute(reg, func() infranodes.Deps { return infranodes.Deps{} }) // forge 22e
+	infraapply.Contribute(reg, func() infraapply.Deps { return infraapply.Deps{} }) // forge 22f
+	connectorstest.Contribute(reg)                                                  // the builtin contracts a test registry has
+	// features wired from their own files (features/wiring): calendar, tasks, …
+	if err := wiring.ContributeAll(reg, nil); err != nil {
+		t.Fatal(err)
+	}
 	return reg
 }
 

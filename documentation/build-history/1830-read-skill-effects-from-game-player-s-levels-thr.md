@@ -1,0 +1,1 @@
+- read skill effects from `game.player`'s levels (`thrustFor` is the first), so the 350 skill system can take them over.

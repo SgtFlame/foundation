@@ -1,0 +1,1 @@
+- **A failed round's tool calls are lost**: the history window carries no tool calls, so "go on" after a round that failed (past its retries) has no context (slice 30). Carry a failed round's tool calls into the next. (The rest of this item, and *too few tool steps for building*, were built in slice 43: a busy provider is retried, and the Builder mode has its own steps.)

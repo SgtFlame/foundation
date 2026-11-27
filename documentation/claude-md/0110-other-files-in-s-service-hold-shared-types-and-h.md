@@ -1,0 +1,1 @@
+- Other files in `<s>service/` hold shared types and helpers other services may use, such as `kbservice/VolumePath.go` and `volumeservice/Marker.go`.

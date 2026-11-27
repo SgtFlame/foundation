@@ -1,0 +1,1 @@
+3. `ComponentFactory.tsx` renders border tabs with `BorderTabHost` and every other tab with `EditorHost`, which finds the `workbench.editor` contribution whose id is the object's `kind` (or shows a placeholder) and renders it with `EditorProps`: `{ object, registry, tabId }`. Editors that open other editors use `registry`.

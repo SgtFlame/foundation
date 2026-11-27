@@ -1,0 +1,1 @@
+Story game areas ([Game.md](Game.md) › *Built in S1 and S2*): piece sets, the `gameArea` ops, `game.describeArea`, the area viewport, night lighting with the moons' phases, Play on a walk grid. Later game work must:
