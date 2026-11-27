@@ -72,6 +72,7 @@ var Allow = []Row{
 	// and the routes of tenants' calls to dedicated servers.
 	{Package: "features/events/durable", Owner: "events", Storage: "durable buses' streams (BUS_*)", Imports: []string{jsImp}},
 	{Package: "features/services/routes", Owner: "services", Storage: "service routes (KV svc_routes)", Imports: []string{jsImp}},
+	{Package: "features/services/servers", Owner: "services", Storage: "processes' announcements (KV svc_servers, 21g-1)", Imports: []string{jsImp}},
 
 	// The Control Plane's own account and its database rows (iteration 20):
 	// not tenant storage.

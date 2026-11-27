@@ -150,7 +150,13 @@ func ServeAt(nc *nats.Conn, subject, service string, handler Handler, opts ...Se
 // the calls in flight.
 func (s *Server) Stop() {
 	if s.sub != nil {
-		_ = s.sub.Drain()
+		// Leave the queue group: once the drain is done the server has no
+		// interest left, so new calls go to other servers
+		if s.sub.Drain() == nil {
+			for i := 0; i < 500 && s.sub.IsValid(); i++ {
+				time.Sleep(2 * time.Millisecond)
+			}
+		}
 	}
 	s.streams.all()
 	s.wg.Wait()
@@ -162,6 +168,10 @@ func (s *Server) Stop() {
 func (s *Server) handle(m *nats.Msg) {
 	start := time.Now()
 	op := OpOf(m.Subject)
+	if op == PingOp {
+		_ = m.Respond([]byte(`{"Common":{"Code":200}}`))
+		return
+	}
 	h, err := ReadHeaders(m.Header)
 	ctx := context.Background()
 	if err != nil {

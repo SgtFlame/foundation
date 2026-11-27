@@ -66,3 +66,7 @@ func (p *Proxy) Watch(args configservice.WatchArgs) *configservice.WatchRequest 
 	}
 	return services.Stream[*configservice.WatchRequest](p.C, Service, "Watch", args)
 }
+
+func (p *Proxy) Resolve(args configservice.ResolveArgs) configservice.ResolveResponse {
+	return services.Call[configservice.ResolveResponse](p.C, Service, "Resolve", args, services.Idempotent())
+}

@@ -117,6 +117,11 @@ func call[R any](c *Client, subject, service, op string, args any, opts []CallOp
 	}
 	moved := 0
 	for attempt := 0; ; attempt++ {
+		if !c.NC.IsConnected() {
+			// NATS itself is away (reconnecting): answer now rather than
+			// wait out the deadline (forge 21g-1)
+			return finish(Unavailable(service), errors.New("not connected to NATS"))
+		}
 		reply, err := c.NC.RequestMsgWithContext(rctx, msg)
 		switch {
 		case err == nil:

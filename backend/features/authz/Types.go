@@ -135,4 +135,8 @@ func Contribute(reg *extensions.Registry) {
 		Descriptor: extensions.Descriptor{ID: "extensions", Source: "authz"}, Title: "Extensions", Parent: "app",
 		Actions: []Action{{Name: "read", Title: "List extension points", Class: ClassSelf, On: OnApp}},
 	})
+	ResourceTypes.Register(reg, ResourceType{
+		Descriptor: extensions.Descriptor{ID: "services", Source: "authz"}, Title: "Services", Parent: "app",
+		Actions: []Action{{Name: "read", Title: "See the processes and the services each runs", Class: ClassAdmin, On: OnApp}},
+	})
 }

@@ -83,6 +83,9 @@ import (
 	secretsproxy "github.com/SgtFlame/foundation/backend/features/secrets/services/secretsservice/proxy"
 	secretsserver "github.com/SgtFlame/foundation/backend/features/secrets/services/secretsservice/server"
 	"github.com/SgtFlame/foundation/backend/features/services"
+	"github.com/SgtFlame/foundation/backend/features/services/services/servicesservice"
+	servicesproxy "github.com/SgtFlame/foundation/backend/features/services/services/servicesservice/proxy"
+	servicesserver "github.com/SgtFlame/foundation/backend/features/services/services/servicesservice/server"
 	"github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice"
 	prefabproxy "github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice/proxy"
 	prefabserver "github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice/server"
@@ -231,6 +234,7 @@ var Services = []services.Spec{
 			{Name: "Set"},
 			{Name: "Reset"},
 			{Name: "Watch", Stream: true},
+			{Name: "Resolve", Idempotent: true},
 		},
 		Proxy: func(c *services.Client) any { return configproxy.New(c) },
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
@@ -486,6 +490,18 @@ var Services = []services.Spec{
 			return secretsserver.Serve(nc, svc.(secretsservice.Service), opts...)
 		},
 		Manifest: services.Named(secretsservice.Manifest, "secrets"),
+	},
+	{
+		Name:      "services",
+		Interface: reflect.TypeOf((*servicesservice.Service)(nil)).Elem(),
+		Ops: []services.OpSpec{
+			{Name: "Status"},
+		},
+		Proxy: func(c *services.Client) any { return servicesproxy.New(c) },
+		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
+			return servicesserver.Serve(nc, svc.(servicesservice.Service), opts...)
+		},
+		Manifest: services.Named(servicesservice.Manifest, "services"),
 	},
 	{
 		Name:      "tenant",

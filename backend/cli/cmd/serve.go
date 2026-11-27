@@ -52,7 +52,13 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/secrets/services/secretsservice"
 	secretsproxy "github.com/SgtFlame/foundation/backend/features/secrets/services/secretsservice/proxy"
 	"github.com/SgtFlame/foundation/backend/features/services"
+	"github.com/SgtFlame/foundation/backend/features/services/catalog"
+	"github.com/SgtFlame/foundation/backend/features/services/rest/serviceshandlers"
 	"github.com/SgtFlame/foundation/backend/features/services/routes"
+	"github.com/SgtFlame/foundation/backend/features/services/servers"
+	"github.com/SgtFlame/foundation/backend/features/services/services/servicesservice"
+	servicesimpl "github.com/SgtFlame/foundation/backend/features/services/services/servicesservice/impl"
+	servicesproxy "github.com/SgtFlame/foundation/backend/features/services/services/servicesservice/proxy"
 	prefabproxy "github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice/proxy"
 	uiproxy "github.com/SgtFlame/foundation/backend/features/ui/services/uiservice/proxy"
 	"github.com/SgtFlame/foundation/backend/features/usage/services/usageservice"
@@ -62,8 +68,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -257,6 +265,12 @@ var (
 	serveNatsPlaces   string
 	serveControlPlane bool
 	serveLoopback     bool
+	serveServices     string
+	serveCheck        bool
+	serveDrain        time.Duration
+	serveProcess      string
+	serveCallKey      string
+	serveNatsListen   string
 )
 
 // serveCmd represents the serve command
@@ -300,6 +314,20 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// as before, or with --services-loopback real, served and reached
 		// through its proxy once NATS is up
 		loc := &services.Locator{}
+		// forge 21g-1: the services this process runs
+		serviceSet, err := services.ParseSet(serveServices, serviceGroups(), knownServices())
+		if err != nil {
+			return err
+		}
+		if serveCheck {
+			if serviceSet == nil {
+				fmt.Println("this process runs every service")
+			} else {
+				fmt.Printf("other processes must run: %s\n", strings.Join(services.Elsewhere(serviceSet, knownServices()), ", "))
+			}
+			return nil
+		}
+		started := time.Now().UTC()
 
 		level, err := logging.ParseLevel(serveLogLevel)
 		if err != nil {
@@ -421,21 +449,42 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		} else if len(places) > 0 {
 			natsd.SetTenantPlacements(func(t uint64) (natsd.Placement, bool) { p, ok := places[t]; return p, ok })
 		}
-		natsOptions := natsd.Options{Dir: filepath.Join(dataDir, "nats"), URL: serveNatsURL, Creds: serveNatsCreds, CA: serveNatsCA}.WithEnv()
+		natsOptions := natsd.Options{Dir: filepath.Join(dataDir, "nats"), URL: serveNatsURL, Creds: serveNatsCreds, CA: serveNatsCA, Listen: serveNatsListen}.WithEnv()
 		nats, err := natsd.Start(ctx, natsOptions)
 		if err != nil {
 			return err
 		}
 		defer nats.Close() // drained after the HTTP server has shut down
+		process := serveProcess
+		if process == "" {
+			host, _ := os.Hostname()
+			process = fmt.Sprintf("%s-%d", host, os.Getpid())
+		}
 		if serveLoopback {
 			keys, err := services.NewKeys()
 			if err != nil {
 				return err
 			}
-			loc.Client = &services.Client{NC: nats.Conn(), Caller: "serve", Keys: keys}
+			loc.Client = &services.Client{NC: nats.Conn(), Caller: process, Keys: keys}
 			loc.Loopback, loc.ServerOptions = true, []services.ServerOption{services.VerifyWith(keys.Public())}
 			defer loc.Stop()
 			log.Info(ctx, "every service call crosses NATS (--services-loopback)")
+		} else if serviceSet != nil {
+			// forge 21g-1: run the set, serve it to other processes and
+			// reach the rest through their proxies; every process signs
+			// and checks call tokens with the same key
+			keyPath := serveCallKey
+			if keyPath == "" {
+				keyPath = filepath.Join(dataDir, "call.key")
+			}
+			keys, err := services.LoadOrCreateKeys(keyPath)
+			if err != nil {
+				return err
+			}
+			loc.Client = &services.Client{NC: nats.Conn(), Caller: process, Keys: keys}
+			loc.Set, loc.Serve, loc.ServerOptions = serviceSet, true, []services.ServerOption{services.VerifyWith(keys.Public())}
+			defer loc.Stop()
+			log.Info(ctx, "running the services %s; other processes run %s", serveServices, strings.Join(services.Elsewhere(serviceSet, knownServices()), ", "))
 		}
 		if loc.Client != nil {
 			// A routed tenant's calls go to its dedicated servers (forge 21f-2)
@@ -1274,6 +1323,41 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		indexHandler := &indexhandlers.IndexHandler{}
 		indexHandler.Register(volumes, indexService)
 
+		// forge 21g-1: what this process runs, for every process to read,
+		// and readiness: the gate stays closed until every service this
+		// process reaches in others answers
+		servicesService := servicesproxy.Use(loc, func() servicesservice.Service {
+			return servicesimpl.CreateService(servicesimpl.WithKnown(knownServices()), servicesimpl.WithProcesses(func(ctx context.Context) ([]servicesservice.Process, error) {
+				list, err := servers.List(ctx, nats.JS())
+				out := make([]servicesservice.Process, len(list))
+				for i, a := range list {
+					out[i] = servicesservice.Process{Process: a.Process, Host: a.Host, Version: a.Version, Set: a.Set, Services: a.Services, Calls: a.Calls, Started: a.Started, Heartbeat: a.Heartbeat, Draining: a.Draining}
+				}
+				return out, err
+			}))
+		})
+		(&serviceshandlers.ServicesHandler{}).Register(api, servicesService)
+		var announcer *servers.Announcer
+		if loc.Client != nil {
+			host, _ := os.Hostname()
+			announcer, err = servers.Announce(ctx, nats.JS(), func() servers.Announcement {
+				set := serveServices
+				if serveLoopback {
+					set = "all (loopback)"
+				}
+				return servers.Announcement{Process: process, Host: host, Version: serveVersion(), Set: set, Services: loc.Served(), Calls: loc.Proxied(), Started: started}
+			})
+			if err != nil {
+				return err
+			}
+			defer announcer.Stop(context.Background())
+			if err := services.WaitReady(ctx, nats.Conn(), loc.Proxied(), 10*time.Second, func(missing []string) {
+				log.Info(ctx, "waiting for the services %s, which other processes run", strings.Join(missing, ", "))
+			}); err != nil {
+				return nil // stopped while waiting
+			}
+		}
+
 		// Shut down cleanly on SIGTERM, so serve.sh restarts close LanceDB
 		gate.Open(router)
 		log.Info(ctx, "ready on %s", serveAddr)
@@ -1283,6 +1367,14 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 				return err
 			}
 		case <-ctx.Done():
+			// forge 21g-1: drain: leave the queue groups so new calls go to
+			// other processes, and give the calls in flight --drain-timeout
+			if announcer != nil {
+				announcer.Draining(context.Background())
+			}
+			if !loc.StopWithin(serveDrain) {
+				log.Warn(context.Background(), "calls still running after --drain-timeout %s", serveDrain)
+			}
 			shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			if err := srv.Shutdown(shutdown); err != nil {
@@ -1323,6 +1415,12 @@ func init() {
 	serveCmd.Flags().StringVar(&serveNatsCreds, "nats-creds", "", "a NATS credentials file for --nats-url (default $FOUNDATION_NATS_CREDS)")
 	serveCmd.Flags().StringVar(&serveNatsCA, "nats-ca", "", "the deployment's CA certificate for TLS to --nats-url (default $FOUNDATION_NATS_CA)")
 	serveCmd.Flags().StringVar(&serveNatsKeys, "nats-keys", "", "the deployment's NATS keys (cli nats init): each tenant's streams and buckets then live in its own account, made with cli nats tenant add (default $FOUNDATION_NATS_KEYS)")
+	serveCmd.Flags().StringVar(&serveServices, "services", "all", "the services and groups this process runs, comma-separated (web, data, runner, connectors:<type>, or service names); others run the rest (forge 21g-1)")
+	serveCmd.Flags().StringVar(&serveNatsListen, "nats-listen", "", "let other processes on this machine reach the embedded NATS server at this address (e.g. 127.0.0.1:4222), for running several serve processes in development (forge 21g-1)")
+	serveCmd.Flags().BoolVar(&serveCheck, "check", false, "print which services other processes must run for --services, and exit")
+	serveCmd.Flags().DurationVar(&serveDrain, "drain-timeout", 30*time.Second, "how long calls in flight may finish when the process stops")
+	serveCmd.Flags().StringVar(&serveProcess, "process", "", "this process's name in svc_servers (default <host>-<pid>)")
+	serveCmd.Flags().StringVar(&serveCallKey, "call-key", "", "the call token key every process of a deployment shares (default <data-dir>/call.key; Vault's server/call-key with 21h)")
 	serveCmd.Flags().BoolVar(&serveLoopback, "services-loopback", false, "run every service through its proxy and server in this process, so every call crosses NATS (forge 21f-1)")
 	serveCmd.Flags().BoolVar(&serveControlPlane, "control-plane", false, "make the root tenant (id 3, Infrastructure), the only tenant that holds infrastructure, with user 1 its Owner")
 	serveCmd.Flags().StringVar(&serveNatsPlaces, "nats-placements", "", "tenants placed in clusters of the supercluster, as <tenant>=<cluster>,… (default $FOUNDATION_NATS_PLACEMENTS)")
@@ -1352,4 +1450,29 @@ func targetFrom(raw string) (logging.Target, error) {
 // serves its own with adapter.Serve.
 func connectorImpls() adapter.Options {
 	return adapter.Options{Name: "server"}
+}
+
+// knownServices are every service's wire name (forge 21g-1).
+func knownServices() []string {
+	var out []string
+	for _, s := range catalog.Services {
+		if s.Name == "bootstrap" {
+			continue // every process serves the bootstrap routes itself, before NATS
+		}
+		out = append(out, s.Name)
+	}
+	return out
+}
+
+// serviceGroups are the groups --services takes.
+func serviceGroups() services.Groups {
+	return services.FoundationGroups().With(services.Groups{"web": {"services"}})
+}
+
+// serveVersion is the build's module version, for svc_servers.
+func serveVersion() string {
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		return bi.Main.Version
+	}
+	return ""
 }

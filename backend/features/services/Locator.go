@@ -2,6 +2,7 @@ package services
 
 import (
 	"sync"
+	"time"
 
 	"github.com/nats-io/nats.go"
 )
@@ -29,6 +30,10 @@ type Locator struct {
 	got     map[string]any
 	servers []*Server
 	failed  []error
+	// proxied and served are the services handed out as proxies and the
+	// ones served (forge 21g-1: readiness waits for the proxied, the
+	// announcement names the served).
+	proxied, served []string
 }
 
 // Runs reports whether the process runs a service.
@@ -60,6 +65,7 @@ func Use[S any](l *Locator, name string, real func() S, proxy func(c *Client, lo
 	case !l.Runs(name):
 		var none S
 		out = proxy(l.Client, none)
+		l.proxied = append(l.proxied, name)
 	case l.Loopback || l.Serve:
 		r := real()
 		srv, err := serve(l.Client.NC, r, l.ServerOptions...)
@@ -67,6 +73,7 @@ func Use[S any](l *Locator, name string, real func() S, proxy func(c *Client, lo
 			l.failed = append(l.failed, err)
 		} else {
 			l.servers = append(l.servers, srv)
+			l.served = append(l.served, name)
 		}
 		out = r
 		if l.Loopback {
@@ -101,16 +108,53 @@ func (l *Locator) Failed() []error {
 	return append([]error(nil), l.failed...)
 }
 
-// Stop stops the servers the locator started.
-func (l *Locator) Stop() {
+// Proxied are the services this process calls in other processes.
+func (l *Locator) Proxied() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.proxied...)
+}
+
+// Served are the services this process serves to others.
+func (l *Locator) Served() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.served...)
+}
+
+// Stop stops the servers the locator started, waiting for the calls in
+// flight.
+func (l *Locator) Stop() { l.StopWithin(0) }
+
+// StopWithin drains: every server leaves its queue group at once, so new
+// calls go to other processes, and the calls in flight get up to d to
+// finish (0: as long as they take). It reports whether they all did.
+func (l *Locator) StopWithin(d time.Duration) bool {
 	if l == nil {
-		return
+		return true
 	}
 	l.mu.Lock()
 	servers := l.servers
 	l.servers = nil
 	l.mu.Unlock()
-	for _, s := range servers {
-		s.Stop()
+	done := make(chan struct{})
+	go func() {
+		var wg sync.WaitGroup
+		for _, s := range servers {
+			wg.Add(1)
+			go func() { defer wg.Done(); s.Stop() }()
+		}
+		wg.Wait()
+		close(done)
+	}()
+	if d <= 0 {
+		<-done
+		return true
+	}
+	select {
+	case <-done:
+		return true
+	case <-time.After(d):
+		return false
 	}
 }
