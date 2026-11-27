@@ -86,6 +86,33 @@ func TestTenantCluster(t *testing.T) {
 	}
 }
 
+// TestTenantAccount: an account that is a tenant's own organization
+// serves only that tenant's dedicated sites (Tony, 2026-11-27).
+func TestTenantAccount(t *testing.T) {
+	doc := sample()
+	doc.Accounts = append(doc.Accounts, infra.Account{ID: "acme-azure", Name: "Acme's subscription", Provider: "azure", Tenant: 42})
+	doc.Sites = append(doc.Sites, infra.Site{ID: "acme", Name: "Acme", Account: "acme-azure", Region: "westeurope"})
+	doc.Clusters = append(doc.Clusters, infra.Cluster{ID: "acme", Site: "acme"})
+	doc.Overrides = []infra.Override{{ID: "acme", Tenant: 42, Spec: json.RawMessage(`{"cluster":{"site":"acme"}}`)}}
+	if ps := doc.Check(); len(ps) != 0 {
+		t.Fatalf("the tenant's own site on its own account: %+v", ps)
+	}
+	for name, over := range map[string][]infra.Override{
+		"no override":    nil,
+		"another tenant": {{ID: "beta", Tenant: 43, Spec: json.RawMessage(`{"cluster":{"site":"acme"}}`)}},
+	} {
+		doc.Overrides = over
+		if ps := doc.Check(); len(ps) != 1 || ps[0].Path != "document.sites[acme].account" || !strings.Contains(ps[0].Message, "tenant 42's own organization") {
+			t.Errorf("%s: %+v", name, ps)
+		}
+	}
+	doc.Overrides = nil
+	doc.Accounts[len(doc.Accounts)-1].Tenant = 3
+	if ps := doc.Check(); len(ps) != 1 || ps[0].Path != "document.accounts[acme-azure].tenant" {
+		t.Errorf("the root tenant's account: %+v", ps)
+	}
+}
+
 func TestTenantStreams(t *testing.T) {
 	doc := sample()
 	doc.Overrides = []infra.Override{{ID: "acme", Tenant: 42, Spec: json.RawMessage(`{"streams":{"site":"west"}}`)}}

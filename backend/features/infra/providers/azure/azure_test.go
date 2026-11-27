@@ -2,6 +2,7 @@ package azure_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,3 +65,21 @@ func TestSizes(t *testing.T) {
 }
 
 func TestType(t *testing.T) { providertest.CheckType(t, azure.Type()) }
+
+func TestGroupNames(t *testing.T) {
+	for _, c := range []struct{ prefix, kind, name, want string }{
+		{"axiom", azure.GroupHost, "web-1", "axiom-host-web-1"},
+		{"axiom-acme", azure.GroupHost, "web-1", "axiom-acme-host-web-1"},
+		{"axiom", azure.GroupNetwork, "westeurope", "axiom-net-westeurope"},
+	} {
+		if got := azure.GroupName(c.prefix, c.kind, c.name); got != c.want {
+			t.Errorf("GroupName(%s, %s, %s) = %s, want %s", c.prefix, c.kind, c.name, got, c.want)
+		}
+	}
+	if got := azure.GroupName("axiom-"+strings.Repeat("p", 30), azure.GroupHost, strings.Repeat("x", 100)); len(got) != 90 {
+		t.Errorf("a long name is %d characters, want 90", len(got))
+	}
+	if _, err := azure.New(azure.Settings{TenantID: "t", ClientID: "c", ClientSecret: "s", SubscriptionID: "x", SSHPublicKey: "k", ResourceGroupPrefix: "Axiom_Acme"}, azure.Options{}); connectors.AsError(err).Code != connectors.CodeInvalid {
+		t.Errorf("a prefix with capitals and _ = %v, want invalid", err)
+	}
+}

@@ -90,3 +90,13 @@ Forge iteration 22 (`../forge/documentation/plans/022-InfrastructureAsCode.md`):
 ## Not built yet
 
 Parts 22g to 22q (the HTTP request node and LXD, cluster formation, service units and credentials, stacks, tenant overrides, the Azure, DigitalOcean and Fly types, the seed, the topology view, the chat), the drift job on a schedule, *Run script*, *Mint join token* and *Ensure NATS account*, the Infrastructure app's pages for configurations, plans and applies, the test server's page and `forge infratest`, and comparing an instance's profile with what is applied (an existing instance is taken as matching). See the part plans in Forge.
+
+## Changed in forge 22l: the Azure layout (2026-11-27)
+
+Tony's layout (2026-11-27), superseding the `<prefix>-<host>` name above:
+
+- **Organizations.** One primary organization holds the shared deployment. Each tenant with dedicated resources gets an organization of its own, so its bill is separate. That means its own Azure subscription, DigitalOcean team or Fly.io organization, which is its own provider account. `infra.Account.Tenant` marks such an account (left out, an account is the primary organization's). `Document.Check` refuses a site on a tenant's account unless an override's `cluster` switch makes that site's cluster the same tenant's own (`document.sites[<id>].account`). It also refuses the root tenant as an account's tenant.
+- **Resource groups.** Every group follows one naming standard, `<prefix>-<kind>-<name>` (`azure.GroupName`, cut to Azure's 90 characters):
+  - The prefix is the connection's `resourceGroupPrefix`: `axiom` in the primary organization (the default), and `axiom-<tenant short name>` in a tenant's own. Until tenants have short names (forge plan 85), set it by hand. It is lower case letters, digits and dashes, at most 40 characters, starting with a letter.
+  - The kinds are `host` (`azure.GroupHost`) and `net` (`azure.GroupNetwork`). Each host has its own group, `<prefix>-host-<host>`, tagged `axiom-host=<id>`. `net` is reserved for networking a location's hosts share, such as a cluster's network, named `<prefix>-net-<location>`. Until hosts share a network, each host's virtual network stays in its host group.
+- Tests: `go test ./features/infra/providers/azure -run TestGroupNames` and `go test ./features/infra -run TestTenantAccount`.

@@ -230,7 +230,7 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
         "query": "%24expand=instanceView&api-version=2024-03-01"
       },
       "response": {
@@ -238,7 +238,7 @@
         "body": {
           "error": {
             "code": "ResourceGroupNotFound",
-            "message": "Resource group 'axiom-contract-suite-1' could not be found."
+            "message": "Resource group 'axiom-host-contract-suite-1' could not be found."
           }
         }
       }
@@ -246,7 +246,7 @@
     {
       "request": {
         "method": "PUT",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1",
         "query": "api-version=2021-04-01",
         "body": {
           "location": "westeurope",
@@ -259,8 +259,8 @@
       "response": {
         "status": 201,
         "body": {
-          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1",
-          "name": "axiom-contract-suite-1",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1",
+          "name": "axiom-host-contract-suite-1",
           "type": "Microsoft.Resources/resourceGroups",
           "location": "westeurope",
           "tags": {
@@ -276,7 +276,7 @@
     {
       "request": {
         "method": "PUT",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/virtualNetworks/contract-suite-1-vnet",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/virtualNetworks/contract-suite-1-vnet",
         "query": "api-version=2023-09-01",
         "body": {
           "location": "westeurope",
@@ -296,7 +296,7 @@
         },
         "body": {
           "name": "contract-suite-1-vnet",
-          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/virtualNetworks/contract-suite-1-vnet",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/virtualNetworks/contract-suite-1-vnet",
           "location": "westeurope",
           "properties": {
             "provisioningState": "Updating",
@@ -325,7 +325,7 @@
     {
       "request": {
         "method": "PUT",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
         "query": "api-version=2023-09-01",
         "body": {
           "sku": {
@@ -343,7 +343,7 @@
         },
         "body": {
           "name": "contract-suite-1-ip",
-          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
           "location": "westeurope",
           "sku": {
             "name": "Standard",
@@ -372,7 +372,7 @@
     {
       "request": {
         "method": "PUT",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic",
         "query": "api-version=2023-09-01",
         "body": {
           "properties": {
@@ -381,10 +381,10 @@
                 "name": "ipconfig1",
                 "properties": {
                   "subnet": {
-                    "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/virtualNetworks/contract-suite-1-vnet/subnets/default"
+                    "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/virtualNetworks/contract-suite-1-vnet/subnets/default"
                   },
                   "publicIPAddress": {
-                    "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip"
+                    "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip"
                   }
                 }
               }
@@ -396,7 +396,7 @@
         "status": 201,
         "body": {
           "name": "contract-suite-1-nic",
-          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic",
           "location": "westeurope",
           "properties": {
             "provisioningState": "Succeeded",
@@ -416,7 +416,7 @@
     {
       "request": {
         "method": "PUT",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
         "query": "api-version=2024-03-01",
         "body": {
           "location": "westeurope",
@@ -446,7 +446,7 @@
         },
         "body": {
           "name": "contract-suite-1",
-          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
           "type": "Microsoft.Compute/virtualMachines",
           "location": "westeurope",
           "tags": {
@@ -484,7 +484,7 @@
             "networkProfile": {
               "networkInterfaces": [
                 {
-                  "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
+                  "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
                 }
               ]
             },
@@ -512,14 +512,14 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
         "query": "%24expand=instanceView&api-version=2024-03-01"
       },
       "response": {
         "status": 200,
         "body": {
           "name": "contract-suite-1",
-          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
           "type": "Microsoft.Compute/virtualMachines",
           "location": "westeurope",
           "tags": {
@@ -557,7 +557,7 @@
             "networkProfile": {
               "networkInterfaces": [
                 {
-                  "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
+                  "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
                 }
               ]
             },
@@ -586,14 +586,14 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
         "query": "api-version=2023-09-01"
       },
       "response": {
         "status": 200,
         "body": {
           "name": "contract-suite-1-ip",
-          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
           "location": "westeurope",
           "properties": {
             "provisioningState": "Succeeded",
@@ -606,14 +606,14 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
         "query": "%24expand=instanceView&api-version=2024-03-01"
       },
       "response": {
         "status": 200,
         "body": {
           "name": "contract-suite-1",
-          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
           "type": "Microsoft.Compute/virtualMachines",
           "location": "westeurope",
           "tags": {
@@ -651,7 +651,7 @@
             "networkProfile": {
               "networkInterfaces": [
                 {
-                  "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
+                  "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
                 }
               ]
             },
@@ -680,14 +680,14 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
         "query": "api-version=2023-09-01"
       },
       "response": {
         "status": 200,
         "body": {
           "name": "contract-suite-1-ip",
-          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
           "location": "westeurope",
           "properties": {
             "provisioningState": "Succeeded",
@@ -709,7 +709,7 @@
           "value": [
             {
               "name": "contract-suite-1",
-              "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+              "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
               "type": "Microsoft.Compute/virtualMachines",
               "location": "westeurope",
               "tags": {
@@ -747,7 +747,7 @@
                 "networkProfile": {
                   "networkInterfaces": [
                     {
-                      "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
+                      "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
                     }
                   ]
                 },
@@ -790,14 +790,14 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
         "query": "%24expand=instanceView&api-version=2024-03-01"
       },
       "response": {
         "status": 200,
         "body": {
           "name": "contract-suite-1",
-          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
           "type": "Microsoft.Compute/virtualMachines",
           "location": "westeurope",
           "tags": {
@@ -835,7 +835,7 @@
             "networkProfile": {
               "networkInterfaces": [
                 {
-                  "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
+                  "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
                 }
               ]
             },
@@ -864,14 +864,14 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
         "query": "api-version=2023-09-01"
       },
       "response": {
         "status": 200,
         "body": {
           "name": "contract-suite-1-ip",
-          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
           "location": "westeurope",
           "properties": {
             "provisioningState": "Succeeded",
@@ -884,14 +884,14 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1",
         "query": "api-version=2021-04-01"
       },
       "response": {
         "status": 200,
         "body": {
-          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1",
-          "name": "axiom-contract-suite-1",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1",
+          "name": "axiom-host-contract-suite-1",
           "location": "westeurope",
           "tags": {
             "axiom-host": "contract-suite-1",
@@ -906,7 +906,7 @@
     {
       "request": {
         "method": "DELETE",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1",
         "query": "api-version=2021-04-01"
       },
       "response": {
@@ -930,7 +930,7 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1",
         "query": "api-version=2021-04-01"
       },
       "response": {
@@ -938,7 +938,7 @@
         "body": {
           "error": {
             "code": "ResourceGroupNotFound",
-            "message": "Resource group 'axiom-contract-suite-1' could not be found."
+            "message": "Resource group 'axiom-host-contract-suite-1' could not be found."
           }
         }
       }
@@ -946,7 +946,7 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-host-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
         "query": "%24expand=instanceView&api-version=2024-03-01"
       },
       "response": {
@@ -954,7 +954,7 @@
         "body": {
           "error": {
             "code": "ResourceGroupNotFound",
-            "message": "Resource group 'axiom-contract-suite-1' could not be found."
+            "message": "Resource group 'axiom-host-contract-suite-1' could not be found."
           }
         }
       }
