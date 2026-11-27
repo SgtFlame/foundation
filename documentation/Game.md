@@ -607,6 +607,16 @@ Lime, coal and the landing pad.
 - The **landing pad** (`designs/pad.json`): a static chip design anyone may lay out, 25 `concrete` blocks (2 bags of cement each) and four lamps. A ship resting on a finished pad charges its battery (`ship/Pad.ts`, `padUnder`, `PAD_RATE`).
 - Tests: `TestLimeAndPad`, `Forge.test.ts`, `Pad.test.ts`.
 
+## Built in S28 and S29 (forge 375)
+
+The Hollowed's road, and Ashby, the village they emptied (the user's lore, 2026-11-27: the Hollowed are villagers captured in Hollowed raids, not killed, and turned by Kasamir and the Enemy; the player sees only what the raids leave behind).
+
+- Steps `track` ("The road they took") and `ashby` ("What is left of Ashby"); the fold gives `items.ashbylore` at `ashby`.
+- `story/Ashby.ts`: `trackReady` (after `wellward`), `trackPrints(well, sign)` (frost prints from the well to the signpost), `REMNANTS` (door, table, shoe, furrows, with their lines), `remnantSpots(width, depth, cell)` placed by the area's size, `remnantAt`, `isAshby(name)` (an area named *Ashby*).
+- `AreaViewport`: `drawRoad` lays the prints in the story's home area and the remnants in Ashby; `stepRoad` reaches `track` at the signpost (`TRACK_REACH`) and `ashby` once all four remnants are seen (`REMNANT_REACH`). The track is a smell; the door a sound, the rest smells.
+- An area named *Ashby* must exist (made in the Areas editor; the seeder does not make one); travel there from the signpost.
+- Tests: `story_test` (`track`, `ashby`, `items.ashbylore`), `Ashby.test.ts`, the step order in `FirstHourStory.test.ts`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

@@ -31,7 +31,7 @@ const (
 
 // StorySteps are the first hour's steps in order (375 › the first hour).
 // S7 adds the first day: the morning's card, foraging and the herbal.
-var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch", "foretold", "watch", "defended", "thanked", "dream", "companion", "stones", "cache", "bundles", "truedream", "ward", "tried", "hearthward", "farmward", "well", "wellward"}
+var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch", "foretold", "watch", "defended", "thanked", "dream", "companion", "stones", "cache", "bundles", "truedream", "ward", "tried", "hearthward", "farmward", "well", "wellward", "track", "ashby"}
 
 // S10: the step that pays for Wenlan's reading, and the coin it pays
 const (
@@ -83,6 +83,12 @@ const (
 	// river stones and gives items.wellward
 	StepWellWard = "wellward"
 	WellWard     = "wellward"
+	// S28: the frost track from the well to the signpost, the Hollowed's road
+	StepTrack = "track"
+	// S29: the remnants of the raid on Ashby, through the signpost: it gives
+	// items.ashbylore (taken, not killed)
+	StepAshby = "ashby"
+	AshbyLore = "ashbylore"
 )
 
 // StoryItems are what a player may gather in a story (S7: herbs for the herbal;
@@ -217,6 +223,12 @@ func foldStory(f live.Fold) (json.RawMessage, error) {
 		}
 		p.Items[RiverStones] = 0
 		p.Items[WellWard] = 1
+	}
+	if d.Step == StepAshby && !p.Done[StepAshby] {
+		if p.Items == nil {
+			p.Items = map[string]int{}
+		}
+		p.Items[AshbyLore] = 1
 	}
 	if d.Step == StepWell && !p.Done[StepWell] {
 		if p.Items == nil {

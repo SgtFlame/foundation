@@ -165,4 +165,11 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "wellward" || p.Items["wellward"] != 1 || p.Items["riverstones"] != 0 || p.Items["sage"] != 0 {
 		t.Fatalf("wellward %+v", p)
 	}
+	// S28: the frost track to the signpost; S29: Ashby's remnants, in the area the road leads to
+	st.ok("game.reachStory", farm, map[string]any{"step": "track", "area": farm, "x": 9, "z": 3})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "ashby", "area": farm, "x": 9, "z": 3})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "ashby" || p.Items["ashbylore"] != 1 || !p.Done["track"] {
+		t.Fatalf("ashby %+v", p)
+	}
 }
