@@ -1,4 +1,4 @@
-import { forgeAction, SMELT_MS, type ForgeState } from '../craft/Forge.ts'
+import { forgeAction, msPer, PART_NAMES, type ForgeKind, type ForgeState, type Part } from '../craft/Forge.ts'
 import { DRIVE_CIRCUITS, DRIVE_IRON, DRIVE_MS, DRIVE_ORE, FAB_IRON, FAB_MS, FAB_ORE, fabAction, JUMP_CHARGE, KIT_CIRCUITS, KIT_IRON, KIT_MS, MAX_BOOST, type FabItem, type FabState } from '../craft/Fabricator.ts'
 import { canJump, jumpTarget } from '../ship/Jump.ts'
 import * as THREE from 'three/webgpu'
@@ -51,6 +51,7 @@ export interface Carried {
   minerals?: Partial<Record<Mineral, number>> // V29: minerals, m³ by name
   coils?: number // V27: jump coils from the wrecks' drive cores
   drives?: number // V27: jump drives
+  parts?: Partial<Record<Part, number>> // V30: components refined at a forge, a count by name
   capacity: number
 }
 
@@ -85,7 +86,7 @@ export type ShipIntent =
   | { kind: 'forage'; what: 'fish' | 'hunt'; animal?: string; x: number; y: number; z: number } // V12: a fish caught, a grazer hunted
   | { kind: 'sleep'; id: string } // V13: a night in a cabin's bed
   | { kind: 'craft'; id: string; item: string } // V14: a tool made at a cabin's bench
-  | { kind: 'smelt'; id: string } // V20: ore from the pack put in a cabin's forge
+  | { kind: 'smelt'; id: string; what?: ForgeKind } // V20: ore from the pack put in a cabin's forge (V30: or a mineral or rock to refine)
   | { kind: 'takeIngots'; id: string } // V20: the forge's iron taken into the pack
   | { kind: 'fabricate'; id: string; item: FabItem } // V23: a circuit board (V24: or an ion thruster kit) started at a cabin's fabricator
   | { kind: 'fitKit'; id: string } // V24: an ion thruster kit fitted to a ship
@@ -730,7 +731,7 @@ export class VoxelViewport {
       const ore = c.ore ?? 0
       const iron = c.iron ?? 0
       const total = c.dust + c.rock + ore + iron + Object.values(c.minerals ?? {}).reduce((s: number, v) => s + (v ?? 0), 0)
-      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}${iron > 0 ? ` · iron ${iron.toFixed(2)}` : ''}${(c.circuits ?? 0) > 0 ? ` · circuits ${c.circuits}` : ''}${(c.kits ?? 0) > 0 ? ` · ion kits ${c.kits}` : ''}${(c.coils ?? 0) > 0 ? ` · jump coils ${c.coils}` : ''}${(c.drives ?? 0) > 0 ? ` · jump drives ${c.drives}` : ''}${Object.entries(c.minerals ?? {}).map(([k, v]) => ` · ${k} ${(v ?? 0).toFixed(2)}`).join('')}${(c.food ?? 0) > 0 ? ` · food ${c.food}` : ''}`)
+      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}${iron > 0 ? ` · iron ${iron.toFixed(2)}` : ''}${(c.circuits ?? 0) > 0 ? ` · circuits ${c.circuits}` : ''}${(c.kits ?? 0) > 0 ? ` · ion kits ${c.kits}` : ''}${(c.coils ?? 0) > 0 ? ` · jump coils ${c.coils}` : ''}${(c.drives ?? 0) > 0 ? ` · jump drives ${c.drives}` : ''}${Object.entries(c.minerals ?? {}).map(([k, v]) => ` · ${k} ${(v ?? 0).toFixed(2)}`).join('')}${Object.entries(c.parts ?? {}).filter(([, v]) => (v ?? 0) > 0).map(([k, v]) => ` · ${PART_NAMES[k as Part]} ${v}`).join('')}${(c.food ?? 0) > 0 ? ` · food ${c.food}` : ''}`)
     }
     if (w && !this.riding && !this.pod.falling) {
       const g = Math.hypot(w.gravity.x, w.gravity.y, w.gravity.z)
@@ -1532,9 +1533,10 @@ export class VoxelViewport {
   private forgeHint(): string {
     if (!this.nearForge) return ''
     const a = forgeAction(this.forgeOf(this.nearForge), this.carried, Date.now())
-    if (a.kind === 'smelt') return `U: put ${a.ore.toFixed(2)} m³ of ore in the forge · `
-    if (a.kind === 'wait') return `The forge is smelting: ${a.seconds} s left · `
+    if (a.kind === 'smelt') return `U: put ${a.ore.toFixed(2)} m³ of ${a.what} in the forge · `
+    if (a.kind === 'wait') return `The forge is working: ${a.seconds} s left · `
     if (a.kind === 'take') return `U: take ${a.iron.toFixed(2)} m³ of iron from the forge · `
+    if (a.kind === 'takeParts') return `U: take ${a.count} ${PART_NAMES[a.part]} from the forge · `
     return `The forge: ${a.why} · `
   }
 
@@ -1638,9 +1640,20 @@ export class VoxelViewport {
   forgeAt(id: string): void {
     const a = forgeAction(this.forgeOf(id), this.carried, Date.now())
     if (a.kind === 'smelt') {
-      if (this.carried) this.carried = { ...this.carried, ore: (this.carried.ore ?? 0) - a.ore }
-      this.opts.onShipIntent?.({ kind: 'smelt', id })
-      this.flashHint(`You shovel ${a.ore.toFixed(2)} m³ of ore into the forge and work the bellows. It will take ${Math.round((a.ore * SMELT_MS) / 1000)} s`)
+      const c = this.carried
+      if (c) {
+        if (a.what === 'ore') this.carried = { ...c, ore: (c.ore ?? 0) - a.ore }
+        else if (a.what === 'rock') this.carried = { ...c, rock: c.rock - a.ore }
+        else this.carried = { ...c, minerals: { ...c.minerals, [a.what]: Math.max(0, (c.minerals?.[a.what] ?? 0) - a.ore) } }
+      }
+      this.opts.onShipIntent?.({ kind: 'smelt', id, what: a.what })
+      const secs = Math.round((a.ore * msPer(a.what)) / 1000)
+      this.flashHint(a.what === 'ore' ? `You shovel ${a.ore.toFixed(2)} m³ of ore into the forge and work the bellows. It will take ${secs} s` : a.what === 'rock' ? `You tip ${a.ore.toFixed(2)} m³ of rock into the kiln side of the forge to burn for cement. It will take ${secs} s` : `You feed ${a.ore.toFixed(2)} m³ of ${a.what} into the forge to refine. It will take ${secs} s`)
+    } else if (a.kind === 'takeParts') {
+      const c = this.carried
+      if (c) this.carried = { ...c, parts: { ...c.parts, [a.part]: (c.parts?.[a.part] ?? 0) + a.count } }
+      this.opts.onShipIntent?.({ kind: 'takeIngots', id })
+      this.flashHint(a.count > 0 ? `You lift ${a.count} ${PART_NAMES[a.part]} out of the forge` : 'The forge gave nothing worth keeping')
     } else if (a.kind === 'take') {
       if (this.carried) this.carried = { ...this.carried, iron: (this.carried.iron ?? 0) + a.iron }
       this.opts.onShipIntent?.({ kind: 'takeIngots', id })
