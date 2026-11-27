@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -73,11 +74,41 @@ func (s *service) find(args features.ServiceArgs, id uint64) (chronicle.Entry, *
 	return e, nil
 }
 
+// refresh writes the facts of the entries named and of those whose facts
+// name them again (forge 35f-6), then indexes every one that changed and
+// the entries named.
+func (s *service) refresh(args features.ServiceArgs, ids ...uint64) {
+	gdb := s.db.WithContext(args.Context())
+	reindex := map[uint64]bool{}
+	for _, id := range ids {
+		reindex[id] = true
+		var e chronicle.Entry
+		if err := gdb.Limit(1).Find(&e, id).Error; err != nil || e.ID == 0 {
+			continue
+		}
+		if _, err := chronicle.RefreshFacts(gdb, &e); err != nil {
+			log.With("entryId", id).Error(args.Context(), err, "cannot write the facts of entry %d", id)
+		}
+		referrers, err := chronicle.Referrers(gdb, e)
+		if err != nil {
+			log.With("entryId", id).Error(args.Context(), err, "cannot find the entries naming entry %d", id)
+		}
+		for i := range referrers {
+			if changed, err := chronicle.RefreshFacts(gdb, &referrers[i]); err == nil && changed {
+				reindex[referrers[i].ID] = true
+			}
+		}
+	}
+	for id := range reindex {
+		s.index(args, id)
+	}
+}
+
 // findVisible loads an entry the principal may read: theirs, or one shared
 // with them.
 func (s *service) findVisible(args features.ServiceArgs, id uint64) (chronicle.Entry, *features.ServiceResponse) {
 	var e chronicle.Entry
-	err := chronicle.Visible(s.db.WithContext(args.Context()), args.Principal).Where("status = ? OR owner_id = ?", chronicle.StatusActive, args.Principal.UserID).First(&e, id).Error
+	err := chronicle.VisibleTo(s.db.WithContext(args.Context()), args.Principal, chronicle.ReadableProjects(args.Context(), args.Principal)).Where("status = ? OR owner_id = ?", chronicle.StatusActive, args.Principal.UserID).First(&e, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return e, args.Fail(http.StatusNotFound, log.Code("entry_not_found").With("entryId", id).New("there is no such entry"))
 	}
@@ -97,7 +128,17 @@ func (s *service) apply(args features.ServiceArgs, in chronicleservice.EntryInpu
 	bad := func(code, format string, a ...any) *features.ServiceResponse {
 		return args.Fail(http.StatusBadRequest, log.Code(code).Errorf(format, a...))
 	}
-	t, ok := chronicle.TypeOf(in.Type)
+	scope := strings.TrimSpace(in.Scope)
+	if scope != "" && (scope == chronicle.ScopeTenant || !chronicle.ValidScope(scope)) {
+		return bad("invalid_scope", "%q is not a project scope (project:<page>)", scope)
+	}
+	if scope != "" && scope != e.Scope && !slices.Contains(chronicle.ReadableProjects(args.Context(), args.Principal), scope) {
+		return args.Fail(http.StatusNotFound, log.Code("project_not_found").Errorf("there is no project %q", scope))
+	}
+	t, ok, err := chronicle.TypeFor(s.db.WithContext(args.Context()), args.Principal.TenantID, in.Type, scope)
+	if err != nil {
+		return args.Fail(http.StatusInternalServerError, log.Wrap(err))
+	}
 	if !ok {
 		return bad("unknown_type", "there is no entry type %q", in.Type)
 	}
@@ -123,7 +164,15 @@ func (s *service) apply(args features.ServiceArgs, in chronicleservice.EntryInpu
 	if err := json.Unmarshal(fields, &value); err != nil {
 		return bad("invalid_fields", "the fields are not a JSON object")
 	}
-	if schema, err := config.ParseSchema(t.Fields); err == nil {
+	if t.Custom {
+		var raw map[string]json.RawMessage
+		_ = json.Unmarshal(fields, &raw)
+		checked, err := chronicle.CheckFields(t, raw)
+		if err != nil {
+			return bad("invalid_fields", "%v", err)
+		}
+		fields, _ = json.Marshal(checked)
+	} else if schema, err := config.ParseSchema(t.Fields); err == nil {
 		// Fields of another type, kept from before a type change, are dropped
 		for k := range value {
 			if _, ok := schema.Properties[k]; !ok {
@@ -141,15 +190,19 @@ func (s *service) apply(args features.ServiceArgs, in chronicleservice.EntryInpu
 			return bad("invalid_parent", "an entry cannot be its own parent")
 		}
 		var entries []chronicle.Entry
-		if err := s.owned(args).Select("id", "parent_id").Find(&entries).Error; err != nil {
+		if err := s.owned(args).Select("id", "parent_id", "type").Find(&entries).Error; err != nil {
 			return args.Fail(http.StatusInternalServerError, log.Wrap(err))
 		}
 		byID := make(map[uint64]chronicle.Entry, len(entries))
 		for _, x := range entries {
 			byID[x.ID] = x
 		}
-		if _, ok := byID[in.ParentID]; !ok {
+		parent, ok := byID[in.ParentID]
+		if !ok {
 			return bad("invalid_parent", "there is no such parent entry")
+		}
+		if len(t.ParentTypes) > 0 && !slices.Contains(t.ParentTypes, parent.Type) {
+			return bad("invalid_parent", "a %s goes under a %s, not a %s", t.Title, strings.Join(t.ParentTypes, " or "), parent.Type)
 		}
 		for _, ancestor := range chronicle.WithAncestors([]uint64{in.ParentID}, byID) {
 			if e.ID != 0 && ancestor == e.ID {
@@ -158,7 +211,7 @@ func (s *service) apply(args features.ServiceArgs, in chronicleservice.EntryInpu
 		}
 	}
 
-	e.Type, e.Title, e.ParentID, e.Fields = t.ID, title, in.ParentID, string(fields)
+	e.Type, e.Title, e.ParentID, e.Fields, e.Scope = t.ID, title, in.ParentID, string(fields), scope
 	e.ShortSummary, e.FullSummary, e.FullContext = strings.TrimSpace(in.ShortSummary), strings.TrimSpace(in.FullSummary), in.FullContext
 	return nil
 }

@@ -9,9 +9,10 @@ type LinkRequest struct {
 	FromID uint64 `json:"fromId,string"`
 	ToID   uint64 `json:"toId,string"`
 	Remove bool   `json:"remove,omitempty"`
+	Kind   string `json:"kind,omitempty"` // related (the default) or a typed link from fromId to toId
 }
 
 // ToArgs converts the request to the service's LinkArgs.
 func (r LinkRequest) ToArgs(args features.ServiceArgs) chronicleservice.LinkArgs {
-	return chronicleservice.LinkArgs{ServiceArgs: args, FromID: r.FromID, ToID: r.ToID, Remove: r.Remove}
+	return chronicleservice.LinkArgs{ServiceArgs: args, FromID: r.FromID, ToID: r.ToID, Remove: r.Remove, Kind: r.Kind}
 }

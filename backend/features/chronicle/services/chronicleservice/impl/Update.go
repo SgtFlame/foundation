@@ -45,6 +45,7 @@ func (s *service) Update(args chronicleservice.UpdateArgs) chronicleservice.Entr
 	if err != nil {
 		return chronicleservice.EntryResponse{Common: *args.Fail(http.StatusInternalServerError, log.Wrap(err))}
 	}
-	s.index(args.ServiceArgs, entry.ID)
+	_, _ = chronicle.RefreshFacts(s.db.WithContext(args.Context()), &entry)
+	s.refresh(args.ServiceArgs, entry.ID)
 	return chronicleservice.EntryResponse{Common: features.OK(), Entry: entry}
 }
