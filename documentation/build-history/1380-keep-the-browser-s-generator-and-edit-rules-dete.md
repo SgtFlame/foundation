@@ -1,0 +1,1 @@
+- keep the browser's generator and edit rules deterministic, because the Node runner (346) will have to produce the same chunks.

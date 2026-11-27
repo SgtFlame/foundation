@@ -1,0 +1,1 @@
+What is still to build. Each plan holds the design for its remaining work and a **TODO** section: open questions (each with a *Decision* line), what to review after seeing it ★, and what is not built yet. What is already built is documented in [../Index.md](../Index.md); how it was built, slice by slice, is in [../BuildHistory.md](../BuildHistory.md).

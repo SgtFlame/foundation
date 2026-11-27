@@ -1,0 +1,1 @@
+- keep saves infrequent: `stood` events share the terrain target with edits, so each one moves that target's expected sequence.

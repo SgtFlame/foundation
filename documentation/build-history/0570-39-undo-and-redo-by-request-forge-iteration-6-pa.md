@@ -1,0 +1,11 @@
+39. **Undo and redo by request** (Forge iteration 6, part 6b, [forge 006b-UndoByRequest.md](../../forge/documentation/plans/006b-UndoByRequest.md)). *Built* ([Apps.md](Apps.md#built-in-slice-39), [Live.md](Live.md#changed-in-slice-39), [Cognition.md](Cognition.md#changed-in-slice-39)).
+    - **Built**:
+      - in `live`: `bus.Transact`, several commands decided in turn over an overlay of the projections and committed as one atomic batch; `LoggedOp.Undoes` and `Events`;
+      - in `apps/ops`: `ops.undo` and `ops.redo` (calls and tools, with conflicts, `force` and `dryRun`), the `ops.stack` and `ops.status` queries, items and conflicts;
+      - restorable deletes: `bp.restore` (the `cognition.trash` projection), `prefab.delete`/`prefab.restore`, `app.delete`/`app.restore`, and the inverses of making parts;
+      - in the browser: `live.gesture`, `live.settled`, `useUndo`, the Undo and Redo buttons with the conflict dialog, the Cognition Editor moved onto them, and *Undo changes*/*Redo changes* on a chat round, previewed;
+      - in Forge: Undo and Redo in the Prefab Editor, the Applications editor and the Data Designer, gestures as requests, *Delete* and *Restore* in the app list and the Prefabs library.
+    - **Blockers**: none. Forge 06b questions 1 to 7 were asked before building and answered with their proposals; the user added Undo and Redo on a chat round with a preview (question 8), built in this slice.
+    - **★ review pending**: Undo and Redo in each editor with two authors, deleted parts shown apart, and the chat round's Undo and Redo (forge 6b).
+    - **Decisions to review after seeing it**: in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-8) and Forge's [PrefabEditor.md](../../forge/documentation/PrefabEditor.md#built-in-slice-39).
+    - **Pending, carried forward**: undoing another author's request from a view (the Activity tab, forge 6c); `forge.undo` on `ops.undo` (forge 6e); hiding a deleted app's parts in the server's queries.

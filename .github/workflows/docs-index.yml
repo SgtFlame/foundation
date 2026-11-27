@@ -1,0 +1,51 @@
+# Shared documentation files are generated from fragments (documentation/Fragments.md).
+# On main: regenerate them after every merge. On a pull request: refuse hand edits.
+name: docs-index
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: write
+concurrency:
+  group: docs-index-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  regenerate:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regenerate
+        run: scripts/docs-index.sh
+      - name: Commit
+        run: |
+          git add -A $(scripts/docs-index.sh --outputs)
+          if git diff --cached --quiet; then echo "up to date"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Regenerate documentation indexes from fragments"
+          for i in 1 2 3 4; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep $((i * 5))
+          done
+          exit 1
+  no-hand-edits:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Generated files are not edited by hand
+        run: |
+          base="origin/${{ github.base_ref }}"
+          changed=$(git diff --name-only "$base"...HEAD)
+          if echo "$changed" | grep -q '^scripts/docs-index'; then echo "the generator changed: allowed"; exit 0; fi
+          bad=$(echo "$changed" | grep -Fxf <(scripts/docs-index.sh --outputs) || true)
+          if [ -n "$bad" ]; then
+            echo "::error::These files are generated from fragments; edit a fragment instead (documentation/Fragments.md):"
+            echo "$bad"
+            exit 1
+          fi
+          scripts/docs-index.sh >/dev/null

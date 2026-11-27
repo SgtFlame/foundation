@@ -1,0 +1,13 @@
+44. **Chat modes** (Forge iteration 6, part 6i, [forge 006i-ChatModes.md](../../forge/documentation/plans/006i-ChatModes.md)). *Built* ([ChatCompletion.md](ChatCompletion.md#built-in-slice-44), [Cognition.md](Cognition.md#built-in-slice-44), [Chronicle.md](Chronicle.md#built-in-slice-44), [Tools.md](Tools.md#built-in-slice-44), [forge ChatModes.md](../../forge/documentation/ChatModes.md)).
+    - **Built**:
+      - in `conversation`: `chat.mode` and the `chat.modes` section, `Send` running the conversation's mode graph with the round as its host (`conversation.Host`), the chat nodes, `Conversation.Mode`, `GET /conversation/modes`; the provider mode hook and `RoundFollower.Follow` removed;
+      - in `cognition`: Go templates (`cognition/tmpl`), *Template* and *Setting*, `Exec.Setting`/`Render`, the mode kind's spec, `RunArgs.Wall`;
+      - in `tools`: tool sets (`tools.Spec`), *Tools*, *Describe tool*, *Graph tool*, *Ask model*, the Agent's *Tools* pin;
+      - in `chronicle`: stage 1's and the memory update's prompts as templates, *Memory changes*, Personal as the whole round (an editable built-in), the provider reduced to settings;
+      - in the browser: the mode select beside the level, the ⚙ showing the mode's settings;
+      - Forge's Builder as two editable graphs (the mode and the agent) with `forge.build` a graph tool; its provider, prompt code and ⚙ switch removed.
+      - the Cognition Editor's client moved from `common` to Forge (`forge/frontend/axiom/src/editors/cognition/`): graph editing is Forge's alone.
+      - a layout fix: `#root` has a fixed height and the workbench's `<main>` `minHeight: 0`, so a long side view (the Cognition Explorer) scrolls inside its panel instead of growing the page and pushing the canvas's fit view off screen.
+    - **Blockers**: none. Forge 06i questions 1 (offered by focus, chosen for new conversations), 2 (now) and 3 (nothing hard-coded: the round is the graph, editable built-ins, tool sets and graph tools), answered 2026-11-09.
+    - **Decisions to review after seeing it**: in [ChatCompletion.md](ChatCompletion.md#decisions-to-review-after-seeing-it-2).
+    - **Pending, carried forward**: a round in each mode against a real model; agents as modes directly; the golden tests and the demo with a real model (forge 6h).

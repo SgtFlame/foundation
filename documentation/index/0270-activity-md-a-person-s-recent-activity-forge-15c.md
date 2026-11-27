@@ -1,0 +1,1 @@
+| [Activity.md](Activity.md) | A person's recent activity (forge 15c): tabs focused, clicks on app pages, record, app and definition commands, grouped by request into gestures with plain summaries, kept briefly in a per-person JetStream subject and readable only by that person (`activity.mine`, `activity.focus`, `activity.dismiss`, `activity.clear`) |

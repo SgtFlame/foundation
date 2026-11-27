@@ -1,0 +1,15 @@
+      Only 2 and 3 went the way the plan proposed.
+    - **★ review pending**: the Hello app needs review by a person, with two users at once.
+      - Seen in headless Chromium against `serve` and the Vite dev server: increments, avatars, selections, graph edits and moves, typing into local state, an item tab and both tabs back after a reload, collaborative markdown over channels, settings changes, a chat failure through a call, and `serve` restarting under two open windows with an offline click applied once. Latency: a median of 75 ms from one user's click to the other's screen.
+      - Not seen: the dark theme beyond the known app-wide issue, a user's own flexlayout arrangement saved by dragging, an external NATS server, and several servers sharing one NATS.
+      - To review: run `serve` and `frontend/example`'s `yarn dev`. Set up two accounts, open Apps › Hello in two browsers signed in as each, increment, select and connect nodes, and open an item. Reload, and stop and restart `serve`. Watch DevTools › Live.
+    - **Decisions to review after seeing it**: in [Live.md](Live.md#decisions-to-review-after-seeing-it) and [ServerUI.md](ServerUI.md#decisions-to-review-after-seeing-it). Among them: fresh snapshots on resume, presence as a query, serialized commands per target, stale events judged by node, and restorable tabs kept in browser storage.
+    - **Pending, carried forward** (the rest of the plan's TODO, in [forge 001-ServerUI.md](../../forge/documentation/plans/001-ServerUI.md#todo)):
+      - re-checking open subscriptions when grants change, and closing a connection whose session is revoked;
+      - atomic multi-event commits;
+      - the `navigate` and `focus` actions;
+      - the graph's `chain` layout;
+      - ephemeral `eph.` subjects;
+      - the trace carried in events;
+      - one `incompatible-library` lint warning on `mui.table`.
+    - **Building**: as in slices 11 and 12, link with `GOGC=25 GOFLAGS=-ldflags=-s` while other large processes run.

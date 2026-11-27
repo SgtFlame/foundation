@@ -1,0 +1,1 @@
+| 35. Export and import (Forge 5e) | forge 005-Applications 3 (opt-in seed data) and 05e 1 (the app's id; parts keep theirs) and 2 (tenant parts copied, duplicates asked about), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-4), the export document read as a person would |

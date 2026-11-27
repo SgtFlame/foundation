@@ -1,0 +1,1 @@
+- refuse a command that changes a ship's charge while someone flies it, since the pilot's window owns the charge then.

@@ -1,0 +1,1 @@
+| 36. Draft runs (Forge 5f) | forge 005-Applications 1 (run drafts, answered before) and 05f 1 (no undo), 2 (parts in their editors) and 3 (a live draft tab; entity types published alone), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-5), the Applications editor with two authors |

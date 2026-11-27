@@ -1,0 +1,1 @@
+- move material between a player and a ship with one event on the ship that the pack projector also folds, as `loaded` does, rather than a command with two targets;

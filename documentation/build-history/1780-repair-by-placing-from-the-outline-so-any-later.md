@@ -1,0 +1,1 @@
+- repair by placing from the outline, so any later cost of a block applies to repairs too.

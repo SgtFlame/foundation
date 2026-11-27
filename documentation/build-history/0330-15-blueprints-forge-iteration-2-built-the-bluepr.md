@@ -1,0 +1,28 @@
+15. **Blueprints** (Forge iteration 2). *Built.* ★ the Blueprint Editor with two users, and the Hello app run by graphs ([Blueprints.md](Blueprints.md)).
+    - **Kinds and nodes**. *Built*:
+      - `ui.handler` and `prefab.logic` (`ui/nodes`); `command`, `data.query`, `server.action` and `app.trigger` (`live/nodes`);
+      - the UI, command and data node families, and the Expression node on `expr-lang/expr`;
+      - `prefab.logic` and `app.trigger` as kinds and events only.
+    - **Running them**. *Built*:
+      - published command and query graphs resolved by the bus and the subscriptions;
+      - handler ids in trees naming graphs, run in the session;
+      - tree overlays (`ui.insertNode`, `ui.removeNode`);
+      - the `live.command` tool.
+    - **The Hello app** is made of graphs: nine handlers, `cmd-hello-increment` and `qry-hello-counter`, as editable built-ins.
+    - **In Forge**: the Blueprint Editor (kind `blueprint`, Test and Owner tabs), Forge › Blueprints, and `serve.go` wired as Foundation's (forge `documentation/BlueprintEditor.md`).
+    - **Blockers**: none left. Its **Before** questions were answered before building: 002-Blueprints 2 (`expr`), 3 (switch at the next event), 4 (trace while open or failing), 6 (generic record commands, with command graphs where needed) and 8 (`app.trigger` deferred).
+    - **★ review pending**:
+      - The acceptance ran through commands in `ui/hello`'s test, not through a model: a Reset button, its command graph and its handler were built and published, and worked in an open tab; republishing took effect at the next click.
+      - In headless Chromium, Ada's published change to *On increment* reached Bob's open Hello tab.
+      - To review: handler latency, how another author's edits read on the canvas, and the Blueprint Editor beside the Cognition Editor.
+    - **Decisions to review after seeing it**: in [Blueprints.md](Blueprints.md#decisions-to-review-after-seeing-it).
+    - **Pending, carried forward** ([forge 002-Blueprints.md](../../forge/documentation/plans/002-Blueprints.md#todo)):
+      - the layout and graph nodes;
+      - Navigate and Focus;
+      - Subscribe;
+      - the presence nodes;
+      - Get props;
+      - actions as tools;
+      - Send command's sequence;
+      - runs of `prefab.logic` (04) and `app.trigger` (07).
+    - **Light scheme**: the editor's controls are hard to read in a light colour scheme, the app-wide dark-preference issue ([plans/Backlog.md](plans/Backlog.md)).

@@ -1,0 +1,1 @@
+| 31. App drafts (Forge 5a) | forge 005-Applications 6 (a slice per part, answered before) and 05a 1 (KV drafts, the app in SQLite), 2 (owned parts, others required), 3 (the `app` actions) and 4 (per item, per field), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it), to review after seeing |

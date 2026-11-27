@@ -1,0 +1,1 @@
+- `<Op>.go` - one gin handler per operation: `args, ok := rest.Bind(c, &req)` (it answers 400 itself, so return when `!ok`), call the service with `req.ToArgs(args)`, and respond with `Common.Code` as the HTTP status and `<Op>ResponseFrom(resp)` as the body. An operation with no body (`GET`) passes `rest.Args(c)` instead. Handlers only translate; logic belongs in the service.

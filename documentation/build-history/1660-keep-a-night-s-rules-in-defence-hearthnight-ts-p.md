@@ -1,0 +1,1 @@
+- keep a night's rules in `defence/HearthNight.ts`, pure and seeded, beside `Combat`, so the Node runner (346) can run both;

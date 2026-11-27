@@ -1,0 +1,1 @@
+| 42. Testing blueprints in a sandbox (Forge 6f) | forge 06f 1 (the app's records, with seeds) and 2 (external nodes stubbed with a sample), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-11), once the Builder uses the tool |

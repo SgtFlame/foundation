@@ -1,0 +1,1 @@
+| 15. Blueprints (Forge 2) | forge 002-Blueprints 2, 3, 4, 6 and 8 (all answered) | 001-ServerUI 7 (concurrent edits to one property): a node's config is replaced whole, the later command winning; the decisions in [Blueprints.md](Blueprints.md#decisions-to-review-after-seeing-it), to review after seeing |

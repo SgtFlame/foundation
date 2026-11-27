@@ -1,0 +1,1 @@
+| 47. Connections, sessions and event sources (Forge 7c) | forge 07c 1 (definitions), 2 (`connection.manage`, grantable to an app role per connection), 3 (share plus one, no rebalancing), answered with their proposals | the decisions in [Connectors.md](Connectors.md#decisions-to-review-after-seeing-it-1), the Connection form for a type with many settings |

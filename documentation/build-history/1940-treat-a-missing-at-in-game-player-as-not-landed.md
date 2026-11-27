@@ -1,0 +1,1 @@
+- treat a missing `at` in `game.player` as "not landed yet", and add any other per-player saved state to `game.players` the same way, from events on a target the sender may name (the world's terrain), keyed by the event's user;

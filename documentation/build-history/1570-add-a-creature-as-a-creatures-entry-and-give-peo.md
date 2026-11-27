@@ -1,0 +1,1 @@
+- add a creature as a `CREATURES` entry and give people of that kind no dialogue; the viewport treats any creature kind as a foe;

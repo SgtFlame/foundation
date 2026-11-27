@@ -1,0 +1,1 @@
+- give dialogues answers that lead to a node or end the talk, checked by `Dialogue.Check`, and keep their text out of Go.

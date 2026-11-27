@@ -1,0 +1,1 @@
+| 34. Running apps in the workbench (Forge 5d) | forge 005-Applications 1 (run drafts, with 5f) and 2 (the app's own history), and 05d 1 (Hello stays Go, Records a manifest app) and 2 (*App frame* in Forge), answered | the decisions in [Apps.md](Apps.md#decisions-to-review-after-seeing-it-3), the Apps section with several apps, the frame and its navigation |

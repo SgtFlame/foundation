@@ -1,0 +1,1 @@
+- decide outcomes from the character's skills, never from the player's aim or reflexes (the user, 2026-11-26).

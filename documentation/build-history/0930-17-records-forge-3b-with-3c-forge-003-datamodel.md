@@ -1,0 +1,1 @@
+| 17. Records (Forge 3b, with 3c) | forge 003-DataModel 7 (one bucket per tenant), 03b 1 (convert values) and 2 (hide a deleted type), all answered | the decisions in [Records.md](Records.md#decisions-to-review-after-seeing-it-1) and [forge DataDesigner.md](../../forge/documentation/DataDesigner.md#decisions-to-review-after-seeing-it), to review after seeing |

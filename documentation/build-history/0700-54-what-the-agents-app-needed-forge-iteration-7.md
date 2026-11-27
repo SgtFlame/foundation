@@ -1,0 +1,11 @@
+54. **What the Agents app needed** (Forge iteration 7, part 7m, [forge AgentsApp.md](../../forge/documentation/AgentsApp.md)). *Built* ([Apps.md](Apps.md#changed-in-slice-54)).
+    - **Built**:
+      - `tools/nodes`: the Agent node's `level` input and its calls' `args` and `result` and `usage` output (priced from `ai.models`); *Tools*' `include` input; *Call tool* (`tools.call`);
+      - `cognition/nodes`: *Call graph*'s `catch` (a *Failed* exit with the error);
+      - `records/nodes` and `ui/nodes`: an `entity` input on *Get record* and *Share*;
+      - `apps/tools`: the *Run in sandbox* node (`apps.sandbox`); `apps.Used` lists the primitives of required apps' parts too;
+      - `authz` and `jobs`: an app principal may use the agents its own records define, and holds actions marked `Apps` (`job.create`) in its tenant, so its triggers enqueue jobs;
+      - browser: the icons the Agents app names (`iconMap.ts`).
+    - **Blockers**: none. Forge's iteration questions 6, 8 and 13 and 7m's question 1 answered by the user before building (2026-11-21).
+    - **Decisions to review after seeing it**: in [forge AgentsApp.md](../../forge/documentation/AgentsApp.md#decisions-to-review-after-seeing-it).
+    - **Deferred failure**: `cognition/engine`'s `TestStepLimit` failed once in code this slice did not change ([forge 099-Cleanup.md](../../forge/documentation/plans/099-Cleanup.md#foundation-cognitionengine-teststeplimit)).

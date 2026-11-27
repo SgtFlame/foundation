@@ -1,0 +1,1 @@
+| [Jobs.md](Jobs.md) | Durable background jobs on NATS JetStream, built for several runners per tenant in several processes: graphs run once as a stated principal, with retries, delays and keys; installed apps' triggers (*On record changed*, *On event*, *On schedule*) run as the app's own principal; *Enqueue job* in a command graph commits with its events; Administration › Jobs |

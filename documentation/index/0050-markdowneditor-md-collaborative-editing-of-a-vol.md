@@ -1,0 +1,1 @@
+| [MarkdownEditor.md](MarkdownEditor.md) | Collaborative editing of a Volume's markdown file in three views (Live Preview, Source, WYSIWYG) over one Yjs document, with `collabservice`, whose rooms also edit documents of other kinds (a record's markdown field) |

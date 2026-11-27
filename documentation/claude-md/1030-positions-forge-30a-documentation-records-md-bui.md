@@ -1,0 +1,1 @@
+**Positions** (forge 30a, `documentation/Records.md` › *Built in forge 30a*): order records by a `rank` field (`scope` the field it orders within), moved only by `record.move {entity, field, after?, before?, set?}`, made in place by *Rank between*; never a number halved by hand.
