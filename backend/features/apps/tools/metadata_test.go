@@ -96,6 +96,7 @@ func everything(t *testing.T) *extensions.Registry {
 	authznodes.Contribute(reg)
 	textnodes.Contribute(reg)                                                                                   // Text diff, Anchor resolve (forge 18b)
 	appdiff.Contribute(reg)                                                                                     // Structured diff (forge 19d)
+	branches.ContributeTrigger(reg)                                                                             // On app branch merged (forge 19f)
 	textnodes.ContributeTranscripts(reg, func() textnodes.TranscriptDeps { return textnodes.TranscriptDeps{} }) // Parse transcript (forge 18e)
 	kbnodes.Contribute(reg, func() collabservice.Service { return nil })                                        // Edit text together (forge 18c)
 	authz.ContributeAgents(reg)

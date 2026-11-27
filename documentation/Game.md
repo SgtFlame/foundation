@@ -410,6 +410,76 @@ The Nine Sisters†, the design's ring of nine lichened standing stones where "t
 - **Remembering**: at the ring's heart on such a night, the ground gives up a memory (`STONES_MEMORY`, shown like a dream): the queen of the First Flight, silver charms in her braids, naming the winter stars for a child and telling her the Wanderer is a world, not a star. It is the new last step **`stones`** (`game.reachStory` takes it), and `game.story`'s `items.starlore` is 1. On other nights the ring says how many nights until the lesser moon is full.
 - **Star lore**: on nights the lesser moon is more than half lit, the Hum pool holds one more (`starlorePool`).
 
+## Built in S19 (forge 375)
+
+The hedge-witch's cache, from the design's Hawk's Rest (a hedge-witch's cottage with a hidden floor cache).
+
+- **Finding it** (`story/Cache.ts`): once the Nine Sisters have remembered (`stones`), the senses layer in the empty cottage at Hawk's Rest hears *a draught, and a board that knocks hollow* by the box bed (`cacheSpot`, `cacheReady`). Walking up to the bed lifts the loose board: the hedge-witch's notes (`CACHE_NOTES`, shown like a dream) and the new last step **`cache`**, with `game.story`'s `items.hedgecraft` 1.
+- **The yarrow poultice** (`POULTICE`): with the notes, C at a hearth also offers a poultice from the yarrow gathered on the first morning (until now unused). It takes 40 Chill off and closes the dream's wound at once (`use: "wound"`), without waiting for a warm night. `showCooking` takes the dishes it offers.
+
+A note from the user on S18 (2026-11-27): in the books the Nine Sisters wake when an Elder is near (Kasimir, Anna, the Stranger); the lesser full moon is a second way to wake them, which does not conflict.
+
+## Built in V21 (forge 360)
+
+The ore scanner: the first thing made from the forge's iron.
+
+- `game.craft` knows a fourth recipe, `scanner` (1 m³ of iron and 0.5 m³ of ore from the pack); the refusal names iron when the pack is short ("a scanner takes 1 m³ of iron and 0.5 m³ of ore from your pack"). `game.player` then gives `tools.scanner`.
+- Engine only for the pulse: `craft/Scanner.ts` (`scan`, `scanLine`) samples the voxel world on a 2.5 m grid within 36 m, gathers solid ore samples into 8 m pockets and returns the nearest six. In `VoxelViewport`, K with a scanner sends a pulse (6 s to recharge), draws a wireframe octahedron through the rock at each pocket, sized by how rich it looks, for 12 s, and says how many pockets it found and how far the nearest is. `Recipe.needs` and `Carried` take `iron`; `missing` says "an" before a vowel.
+- `TestForge` checks the scanner's refusal; `Scanner.test.ts` and `Crafting.test.ts` the rest.
+
+## Built in S20 (forge 375)
+
+The hedge-witch's bundles and her moon calendar, from the design's Hawk's Rest ("overgrown herb garden, moon-calendar stones on the sill") and its herb list ("lavender, mugwort, yarrow, valerian, feverfew, borage, sage: gardens and dried bundles").
+
+- **The bundles** (`story/Bundles.ts`): once her notes are found (`cache`), four bundles hang drying over the cottage's shelves, two to a shelf (`bundleSpots`, spots `bundle-<herb>`): lavender, mugwort, valerian and sage (`BUNDLE_HERBS`). The senses smell each; walking up to one takes it into the herbal (an `item` save, like the first morning's herbs), and all four reach the new last step **`bundles`**. The herbal lists them once the cache is open (`showHerbal`'s `more`). `game.reachStory` accepts the four herbs, and `StoryItems` lists them.
+- **Two recipes from her notes** (`HEDGE_DISHES`, offered with hedge-craft): *Valerian and lavender tea* (60 Chill off) and *Sage broth* (45 Hunger and 20 Chill off). Lavender and mugwort are kept for the dream tincture still to come.
+- **The moon calendar**: pebbles on the cottage's window sill (`sillSpot`); standing by them says how many nights until the lesser and the greater full moons (`sillLine`, `nextGreaterFull`, the stones' `nextWaking`).
+- `TestStory` gathers a bundle, reaches `bundles` and cooks the tea; `Bundles.test.ts` covers the rest.
+
+## Built in V22 (forge 360)
+
+The iron air tank: the suit's first upgrade (the play design: gear answers the environment; a cheap suit forces short trips).
+
+- `game.craft` knows a fifth recipe, `airTank` (1.5 m³ of iron and 0.5 m³ of rock). The refusal now names every material the item needs, iron first, joined with *and* (`join(filter(…))` in `cmd-game-craft`), so the older messages read as before.
+- Engine: `survival/Needs.ts` `ratesFor(tools)` gives the suit's rates, with `AIR_TANK_SECONDS` (480, twice the plain suit's 240) when the player has the tank; `VoxelViewport` steps the needs and shows the air warning ("Air low: n s left") with them. The bench's hint once everything is made says so.
+- `TestForge` checks the refusal; `Crafting.test.ts` and `Needs.test.ts` the rest.
+
+## Built in S21 (forge 375)
+
+The dream tincture, from the design's recipes ("Dream tincture. Made only at the full of the lesser moon. Brings true dreams. Ingredients not given").
+
+- **Making it** (`story/Tincture.ts`): on a night of the lesser full moon, with her notes (`items.hedgecraft`) and a mugwort and a lavender from her bundles, C at a hearth offers the *Dream tincture* (`TINCTURE`, `tinctureReady`). It spends both herbs (`use: "mugwort"`, then `use: "lavender"`).
+- **The true dream**: the next sleep (R), wherever it is slept, plays `TRUE_DREAM` and reaches the new last step **`truedream`**; `game.story` then gives `items.wardlore` 1, the lore of the design's threshold ward (sage along the sill and five stones in their order), for a later step to lay. The dream's scene is a placeholder until the past lives are written, as the user asked (2026-11-27).
+- `TestStory` reaches `truedream`; `Tincture.test.ts` checks when it can be made.
+
+## Built in V23 (forge 360)
+
+The fabricator: the third rung of the crafting ladder ("fabricator (powered; electronics, thrusters, advanced blocks)"), thin: power from a solar panel and one product, the circuit board.
+
+- The cabin gains a **fabricator** (block 76, type `fabricator`, across from the forge) and a **solar panel** on the roof (block 77, `solar`); 78 blocks now. `game.placeBlock` lets a cabin place up to 78, so cabins started before can add them.
+- `game.fabricate` (`cmd-game-fabricate`, target the cabin): refused until both are placed ("the fabricator has no power: place the solar panel on the roof"), while it is at work, or without 0.5 m³ of iron and 0.25 m³ of ore in the pack; otherwise event `fabricating {world, item: "circuit", at, pack}`, kept as `fab {item, at}` on the ship.
+- `game.takeFabricated` (`cmd-game-takeFabricated`): after 30 s (`FabMs`), event `fabricated {world, item, pack: {circuits: 1}}`. The pack gains `circuits`, a count that takes no room (at most 20).
+- Engine: `craft/Fabricator.ts` (`fabAction`, `fabLeft`), the fabricator's mesh (a grey cabinet with a green screen and a tool arm), `ShipLayer.fabricatorNear` and `hasPlaced`, and U at the fabricator in `VoxelViewport` (`fabAt`, `fabHint`), the forge taking U when nearer. Circuit boards are for what the fabricator builds next (thrusters, bigger ships).
+- `TestFabricator` checks the refusals and `TestCabin` the design; `Fabricator.test.ts` the engine's view.
+
+## Built in S22 (forge 375)
+
+The threshold ward, from the design's hedge-craft ("Wards. Arrangements of herbs and stones on a threshold so nothing unwelcome crosses") and its blessed places ("Sleep there is dreamless and healing").
+
+- **The river stones** (`story/Ward.ts`): after the true dream (`truedream`), five pale stones lie in the cleared culvert by the east field (the ditch's spot), heard as *clean water running over stones*. Walking up to them takes them (`item: "riverstones"`, spot `culvert-stones`; `riverStonesReady`).
+- **Laying it**: at Hawk's Rest's door (`thresholdSpot`, the door's cell) with the stones and a sage, the ward is laid: the new last step **`ward`**, whose fold spends a sage and the stones and gives `items.ward` 1. Without them the door says what is missing (`wardMissing`). The ward shows as a line of sage and five stones on the threshold.
+- **A warded night**: sleeping at a warded blessed place clears the Chill by morning (`wardedNight`) and closes a dream's wound, warm food or not.
+- `TestStory` lays the ward; `Ward.test.ts` covers the rest.
+
+## Built in V24 (forge 360)
+
+Ion thruster kits: the fabricator's second product, the first ship part, a step towards the bigger ships the job board needs.
+
+- `game.fabricate` takes `item`: `circuit` (the default, as in V23) or `ionKit`, 1 m³ of iron and 2 circuit boards, 60 s. `game.takeFabricated` gives a kit into the pack's `kits` (a count).
+- `game.fitKit` (`cmd-game-fitKit`, target a ship): fits a kit from the pack, event `kitFitted {world, boost: 0.25, pack: {kits: -1}}`; the ship keeps `boost` (at most 0.5, two kits). Refused for a building, a ship with two, or a pack without a kit.
+- Engine: `craft/Fabricator.ts` gains the kit (`KIT_MS`, `KIT_IRON`, `KIT_CIRCUITS`, `KIT_BOOST`, `MAX_BOOST`; `fabAction(…, item)`); at the fabricator U makes a circuit board and I a kit, the hint offering what the pack can make; by a ship, O fits a kit (`canFitKit`, `fitKit`). A ship's thrust is the pilot's skill times 1 + its boost (`thrustOf`).
+- `TestFabricator` checks the refusals; `Fabricator.test.ts` the kit's timing and needs.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

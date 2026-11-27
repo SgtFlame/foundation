@@ -31,7 +31,7 @@ const (
 
 // StorySteps are the first hour's steps in order (375 › the first hour).
 // S7 adds the first day: the morning's card, foraging and the herbal.
-var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch", "foretold", "watch", "defended", "thanked", "dream", "companion", "stones"}
+var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch", "foretold", "watch", "defended", "thanked", "dream", "companion", "stones", "cache", "bundles", "truedream", "ward"}
 
 // S10: the step that pays for Wenlan's reading, and the coin it pays
 const (
@@ -49,10 +49,25 @@ const (
 	// lore they give, which makes card readings clearer
 	StepStones = "stones"
 	Starlore   = "starlore"
+	// S19: the hedge-witch's cache at Hawk's Rest, and the hedge-craft
+	// notes in it, which teach the yarrow poultice
+	StepCache  = "cache"
+	Hedgecraft = "hedgecraft"
+	// S21: the true dream the dream tincture brings, and the threshold
+	// ward's lore it leaves
+	StepTrueDream = "truedream"
+	Wardlore      = "wardlore"
+	// S22: the threshold ward laid at Hawk's Rest: it spends a sage and the
+	// river stones, and the ward stands from then on
+	StepWard    = "ward"
+	RiverStones = "riverstones"
+	Ward        = "ward"
+	Sage        = "sage"
 )
 
-// StoryItems are what a player may gather in a story (S7: herbs for the herbal).
-var StoryItems = []string{"thyme", "nettle", "yarrow"}
+// StoryItems are what a player may gather in a story (S7: herbs for the herbal;
+// S20: the hedge-witch's dried bundles at Hawk's Rest).
+var StoryItems = []string{"thyme", "nettle", "yarrow", "lavender", "mugwort", "valerian", "sage", "riverstones"}
 
 // StoryPlace is a player's place in one story.
 type StoryPlace struct {
@@ -135,6 +150,28 @@ func foldStory(f live.Fold) (json.RawMessage, error) {
 		}
 		p.Items[Starlore] = 1
 	}
+	if d.Step == StepCache && !p.Done[StepCache] {
+		if p.Items == nil {
+			p.Items = map[string]int{}
+		}
+		p.Items[Hedgecraft] = 1
+	}
+	if d.Step == StepTrueDream && !p.Done[StepTrueDream] {
+		if p.Items == nil {
+			p.Items = map[string]int{}
+		}
+		p.Items[Wardlore] = 1
+	}
+	if d.Step == StepWard && !p.Done[StepWard] {
+		if p.Items == nil {
+			p.Items = map[string]int{}
+		}
+		if p.Items[Sage] > 0 {
+			p.Items[Sage]--
+		}
+		p.Items[RiverStones] = 0
+		p.Items[Ward] = 1
+	}
 	if d.Told != "" {
 		p.Told = d.Told
 	}
@@ -198,7 +235,7 @@ func contributeStories(reg *extensions.Registry) {
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "game.story", Source: source}, Title: "My place in a story",
-		Description: fmt.Sprintf("The caller's place in a story known by its starting area: {done: {<step>: true}, last (the last step reached), area (the area they were last in), at: [x, z] (where they stood in it), items: {<herb>: n} and picked: {<spot>: true} (what they gathered, S7, less what they cooked), body: {hum, chill, hunger} (S8), clock: {day, hour} (S9), told (S10: what the player told Wenlan after his reading; the ditch pays items.silver; thanked gives items.knot, S15; dream gives items.wound, healed with use: wound, S16)}, then each change as they play. The first hour's steps are %v.", StorySteps),
+		Description: fmt.Sprintf("The caller's place in a story known by its starting area: {done: {<step>: true}, last (the last step reached), area (the area they were last in), at: [x, z] (where they stood in it), items: {<herb>: n} and picked: {<spot>: true} (what they gathered, S7, less what they cooked), body: {hum, chill, hunger} (S8), clock: {day, hour} (S9), told (S10: what the player told Wenlan after his reading; the ditch pays items.silver; thanked gives items.knot, S15; dream gives items.wound, healed with use: wound, S16; stones gives items.starlore, S18; cache items.hedgecraft, S19; truedream items.wardlore, S21; ward spends a sage and items.riverstones and gives items.ward, S22)}, then each change as they play. The first hour's steps are %v.", StorySteps),
 		Params:      json.RawMessage(`{"type":"object","properties":{"story":{"type":"string","description":"The story's starting area's id (the farmstead)"}},"required":["story"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"story":"a123"}`)},
 		Action:      "game.read",

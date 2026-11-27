@@ -199,7 +199,7 @@ export class BreathPrompt {
 }
 
 // The cooking panel by a hearth: each dish with the herb it needs
-export function showCooking(container: HTMLElement, items: Readonly<Record<string, number>>, onCook: (d: Dish) => void): HTMLDivElement {
+export function showCooking(container: HTMLElement, items: Readonly<Record<string, number>>, onCook: (d: Dish) => void, dishes: readonly Dish[] = DISHES): HTMLDivElement {
   const el = document.createElement('div')
   el.dataset.cooking = ''
   el.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:360px;padding:16px 18px;border-radius:6px;background:#efe3c8;color:#3a2a18;font:13px Georgia,serif;box-shadow:0 8px 30px rgba(0,0,0,.6);z-index:4'
@@ -207,7 +207,7 @@ export function showCooking(container: HTMLElement, items: Readonly<Record<strin
   h.textContent = 'At the hearth'
   h.style.cssText = 'font-size:16px;font-weight:bold;margin-bottom:8px'
   el.appendChild(h)
-  for (const d of DISHES) {
+  for (const d of dishes) {
     const have = items[d.herb] ?? 0
     const b = document.createElement('button')
     b.dataset.dish = d.id

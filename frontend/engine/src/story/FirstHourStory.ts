@@ -48,6 +48,14 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'companion', title: 'Someone to take the flank', how: "The morning after the dream, someone knocks at the cottage door at Hawk's Rest. Answer, and ask them to walk with you." },
   // S18: the Nine Sisters
   { id: 'stones', title: 'The Nine Sisters', how: 'On a night of the lesser full moon (the almanac, M, shows when), stand at the heart of the ring of nine stones by the signpost.' },
+  // S19: the hedge-witch's cache
+  { id: 'cache', title: "The hedge-witch's cache", how: "Back at Hawk's Rest, listen for a draught (hold F to focus your senses) and look by the box bed." },
+  // S20: her bundles and the moon calendar
+  { id: 'bundles', title: 'Her dried bundles', how: "Take the four bundles of herbs drying over Hawk's Rest's shelves. The pebbles on the sill are her moon calendar." },
+  // S21: the dream tincture
+  { id: 'truedream', title: 'A true dream', how: 'On a night of the lesser full moon (the sill or the almanac tells when), press C at a hearth for the dream tincture, then sleep (R).' },
+  // S22: the threshold ward
+  { id: 'ward', title: 'The threshold ward', how: "Take five river stones from the culvert by the east field, then walk to Hawk's Rest's door with a sage to lay the ward." },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the
@@ -76,7 +84,7 @@ export function herbSpots(pieces: Readonly<Record<string, { id: string; piece: s
 }
 
 // The herbal (S7): the herbs gathered, with what each is for. Pure DOM.
-export function showHerbal(container: HTMLElement, items: Readonly<Record<string, number>>): HTMLDivElement {
+export function showHerbal(container: HTMLElement, items: Readonly<Record<string, number>>, more: readonly Herb[] = []): HTMLDivElement {
   const el = document.createElement('div')
   el.dataset.herbal = ''
   el.style.cssText =
@@ -86,7 +94,7 @@ export function showHerbal(container: HTMLElement, items: Readonly<Record<string
   h.style.cssText = 'font:600 17px Georgia,serif;margin-bottom:8px'
   h.textContent = "The herbal of Hawk's Rest"
   el.append(h)
-  for (const herb of HERBS) {
+  for (const herb of [...HERBS, ...more]) {
     const n = items[herb.id] ?? 0
     const row = document.createElement('div')
     row.dataset.herb = herb.id

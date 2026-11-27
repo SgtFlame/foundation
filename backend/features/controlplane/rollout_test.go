@@ -39,6 +39,8 @@ func TestRollout(t *testing.T) {
 	pinOf := map[string]string{}
 	for i := range pins {
 		var target string
+		// The records projection may not have folded the pin yet
+		until(t, "the pin is readable", func() bool { return s.field(controlplane.EntityPackagePin, pins[i], "target") != "" })
 		_ = json.Unmarshal([]byte(s.field(controlplane.EntityPackagePin, pins[i], "target")), &target)
 		pinOf[target] = pins[i]
 	}

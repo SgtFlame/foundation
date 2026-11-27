@@ -720,3 +720,11 @@ App branches, commits, diffs, approvals and merges (forge's iteration 19, [plan]
 - **Not built yet**: the model-proposed resolutions (`app-mergePart`) and cross-part check (`app-mergeCheck`) of 19e, conflict threads, *Update from main* as its own action (a merge with `source: main` does it), the Data Designer on a branch, preview data and the sandbox for a branch's entity types.
 
 A merge waits for approval of every part kind it changes or still has an open conflict in (`Merge.settle`), and `app.commit {merge}` copies the merge's approvals onto the merge commit, which is therefore approved as soon as it is made.
+
+## Built in forge 19f
+
+Two generic pieces for Forge's part 19f (what each part serves, forge `RequirementsApp.md` › *Built in part 19f*):
+
+- **Checks of other apps**: a manifest tool with `checks: true` (read effect only; `apps.Tool.Checks`, carried to `tools.Tool.Checks` by `installs`) is run by `forge.check` for every app checked, with `{appId, branch}`; its output's `warnings` (`[{path, message}]`) are added to the check's warnings, each path prefixed `<toolId>:` (`apptools.AppChecks`). A check that fails is skipped. This is how an installed app adds warnings about other apps without Go code.
+- ***On app branch merged*** (`apps.onBranchMerged`, `branches.ContributeTrigger`): a trigger event on the def area's `appBranch` `merged` events, giving `app`, `branch`, `into` and `commit` (the merged event's data now carries `app` and `branch`). The trigger kind allows it. Test fixtures whose apps use it contribute it as `serve.go` does.
+- `app.publish` works where app branches are not contributed (no `apps.branch` projector): no app has commits, a rev publishes as before 19c, and naming a commit is refused (foundation #12).
