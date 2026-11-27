@@ -419,6 +419,14 @@ The hedge-witch's cache, from the design's Hawk's Rest (a hedge-witch's cottage 
 
 A note from the user on S18 (2026-11-27): in the books the Nine Sisters wake when an Elder is near (Kasimir, Anna, the Stranger); the lesser full moon is a second way to wake them, which does not conflict.
 
+## Built in V21 (forge 360)
+
+The ore scanner: the first thing made from the forge's iron.
+
+- `game.craft` knows a fourth recipe, `scanner` (1 m³ of iron and 0.5 m³ of ore from the pack); the refusal names iron when the pack is short ("a scanner takes 1 m³ of iron and 0.5 m³ of ore from your pack"). `game.player` then gives `tools.scanner`.
+- Engine only for the pulse: `craft/Scanner.ts` (`scan`, `scanLine`) samples the voxel world on a 2.5 m grid within 36 m, gathers solid ore samples into 8 m pockets and returns the nearest six. In `VoxelViewport`, K with a scanner sends a pulse (6 s to recharge), draws a wireframe octahedron through the rock at each pocket, sized by how rich it looks, for 12 s, and says how many pockets it found and how far the nearest is. `Recipe.needs` and `Carried` take `iron`; `missing` says "an" before a vowel.
+- `TestForge` checks the scanner's refusal; `Scanner.test.ts` and `Crafting.test.ts` the rest.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

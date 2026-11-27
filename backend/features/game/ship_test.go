@@ -493,4 +493,9 @@ func TestForge(t *testing.T) {
 	if !st.read(game.ShipsProjector, game.ShipType+".c1", res.Seq, &after) || after.Forge != nil {
 		t.Fatalf("ship %+v", after)
 	}
+	// V21: the ore scanner is made from the forge's iron at the bench
+	st.ok("game.placeBlock", "c1", map[string]any{"index": 74})
+	if r := st.refused("game.craft", "c1", map[string]any{"item": "scanner"}); !strings.Contains(r.Common.Message, "1 m³ of iron and 0.5 m³ of ore") {
+		t.Fatalf("a scanner from too little: %q", r.Common.Message)
+	}
 }

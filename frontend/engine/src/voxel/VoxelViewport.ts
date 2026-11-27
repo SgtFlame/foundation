@@ -19,7 +19,9 @@ import { available, Fishing, FLEE_RANGE, floatModel, grazerDir, grazerModel, her
 import { eat, FRESH, hungry, NeedsHud, rounded, stepNeeds, type Needs } from '../survival/Needs.ts'
 import { countdown, DRONE_HIT, DRONE_SCRAP, dronesOf, shotHits, surgeAt, TURRET_RANGE, TURRET_RELOAD, turretPick, type Drone } from '../surge/Surge.ts'
 import { MANUAL_BLOCK, nearestSalvage, SALVAGE_ORE, salvageKey, wreckSites, type Vec3 as WVec3 } from '../wreck/Wreck.ts'
-import { digLimits, missing, nextRecipe, spend, type DigLimits } from '../craft/Crafting.ts'
+import { digLimits, missing, named, nextRecipe, spend, type DigLimits } from '../craft/Crafting.ts'
+import { scan, scanLine, SCAN_COOLDOWN, SCAN_SHOW } from '../craft/Scanner.ts'
+import { MATERIAL_ORE } from './Types.ts'
 import { Hold, secondsFor, spotKey, toolPower, workFor, type Contents } from '../craft/Mining.ts'
 
 // What the player asks for; the host sends it to the server, which decides
@@ -258,6 +260,10 @@ export class VoxelViewport {
   // V17: sentry turrets, by user id, and when each fires next
   private turrets: Record<string, { at: THREE.Vector3; mesh: THREE.Group; head: THREE.Object3D; reload: number }> = {}
   private readonly turretGroup = new THREE.Group()
+  // V21: the ore scanner's marks and its timers
+  private readonly scanGroup = new THREE.Group()
+  private scanLeft = 0
+  private scanCool = 0
   myUserId = ''
   private herd: { g: Grazer; model: THREE.Group; shown: boolean; run: number; at: THREE.Vector3 }[] = []
   private taken: Record<string, number> = {}
@@ -376,7 +382,7 @@ export class VoxelViewport {
     this.scene.add(globe, glow, this.cropsGroup)
     // V12: the sea in the planet's hollows, its herd and a fishing float
     this.float.visible = false
-    this.scene.add(seaMesh(), this.wildGroup, this.float, this.wreckGroup, this.surgeGroup, this.turretGroup, this.chips)
+    this.scene.add(seaMesh(), this.wildGroup, this.float, this.wreckGroup, this.surgeGroup, this.turretGroup, this.scanGroup, this.chips)
   }
 
   // V9: the sky turns blue and the stars fade as the camera goes down into the planet's air
@@ -626,7 +632,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.forgeHint()}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHit ? 'Left: place this block · ' : ''}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.forgeHint()}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.progress?.tools?.scanner ? 'K: scan for ore · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -794,6 +800,7 @@ export class VoxelViewport {
     this.stepShipsOnFoot()
     this.stepWrecks()
     this.stepSurge(dt)
+    this.stepScan(dt)
     const wheel = input.takeWheel()
     if (wheel !== 0) {
       this.brushRadius = Math.max(MIN_BRUSH, Math.min(this.maxBrush(), this.brushRadius * (wheel < 0 ? 1.15 : 1 / 1.15)))
@@ -1064,6 +1071,55 @@ export class VoxelViewport {
       return
     }
     this.flashHint(`You wrench a plate off the wreck: ${SALVAGE_ORE} m³ of scrap for the refinery, counted as ore`)
+  }
+
+  // --- The ore scanner (V21) ---
+
+  // K with a scanner sends a pulse; its marks fade after SCAN_SHOW s
+  private stepScan(dt: number): void {
+    this.scanCool = Math.max(0, this.scanCool - dt)
+    if (this.scanLeft > 0) {
+      this.scanLeft -= dt
+      const k = Math.max(0, this.scanLeft / SCAN_SHOW)
+      for (const m of this.scanGroup.children) {
+        m.rotation.y += dt * 1.5
+        const mat = (m as THREE.Mesh).material as THREE.MeshBasicNodeMaterial
+        mat.opacity = 0.35 + 0.6 * k
+      }
+      if (this.scanLeft <= 0) this.clearScan()
+    }
+    const w = this.walker
+    if (!w || this.mode !== 'walk' || !this.progress?.tools?.scanner || !this.input.locked || !this.input.pressed('KeyK')) return
+    if (this.scanCool > 0) return this.flashHint(`The scanner is still charging: ${Math.ceil(this.scanCool)} s`)
+    this.pulseScan(w.pos)
+  }
+
+  private pulseScan(at: { x: number; y: number; z: number }): void {
+    this.scanCool = SCAN_COOLDOWN
+    const found = scan((x, y, z) => {
+      const [d, m] = this.world.sampleAt(x, y, z)
+      return d < 0 && m === MATERIAL_ORE
+    }, at)
+    this.clearScan()
+    for (const p of found) {
+      const size = 0.5 + Math.min(1.5, p.cells * 0.12)
+      const mat = new THREE.MeshBasicNodeMaterial({ color: 0x4fd6ff, transparent: true, opacity: 0.95, depthTest: false, wireframe: true })
+      const m = new THREE.Mesh(new THREE.OctahedronGeometry(size, 0), mat)
+      m.renderOrder = 10
+      m.position.set(p.x, p.y, p.z)
+      this.scanGroup.add(m)
+    }
+    this.scanLeft = found.length ? SCAN_SHOW : 0
+    this.flashHint(scanLine(found))
+  }
+
+  private clearScan(): void {
+    for (const m of [...this.scanGroup.children]) {
+      const mesh = m as THREE.Mesh
+      mesh.geometry.dispose()
+      ;(mesh.material as THREE.Material).dispose()
+      this.scanGroup.remove(m)
+    }
   }
 
   // --- Swarm surges (V16) ---
@@ -1408,7 +1464,7 @@ export class VoxelViewport {
   private benchHint(): string {
     if (!this.nearBench) return ''
     const r = nextRecipe(this.progress?.tools, this.progress?.manuals)
-    return !r ? (this.progress?.manuals?.powerDrill ? 'The bench: everything it knows is made · ' : 'The bench: drill and turret made; a wreck may hold a manual for more · ') : `U: craft a ${r.title} (${Object.entries(r.needs).map(([k, n]) => `${n} m³ ${k}`).join(', ')}) · `
+    return !r ? (this.progress?.manuals?.powerDrill ? 'The bench: everything it knows is made · ' : 'The bench: drill, turret and scanner made; a wreck may hold a manual for more · ') : `U: craft ${named(r)} (${Object.entries(r.needs).map(([k, n]) => `${n} m³ ${k}`).join(', ')}) · `
   }
 
   private forgeOf(id: string): ForgeState | null {
@@ -1459,11 +1515,11 @@ export class VoxelViewport {
     this.opts.onShipIntent?.({ kind: 'craft', id, item: r.id })
     if (r.id === 'powerDrill') {
       this.brushRadius = Math.max(this.brushRadius, 3)
-      this.flashHint(`Following the manual's diagrams, you fit a motor to your drill: a ${r.title}. It ${r.line}`)
+      this.flashHint(`Following the manual's diagrams, you fit a motor to your drill: ${named(r)}. It ${r.line}`)
     } else if (r.id === 'drill') {
       this.brushRadius = Math.max(this.brushRadius, 2)
-      this.flashHint(`You file and fit the parts at the bench: a ${r.title}. It ${r.line}; the wheel opens its bite to ${this.dig().maxBrush} m`)
-    } else this.flashHint(`You bolt the parts together at the bench: a ${r.title}. It ${r.line}`)
+      this.flashHint(`You file and fit the parts at the bench: ${named(r)}. It ${r.line}; the wheel opens its bite to ${this.dig().maxBrush} m`)
+    } else this.flashHint(`You bolt the parts together at the bench: ${named(r)}. It ${r.line}`)
     this.updateHint()
   }
 

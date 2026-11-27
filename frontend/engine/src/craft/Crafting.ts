@@ -7,7 +7,7 @@
 export interface Recipe {
   id: string
   title: string
-  needs: { ore?: number; rock?: number; dust?: number } // m³ from the pack
+  needs: { ore?: number; rock?: number; dust?: number; iron?: number } // m³ from the pack
   line: string // what it does, for the HUD
   manual?: string // V18: the manual that teaches it, salvaged from a wreck
   builtOn?: string // V18: a tool it needs first
@@ -19,6 +19,8 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'turret', title: 'sentry turret', needs: { ore: 2, rock: 1.5 }, line: 'shoots down the surge\'s drones near where you set it; Y on the moon sets it down' },
   // V18: taught by the manual in a wreck's cockpit block
   { id: 'powerDrill', title: 'powered drill', needs: { ore: 2.5, rock: 1 }, line: 'tears through rock in a 6 m bite, faster than any hand', manual: 'powerDrill', builtOn: 'drill' },
+  // V21: the first thing made from the forge's iron
+  { id: 'scanner', title: 'ore scanner', needs: { iron: 1, ore: 0.5 }, line: 'K sends a pulse that marks ore within 36 m through the rock' },
 ]
 
 // The recipe the bench offers next: the first not made yet, or null
@@ -31,6 +33,12 @@ export interface Carried {
   dust?: number
   rock?: number
   ore?: number
+  iron?: number
+}
+
+// "a hand drill", "an ore scanner"
+export function named(r: Recipe): string {
+  return `${/^[aeiou]/.test(r.title) ? 'an' : 'a'} ${r.title}`
 }
 
 // Why a recipe cannot be made from a pack yet, or '' when it can
@@ -38,7 +46,7 @@ export function missing(r: Recipe, pack: Carried | null, tools: Readonly<Record<
   if (tools?.[r.id]) return `you already have a ${r.title}`
   const short = (Object.entries(r.needs) as [keyof Carried, number][]).filter(([k, n]) => (pack?.[k] ?? 0) < n)
   if (!short.length) return ''
-  return `a ${r.title} takes ${Object.entries(r.needs).map(([k, n]) => `${n} m³ of ${k}`).join(' and ')} from your pack`
+  return `${named(r)} takes ${Object.entries(r.needs).map(([k, n]) => `${n} m³ of ${k}`).join(' and ')} from your pack`
 }
 
 // The pack after making a recipe

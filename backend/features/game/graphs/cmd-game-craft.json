@@ -7,13 +7,13 @@
   "spec": {
     "command": "game.craft",
     "title": "Craft at a bench",
-    "description": "Crafts a tool at the field bench of a cabin (V14); the target is the cabin's id. Its recipes are drill (a hand drill: 2 m³ of ore and 1 m³ of rock from the sender's pack), which digs wider and faster than bare hands, and turret (V17, a sentry turret: 2 m³ of ore and 1.5 m³ of rock), set down on the moon with game.placeTurret, and powerDrill (V18, a powered drill: 2.5 m³ of ore and 1 m³ of rock, for a sender with a drill and the manual salvaged from a wreck), which digs wider and faster still; game.player then gives tools: {drill: true, turret: true, powerDrill: true}. Refused for a ship that is not a cabin, a cabin whose bench is not placed, an unknown item, a tool the sender already has, or a pack without the materials.",
+    "description": "Crafts a tool at the field bench of a cabin (V14); the target is the cabin's id. Its recipes are drill (a hand drill: 2 m³ of ore and 1 m³ of rock from the sender's pack), which digs wider and faster than bare hands, and turret (V17, a sentry turret: 2 m³ of ore and 1.5 m³ of rock), set down on the moon with game.placeTurret, and powerDrill (V18, a powered drill: 2.5 m³ of ore and 1 m³ of rock, for a sender with a drill and the manual salvaged from a wreck), which digs wider and faster still, and scanner (V21, an ore scanner: 1 m³ of iron from the cabin's forge and 0.5 m³ of ore), which finds ore pockets through the rock; game.player then gives tools: {drill: true, turret: true, powerDrill: true, scanner: true}. Refused for a ship that is not a cabin, a cabin whose bench is not placed, an unknown item, a tool the sender already has, or a pack without the materials.",
     "args": {
       "type": "object",
       "properties": {
         "item": {
           "type": "string",
-          "description": "What to craft: drill, turret or powerDrill"
+          "description": "What to craft: drill, turret, powerDrill or scanner"
         }
       },
       "required": [
@@ -125,7 +125,7 @@
         "y": 150
       },
       "config": {
-        "expr": "let need = item == \"turret\" ? {ore: 2, rock: 1.5} : item == \"powerDrill\" ? {ore: 2.5, rock: 1} : {ore: 2, rock: 1}; !found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a field bench\" : !(74 in ship.placed) ? \"the cabin's field bench is not placed yet\" : !(item in [\"drill\", \"turret\", \"powerDrill\"]) ? \"the bench knows two recipes: drill and turret, and a third from a manual\" : item == \"powerDrill\" \u0026\u0026 !(player?.manuals?.powerDrill ?? false) ? \"the bench needs the powered drill's manual: salvage it from a wreck\" : item == \"powerDrill\" \u0026\u0026 !(player?.tools?.drill ?? false) ? \"a powered drill is built on a hand drill: craft that first\" : (player?.tools?.[item] ?? false) ? \"you already have a \" + item : (pack?.ore ?? 0) \u003c need.ore || (pack?.rock ?? 0) \u003c need.rock ? \"a \" + item + \" takes \" + string(need.ore) + \" m³ of ore and \" + string(need.rock) + \" m³ of rock from your pack\" : \"\"",
+        "expr": "let need = item == \"turret\" ? {ore: 2, rock: 1.5, iron: 0} : item == \"powerDrill\" ? {ore: 2.5, rock: 1, iron: 0} : item == \"scanner\" ? {ore: 0.5, rock: 0, iron: 1} : {ore: 2, rock: 1, iron: 0}; !found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a field bench\" : !(74 in ship.placed) ? \"the cabin's field bench is not placed yet\" : !(item in [\"drill\", \"turret\", \"powerDrill\", \"scanner\"]) ? \"the bench knows two recipes: drill and turret, a third from a manual and a scanner from iron\" : item == \"powerDrill\" && !(player?.manuals?.powerDrill ?? false) ? \"the bench needs the powered drill's manual: salvage it from a wreck\" : item == \"powerDrill\" && !(player?.tools?.drill ?? false) ? \"a powered drill is built on a hand drill: craft that first\" : (player?.tools?.[item] ?? false) ? \"you already have a \" + item : (pack?.ore ?? 0) < need.ore || (pack?.rock ?? 0) < need.rock || (pack?.iron ?? 0) < need.iron ? \"a \" + item + \" takes \" + (need.iron > 0 ? string(need.iron) + \" m³ of iron and \" + string(need.ore) + \" m³ of ore\" : string(need.ore) + \" m³ of ore and \" + string(need.rock) + \" m³ of rock\") + \" from your pack\" : \"\"",
         "type": "string"
       }
     },
@@ -159,7 +159,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{world: ship.world, item: item, pack: item == \"turret\" ? {ore: -2, rock: -1.5} : item == \"powerDrill\" ? {ore: -2.5, rock: -1} : {ore: -2, rock: -1}}",
+        "expr": "{world: ship.world, item: item, pack: item == \"turret\" ? {ore: -2, rock: -1.5} : item == \"powerDrill\" ? {ore: -2.5, rock: -1} : item == \"scanner\" ? {ore: -0.5, iron: -1} : {ore: -2, rock: -1}}",
         "type": "json"
       }
     },
