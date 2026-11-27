@@ -1,0 +1,105 @@
+{
+  "id": "tasksProject",
+  "owner": "app:tasks",
+  "name": "Project",
+  "description": "A project of the Tasks library app: its tasks, statuses and labels, and who may see it (admins, members and guests, each kept as a grant on the project by the app)",
+  "titleField": "name",
+  "fields": [
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "The project's name",
+      "required": true,
+      "searchable": true
+    },
+    {
+      "id": "description",
+      "name": "Description",
+      "type": "markdown",
+      "description": "What the project is for"
+    },
+    {
+      "id": "key",
+      "name": "Key",
+      "type": "text",
+      "description": "A short prefix for its task numbers, such as WEB (WEB-42)"
+    },
+    {
+      "id": "admins",
+      "name": "Admins",
+      "type": "relation",
+      "description": "People who administer the project: its settings, statuses, labels and people",
+      "relation": {
+        "entity": "user",
+        "many": true
+      }
+    },
+    {
+      "id": "members",
+      "name": "Members",
+      "type": "relation",
+      "description": "People who read and write its tasks, comments and checklists",
+      "relation": {
+        "entity": "user",
+        "many": true
+      }
+    },
+    {
+      "id": "guests",
+      "name": "Guests",
+      "type": "relation",
+      "description": "People who read the project, comment and move its tasks, and see no other project",
+      "relation": {
+        "entity": "user",
+        "many": true
+      }
+    },
+    {
+      "id": "defaultView",
+      "name": "Default view",
+      "type": "enum",
+      "description": "The view the project opens in",
+      "options": [
+        {
+          "id": "board",
+          "name": "Board"
+        },
+        {
+          "id": "list",
+          "name": "List"
+        },
+        {
+          "id": "table",
+          "name": "Table"
+        },
+        {
+          "id": "calendar",
+          "name": "Calendar"
+        }
+      ],
+      "default": "board"
+    },
+    {
+      "id": "connection",
+      "name": "Tracker connection",
+      "type": "connection",
+      "description": "An outside tracker (Trello, Asana\u2026) the project is kept in step with (part 30h)",
+      "contract": "tasks.tracker@1"
+    },
+    {
+      "id": "archived",
+      "name": "Archived",
+      "type": "bool",
+      "description": "Archived projects are hidden from lists"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "byArchived",
+      "fields": [
+        "archived"
+      ]
+    }
+  ]
+}

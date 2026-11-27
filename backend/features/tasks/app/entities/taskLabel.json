@@ -1,0 +1,40 @@
+{
+  "id": "taskLabel",
+  "owner": "app:tasks",
+  "name": "Label",
+  "description": "A label of a project, put on its tasks",
+  "titleField": "name",
+  "fields": [
+    {
+      "id": "project",
+      "name": "Project",
+      "type": "relation",
+      "description": "The project it belongs to",
+      "relation": {
+        "entity": "tasksProject"
+      },
+      "required": true
+    },
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "The label",
+      "required": true
+    },
+    {
+      "id": "color",
+      "name": "Colour",
+      "type": "text",
+      "description": "A theme palette name or a CSS colour"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "byProject",
+      "fields": [
+        "project"
+      ]
+    }
+  ]
+}

@@ -374,6 +374,12 @@ func (im *importer) entities() error {
 		def := e.Entity
 		if slices.ContainsFunc(def.Fields, func(f records.Field) bool { return f.Relation != nil && !here(f.Relation.Entity) }) {
 			def.Fields = slices.DeleteFunc(slices.Clone(def.Fields), func(f records.Field) bool { return f.Relation != nil || records.IsComputed(f) })
+			// and the positions ordering within a field left out (forge 30c:
+			// a checklist item's rank scoped by its task)
+			def.Fields = slices.DeleteFunc(def.Fields, func(f records.Field) bool {
+				_, _, ok := def.FieldByID(f.Scope)
+				return f.Scope != "" && !ok
+			})
 			def.Indexes, def.Access = nil, records.Access{}
 			later = append(later, e)
 		}
