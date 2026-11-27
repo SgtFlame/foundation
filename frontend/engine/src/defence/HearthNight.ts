@@ -19,12 +19,14 @@ export type NightEvent =
   | { kind: 'clawed'; damage: number } // the watcher hurt
   | { kind: 'dawn' }
   | { kind: 'taken' } // the watcher fell and the family was dragged under
+  | { kind: 'settled' } // S25: a warded hearthstone stirred and settled: nothing comes through
 
 export interface NightOptions {
   seed?: number
   length?: number // seconds to dawn
   raiders?: number // how many come through
   cell?: number // the house's cell size in metres
+  warded?: boolean // S25: a hearth ward on the stone: it stirs once and nothing comes through
 }
 
 export const WATCHER_HP = 45
@@ -58,6 +60,7 @@ export class HearthNight {
   readonly length: number
   readonly watcher: Npc | null
   readonly barrel: boolean
+  readonly warded: boolean
   readonly stone: { x: number; z: number }
   watcherHp: number
   time = 0
@@ -74,7 +77,8 @@ export class HearthNight {
   constructor(house: AreaDef, opts: NightOptions = {}) {
     this.house = house.id
     this.length = opts.length ?? 180
-    this.raiders = opts.raiders ?? 2
+    this.warded = !!opts.warded
+    this.raiders = this.warded ? 0 : (opts.raiders ?? 2)
     this.rand = mulberry32(opts.seed ?? 1)
     this.watcher = Object.values(house.npcs ?? {}).find((n) => n.kind === 'watcher') ?? null
     this.watcherHp = this.watcher ? WATCHER_HP : 0
@@ -105,7 +109,8 @@ export class HearthNight {
     while (this.schedule.length && this.schedule[0].at <= this.time) {
       const s = this.schedule.shift()!
       if (s.kind === 'stone') {
-        if (this.watcherHp > 0) out.push({ kind: 'whistle', blasts: 1 })
+        if (this.warded) out.push({ kind: 'settled' })
+        else if (this.watcherHp > 0) out.push({ kind: 'whistle', blasts: 1 })
       } else {
         this.came++
         const foe = { id: `raider-${this.came}`, kind: 'hollowed', x: this.stone.x + (this.rand() - 0.5) * 0.8, z: this.stone.z + (this.rand() - 0.5) * 0.8 }

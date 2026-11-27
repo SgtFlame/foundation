@@ -518,6 +518,16 @@ Cargo weighs in flight: the barge's lift (V25) as physics, not only a loading ru
 - While piloting, the ship's line says *too heavy to climb here* when the pull is more than its thrusters give.
 - `Ship.test.ts` checks the weights and each ship's climb.
 
+## Built in S25 (forge 375)
+
+Wenlan's hearth ward, and what a warded hearth does on a dark night.
+
+- Step `farmward`; the fold spends a sage and the river stones and gives `items.farmward`.
+- `story/HearthWard.ts`: `nextHearthWard(done)` (Hawk's Rest's, then Wenlan's) and `wardSpots(ward)` (`culvert-stones-3`, `ditch-sage-2` for the second), so the culvert and the bank give a third handful; `hearthWarded(done, house)` (Hawk's Rest, a house with nobody in it, once `hearthward`; a house with Wenlan or a watcher once `farmward`).
+- In Wenlan's kitchen (an interior with the farmer in it), standing on the hearthstone with both lays the ward, drawn as at Hawk's Rest.
+- `HearthNight` takes `warded`: the stone stirs once (event `settled`) and nothing comes through, so the house holds until dawn. `startHearthNight` sets it from `hearthWarded`.
+- Tests: `story_test` (`farmward`), `HearthWard.test.ts`, `HearthNight.test.ts` (a warded night).
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

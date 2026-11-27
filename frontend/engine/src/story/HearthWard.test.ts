@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { bankSageReady, bankSageSpot, hearthStonesReady, hearthWardMissing, hearthWardReady } from './HearthWard.ts'
+import { bankSageReady, bankSageSpot, hearthStonesReady, hearthWarded, hearthWardMissing, hearthWardReady, nextHearthWard, wardSpots } from './HearthWard.ts'
 
 test('the hearth ward wants the lore, five stones and a sage (S24)', () => {
   assert.equal(hearthStonesReady({ ward: true }, {}), false)
   assert.equal(hearthStonesReady({ tried: true }, {}), true)
   assert.equal(hearthStonesReady({ tried: true }, { riverstones: 1 }), false)
-  assert.equal(hearthStonesReady({ tried: true, hearthward: true }, {}), false)
+  assert.equal(hearthStonesReady({ tried: true, hearthward: true, farmward: true }, {}), false)
   assert.equal(bankSageReady({ tried: true }, {}, {}), true)
   assert.equal(bankSageReady({ tried: true }, { sage: 1 }, {}), false)
   assert.equal(bankSageReady({ tried: true }, {}, { 'ditch-sage': true }), false)
@@ -16,4 +16,24 @@ test('the hearth ward wants the lore, five stones and a sage (S24)', () => {
   assert.match(hearthWardMissing({ riverstones: 1 }), /sage/)
   assert.equal(hearthWardMissing({ riverstones: 1, sage: 1 }), '')
   assert.deepEqual(bankSageSpot({ x: 10, z: 4 }), { x: 12.2, z: 4.6 })
+})
+
+test('then Wenlan\'s hearth, from a third handful of stones and sage; warded hearths (S25)', () => {
+  assert.equal(nextHearthWard({ ward: true }), null)
+  assert.equal(nextHearthWard({ tried: true }), 'hearthward')
+  assert.equal(nextHearthWard({ tried: true, hearthward: true }), 'farmward')
+  assert.equal(nextHearthWard({ tried: true, hearthward: true, farmward: true }), null)
+  const done = { tried: true, hearthward: true }
+  assert.equal(hearthStonesReady(done, {}), true)
+  assert.equal(bankSageReady(done, {}, { 'ditch-sage': true }), true)
+  assert.equal(bankSageReady(done, {}, { 'ditch-sage-2': true }), false)
+  assert.notEqual(wardSpots('farmward').stones, wardSpots('hearthward').stones)
+  assert.equal(hearthWardReady(done, { riverstones: 1, sage: 1 }, 'farmward'), true)
+  assert.equal(hearthWardReady(done, { riverstones: 1, sage: 1 }, 'hearthward'), false)
+  const hawk = { npcs: {} }
+  const kitchen = { npcs: { w: { dialogue: 'farmer' }, h: { kind: 'watcher' } } }
+  assert.equal(hearthWarded({ hearthward: true }, hawk), true)
+  assert.equal(hearthWarded({ hearthward: true }, kitchen), false)
+  assert.equal(hearthWarded({ farmward: true }, kitchen), true)
+  assert.equal(hearthWarded({}, hawk), false)
 })

@@ -20,7 +20,7 @@ import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../sto
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
-import { bankSageReady, bankSageSpot, HEARTH_REACH, HEARTH_WARD_LINE, hearthStonesReady, hearthWardMissing, hearthWardReady, SAGE_LINE, SAGE_REACH } from '../story/HearthWard.ts'
+import { bankSageReady, bankSageSpot, FARM_WARD_LINE, FARM_WARDED_NIGHT, HEARTH_REACH, HEARTH_WARD_LINE, hearthStonesReady, hearthWarded, hearthWardMissing, hearthWardReady, nextHearthWard, SAGE_LINE, SAGE_REACH, wardSpots } from '../story/HearthWard.ts'
 import { TRIED_DOOR_LINE, TRIED_LINE, TRIED_LOST, TRIED_NIGHT, triedReady } from '../story/Tried.ts'
 import { riverStonesReady, STONES_LINE, STONES_REACH, thresholdSpot, WARD_LINE, WARD_REACH, wardedNight, wardMissing, wardReady } from '../story/Ward.ts'
 import { TINCTURE, TINCTURE_ALSO, tinctureReady, TRUE_DREAM, TRUE_DREAM_LINE } from '../story/Tincture.ts'
@@ -1476,7 +1476,9 @@ export class AreaViewport {
   // hearth and, by day, a hearth-watch), while playing; length in seconds
   startHearthNight(house: AreaDef, opts: { length?: number; seed?: number; raiders?: number; cell?: number } = {}): boolean {
     if (!this.playing) return false
-    this.hearth = new HearthNight(house, { seed: opts.seed ?? hash(house.id + house.version), length: opts.length, raiders: opts.raiders, cell: opts.cell ?? 2 })
+    // S25: a warded hearth lets nothing through
+    const warded = !!this.story && hearthWarded(this.story.done, house)
+    this.hearth = new HearthNight(house, { seed: opts.seed ?? hash(house.id + house.version), length: opts.length, raiders: opts.raiders, cell: opts.cell ?? 2, warded })
     this.hearthSignals = []
     this.nightHud.show(true)
     this.nightHud.say(
@@ -1527,6 +1529,10 @@ export class AreaViewport {
             else this.startCombat()
             this.hud.say('The hearthstone heaves. Something comes up out of the dark.')
           }
+          break
+        case 'settled':
+          this.nightHud.say(FARM_WARDED_NIGHT)
+          this.hud.say(FARM_WARDED_NIGHT)
           break
         case 'taken':
           this.nightHud.say(`The whistle stops. ${h.watcher ? `${h.watcher.name} is gone, and` : 'Nobody kept the watch, and'} the family with them, dragged under the stone.`)
@@ -1971,7 +1977,7 @@ export class AreaViewport {
       const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
       if (d && Math.hypot(p.x - d.x, p.z - d.z) < STONES_REACH) {
         st.items.riverstones = 1
-        this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: 'riverstones', spot: again ? 'culvert-stones-2' : 'culvert-stones' })
+        this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: 'riverstones', spot: again ? wardSpots(nextHearthWard(st.done)!).stones : 'culvert-stones' })
         this.drawHerbs()
         this.say(STONES_LINE)
       }
@@ -1981,9 +1987,10 @@ export class AreaViewport {
       const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
       const at = d ? bankSageSpot(d) : null
       if (at && Math.hypot(p.x - at.x, p.z - at.z) < SAGE_REACH) {
+        const spot = wardSpots(nextHearthWard(st.done)!).sage
         st.items.sage = (st.items.sage ?? 0) + 1
-        st.picked['ditch-sage'] = true
-        this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: 'sage', spot: 'ditch-sage' })
+        st.picked[spot] = true
+        this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: 'sage', spot })
         this.drawHerbs()
         this.say(SAGE_LINE)
       }
@@ -2012,6 +2019,7 @@ export class AreaViewport {
     this.stepStones(p)
     this.stepCache(p)
     this.stepBundles(p)
+    this.stepFarmWard(p)
     this.stepSenses(p)
     this.savePlace()
   }
@@ -2037,6 +2045,8 @@ export class AreaViewport {
   // found, and her moon calendar on the sill
   private drawBundles(): void {
     const st = this.story
+    // S25: Wenlan's hearth ward, drawn in his kitchen
+    if (st?.done.farmward && this.inKitchen()) this.drawHearthWard()
     if (!st || !this.blessed()) return
     const pieces = Object.values(this.area.pieces)
     const sill = sillSpot(pieces, this.set.cell)
@@ -2064,7 +2074,26 @@ export class AreaViewport {
       }
     }
     // S24: the hearth ward: sage round the hearthstone and a stone at each corner and the heart
-    const hs = st.done.hearthward ? hearthOf(this.area, this.set.cell)?.stone : null
+    if (st.done.hearthward) this.drawHearthWard()
+    if (!st.done.cache) return
+    const string = new THREE.MeshBasicNodeMaterial({ color: 0x6b5236 })
+    for (const b of bundleSpots(pieces, this.set.cell)) {
+      if (st.picked[b.spot]) continue
+      const g = new THREE.Group()
+      const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.4, 4), string)
+      cord.position.y = 2.2
+      const bunch = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.5, 7), new THREE.MeshStandardNodeMaterial({ color: b.herb.color, roughness: 1 }))
+      bunch.position.y = 1.75
+      g.add(cord, bunch)
+      g.position.set(b.x, 0, b.z)
+      g.userData.spot = b.spot
+      this.herbs.add(g)
+    }
+  }
+
+  // S24: the hearth ward on this house's hearthstone: sage round it, a stone at each corner and the heart
+  private drawHearthWard(): void {
+    const hs = hearthOf(this.area, this.set.cell)?.stone
     if (hs) {
       const sageMat = new THREE.MeshStandardNodeMaterial({ color: 0x8fa38a, roughness: 1 })
       const pale = new THREE.MeshStandardNodeMaterial({ color: 0xe6e1d3, roughness: 0.6 })
@@ -2080,20 +2109,31 @@ export class AreaViewport {
         this.herbs.add(m)
       }
     }
-    if (!st.done.cache) return
-    const string = new THREE.MeshBasicNodeMaterial({ color: 0x6b5236 })
-    for (const b of bundleSpots(pieces, this.set.cell)) {
-      if (st.picked[b.spot]) continue
-      const g = new THREE.Group()
-      const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.4, 4), string)
-      cord.position.y = 2.2
-      const bunch = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.5, 7), new THREE.MeshStandardNodeMaterial({ color: b.herb.color, roughness: 1 }))
-      bunch.position.y = 1.75
-      g.add(cord, bunch)
-      g.position.set(b.x, 0, b.z)
-      g.userData.spot = b.spot
-      this.herbs.add(g)
+  }
+
+  // S25: Wenlan's kitchen, the house with the farmer in it
+  private inKitchen(): boolean {
+    return !!this.set.interior && Object.values(this.area.npcs ?? {}).some((n) => n.dialogue === 'farmer')
+  }
+
+  // S25: standing on the farmhouse hearthstone with stones and a sage lays Wenlan's hearth ward
+  private atFarmStone = false
+  private stepFarmWard(p: { x: number; z: number }): void {
+    const st = this.story!
+    if (nextHearthWard(st.done) !== 'farmward' || !this.inKitchen()) return
+    const hs = hearthOf(this.area, this.set.cell)?.stone
+    const at = !!hs && Math.hypot(p.x - hs.x, p.z - hs.z) < HEARTH_REACH
+    if (at && !this.atFarmStone) {
+      if (hearthWardReady(st.done, st.items, 'farmward')) {
+        st.items.sage--
+        st.items.riverstones = 0
+        st.items.farmward = 1
+        this.reach('farmward')
+        this.drawHerbs()
+        this.say(FARM_WARD_LINE)
+      } else this.say(hearthWardMissing(st.items))
     }
+    this.atFarmStone = at
   }
 
   // S20: walking up to a bundle takes it into the herbal; the sill tells the moons
@@ -2120,7 +2160,7 @@ export class AreaViewport {
     }
     this.atThreshold = atTh
     // S24: the hearthstone: lay the hearth ward when the stones and a sage are in hand
-    const hs = st.done.tried && !st.done.hearthward ? hearthOf(this.area, this.set.cell)?.stone : null
+    const hs = nextHearthWard(st.done) === 'hearthward' ? hearthOf(this.area, this.set.cell)?.stone : null
     const atHs = !!hs && Math.hypot(p.x - hs.x, p.z - hs.z) < HEARTH_REACH
     if (atHs && !this.atHearthStone) {
       if (hearthWardReady(st.done, st.items)) {
