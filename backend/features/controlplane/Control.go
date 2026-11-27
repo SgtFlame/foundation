@@ -118,20 +118,25 @@ type Control struct {
 
 // Ensure makes the buckets and the stream if they do not exist.
 func (c *Control) Ensure(ctx context.Context) error {
-	for _, kv := range []jetstream.KeyValueConfig{
-		{Bucket: DesiredBucket, Description: "Each daemon's resolved desired state", History: 1, Storage: jetstream.FileStorage},
-		{Bucket: FactsBucket, Description: "What each daemon reports about itself", History: 1, Storage: jetstream.FileStorage},
-		{Bucket: HealthBucket, Description: "Each daemon's heartbeat", History: 1, TTL: HealthTTL, Storage: jetstream.MemoryStorage},
-	} {
-		if _, err := c.JS.CreateOrUpdateKeyValue(ctx, natsd.KV(kv)); err != nil {
-			return log.Wrapf(err, "cannot make the bucket %s", kv.Bucket)
-		}
+	if err := c.ensureKV(ctx, natsd.KV(jetstream.KeyValueConfig{Bucket: DesiredBucket, Description: "Each daemon's resolved desired state", History: 1, Storage: jetstream.FileStorage})); err != nil {
+		return err
+	}
+	if err := c.ensureKV(ctx, natsd.KV(jetstream.KeyValueConfig{Bucket: FactsBucket, Description: "What each daemon reports about itself", History: 1, Storage: jetstream.FileStorage})); err != nil {
+		return err
+	}
+	if err := c.ensureKV(ctx, natsd.KV(jetstream.KeyValueConfig{Bucket: HealthBucket, Description: "Each daemon's heartbeat", History: 1, TTL: HealthTTL, Storage: jetstream.MemoryStorage})); err != nil {
+		return err
 	}
 	_, err := c.JS.CreateOrUpdateStream(ctx, natsd.Stream(jetstream.StreamConfig{
 		Name: StreamName, Subjects: []string{"ctl.evt.>"}, Storage: jetstream.FileStorage,
 		MaxAge: 30 * 24 * time.Hour, Duplicates: 24 * time.Hour,
 	}))
 	return log.Wrap(err)
+}
+
+func (c *Control) ensureKV(ctx context.Context, cfg jetstream.KeyValueConfig) error {
+	_, err := c.JS.CreateOrUpdateKeyValue(ctx, cfg)
+	return log.Wrapf(err, "cannot make the bucket %s", cfg.Bucket)
 }
 
 func (c *Control) kv(ctx context.Context, name string) (jetstream.KeyValue, error) {

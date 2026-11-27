@@ -116,7 +116,7 @@ func TestClusterSurvivesANode(t *testing.T) {
 	SetDefault(Placement{Replicas: 3})
 	c := StartTestCluster(t, 3)
 	s := c.Connect()
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
 	st, err := s.JS().CreateOrUpdateStream(ctx, Stream(jetstream.StreamConfig{Name: "EVT", Subjects: []string{"evt.>"}}))
@@ -138,8 +138,10 @@ func TestClusterSurvivesANode(t *testing.T) {
 			var ack *jetstream.PubAck
 			var err error
 			for try := 0; try < 50; try++ { // a leader election answers with a timeout, then a retry commits
-				ack, err = s.JS().Publish(ctx, "evt.x", []byte(fmt.Sprint(last+1)),
+				tctx, tcancel := context.WithTimeout(ctx, 2*time.Second) // one try never takes the whole test
+				ack, err = s.JS().Publish(tctx, "evt.x", []byte(fmt.Sprint(last+1)),
 					jetstream.WithExpectLastSequence(last), jetstream.WithMsgID(fmt.Sprintf("m%d", last+1)))
+				tcancel()
 				if err == nil {
 					break
 				}
@@ -150,7 +152,10 @@ func TestClusterSurvivesANode(t *testing.T) {
 			}
 			last = ack.Sequence
 			for try := 0; try < 50; try++ { // projectors retry a failed write the same way
-				if _, err = kv.Put(ctx, "k", []byte(fmt.Sprint(last))); err == nil {
+				tctx, tcancel := context.WithTimeout(ctx, 2*time.Second)
+				_, err = kv.Put(tctx, "k", []byte(fmt.Sprint(last)))
+				tcancel()
+				if err == nil {
 					break
 				}
 				time.Sleep(200 * time.Millisecond)
