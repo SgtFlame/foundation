@@ -7,6 +7,7 @@ package proxy
 import (
 	"github.com/SgtFlame/foundation/backend/features/services"
 	"github.com/SgtFlame/foundation/backend/features/ui/services/uiservice"
+	"github.com/SgtFlame/foundation/backend/features/ui/services/uiservice/server"
 )
 
 // Service is the ui service's name on the wire.
@@ -16,7 +17,7 @@ const Service = "ui"
 type Proxy struct {
 	C *services.Client
 	// Local, when set, runs the operations that cannot be sent (local
-	// ones) in this process, and streamed ones without a stream.
+	// ones) in this process, and streamed ones when it has no client.
 	Local uiservice.Service
 }
 
@@ -24,6 +25,15 @@ var _ uiservice.Service = (*Proxy)(nil)
 
 // New is a proxy sending its calls with c.
 func New(c *services.Client) *Proxy { return &Proxy{C: c} }
+
+// Use is the service as loc gives it (forge 21f-1): real when the
+// process runs it, served when it serves, else (or in loopback) this proxy.
+func Use(loc *services.Locator, real func() uiservice.Service) uiservice.Service {
+	return services.Use(loc, Service, real, func(c *services.Client, local uiservice.Service) uiservice.Service {
+		p := &Proxy{C: c, Local: local}
+		return p
+	}, server.Serve)
+}
 
 func (p *Proxy) Components(args uiservice.ComponentsArgs) uiservice.ComponentsResponse {
 	return services.Call[uiservice.ComponentsResponse](p.C, Service, "Components", args)

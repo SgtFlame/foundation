@@ -55,6 +55,10 @@ The tenant database's runtime tables are reached only through their data service
 - `connectors` `TestAdapterFencedByNATS`: an adapter under its user serves calls through `svc.connectors`, and NATS refuses it a tenant's event subject, JetStream's API, `svc.identity.*` and `svc.files.*` (its types declare none).
 - Not yet: reading a record through `svc.records` as the call's principal from an adapter (`adapter.Context.Services`, with 21f-1's manifests); the Control Plane issuing adapter users (21h); the Mail test server's walk with its adapter in its own process (21g-1); whether a third party may start a compiled adapter (iteration question 10).
 
+## Built in forge 21f-1
+
+Every data service's `Manifest.go` declares the storage it owns (`Owns`, the inventory's text) and, for the live core, the files service and the connectors service, the JetStream subjects (`Subjects`) its process needs; `services.ProcessPermissions` turns a service set into NATS permissions from them (Services.md › *Built in forge 21f-1*).
+
 ## The inventory
 
 | Storage | Owner (data service) | Packages allowed a handle | Removed by |

@@ -6,6 +6,7 @@ package proxy
 
 import (
 	"github.com/SgtFlame/foundation/backend/features/records/services/filesservice"
+	"github.com/SgtFlame/foundation/backend/features/records/services/filesservice/server"
 	"github.com/SgtFlame/foundation/backend/features/services"
 )
 
@@ -16,7 +17,7 @@ const Service = "files"
 type Proxy struct {
 	C *services.Client
 	// Local, when set, runs the operations that cannot be sent (local
-	// ones) in this process, and streamed ones without a stream.
+	// ones) in this process, and streamed ones when it has no client.
 	Local filesservice.Service
 }
 
@@ -24,6 +25,15 @@ var _ filesservice.Service = (*Proxy)(nil)
 
 // New is a proxy sending its calls with c.
 func New(c *services.Client) *Proxy { return &Proxy{C: c} }
+
+// Use is the service as loc gives it (forge 21f-1): real when the
+// process runs it, served when it serves, else (or in loopback) this proxy.
+func Use(loc *services.Locator, real func() filesservice.Service) filesservice.Service {
+	return services.Use(loc, Service, real, func(c *services.Client, local filesservice.Service) filesservice.Service {
+		p := &Proxy{C: c, Local: local}
+		return p
+	}, server.Serve)
+}
 
 func (p *Proxy) PutPart(args filesservice.PutPartArgs) filesservice.PutPartResponse {
 	return services.Call[filesservice.PutPartResponse](p.C, Service, "PutPart", args, services.Idempotent())
@@ -38,7 +48,7 @@ func (p *Proxy) Uploader(args filesservice.UploaderArgs) filesservice.UploaderRe
 }
 
 func (p *Proxy) Get(args filesservice.GetArgs) *filesservice.GetRequest {
-	if p.Local != nil {
+	if p.C == nil && p.Local != nil {
 		return p.Local.Get(args)
 	}
 	return services.Stream[*filesservice.GetRequest](p.C, Service, "Get", args)

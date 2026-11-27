@@ -7,6 +7,7 @@ package proxy
 import (
 	config "github.com/SgtFlame/foundation/backend/features/config"
 	"github.com/SgtFlame/foundation/backend/features/config/services/configservice"
+	"github.com/SgtFlame/foundation/backend/features/config/services/configservice/server"
 	"github.com/SgtFlame/foundation/backend/features/services"
 )
 
@@ -17,7 +18,7 @@ const Service = "config"
 type Proxy struct {
 	C *services.Client
 	// Local, when set, runs the operations that cannot be sent (local
-	// ones) in this process, and streamed ones without a stream.
+	// ones) in this process, and streamed ones when it has no client.
 	Local configservice.Service
 	// config.Reader cannot be sent as it is: the caller sets it.
 	config.Reader
@@ -27,6 +28,18 @@ var _ configservice.Service = (*Proxy)(nil)
 
 // New is a proxy sending its calls with c.
 func New(c *services.Client) *Proxy { return &Proxy{C: c} }
+
+// Use is the service as loc gives it (forge 21f-1): real when the
+// process runs it, served when it serves, else (or in loopback) this proxy.
+func Use(loc *services.Locator, real func() configservice.Service) configservice.Service {
+	return services.Use(loc, Service, real, func(c *services.Client, local configservice.Service) configservice.Service {
+		p := &Proxy{C: c, Local: local}
+		if local != nil {
+			p.Reader = local
+		}
+		return p
+	}, server.Serve)
+}
 
 func (p *Proxy) Sections(args configservice.SectionsArgs) configservice.SectionsResponse {
 	if p.Local != nil {
@@ -48,7 +61,7 @@ func (p *Proxy) Reset(args configservice.ResetArgs) configservice.ResetResponse 
 }
 
 func (p *Proxy) Watch(args configservice.WatchArgs) *configservice.WatchRequest {
-	if p.Local != nil {
+	if p.C == nil && p.Local != nil {
 		return p.Local.Watch(args)
 	}
 	return services.Stream[*configservice.WatchRequest](p.C, Service, "Watch", args)

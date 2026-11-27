@@ -11,20 +11,30 @@ func proxyFile(o Options, s Service) ([]byte, error) {
 	b.WriteString(Header)
 	fmt.Fprintf(&b, "// Package proxy is %s.Service over NATS (forge 21a-2): each call goes to\n// a server of the %s service, wherever it runs.\npackage proxy\n\n", s.Pkg, s.Name)
 	b.WriteString("import (\n")
-	fmt.Fprintf(&b, "\t%q\n\t%q\n", o.Services, s.Import)
+	fmt.Fprintf(&b, "\t%q\n\t%q\n\t%q\n", o.Services, s.Import, s.Import+"/server")
 	for _, e := range s.Embedded {
 		fmt.Fprintf(&b, "\t%s %q\n", e.Alias, e.Pkg)
 	}
 	b.WriteString(")\n\n")
 	fmt.Fprintf(&b, "// Service is the %s service's name on the wire.\nconst Service = %q\n\n", s.Name, s.Name)
 	b.WriteString("// Proxy sends each call to a server of the service.\ntype Proxy struct {\n\tC *services.Client\n")
-	fmt.Fprintf(&b, "\t// Local, when set, runs the operations that cannot be sent (local\n\t// ones) in this process, and streamed ones without a stream.\n\tLocal %s.Service\n", s.Pkg)
+	fmt.Fprintf(&b, "\t// Local, when set, runs the operations that cannot be sent (local\n\t// ones) in this process, and streamed ones when it has no client.\n\tLocal %s.Service\n", s.Pkg)
 	for _, e := range s.Embedded {
 		fmt.Fprintf(&b, "\t// %s.%s cannot be sent as it is: the caller sets it.\n\t%s.%s\n", e.Alias, e.Name, e.Alias, e.Name)
 	}
 	b.WriteString("}\n\n")
 	fmt.Fprintf(&b, "var _ %s.Service = (*Proxy)(nil)\n\n", s.Pkg)
 	b.WriteString("// New is a proxy sending its calls with c.\nfunc New(c *services.Client) *Proxy { return &Proxy{C: c} }\n")
+	fmt.Fprintf(&b, "\n// Use is the service as loc gives it (forge 21f-1): real when the\n// process runs it, served when it serves, else (or in loopback) this proxy.\nfunc Use(loc *services.Locator, real func() %s.Service) %s.Service {\n", s.Pkg, s.Pkg)
+	fmt.Fprintf(&b, "\treturn services.Use(loc, Service, real, func(c *services.Client, local %s.Service) %s.Service {\n\t\tp := &Proxy{C: c, Local: local}\n", s.Pkg, s.Pkg)
+	if len(s.Embedded) > 0 {
+		b.WriteString("\t\tif local != nil {\n")
+		for _, e := range s.Embedded {
+			fmt.Fprintf(&b, "\t\t\tp.%s = local\n", e.Name)
+		}
+		b.WriteString("\t\t}\n")
+	}
+	b.WriteString("\t\treturn p\n\t}, server.Serve)\n}\n")
 	for _, op := range s.Ops {
 		res := qualify(s.Pkg, op.Result)
 		fmt.Fprintf(&b, "\nfunc (p *Proxy) %s(args %s.%s)", op.Name, s.Pkg, op.Args)
@@ -37,7 +47,11 @@ func proxyFile(o Options, s Service) ([]byte, error) {
 			if res == "" {
 				ret = ""
 			}
-			fmt.Fprintf(&b, "\tif p.Local != nil {\n\t\t%sp.Local.%s(args)\n", ret, op.Name)
+			cond := "p.Local != nil"
+			if op.Stream {
+				cond = "p.C == nil && p.Local != nil"
+			}
+			fmt.Fprintf(&b, "\tif %s {\n\t\t%sp.Local.%s(args)\n", cond, ret, op.Name)
 			if res == "" {
 				b.WriteString("\t\treturn\n")
 			}
@@ -111,7 +125,12 @@ func catalogFile(o Options, svcs []Service) ([]byte, error) {
 			fmt.Fprintf(&b, "\t\t\t{Name: %q%s},\n", op.Name, extra)
 		}
 		fmt.Fprintf(&b, "\t\t},\n\t\tProxy: func(c *services.Client) any { return %sproxy.New(c) },\n", s.Name)
-		fmt.Fprintf(&b, "\t\tServe: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {\n\t\t\treturn %sserver.Serve(nc, svc.(%s.Service), opts...)\n\t\t},\n\t},\n", s.Name, s.Pkg)
+		fmt.Fprintf(&b, "\t\tServe: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {\n\t\t\treturn %sserver.Serve(nc, svc.(%s.Service), opts...)\n\t\t},\n", s.Name, s.Pkg)
+		if s.Manifest {
+			fmt.Fprintf(&b, "\t\tManifest: services.Named(%s.Manifest, %q),\n\t},\n", s.Pkg, s.Name)
+		} else {
+			fmt.Fprintf(&b, "\t\tManifest: services.Manifest{Name: %q},\n\t},\n", s.Name)
+		}
 	}
 	b.WriteString("}\n")
 	return formatted(o.Catalog+"/catalog.go", b.Bytes())

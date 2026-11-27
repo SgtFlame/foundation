@@ -7,6 +7,7 @@ package proxy
 import (
 	"github.com/SgtFlame/foundation/backend/features/services"
 	"github.com/SgtFlame/foundation/backend/features/usage/services/usageservice"
+	"github.com/SgtFlame/foundation/backend/features/usage/services/usageservice/server"
 )
 
 // Service is the usage service's name on the wire.
@@ -16,7 +17,7 @@ const Service = "usage"
 type Proxy struct {
 	C *services.Client
 	// Local, when set, runs the operations that cannot be sent (local
-	// ones) in this process, and streamed ones without a stream.
+	// ones) in this process, and streamed ones when it has no client.
 	Local usageservice.Service
 }
 
@@ -24,6 +25,15 @@ var _ usageservice.Service = (*Proxy)(nil)
 
 // New is a proxy sending its calls with c.
 func New(c *services.Client) *Proxy { return &Proxy{C: c} }
+
+// Use is the service as loc gives it (forge 21f-1): real when the
+// process runs it, served when it serves, else (or in loopback) this proxy.
+func Use(loc *services.Locator, real func() usageservice.Service) usageservice.Service {
+	return services.Use(loc, Service, real, func(c *services.Client, local usageservice.Service) usageservice.Service {
+		p := &Proxy{C: c, Local: local}
+		return p
+	}, server.Serve)
+}
 
 func (p *Proxy) Summary(args usageservice.SummaryArgs) usageservice.SummaryResponse {
 	return services.Call[usageservice.SummaryResponse](p.C, Service, "Summary", args, services.Idempotent())

@@ -109,6 +109,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return appserver.Serve(nc, svc.(appservice.Service), opts...)
 		},
+		Manifest: services.Named(appservice.Manifest, "app"),
 	},
 	{
 		Name:      "authz",
@@ -131,6 +132,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return authzserver.Serve(nc, svc.(authzservice.Service), opts...)
 		},
+		Manifest: services.Named(authzservice.Manifest, "authz"),
 	},
 	{
 		Name:      "bootstrap",
@@ -143,6 +145,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return bootstrapserver.Serve(nc, svc.(bootstrapservice.Service), opts...)
 		},
+		Manifest: services.Manifest{Name: "bootstrap"},
 	},
 	{
 		Name:      "chat",
@@ -155,6 +158,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return chatserver.Serve(nc, svc.(chatservice.Service), opts...)
 		},
+		Manifest: services.Manifest{Name: "chat"},
 	},
 	{
 		Name:      "chronicle",
@@ -181,6 +185,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return chronicleserver.Serve(nc, svc.(chronicleservice.Service), opts...)
 		},
+		Manifest: services.Named(chronicleservice.Manifest, "chronicle"),
 	},
 	{
 		Name:      "cognition",
@@ -199,6 +204,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return cognitionserver.Serve(nc, svc.(cognitionservice.Service), opts...)
 		},
+		Manifest: services.Named(cognitionservice.Manifest, "cognition"),
 	},
 	{
 		Name:      "collab",
@@ -214,6 +220,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return collabserver.Serve(nc, svc.(collabservice.Service), opts...)
 		},
+		Manifest: services.Manifest{Name: "collab"},
 	},
 	{
 		Name:      "config",
@@ -229,6 +236,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return configserver.Serve(nc, svc.(configservice.Service), opts...)
 		},
+		Manifest: services.Named(configservice.Manifest, "config"),
 	},
 	{
 		Name:      "connectors",
@@ -253,6 +261,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return connectorsserver.Serve(nc, svc.(connectorsservice.Service), opts...)
 		},
+		Manifest: services.Named(connectorsservice.Manifest, "connectors"),
 	},
 	{
 		Name:      "conversation",
@@ -273,6 +282,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return conversationserver.Serve(nc, svc.(conversationservice.Service), opts...)
 		},
+		Manifest: services.Named(conversationservice.Manifest, "conversation"),
 	},
 	{
 		Name:      "embed",
@@ -285,6 +295,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return embedserver.Serve(nc, svc.(embedservice.Service), opts...)
 		},
+		Manifest: services.Manifest{Name: "embed"},
 	},
 	{
 		Name:      "entity",
@@ -298,6 +309,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return entityserver.Serve(nc, svc.(entityservice.Service), opts...)
 		},
+		Manifest: services.Named(entityservice.Manifest, "entity"),
 	},
 	{
 		Name:      "extensions",
@@ -309,6 +321,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return extensionsserver.Serve(nc, svc.(extensionsservice.Service), opts...)
 		},
+		Manifest: services.Manifest{Name: "extensions"},
 	},
 	{
 		Name:      "files",
@@ -324,6 +337,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return filesserver.Serve(nc, svc.(filesservice.Service), opts...)
 		},
+		Manifest: services.Named(filesservice.Manifest, "files"),
 	},
 	{
 		Name:      "identity",
@@ -341,6 +355,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return identityserver.Serve(nc, svc.(identityservice.Service), opts...)
 		},
+		Manifest: services.Named(identityservice.Manifest, "identity"),
 	},
 	{
 		Name:      "index",
@@ -354,6 +369,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return indexserver.Serve(nc, svc.(indexservice.Service), opts...)
 		},
+		Manifest: services.Manifest{Name: "index"},
 	},
 	{
 		Name:      "kb",
@@ -366,6 +382,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return kbserver.Serve(nc, svc.(kbservice.Service), opts...)
 		},
+		Manifest: services.Manifest{Name: "kb"},
 	},
 	{
 		Name:      "live",
@@ -381,6 +398,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return liveserver.Serve(nc, svc.(liveservice.Service), opts...)
 		},
+		Manifest: services.Named(liveservice.Manifest, "live"),
 	},
 	{
 		Name:      "logs",
@@ -402,6 +420,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return logsserver.Serve(nc, svc.(logsservice.Service), opts...)
 		},
+		Manifest: services.Named(logsservice.Manifest, "logs"),
 	},
 	{
 		Name:      "prefab",
@@ -416,6 +435,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return prefabserver.Serve(nc, svc.(prefabservice.Service), opts...)
 		},
+		Manifest: services.Named(prefabservice.Manifest, "prefab"),
 	},
 	{
 		Name:      "record",
@@ -437,6 +457,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return recordserver.Serve(nc, svc.(recordservice.Service), opts...)
 		},
+		Manifest: services.Named(recordservice.Manifest, "record"),
 	},
 	{
 		Name:      "retrieval",
@@ -449,6 +470,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return retrievalserver.Serve(nc, svc.(retrievalservice.Service), opts...)
 		},
+		Manifest: services.Named(retrievalservice.Manifest, "retrieval"),
 	},
 	{
 		Name:      "secrets",
@@ -463,6 +485,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return secretsserver.Serve(nc, svc.(secretsservice.Service), opts...)
 		},
+		Manifest: services.Named(secretsservice.Manifest, "secrets"),
 	},
 	{
 		Name:      "tenant",
@@ -480,6 +503,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return tenantserver.Serve(nc, svc.(tenantservice.Service), opts...)
 		},
+		Manifest: services.Named(tenantservice.Manifest, "tenant"),
 	},
 	{
 		Name:      "ui",
@@ -495,6 +519,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return uiserver.Serve(nc, svc.(uiservice.Service), opts...)
 		},
+		Manifest: services.Manifest{Name: "ui"},
 	},
 	{
 		Name:      "usage",
@@ -510,6 +535,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return usageserver.Serve(nc, svc.(usageservice.Service), opts...)
 		},
+		Manifest: services.Named(usageservice.Manifest, "usage"),
 	},
 	{
 		Name:      "user",
@@ -524,6 +550,7 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return userserver.Serve(nc, svc.(userservice.Service), opts...)
 		},
+		Manifest: services.Named(userservice.Manifest, "user"),
 	},
 	{
 		Name:      "volume",
@@ -539,5 +566,6 @@ var Services = []services.Spec{
 		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
 			return volumeserver.Serve(nc, svc.(volumeservice.Service), opts...)
 		},
+		Manifest: services.Manifest{Name: "volume"},
 	},
 }

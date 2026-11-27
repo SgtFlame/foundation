@@ -21,6 +21,9 @@ type Spec struct {
 	Proxy func(c *Client) any
 	// Serve serves svc, a <s>service.Service, on nc.
 	Serve func(nc *nats.Conn, svc any, opts ...ServerOption) (*Server, error)
+	// Manifest is the service's declaration (forge 21f-1), its Name the
+	// wire name; only Name is set for a service that declares none.
+	Manifest Manifest
 }
 
 // OpSpec is one operation of a Spec.

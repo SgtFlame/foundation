@@ -6,6 +6,7 @@ package proxy
 
 import (
 	"github.com/SgtFlame/foundation/backend/features/logs/services/logsservice"
+	"github.com/SgtFlame/foundation/backend/features/logs/services/logsservice/server"
 	"github.com/SgtFlame/foundation/backend/features/services"
 )
 
@@ -16,7 +17,7 @@ const Service = "logs"
 type Proxy struct {
 	C *services.Client
 	// Local, when set, runs the operations that cannot be sent (local
-	// ones) in this process, and streamed ones without a stream.
+	// ones) in this process, and streamed ones when it has no client.
 	Local logsservice.Service
 }
 
@@ -24,6 +25,15 @@ var _ logsservice.Service = (*Proxy)(nil)
 
 // New is a proxy sending its calls with c.
 func New(c *services.Client) *Proxy { return &Proxy{C: c} }
+
+// Use is the service as loc gives it (forge 21f-1): real when the
+// process runs it, served when it serves, else (or in loopback) this proxy.
+func Use(loc *services.Locator, real func() logsservice.Service) logsservice.Service {
+	return services.Use(loc, Service, real, func(c *services.Client, local logsservice.Service) logsservice.Service {
+		p := &Proxy{C: c, Local: local}
+		return p
+	}, server.Serve)
+}
 
 func (p *Proxy) Status(args logsservice.StatusArgs) logsservice.StatusResponse {
 	return services.Call[logsservice.StatusResponse](p.C, Service, "Status", args)
@@ -50,7 +60,7 @@ func (p *Proxy) Streams(args logsservice.StreamsArgs) logsservice.StreamsRespons
 }
 
 func (p *Proxy) Tail(args logsservice.TailArgs) *logsservice.TailRequest {
-	if p.Local != nil {
+	if p.C == nil && p.Local != nil {
 		return p.Local.Tail(args)
 	}
 	return services.Stream[*logsservice.TailRequest](p.C, Service, "Tail", args)

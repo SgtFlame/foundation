@@ -57,6 +57,7 @@ type Service struct {
 	Dir      string // its directory
 	Ops      []Op
 	Embedded []Embedded
+	Manifest bool // its package declares var Manifest (forge 21f-1)
 }
 
 // Options say where to read and write.
@@ -156,6 +157,9 @@ func readService(o Options, dir, path string) (*Service, error) {
 	}
 	s := &Service{Pkg: f.Name.Name, Import: o.Module + "/" + filepath.ToSlash(rel), Dir: dir}
 	s.Name = strings.TrimSuffix(s.Pkg, "service")
+	if raw, err := os.ReadFile(filepath.Join(dir, "Manifest.go")); err == nil && strings.Contains(string(raw), "var Manifest") {
+		s.Manifest = true
+	}
 	imports := map[string]string{}
 	for _, im := range f.Imports {
 		p := strings.Trim(im.Path.Value, `"`)
