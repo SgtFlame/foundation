@@ -218,5 +218,13 @@
       "effect": "write",
       "description": "Toggles an emoji reaction (the character, such as 👍) on a message as the caller (nexus.reaction.toggle): added, or taken away when they had it."
     }
+  ],
+  "ephemeral": [
+    {
+      "topic": "typing",
+      "title": "Typing",
+      "description": "Who is typing in a channel, keyed by the channel's id: sent by the composer at most every three seconds with {name}, never stored; read by whoever may see the channel",
+      "read": "entity:nexusChannel.read"
+    }
   ]
 }

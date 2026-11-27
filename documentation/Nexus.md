@@ -44,6 +44,8 @@ All are graphs. Each command's plan reads what it needs, then refuses or writes:
 
 The trigger grants the role only when whoever made the membership (`_createdBy`) is the channel's owner or already holds the role there. A membership an outsider forges for themselves therefore gives no access. Entity access rules keep a message's edits to its author, a membership's changes to its person, and a channel's changes to its owner.
 
+The manifest declares one ephemeral topic, `typing`, keyed by a channel id and readable by whoever may see the channel (26d-1's *Publish* and `live.ephemeral`).
+
 The `onMessage` trigger notifies the people a message mentions (`notify.send`, key `nexus:<message>:mention`). In a private channel it notifies only members, and never the author.
 
 ## Tools
