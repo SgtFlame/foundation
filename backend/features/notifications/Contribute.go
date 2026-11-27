@@ -224,5 +224,11 @@ func MarkAllRead(args features.ServiceArgs, d Deps) (int, *features.ServiceRespo
 			n++
 		}
 	}
+	if n > 0 {
+		// the caller's next read (the unread count) sees every mark
+		if err := d.Projections.Settle(args.Context(), args.Principal.TenantID, data.Projector); err != nil {
+			log.Warn(args.Context(), "settling the records after marking notifications read: %v", err)
+		}
+	}
 	return n, nil
 }
