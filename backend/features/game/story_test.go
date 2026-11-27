@@ -109,4 +109,17 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "cache" || p.Items["hedgecraft"] != 1 {
 		t.Fatalf("cache %+v", p)
 	}
+	// S20: her dried bundles are gathered like herbs, then cooked
+	st.ok("game.reachStory", farm, map[string]any{"item": "valerian", "spot": "bundle-valerian", "area": farm, "x": 9, "z": 3})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "bundles", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "bundles" || p.Items["valerian"] != 1 || !p.Picked["bundle-valerian"] {
+		t.Fatalf("bundles %+v", p)
+	}
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "cook", "use": "valerian", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Items["valerian"] != 0 {
+		t.Fatalf("valerian tea %+v", p)
+	}
+	if r := st.refused("game.reachStory", farm, map[string]any{"item": "hemlock", "area": farm, "x": 9, "z": 3}); !strings.Contains(r.Common.Message, "no herb") {
+		t.Fatalf("hemlock: %q", r.Common.Message)
+	}
 }

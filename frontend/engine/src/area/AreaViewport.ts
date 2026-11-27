@@ -20,6 +20,7 @@ import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../sto
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
+import { BUNDLE_HERBS, BUNDLE_REACH, bundleSpots, bundlesReady, HEDGE_DISHES, SILL_REACH, sillLine, sillSpot } from '../story/Bundles.ts'
 import { HEART, nextWaking, ringSpot, STARLORE_LINE, starlorePool, stonePoints, STONES_MEMORY, stonesWake } from '../story/Stones.ts'
 import { clarity, ditchSpot, ReadingScene, wenlanAnswer, type Told } from '../story/Reading.ts'
 import { canSleep, CLOCK_START, clockText, FIRST_NIGHT, isDay, nightOf, showAlmanac, sleep, stepClock, type Clock } from '../story/Clock.ts'
@@ -245,6 +246,7 @@ export class AreaViewport {
   private ringHeart: { x: number; z: number } | null = null
   private ringVisited = false
   private cacheOpen = false // S19: the cache's notes are being read
+  private atSill = false // S20: standing by the moon calendar
   private signature: Point | null = null
   private barnDoor: Point | null = null
   private resumeAt: { area: string; at: Point } | null = null
@@ -1706,7 +1708,7 @@ export class AreaViewport {
       if (closes) this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: 'wound', ...this.stateToSave() })
       this.showStory()
       this.say(`${d.title}. ${d.line}${closes ? ' The ache in your side is gone.' : ''}`)
-    }, st.items.hedgecraft ? [...DISHES, POULTICE] : DISHES)
+    }, st.items.hedgecraft ? [...DISHES, POULTICE, ...HEDGE_DISHES] : DISHES)
   }
 
   // A fight's cadence spends a Hum, once stillness has been learned
@@ -1804,6 +1806,7 @@ export class AreaViewport {
   // S7: the herbs by the trees, in the story's area, from the first morning until gathered
   private drawHerbs(): void {
     this.herbs.clear()
+    this.drawBundles()
     const st = this.story
     if (!st || this.area.id !== st.area || !st.done.morning) return
     for (const h of herbSpots(this.area.pieces, this.set.cell)) {
@@ -1887,7 +1890,7 @@ export class AreaViewport {
       this.herbal = null
       return
     }
-    this.herbal = showHerbal(this.container, st.items)
+    this.herbal = showHerbal(this.container, st.items, st.done.cache ? BUNDLE_HERBS : [])
     if (st.done.forage) this.reach('herbal')
   }
 
@@ -1944,6 +1947,7 @@ export class AreaViewport {
     }
     this.stepStones(p)
     this.stepCache(p)
+    this.stepBundles(p)
     this.stepSenses(p)
     this.savePlace()
   }
@@ -1960,8 +1964,66 @@ export class AreaViewport {
       this.cacheOpen = false
       st.items.hedgecraft = 1
       this.reach('cache')
+      this.drawHerbs()
       this.say(CACHE_LINE)
     })
+  }
+
+  // S20: the hedge-witch's bundles over the shelves, once her notes are
+  // found, and her moon calendar on the sill
+  private drawBundles(): void {
+    const st = this.story
+    if (!st || !this.blessed()) return
+    const pieces = Object.values(this.area.pieces)
+    const sill = sillSpot(pieces, this.set.cell)
+    if (sill) {
+      const pebble = (c: number) => new THREE.MeshStandardNodeMaterial({ color: c, roughness: 0.8 })
+      for (let i = 0; i < 7; i++) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 4), pebble(i % 3 ? 0x9a9a92 : 0xeeeae0))
+        m.scale.y = 0.6
+        m.position.set(sill.x - 0.36 + i * 0.12, 1.05, sill.z - 0.3)
+        this.herbs.add(m)
+      }
+    }
+    if (!st.done.cache) return
+    const string = new THREE.MeshBasicNodeMaterial({ color: 0x6b5236 })
+    for (const b of bundleSpots(pieces, this.set.cell)) {
+      if (st.picked[b.spot]) continue
+      const g = new THREE.Group()
+      const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.4, 4), string)
+      cord.position.y = 2.2
+      const bunch = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.5, 7), new THREE.MeshStandardNodeMaterial({ color: b.herb.color, roughness: 1 }))
+      bunch.position.y = 1.75
+      g.add(cord, bunch)
+      g.position.set(b.x, 0, b.z)
+      g.userData.spot = b.spot
+      this.herbs.add(g)
+    }
+  }
+
+  // S20: walking up to a bundle takes it into the herbal; the sill tells the moons
+  private stepBundles(p: { x: number; z: number }): void {
+    const st = this.story!
+    if (!this.blessed()) return
+    const pieces = Object.values(this.area.pieces)
+    const sill = sillSpot(pieces, this.set.cell)
+    const near = !!sill && Math.hypot(p.x - sill.x, p.z - sill.z) < SILL_REACH
+    if (near && !this.atSill) this.say(sillLine(nightOf(st.clock)))
+    this.atSill = near
+    if (!bundlesReady(st.done)) return
+    const spots = bundleSpots(pieces, this.set.cell)
+    for (const b of spots) {
+      if (st.picked[b.spot] || Math.hypot(p.x - b.x, p.z - b.z) > BUNDLE_REACH) continue
+      st.picked[b.spot] = true
+      st.items[b.herb.id] = (st.items[b.herb.id] ?? 0) + 1
+      this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: b.herb.id, spot: b.spot })
+      this.say(`${b.herb.title}, dried and tied with red thread. ${b.herb.note}`)
+      this.drawHerbs()
+      if (spots.every((x) => st.picked[x.spot])) {
+        this.reach('bundles')
+        this.say('Four of her herbs in your herbal now (K). Her notes teach valerian and lavender tea and sage broth: press C at the hearth.')
+      }
+    }
   }
 
   // S18: the Nine Sisters, on the open ground nearest the signpost, once
@@ -2041,9 +2103,13 @@ export class AreaViewport {
   // S12: what there is to smell and hear in the story's area now
   senseSources(): Source[] {
     const st = this.story
-    if (st && this.blessed() && cacheReady(st.done)) {
-      const c = cacheSpot(Object.values(this.area.pieces), this.set.cell)
-      return c ? [{ id: 'cache', ...c, sense: 'sound', text: 'A draught, and a board that knocks hollow', from: 'by the box bed', range: 14 }] : []
+    if (st && this.blessed()) {
+      const pieces = Object.values(this.area.pieces)
+      const c = cacheReady(st.done) ? cacheSpot(pieces, this.set.cell) : null
+      const out: Source[] = c ? [{ id: 'cache', ...c, sense: 'sound', text: 'A draught, and a board that knocks hollow', from: 'by the box bed', range: 14 }] : []
+      // S20: the bundles drying over the shelves
+      if (bundlesReady(st.done)) for (const b of bundleSpots(pieces, this.set.cell)) if (!st.picked[b.spot]) out.push({ id: b.spot, x: b.x, z: b.z, sense: 'smell', text: `${b.herb.title}, dry and sweet`, from: 'over the shelves', range: 12 })
+      return out
     }
     if (!st || this.area.id !== st.area) return []
     const out: Source[] = []

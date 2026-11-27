@@ -50,6 +50,8 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'stones', title: 'The Nine Sisters', how: 'On a night of the lesser full moon (the almanac, M, shows when), stand at the heart of the ring of nine stones by the signpost.' },
   // S19: the hedge-witch's cache
   { id: 'cache', title: "The hedge-witch's cache", how: "Back at Hawk's Rest, listen for a draught (hold F to focus your senses) and look by the box bed." },
+  // S20: her bundles and the moon calendar
+  { id: 'bundles', title: 'Her dried bundles', how: "Take the four bundles of herbs drying over Hawk's Rest's shelves. The pebbles on the sill are her moon calendar." },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the
@@ -78,7 +80,7 @@ export function herbSpots(pieces: Readonly<Record<string, { id: string; piece: s
 }
 
 // The herbal (S7): the herbs gathered, with what each is for. Pure DOM.
-export function showHerbal(container: HTMLElement, items: Readonly<Record<string, number>>): HTMLDivElement {
+export function showHerbal(container: HTMLElement, items: Readonly<Record<string, number>>, more: readonly Herb[] = []): HTMLDivElement {
   const el = document.createElement('div')
   el.dataset.herbal = ''
   el.style.cssText =
@@ -88,7 +90,7 @@ export function showHerbal(container: HTMLElement, items: Readonly<Record<string
   h.style.cssText = 'font:600 17px Georgia,serif;margin-bottom:8px'
   h.textContent = "The herbal of Hawk's Rest"
   el.append(h)
-  for (const herb of HERBS) {
+  for (const herb of [...HERBS, ...more]) {
     const n = items[herb.id] ?? 0
     const row = document.createElement('div')
     row.dataset.herb = herb.id

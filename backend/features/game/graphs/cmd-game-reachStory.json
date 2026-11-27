@@ -13,11 +13,11 @@
       "properties": {
         "step": {
           "type": "string",
-          "description": "The step just reached: arrive, farmer, howl, signature, trail, fight, road, rest, morning, forage, herbal, stillness, cook, almanac, sleep, reading, ditch, foretold, watch, defended, thanked, dream, companion, stones or cache; empty to save only the place"
+          "description": "The step just reached: arrive, farmer, howl, signature, trail, fight, road, rest, morning, forage, herbal, stillness, cook, almanac, sleep, reading, ditch, foretold, watch, defended, thanked, dream, companion, stones, cache or bundles; empty to save only the place"
         },
         "item": {
           "type": "string",
-          "description": "S7: a herb just gathered (thyme, nettle or yarrow), with spot; empty for none"
+          "description": "S7: a herb just gathered (thyme, nettle or yarrow; S20: lavender, mugwort, valerian or sage from the bundles), with spot; empty for none"
         },
         "spot": {
           "type": "string",
@@ -25,7 +25,7 @@
         },
         "use": {
           "type": "string",
-          "description": "S8: a herb spent, cooking at a hearth (thyme, nettle or yarrow); empty for none. Refused unless the player holds one"
+          "description": "S8: a herb spent, cooking at a hearth (thyme, nettle, yarrow, valerian or sage); empty for none. Refused unless the player holds one"
         },
         "body": {
           "type": "object",
@@ -245,7 +245,7 @@
         "y": 150
       },
       "config": {
-        "expr": "!started || start?.deleted == true ? \"there is no area \" + target + \" to start a story in\" : (step ?? \"\") not in [\"\", \"arrive\", \"farmer\", \"howl\", \"signature\", \"trail\", \"fight\", \"road\", \"rest\", \"morning\", \"forage\", \"herbal\", \"stillness\", \"cook\", \"almanac\", \"sleep\", \"reading\", \"ditch\", \"foretold\", \"watch\", \"defended\", \"thanked\", \"dream\", \"companion\", \"stones\", \"cache\"] ? \"there is no step \" + step + \" in the story\" : (item ?? \"\") not in [\"\", \"thyme\", \"nettle\", \"yarrow\"] ? \"there is no herb \" + item + \" to gather\" : (told ?? \"\") not in [\"\", \"all\", \"ditch\"] ? \"told must be all or ditch\" : (use ?? \"\") != \"\" \u0026\u0026 ((place?.items ?? {})[use] ?? 0) \u003c 1 ? \"you have no \" + use + \" to use\" : !found || here?.deleted == true ? \"there is no area \" + area : x \u003c 0 || z \u003c 0 || x \u003e here.width * 10 + 1 || z \u003e here.depth * 10 + 1 ? \"the point is outside \" + here.name : \"\"",
+        "expr": "!started || start?.deleted == true ? \"there is no area \" + target + \" to start a story in\" : (step ?? \"\") not in [\"\", \"arrive\", \"farmer\", \"howl\", \"signature\", \"trail\", \"fight\", \"road\", \"rest\", \"morning\", \"forage\", \"herbal\", \"stillness\", \"cook\", \"almanac\", \"sleep\", \"reading\", \"ditch\", \"foretold\", \"watch\", \"defended\", \"thanked\", \"dream\", \"companion\", \"stones\", \"cache\", \"bundles\"] ? \"there is no step \" + step + \" in the story\" : (item ?? \"\") not in [\"\", \"thyme\", \"nettle\", \"yarrow\", \"lavender\", \"mugwort\", \"valerian\", \"sage\"] ? \"there is no herb \" + item + \" to gather\" : (told ?? \"\") not in [\"\", \"all\", \"ditch\"] ? \"told must be all or ditch\" : (use ?? \"\") != \"\" \u0026\u0026 ((place?.items ?? {})[use] ?? 0) \u003c 1 ? \"you have no \" + use + \" to use\" : !found || here?.deleted == true ? \"there is no area \" + area : x \u003c 0 || z \u003c 0 || x \u003e here.width * 10 + 1 || z \u003e here.depth * 10 + 1 ? \"the point is outside \" + here.name : \"\"",
         "type": "string"
       }
     },

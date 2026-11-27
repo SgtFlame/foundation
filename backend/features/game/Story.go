@@ -31,7 +31,7 @@ const (
 
 // StorySteps are the first hour's steps in order (375 › the first hour).
 // S7 adds the first day: the morning's card, foraging and the herbal.
-var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch", "foretold", "watch", "defended", "thanked", "dream", "companion", "stones", "cache"}
+var StorySteps = []string{"arrive", "farmer", "howl", "signature", "trail", "fight", "road", "rest", "morning", "forage", "herbal", "stillness", "cook", "almanac", "sleep", "reading", "ditch", "foretold", "watch", "defended", "thanked", "dream", "companion", "stones", "cache", "bundles"}
 
 // S10: the step that pays for Wenlan's reading, and the coin it pays
 const (
@@ -55,8 +55,9 @@ const (
 	Hedgecraft = "hedgecraft"
 )
 
-// StoryItems are what a player may gather in a story (S7: herbs for the herbal).
-var StoryItems = []string{"thyme", "nettle", "yarrow"}
+// StoryItems are what a player may gather in a story (S7: herbs for the herbal;
+// S20: the hedge-witch's dried bundles at Hawk's Rest).
+var StoryItems = []string{"thyme", "nettle", "yarrow", "lavender", "mugwort", "valerian", "sage"}
 
 // StoryPlace is a player's place in one story.
 type StoryPlace struct {

@@ -427,6 +427,15 @@ The ore scanner: the first thing made from the forge's iron.
 - Engine only for the pulse: `craft/Scanner.ts` (`scan`, `scanLine`) samples the voxel world on a 2.5 m grid within 36 m, gathers solid ore samples into 8 m pockets and returns the nearest six. In `VoxelViewport`, K with a scanner sends a pulse (6 s to recharge), draws a wireframe octahedron through the rock at each pocket, sized by how rich it looks, for 12 s, and says how many pockets it found and how far the nearest is. `Recipe.needs` and `Carried` take `iron`; `missing` says "an" before a vowel.
 - `TestForge` checks the scanner's refusal; `Scanner.test.ts` and `Crafting.test.ts` the rest.
 
+## Built in S20 (forge 375)
+
+The hedge-witch's bundles and her moon calendar, from the design's Hawk's Rest ("overgrown herb garden, moon-calendar stones on the sill") and its herb list ("lavender, mugwort, yarrow, valerian, feverfew, borage, sage: gardens and dried bundles").
+
+- **The bundles** (`story/Bundles.ts`): once her notes are found (`cache`), four bundles hang drying over the cottage's shelves, two to a shelf (`bundleSpots`, spots `bundle-<herb>`): lavender, mugwort, valerian and sage (`BUNDLE_HERBS`). The senses smell each; walking up to one takes it into the herbal (an `item` save, like the first morning's herbs), and all four reach the new last step **`bundles`**. The herbal lists them once the cache is open (`showHerbal`'s `more`). `game.reachStory` accepts the four herbs, and `StoryItems` lists them.
+- **Two recipes from her notes** (`HEDGE_DISHES`, offered with hedge-craft): *Valerian and lavender tea* (60 Chill off) and *Sage broth* (45 Hunger and 20 Chill off). Lavender and mugwort are kept for the dream tincture still to come.
+- **The moon calendar**: pebbles on the cottage's window sill (`sillSpot`); standing by them says how many nights until the lesser and the greater full moons (`sillLine`, `nextGreaterFull`, the stones' `nextWaking`).
+- `TestStory` gathers a bundle, reaches `bundles` and cooks the tea; `Bundles.test.ts` covers the rest.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
