@@ -35,17 +35,20 @@ var errTruncated = errors.New("collab: truncated message")
 // saved, compact, edit (to the writer: apply Edits to the document) and
 // edited (the writer's answer to the edit with the same ID).
 type control struct {
-	Op       string               `json:"op"`
-	Writer   bool                 `json:"writer,omitempty"`
-	Ready    bool                 `json:"ready,omitempty"`
-	Dirty    bool                 `json:"dirty,omitempty"` // role: the new writer must save right away
-	Seed     *string              `json:"seed,omitempty"`
-	Markdown string               `json:"markdown,omitempty"`
-	Code     int                  `json:"code,omitempty"`
-	Message  string               `json:"message,omitempty"`
-	At       int64                `json:"at,omitempty"` // Unix milliseconds
-	ID       string               `json:"id,omitempty"` // edit and edited
-	Edits    []collabservice.Edit `json:"edits,omitempty"`
+	Op       string  `json:"op"`
+	Writer   bool    `json:"writer,omitempty"`
+	Ready    bool    `json:"ready,omitempty"`
+	Dirty    bool    `json:"dirty,omitempty"` // role: the new writer must save right away
+	Seed     *string `json:"seed,omitempty"`
+	Markdown string  `json:"markdown,omitempty"`
+	Code     int     `json:"code,omitempty"`
+	Message  string  `json:"message,omitempty"`
+	// ErrorCode names why a save was refused (saved, forge 35a-1:
+	// invalid_document, document_too_large)
+	ErrorCode string               `json:"errorCode,omitempty"`
+	At        int64                `json:"at,omitempty"` // Unix milliseconds
+	ID        string               `json:"id,omitempty"` // edit and edited
+	Edits     []collabservice.Edit `json:"edits,omitempty"`
 }
 
 // decoder reads lib0-encoded values.

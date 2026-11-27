@@ -21,6 +21,7 @@ export async function openMarkdownAt(registry: EditorRegistry, path: string, lin
   const name = parts.pop() ?? ''
   const fileType = fileTypes.find((t) => name.endsWith(t.extension))
   if (!fileType) throw new Error(`cannot open ${path}: unknown file type`)
+  if (fileType.type !== 'markdown') throw new Error(`cannot open ${path}: no editor for ${fileType.label} files yet`)
   const fileId = await openMarkdown(registry, [...parts, name.slice(0, -fileType.extension.length)], fileType.type)
   if (fileId && lines) revealLines(fileId, lines[0], lines[1])
 }

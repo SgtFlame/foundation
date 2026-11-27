@@ -162,7 +162,7 @@ function VolumeEditor({ object, registry, tabId }: EditorProps<VolumeObject>) {
           value={fileType}
           onChange={(event) => setFileType(event.target.value)}
         >
-          {fileTypes.map((t) => (
+          {fileTypes.filter((t) => t.editable).map((t) => (
             <MenuItem key={t.type} value={t.type}>
               {t.label} ({t.extension})
             </MenuItem>

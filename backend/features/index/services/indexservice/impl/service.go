@@ -41,12 +41,18 @@ func (s *service) start(ctx context.Context) {
 	}
 }
 
-// indexable reports whether file is a markdown file, rather than a dotted
-// one such as a sidecar or a temp file.
+// indexable reports whether file is a markdown or document file, rather
+// than a dotted one such as a sidecar or a temp file.
 func indexable(file string) bool {
 	base := filepath.Base(file)
 	_, fileType, ok := kbservice.SplitFile(base)
-	return ok && fileType == "markdown"
+	return ok && volumeservice.IsText(fileType)
+}
+
+// fileType is a file's type from its name.
+func fileType(file string) string {
+	_, t, _ := kbservice.SplitFile(filepath.Base(file))
+	return t
 }
 
 // volumeOf returns the ID of the volume holding file, or 0 outside a volume.
@@ -90,4 +96,12 @@ func failed(resp features.ServiceResponse) *features.ServiceResponse {
 		return &resp
 	}
 	return nil
+}
+
+// title is a file's name without its extension.
+func title(file string) string {
+	if base, _, ok := kbservice.SplitFile(filepath.Base(file)); ok {
+		return base
+	}
+	return strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
 }

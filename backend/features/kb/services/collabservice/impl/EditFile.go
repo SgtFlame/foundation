@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"time"
 
@@ -21,8 +20,10 @@ const editTimeout = 10 * time.Second
 // first, so the next open seeds from the edited file.
 func (s *service) EditFile(args collabservice.EditFileArgs) collabservice.EditFileResponse {
 	sa := args.ServiceArgs
-	if !slices.Contains(volumeservice.FileTypes, args.Type) {
-		return collabservice.EditFileResponse{Common: *sa.Fail(http.StatusBadRequest, log.Code("unsupported_file_type").Errorf("unsupported file type %q", args.Type))}
+	// Find/replace edits are text edits: a document (forge 35a-1) is
+	// edited through its editor, or as suggestions (35b-5)
+	if args.Type != "markdown" {
+		return collabservice.EditFileResponse{Common: *sa.Fail(http.StatusBadRequest, log.Code("unsupported_file_type").Errorf("cannot edit a %q file by find and replace", args.Type))}
 	}
 	if len(args.Edits) == 0 {
 		return collabservice.EditFileResponse{Common: *sa.Fail(http.StatusBadRequest, log.Code("no_edits").New("there are no edits"))}
