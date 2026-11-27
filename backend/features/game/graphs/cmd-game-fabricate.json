@@ -7,10 +7,15 @@
   "spec": {
     "command": "game.fabricate",
     "title": "Make a circuit board at a fabricator",
-    "description": "Starts a circuit board in the fabricator of a cabin (V23); the target is the cabin's id. It takes 0.5 m³ of iron and 0.25 m³ of ore from the sender's pack and 30 s, powered by the cabin's solar panel (the ship's fab gives {item, at}); game.takeFabricated then takes the board into the pack's circuits. Refused for a ship that is not a cabin, a cabin whose fabricator or solar panel is not placed, a fabricator already at work, or a pack without the iron and ore.",
+    "description": "Starts work in the fabricator of a cabin (V23); the target is the cabin's id. item circuit (the default) is a circuit board: 0.5 m³ of iron and 0.25 m³ of ore from the sender's pack and 30 s; item ionKit (V24) is an ion thruster kit: 1 m³ of iron and 2 circuit boards and 60 s. It is powered by the cabin's solar panel (the ship's fab gives {item, at}); game.takeFabricated then takes the work into the pack (circuits or kits). Refused for a ship that is not a cabin, a cabin whose fabricator or solar panel is not placed, a fabricator already at work, an unknown item, or a pack without what the item takes.",
     "args": {
       "type": "object",
-      "properties": {}
+      "properties": {
+        "item": {
+          "type": "string",
+          "description": "What to make: circuit (a circuit board, the default) or ionKit (V24, an ion thruster kit)"
+        }
+      }
     },
     "area": "game",
     "targetType": "gameShip",
@@ -27,6 +32,15 @@
       "position": {
         "x": 0,
         "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "item",
+            "type": "string",
+            "description": "What to make"
+          }
+        ]
       }
     },
     {
@@ -96,7 +110,7 @@
         "y": 150
       },
       "config": {
-        "expr": "!found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a fabricator\" : !(76 in ship.placed) ? \"the cabin's fabricator is not built yet\" : !(77 in ship.placed) ? \"the fabricator has no power: place the solar panel on the roof\" : ship?.fab != nil ? \"the fabricator is already at work: take its circuit board first\" : (pack?.iron ?? 0) < 0.5 || (pack?.ore ?? 0) < 0.25 ? \"a circuit board takes 0.5 m³ of iron and 0.25 m³ of ore from your pack\" : \"\"",
+        "expr": "let it = item ?? \"circuit\"; !found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a fabricator\" : !(76 in ship.placed) ? \"the cabin's fabricator is not built yet\" : !(77 in ship.placed) ? \"the fabricator has no power: place the solar panel on the roof\" : ship?.fab != nil ? \"the fabricator is already at work: take its work first\" : !(it in [\"\", \"circuit\", \"ionKit\"]) ? \"the fabricator makes circuit boards (circuit) and ion thruster kits (ionKit)\" : it == \"ionKit\" ? ((pack?.iron ?? 0) < 1 || (pack?.circuits ?? 0) < 2 ? \"an ion thruster kit takes 1 m³ of iron and 2 circuit boards from your pack\" : \"\") : (pack?.iron ?? 0) < 0.5 || (pack?.ore ?? 0) < 0.25 ? \"a circuit board takes 0.5 m³ of iron and 0.25 m³ of ore from your pack\" : \"\"",
         "type": "string"
       }
     },
@@ -130,7 +144,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{world: ship.world, item: \"circuit\", at: now().UnixMilli(), pack: {iron: -0.5, ore: -0.25}}",
+        "expr": "let it = item ?? \"circuit\"; it == \"ionKit\" ? {world: ship.world, item: \"ionKit\", at: now().UnixMilli(), pack: {iron: -1, circuits: -2}} : {world: ship.world, item: \"circuit\", at: now().UnixMilli(), pack: {iron: -0.5, ore: -0.25}}",
         "type": "json"
       }
     },
@@ -327,6 +341,26 @@
       "to": {
         "node": "emit",
         "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "item"
+      },
+      "to": {
+        "node": "check",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "item"
+      },
+      "to": {
+        "node": "fabricating",
+        "pin": "item"
       }
     }
   ]

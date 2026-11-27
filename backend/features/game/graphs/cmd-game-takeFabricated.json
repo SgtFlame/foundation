@@ -7,7 +7,7 @@
   "spec": {
     "command": "game.takeFabricated",
     "title": "Take a circuit board from a fabricator",
-    "description": "Takes the finished circuit board from the fabricator of a cabin (V23) into the sender's pack (circuits, a count, at most 20); the target is the cabin's id. Refused while the board is still being made (30 s) or when the fabricator is empty.",
+    "description": "Takes the finished work from the fabricator of a cabin (V23) into the sender's pack: a circuit board into circuits (at most 20), or (V24) an ion thruster kit into kits; the target is the cabin's id. Refused while the work is still going (30 s for a board, 60 s for a kit) or when the fabricator is empty.",
     "args": {
       "type": "object",
       "properties": {}
@@ -96,7 +96,7 @@
         "y": 150
       },
       "config": {
-        "expr": "let f = ship?.fab; let left = f == nil ? 0 : 30000 - (now().UnixMilli() - f.at); !found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a fabricator\" : f == nil ? \"the fabricator is empty: start a circuit board with game.fabricate\" : left > 0 ? \"the fabricator is still at work: \" + string(int(ceil(left / 1000))) + \" s left\" : (pack?.circuits ?? 0) >= 20 ? \"you can carry no more than 20 circuit boards\" : \"\"",
+        "expr": "let f = ship?.fab; let left = f == nil ? 0 : (f.item == \"ionKit\" ? 60000 : 30000) - (now().UnixMilli() - f.at); !found ? \"there is no cabin \" + target : ship.design != \"cabin\" ? \"only a cabin has a fabricator\" : f == nil ? \"the fabricator is empty: start work with game.fabricate\" : left > 0 ? \"the fabricator is still at work: \" + string(int(ceil(left / 1000))) + \" s left\" : f.item != \"ionKit\" && (pack?.circuits ?? 0) >= 20 ? \"you can carry no more than 20 circuit boards\" : \"\"",
         "type": "string"
       }
     },
@@ -130,7 +130,7 @@
         "y": 350
       },
       "config": {
-        "expr": "{world: ship.world, item: ship.fab.item, pack: {circuits: 1}}",
+        "expr": "{world: ship.world, item: ship.fab.item, pack: ship.fab.item == \"ionKit\" ? {kits: 1} : {circuits: 1}}",
         "type": "json"
       }
     },

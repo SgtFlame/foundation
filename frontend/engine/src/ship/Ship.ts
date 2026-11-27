@@ -43,6 +43,7 @@ export interface ShipState {
   charge?: number // V4: its battery, 0 to 1
   forge?: { ore: number; at: number } // V20: the ore smelting in a cabin's forge
   fab?: { item: string; at: number } // V23: the circuit board a cabin's fabricator is making
+  boost?: number // V24: what ion thruster kits add to its thrust
   seq: number
   updatedAt?: string
 }

@@ -471,6 +471,15 @@ The threshold ward, from the design's hedge-craft ("Wards. Arrangements of herbs
 - **A warded night**: sleeping at a warded blessed place clears the Chill by morning (`wardedNight`) and closes a dream's wound, warm food or not.
 - `TestStory` lays the ward; `Ward.test.ts` covers the rest.
 
+## Built in V24 (forge 360)
+
+Ion thruster kits: the fabricator's second product, the first ship part, a step towards the bigger ships the job board needs.
+
+- `game.fabricate` takes `item`: `circuit` (the default, as in V23) or `ionKit`, 1 m³ of iron and 2 circuit boards, 60 s. `game.takeFabricated` gives a kit into the pack's `kits` (a count).
+- `game.fitKit` (`cmd-game-fitKit`, target a ship): fits a kit from the pack, event `kitFitted {world, boost: 0.25, pack: {kits: -1}}`; the ship keeps `boost` (at most 0.5, two kits). Refused for a building, a ship with two, or a pack without a kit.
+- Engine: `craft/Fabricator.ts` gains the kit (`KIT_MS`, `KIT_IRON`, `KIT_CIRCUITS`, `KIT_BOOST`, `MAX_BOOST`; `fabAction(…, item)`); at the fabricator U makes a circuit board and I a kit, the hint offering what the pack can make; by a ship, O fits a kit (`canFitKit`, `fitKit`). A ship's thrust is the pilot's skill times 1 + its boost (`thrustOf`).
+- `TestFabricator` checks the refusals; `Fabricator.test.ts` the kit's timing and needs.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

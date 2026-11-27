@@ -1,5 +1,5 @@
 import { forgeAction, SMELT_MS, type ForgeState } from '../craft/Forge.ts'
-import { FAB_IRON, FAB_MS, FAB_ORE, fabAction, type FabState } from '../craft/Fabricator.ts'
+import { FAB_IRON, FAB_MS, FAB_ORE, fabAction, KIT_CIRCUITS, KIT_IRON, KIT_MS, MAX_BOOST, type FabItem, type FabState } from '../craft/Fabricator.ts'
 import * as THREE from 'three/webgpu'
 import { surfaceBelow, Walker, type WalkerTerrain } from '../character/Walker.ts'
 import { FlyCamera } from '../camera/FlyCamera.ts'
@@ -46,6 +46,7 @@ export interface Carried {
   food?: number // V9: rations harvested on the planet
   iron?: number // V20: smelted at a cabin's forge
   circuits?: number // V23: circuit boards from a cabin's fabricator, a count
+  kits?: number // V24: ion thruster kits
   capacity: number
 }
 
@@ -82,7 +83,8 @@ export type ShipIntent =
   | { kind: 'craft'; id: string; item: string } // V14: a tool made at a cabin's bench
   | { kind: 'smelt'; id: string } // V20: ore from the pack put in a cabin's forge
   | { kind: 'takeIngots'; id: string } // V20: the forge's iron taken into the pack
-  | { kind: 'fabricate'; id: string } // V23: a circuit board started at a cabin's fabricator
+  | { kind: 'fabricate'; id: string; item: FabItem } // V23: a circuit board (V24: or an ion thruster kit) started at a cabin's fabricator
+  | { kind: 'fitKit'; id: string } // V24: an ion thruster kit fitted to a ship
   | { kind: 'takeFabricated'; id: string } // V23: the fabricator's board taken into the pack
   | { kind: 'plant'; x: number; y: number; z: number } // V9: barley in the planet's soil
   | { kind: 'harvest'; crop: string } // V9: a ripe crop, as food
@@ -723,7 +725,7 @@ export class VoxelViewport {
       const ore = c.ore ?? 0
       const iron = c.iron ?? 0
       const total = c.dust + c.rock + ore + iron
-      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}${iron > 0 ? ` · iron ${iron.toFixed(2)}` : ''}${(c.circuits ?? 0) > 0 ? ` · circuits ${c.circuits}` : ''}${(c.food ?? 0) > 0 ? ` · food ${c.food}` : ''}`)
+      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}${iron > 0 ? ` · iron ${iron.toFixed(2)}` : ''}${(c.circuits ?? 0) > 0 ? ` · circuits ${c.circuits}` : ''}${(c.kits ?? 0) > 0 ? ` · ion kits ${c.kits}` : ''}${(c.food ?? 0) > 0 ? ` · food ${c.food}` : ''}`)
     }
     if (w && !this.riding && !this.pod.falling) {
       const g = Math.hypot(w.gravity.x, w.gravity.y, w.gravity.z)
@@ -968,7 +970,17 @@ export class VoxelViewport {
     if (!s) return ''
     const d = this.shipLayer.design(s.design)
     const has = (type: string) => d?.blocks.some((b, i) => b.type === type && s.placed.includes(i))
-    return `${has('cargo') ? 'L: load your pack into the hold · ' : ''}${has('refinery') ? 'R: refine rock · ' : ''}${this.canBoard(s) ? 'B: board as crew · ' : ''}`
+    return `${has('cargo') ? 'L: load your pack into the hold · ' : ''}${has('refinery') ? 'R: refine rock · ' : ''}${this.canBoard(s) ? 'B: board as crew · ' : ''}${this.canFitKit(s) ? 'O: fit an ion thruster kit · ' : ''}`
+  }
+
+  // V24: an ion thruster kit in the pack and a ship with room for one
+  private canFitKit(s: ShipState): boolean {
+    return (this.carried?.kits ?? 0) >= 1 && !this.shipLayer.design(s.design)?.static && (s.boost ?? 0) < MAX_BOOST - 1e-6
+  }
+
+  // V24: a ship's thrust: the pilot's skill and its ion thruster kits
+  private thrustOf(id: string): number {
+    return thrustFor(this.progress?.levels) * (1 + (this.shipLayer.ships().find((s) => s.id === id)?.boost ?? 0))
   }
 
   // A line about a ship: its charge, hold and power
@@ -1372,6 +1384,7 @@ export class VoxelViewport {
       this.updateHint()
     }
     if (fab && input.locked && input.pressed('KeyU')) this.fabAt(fab)
+    if (fab && input.locked && input.pressed('KeyI')) this.fabAt(fab, 'ionKit')
     const bench = this.walker && !seat && !forge && !fab ? this.shipLayer.benchNear(this.walker.pos) : null
     if (bench !== this.nearBench) {
       this.nearBench = bench
@@ -1387,6 +1400,7 @@ export class VoxelViewport {
     if (near && input.locked && input.pressed('KeyL')) this.opts.onShipIntent?.({ kind: 'load', id: near.id })
     if (near && input.locked && input.pressed('KeyR')) this.opts.onShipIntent?.({ kind: 'refine', id: near.id })
     if (near && input.locked && input.pressed('KeyB') && this.canBoard(near)) this.opts.onShipIntent?.({ kind: 'crew', id: near.id, aboard: true })
+    if (near && input.locked && input.pressed('KeyO') && this.canFitKit(near)) this.fitKit(near.id)
     this.stepOutpost()
   }
 
@@ -1502,26 +1516,52 @@ export class VoxelViewport {
 
   private fabHint(): string {
     if (!this.nearFab) return ''
-    const a = fabAction(this.fabOf(this.nearFab), this.carried, this.shipLayer.hasPlaced(this.nearFab, 'solar'), Date.now())
+    const f = this.fabOf(this.nearFab)
+    const powered = this.shipLayer.hasPlaced(this.nearFab, 'solar')
+    const a = fabAction(f, this.carried, powered, Date.now())
+    if (!f && powered) {
+      // V24: what it can make now: a circuit board (U), an ion thruster kit (I)
+      const kit = fabAction(f, this.carried, powered, Date.now(), 'ionKit')
+      const parts = [a.kind === 'make' ? `U: make a circuit board (${FAB_IRON} m³ iron, ${FAB_ORE} m³ ore) · ` : '', kit.kind === 'make' ? `I: make an ion thruster kit (${KIT_IRON} m³ iron, ${KIT_CIRCUITS} boards) · ` : ''].join('')
+      if (parts) return parts
+    }
     if (a.kind === 'make') return `U: make a circuit board (${FAB_IRON} m³ iron, ${FAB_ORE} m³ ore) · `
     if (a.kind === 'wait') return `The fabricator is at work: ${a.seconds} s left · `
-    if (a.kind === 'take') return 'U: take the circuit board · '
+    if (a.kind === 'take') return `U: take the ${this.fabOf(this.nearFab)?.item === 'ionKit' ? 'ion thruster kit' : 'circuit board'} · `
     return `The fabricator: ${a.why} · `
   }
 
   // V23: U at the fabricator starts a circuit board, or takes it once done
-  fabAt(id: string): void {
-    const a = fabAction(this.fabOf(id), this.carried, this.shipLayer.hasPlaced(id, 'solar'), Date.now())
-    if (a.kind === 'make') {
+  fabAt(id: string, item: FabItem = 'circuit'): void {
+    const f = this.fabOf(id)
+    const a = fabAction(f, this.carried, this.shipLayer.hasPlaced(id, 'solar'), Date.now(), item)
+    if (a.kind === 'make' && item === 'ionKit') {
+      if (this.carried) this.carried = { ...this.carried, iron: (this.carried.iron ?? 0) - KIT_IRON, circuits: (this.carried.circuits ?? 0) - KIT_CIRCUITS }
+      this.opts.onShipIntent?.({ kind: 'fabricate', id, item })
+      this.flashHint(`You slot two circuit boards and an iron housing into the fabricator. It starts to wind an ion thruster: ${KIT_MS / 1000} s`)
+    } else if (a.kind === 'make') {
       if (this.carried) this.carried = { ...this.carried, iron: (this.carried.iron ?? 0) - FAB_IRON, ore: (this.carried.ore ?? 0) - FAB_ORE }
-      this.opts.onShipIntent?.({ kind: 'fabricate', id })
+      this.opts.onShipIntent?.({ kind: 'fabricate', id, item })
       this.flashHint(`You feed iron and ore into the fabricator. Its arm starts to etch a circuit board: ${FAB_MS / 1000} s`)
+    } else if (a.kind === 'take' && f?.item === 'ionKit') {
+      if (this.carried) this.carried = { ...this.carried, kits: (this.carried.kits ?? 0) + 1 }
+      this.opts.onShipIntent?.({ kind: 'takeFabricated', id })
+      this.flashHint('You lift out an ion thruster kit, humming faintly. O by a ship fits it')
     } else if (a.kind === 'take') {
       if (this.carried) this.carried = { ...this.carried, circuits: (this.carried.circuits ?? 0) + 1 }
       this.opts.onShipIntent?.({ kind: 'takeFabricated', id })
       this.flashHint('You lift a finished circuit board out of the fabricator, its traces still bright')
     } else if (a.kind === 'wait') this.flashHint(`The fabricator's arm is still etching: ${a.seconds} s left`)
     else this.flashHint(a.why[0].toUpperCase() + a.why.slice(1))
+    this.drawPack()
+    this.updateHint()
+  }
+
+  // V24: O by a ship fits an ion thruster kit from the pack
+  fitKit(id: string): void {
+    if (this.carried) this.carried = { ...this.carried, kits: (this.carried.kits ?? 0) - 1 }
+    this.opts.onShipIntent?.({ kind: 'fitKit', id })
+    this.flashHint('You bolt the ion thruster kit into the ship\'s thruster bus: it will push a quarter harder')
     this.drawPack()
     this.updateHint()
   }
@@ -1790,7 +1830,7 @@ export class VoxelViewport {
         }
       }
     }
-    if (this.shipLayer.body) this.shipLayer.body.thrustScale = thrustFor(p?.levels)
+    if (this.shipLayer.body && this.shipLayer.pilotOf) this.shipLayer.body.thrustScale = this.thrustOf(this.shipLayer.pilotOf)
     this.brushRadius = Math.min(this.brushRadius, this.maxBrush())
     if (this.mode === 'walk') this.arrive()
     if (this.contracts.open) this.openContracts()
@@ -1802,7 +1842,7 @@ export class VoxelViewport {
     if (!st || (st.pilot && st.pilot !== (this.opts.userId ?? ''))) return false
     const body = this.shipLayer.sit(id, this.terrain())
     if (!body) return false
-    body.thrustScale = thrustFor(this.progress?.levels)
+    body.thrustScale = this.thrustOf(id)
     this.contracts.hide()
     this.ghostHit = null
     this.shipLayer.aim(null)

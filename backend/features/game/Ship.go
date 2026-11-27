@@ -40,6 +40,7 @@ const (
 	EventIngots         = "ingots"      // {world, iron, pack} (V20: the forge's iron taken into the sender's pack; the forge is empty again)
 	EventFabricating    = "fabricating" // {world, item, at, pack} (V23: iron and ore from the sender's pack put in this cabin's fabricator at Unix ms at)
 	EventFabricated     = "fabricated"  // {world, item, pack} (V23: the fabricator's work taken into the sender's pack)
+	EventKitFitted      = "kitFitted"   // {world, boost, pack} (V24: an ion thruster kit from the sender's pack fitted to this ship)
 )
 
 // ShipDesign is a premade ship: its blocks in its own grid, x right, y up
@@ -86,7 +87,9 @@ type Ship struct {
 	// V20: a cabin's forge: the ore smelting in it and since when (Unix ms)
 	Forge *Forge `json:"forge,omitempty"`
 	// V23: a cabin's fabricator: what it is making and since when (Unix ms)
-	Fab       *Fab      `json:"fab,omitempty"`
+	Fab *Fab `json:"fab,omitempty"`
+	// V24: what ion thruster kits add to its thrust (0.25 each, at most 0.5)
+	Boost     float64   `json:"boost,omitempty"`
 	Seq       uint64    `json:"seq"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -218,6 +221,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		Aboard bool       `json:"aboard"`
 		At     int64      `json:"at"`
 		Item   string     `json:"item"`
+		Boost  float64    `json:"boost"`
 	}
 	// a damaged event's blocks are indices, read on their own below
 	if err := json.Unmarshal(f.Event.Data, &d); err != nil && f.Event.Type != EventShipDamaged {
@@ -277,6 +281,8 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		s.Fab = &Fab{Item: d.Item, At: d.At}
 	case EventFabricated:
 		s.Fab = nil
+	case EventKitFitted:
+		s.Boost = math.Min(0.5, math.Round((s.Boost+d.Boost)*1000)/1000)
 	case EventShipCrewed:
 		s.Crew = without(s.Crew, d.User)
 		if d.Aboard && d.User != "" {
@@ -299,7 +305,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	return json.Marshal(s)
 }
 
-const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron, ore} (m³ in its hold), charge (its battery, 0 to 1), forge {ore, at} (V20: a cabin's forge smelting ore since Unix ms at), fab {item, at} (V23: a cabin's fabricator making a circuit board since Unix ms at), seq, updatedAt}"
+const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron, ore} (m³ in its hold), charge (its battery, 0 to 1), forge {ore, at} (V20: a cabin's forge smelting ore since Unix ms at), fab {item, at} (V23: a cabin's fabricator making a circuit board, or V24 an ion thruster kit, since Unix ms at), boost (V24: what ion thruster kits add to its thrust), seq, updatedAt}"
 
 func without(list []string, v string) []string {
 	out := []string{}

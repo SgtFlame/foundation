@@ -533,4 +533,18 @@ func TestFabricator(t *testing.T) {
 	if r := st.refused("game.takeFabricated", "c1", map[string]any{}); !strings.Contains(r.Common.Message, "empty") {
 		t.Fatalf("take from an empty fabricator: %q", r.Common.Message)
 	}
+	// V24: the ion thruster kit takes circuit boards, and fits only a ship
+	if r := st.refused("game.fabricate", "c1", map[string]any{"item": "ionKit"}); !strings.Contains(r.Common.Message, "2 circuit boards") {
+		t.Fatalf("a kit without boards: %q", r.Common.Message)
+	}
+	if r := st.refused("game.fabricate", "c1", map[string]any{"item": "rocket"}); !strings.Contains(r.Common.Message, "ionKit") {
+		t.Fatalf("an unknown item: %q", r.Common.Message)
+	}
+	if r := st.refused("game.fitKit", "c1", map[string]any{}); !strings.Contains(r.Common.Message, "cabin") {
+		t.Fatalf("a kit on a cabin: %q", r.Common.Message)
+	}
+	st.ok("game.startShip", "s1", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 110, "z": 0, "q": q})
+	if r := st.refused("game.fitKit", "s1", map[string]any{}); !strings.Contains(r.Common.Message, "no ion thruster kit") {
+		t.Fatalf("a kit from an empty pack: %q", r.Common.Message)
+	}
 }
