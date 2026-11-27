@@ -20,6 +20,7 @@ import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../sto
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
+import { TINCTURE, TINCTURE_ALSO, tinctureReady, TRUE_DREAM, TRUE_DREAM_LINE } from '../story/Tincture.ts'
 import { BUNDLE_HERBS, BUNDLE_REACH, bundleSpots, bundlesReady, HEDGE_DISHES, SILL_REACH, sillLine, sillSpot } from '../story/Bundles.ts'
 import { HEART, nextWaking, ringSpot, STARLORE_LINE, starlorePool, stonePoints, STONES_MEMORY, stonesWake } from '../story/Stones.ts'
 import { clarity, ditchSpot, ReadingScene, wenlanAnswer, type Told } from '../story/Reading.ts'
@@ -247,6 +248,7 @@ export class AreaViewport {
   private ringVisited = false
   private cacheOpen = false // S19: the cache's notes are being read
   private atSill = false // S20: standing by the moon calendar
+  private tincture = false // S21: the dream tincture drunk, for the next sleep
   private signature: Point | null = null
   private barnDoor: Point | null = null
   private resumeAt: { area: string; at: Point } | null = null
@@ -1701,14 +1703,21 @@ export class AreaViewport {
       // S19: the yarrow poultice closes the dream's wound at once
       const closes = d.id === POULTICE.id && !!st.items.wound
       if (closes) st.items.wound = 0
+      // S21: the tincture takes lavender too, and waits for the night's sleep
+      const tincture = d.id === TINCTURE.id && (st.items[TINCTURE_ALSO] ?? 0) >= 1
+      if (tincture) {
+        st.items[TINCTURE_ALSO]--
+        this.tincture = true
+      }
       const p = this.player()
       st.done.cook = true
       this.ateHot = true
       this.opts.onStory?.({ step: 'cook', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: d.herb, ...this.stateToSave() })
       if (closes) this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: 'wound', ...this.stateToSave() })
+      if (tincture) this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: TINCTURE_ALSO, ...this.stateToSave() })
       this.showStory()
       this.say(`${d.title}. ${d.line}${closes ? ' The ache in your side is gone.' : ''}`)
-    }, st.items.hedgecraft ? [...DISHES, POULTICE, ...HEDGE_DISHES] : DISHES)
+    }, st.items.hedgecraft ? [...DISHES, POULTICE, ...HEDGE_DISHES, ...(tinctureReady(nightOf(st.clock), st.items, st.done) ? [TINCTURE] : [])] : DISHES)
   }
 
   // A fight's cadence spends a Hum, once stillness has been learned
@@ -2222,6 +2231,18 @@ export class AreaViewport {
     const morning = `Day ${st.clock.day + 1}; the day's card: ${card.title}${e?.line ? `: ${e.line}` : ''}.`
     const warm = this.ateHot
     this.ateHot = false
+    // S21: the dream tincture brings a true dream, wherever the night is slept
+    if (this.tincture && !st.done.truedream) {
+      this.tincture = false
+      showDream(this.container, TRUE_DREAM, () => {
+        st.items.wardlore = 1
+        this.reach('truedream')
+        showCard(this.container, card)
+        this.drawMarks()
+        this.say(`${TRUE_DREAM_LINE} ${morning}`)
+      })
+      return
+    }
     // S16: a blessed place's dream, or a warm night that heals its wound
     if (dreams(st.done, this.blessed())) {
       showDream(this.container, FORD_DREAM, () => {

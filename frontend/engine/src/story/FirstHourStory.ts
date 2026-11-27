@@ -52,6 +52,8 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'cache', title: "The hedge-witch's cache", how: "Back at Hawk's Rest, listen for a draught (hold F to focus your senses) and look by the box bed." },
   // S20: her bundles and the moon calendar
   { id: 'bundles', title: 'Her dried bundles', how: "Take the four bundles of herbs drying over Hawk's Rest's shelves. The pebbles on the sill are her moon calendar." },
+  // S21: the dream tincture
+  { id: 'truedream', title: 'A true dream', how: 'On a night of the lesser full moon (the sill or the almanac tells when), press C at a hearth for the dream tincture, then sleep (R).' },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

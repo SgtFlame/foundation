@@ -122,4 +122,9 @@ func TestStorySaves(t *testing.T) {
 	if r := st.refused("game.reachStory", farm, map[string]any{"item": "hemlock", "area": farm, "x": 9, "z": 3}); !strings.Contains(r.Common.Message, "no herb") {
 		t.Fatalf("hemlock: %q", r.Common.Message)
 	}
+	// S21: the true dream after the dream tincture leaves the ward's lore
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "truedream", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "truedream" || p.Items["wardlore"] != 1 {
+		t.Fatalf("true dream %+v", p)
+	}
 }

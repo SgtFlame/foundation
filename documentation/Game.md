@@ -444,6 +444,14 @@ The iron air tank: the suit's first upgrade (the play design: gear answers the e
 - Engine: `survival/Needs.ts` `ratesFor(tools)` gives the suit's rates, with `AIR_TANK_SECONDS` (480, twice the plain suit's 240) when the player has the tank; `VoxelViewport` steps the needs and shows the air warning ("Air low: n s left") with them. The bench's hint once everything is made says so.
 - `TestForge` checks the refusal; `Crafting.test.ts` and `Needs.test.ts` the rest.
 
+## Built in S21 (forge 375)
+
+The dream tincture, from the design's recipes ("Dream tincture. Made only at the full of the lesser moon. Brings true dreams. Ingredients not given").
+
+- **Making it** (`story/Tincture.ts`): on a night of the lesser full moon, with her notes (`items.hedgecraft`) and a mugwort and a lavender from her bundles, C at a hearth offers the *Dream tincture* (`TINCTURE`, `tinctureReady`). It spends both herbs (`use: "mugwort"`, then `use: "lavender"`).
+- **The true dream**: the next sleep (R), wherever it is slept, plays `TRUE_DREAM` and reaches the new last step **`truedream`**; `game.story` then gives `items.wardlore` 1, the lore of the design's threshold ward (sage along the sill and five stones in their order), for a later step to lay. The dream's scene is a placeholder until the past lives are written, as the user asked (2026-11-27).
+- `TestStory` reaches `truedream`; `Tincture.test.ts` checks when it can be made.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.
