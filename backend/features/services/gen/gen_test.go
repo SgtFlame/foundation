@@ -78,7 +78,7 @@ func TestMarkersAndRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := string(files[filepath.Join("features", "x", "services", "xservice", "server", "server.go")])
-	if !strings.Contains(server, `"Get": services.Unary(svc.Get)`) || strings.Contains(server, "Poke") || strings.Contains(server, "Watch") {
+	if !strings.Contains(server, "services.Unary(svc.Get)") || strings.Contains(server, "Poke") || !strings.Contains(server, "services.Streamed(svc.Watch)") {
 		t.Fatalf("server:\n%s", server)
 	}
 

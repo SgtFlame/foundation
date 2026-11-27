@@ -60,6 +60,16 @@ func Key(key string) CallOption {
 // service_unavailable when no server answers, 504 service_timeout when the
 // deadline passes, 502 service_bad_reply when the reply does not decode.
 func Call[R any](c *Client, service, op string, args any, opts ...CallOption) R {
+	return call[R](c, Subject(service, op), service, op, args, opts)
+}
+
+// CallAt is Call sent to subject: a WaitSubject, where one process waits
+// for it (forge 21c).
+func CallAt[R any](c *Client, subject, service string, args any, opts ...CallOption) R {
+	return call[R](c, subject, service, OpOf(subject), args, opts)
+}
+
+func call[R any](c *Client, subject, service, op string, args any, opts []CallOption) R {
 	mustStruct[R]()
 	var o callOptions
 	for _, opt := range opts {
@@ -83,57 +93,19 @@ func Call[R any](c *Client, service, op string, args any, opts ...CallOption) R 
 		return resp
 	}
 
-	timeout := c.Timeout
-	if timeout <= 0 {
-		timeout = DefaultTimeout
+	msg, err := c.request(ctx, service, op, args, opts, false)
+	if err == nil {
+		msg.Subject = subject
 	}
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		deadline = time.Now().Add(timeout)
-	}
-	body, err := Encode(args)
 	if err != nil {
-		return finish(Failed(http.StatusBadRequest, CodeBadRequest, "The call's arguments cannot be sent."), err)
-	}
-	h := Headers{
-		CallID:      strconv.FormatUint(features.NewTSID(), 10),
-		Trace:       logging.TraceFrom(ctx),
-		Deadline:    deadline,
-		Meta:        a.Meta,
-		Idempotency: o.key,
-		Caller:      c.Caller,
-		Tenant:      a.Principal.TenantID,
-	}
-	if authz.HasAs(ctx) {
-		return finish(Failed(http.StatusForbidden, CodeAsLocal, "A check decided by a role cannot be sent to another process."), errors.New("the call runs under authz.WithAs"))
-	}
-	if a.Principal.Kind != "" {
-		tok, has := TokenFrom(ctx)
-		fresh := has && time.Until(time.Unix(tok.Expires, 0)) > 30*time.Second
-		switch {
-		case has && tok.Names(a.Principal) && (fresh || c.Keys == nil):
-			h.Token = tok.Raw()
-		case c.Keys != nil:
-			var parent *Token
-			if has && !tok.Names(a.Principal) {
-				parent = &tok
-			}
-			t, err := c.Keys.Mint(a.Principal, parent)
-			if err != nil {
-				return finish(Failed(http.StatusInternalServerError, "call_token", ""), err)
-			}
-			h.Token = t.Raw()
-		case has:
-			return finish(Failed(http.StatusForbidden, CodePrincipalChanged, "This process cannot make a call for another principal."), errors.New("no call key to narrow the token"))
-		default:
-			ref := a.Principal.Ref()
-			h.Principal = &ref
+		var ce *callError
+		if errors.As(err, &ce) {
+			return finish(ce.resp, ce.err)
 		}
+		return finish(Failed(http.StatusBadRequest, CodeBadRequest, ""), err)
 	}
-	msg := nats.NewMsg(Subject(service, op))
-	h.Set(msg.Header)
-	msg.Data = body
-
+	deadline, _ := ReadDeadline(msg)
+	callID := msg.Header.Get(HeaderCall)
 	rctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 	retries := c.Retries
@@ -164,6 +136,8 @@ func Call[R any](c *Client, service, op string, args any, opts ...CallOption) R 
 			}
 			return finish(Unavailable(service), err)
 		case errors.Is(err, context.Canceled):
+			// Tell the server holding the call to stop it (forge 21c).
+			_ = c.NC.Publish(CancelSubject(service, callID), nil)
 			return finish(Failed(499, "call_canceled", "The call was canceled."), err)
 		case errors.Is(err, context.DeadlineExceeded), errors.Is(err, nats.ErrTimeout):
 			return finish(Timeout(service), err)
@@ -171,4 +145,83 @@ func Call[R any](c *Client, service, op string, args any, opts ...CallOption) R 
 			return finish(Unavailable(service), err)
 		}
 	}
+}
+
+// callError is a call that failed before it was sent, with its response.
+type callError struct {
+	resp features.ServiceResponse
+	err  error
+}
+
+func (e *callError) Error() string { return e.err.Error() }
+
+// ReadDeadline is the deadline a call's message carries.
+func ReadDeadline(m *nats.Msg) (time.Time, bool) {
+	h, err := ReadHeaders(m.Header)
+	if err != nil || h.Deadline.IsZero() {
+		return time.Time{}, false
+	}
+	return h.Deadline, true
+}
+
+// request is the message for op of service with args: body, headers and
+// call token. A plain call always has a deadline (the context's, else the
+// client's timeout); a stream has one only when its context does.
+func (c *Client) request(ctx context.Context, service, op string, args any, opts []CallOption, stream bool) (*nats.Msg, error) {
+	var o callOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	a := ArgsOf(args)
+	timeout := c.Timeout
+	if timeout <= 0 {
+		timeout = DefaultTimeout
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok && !stream {
+		deadline = time.Now().Add(timeout)
+	}
+	body, err := Encode(args)
+	if err != nil {
+		return nil, &callError{Failed(http.StatusBadRequest, CodeBadRequest, "The call's arguments cannot be sent."), err}
+	}
+	h := Headers{
+		CallID:      strconv.FormatUint(features.NewTSID(), 10),
+		Trace:       logging.TraceFrom(ctx),
+		Deadline:    deadline,
+		Meta:        a.Meta,
+		Idempotency: o.key,
+		Caller:      c.Caller,
+		Tenant:      a.Principal.TenantID,
+	}
+	if authz.HasAs(ctx) {
+		return nil, &callError{Failed(http.StatusForbidden, CodeAsLocal, "A check decided by a role cannot be sent to another process."), errors.New("the call runs under authz.WithAs")}
+	}
+	if a.Principal.Kind != "" {
+		tok, has := TokenFrom(ctx)
+		fresh := has && time.Until(time.Unix(tok.Expires, 0)) > 30*time.Second
+		switch {
+		case has && tok.Names(a.Principal) && (fresh || c.Keys == nil):
+			h.Token = tok.Raw()
+		case c.Keys != nil:
+			var parent *Token
+			if has && !tok.Names(a.Principal) {
+				parent = &tok
+			}
+			t, err := c.Keys.Mint(a.Principal, parent)
+			if err != nil {
+				return nil, &callError{Failed(http.StatusInternalServerError, "call_token", ""), err}
+			}
+			h.Token = t.Raw()
+		case has:
+			return nil, &callError{Failed(http.StatusForbidden, CodePrincipalChanged, "This process cannot make a call for another principal."), errors.New("no call key to narrow the token")}
+		default:
+			ref := a.Principal.Ref()
+			h.Principal = &ref
+		}
+	}
+	msg := nats.NewMsg(Subject(service, op))
+	h.Set(msg.Header)
+	msg.Data = body
+	return msg, nil
 }

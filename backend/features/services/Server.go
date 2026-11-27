@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,21 +59,64 @@ type Server struct {
 	trust   bool
 	public  []ed25519.PublicKey
 	slots   chan struct{}
+	nc      *nats.Conn
 	sub     *nats.Subscription
-	wg      sync.WaitGroup
+	cancel  *nats.Subscription
+	cancels cancels
+	// at is the one operation of a server made by ServeAt.
+	at string
+	wg sync.WaitGroup
 }
 
 // Serve subscribes to service's calls in its queue group and runs each
 // with the operation of ops its subject names.
 func Serve(nc *nats.Conn, service string, ops map[string]Handler, opts ...ServerOption) (*Server, error) {
-	s := &Server{service: service, ops: ops}
+	s := &Server{service: service, ops: ops, nc: nc}
 	for _, o := range opts {
 		o(s)
 	}
 	if s.slots == nil {
 		s.slots = make(chan struct{}, 256)
 	}
+	// Cancellations go to every server: the one holding the call stops it.
+	csub, err := nc.Subscribe(CancelSubject(service, "*"), func(m *nats.Msg) {
+		s.cancels.cancel(OpOf(m.Subject))
+	})
+	if err != nil {
+		return nil, log.Wrap(err)
+	}
+	s.cancel = csub
 	sub, err := nc.QueueSubscribe(Prefix+"."+service+".>", Queue(service), func(m *nats.Msg) {
+		if isCancel(m.Subject) {
+			return
+		}
+		s.slots <- struct{}{}
+		s.wg.Add(1)
+		go func() {
+			defer func() { <-s.slots; s.wg.Done() }()
+			s.handle(m)
+		}()
+	})
+	if err != nil {
+		_ = csub.Unsubscribe()
+		return nil, log.Wrap(err)
+	}
+	s.sub = sub
+	return s, nil
+}
+
+// ServeAt serves the one call sent to subject (a WaitSubject) with
+// handler: the process waiting for it, alone, not in a queue group.
+func ServeAt(nc *nats.Conn, subject, service string, handler Handler, opts ...ServerOption) (*Server, error) {
+	op := OpOf(subject)
+	s := &Server{service: service, ops: map[string]Handler{op: handler}, nc: nc, at: op}
+	for _, o := range opts {
+		o(s)
+	}
+	if s.slots == nil {
+		s.slots = make(chan struct{}, 4)
+	}
+	sub, err := nc.Subscribe(subject, func(m *nats.Msg) {
 		s.slots <- struct{}{}
 		s.wg.Add(1)
 		go func() {
@@ -93,6 +137,9 @@ func (s *Server) Stop() {
 		_ = s.sub.Drain()
 	}
 	s.wg.Wait()
+	if s.cancel != nil {
+		_ = s.cancel.Unsubscribe()
+	}
 }
 
 func (s *Server) handle(m *nats.Msg) {
@@ -143,11 +190,17 @@ func (s *Server) handle(m *nats.Msg) {
 	if tok != nil {
 		ctx = WithToken(ctx, *tok)
 	}
-	cancel := func() {}
+	ctx, cancel := context.WithCancel(ctx)
 	if !h.Deadline.IsZero() {
-		ctx, cancel = context.WithDeadline(ctx, h.Deadline)
+		var stop context.CancelFunc
+		ctx, stop = context.WithDeadline(ctx, h.Deadline)
+		defer stop()
 	}
 	defer cancel()
+	if h.CallID != "" {
+		s.cancels.add(h.CallID, cancel)
+		defer s.cancels.remove(h.CallID)
+	}
 
 	handler, ok := s.ops[op]
 	if !ok {
@@ -159,7 +212,47 @@ func (s *Server) handle(m *nats.Msg) {
 		s.reply(ctx, m, op, start, failure{Failed(http.StatusBadRequest, CodeBadRequest, "The call's arguments cannot be read.")})
 		return
 	}
+	if st, ok := resp.(streamOf); ok {
+		s.serveStream(ctx, m, op, st.req)
+		log.With("service", s.service, "op", op, "durationMs", time.Since(start).Milliseconds(), "side", "server").
+			Debug(ctx, "svc.stream %s.%s", s.service, op)
+		return
+	}
 	s.reply(ctx, m, op, start, resp)
+}
+
+// isCancel reports whether subject is a call's cancellation or a call to
+// a waiting process (WaitSubject), which the queue group leaves alone.
+func isCancel(subject string) bool {
+	parts := strings.SplitN(subject, ".", 4)
+	return len(parts) == 4 && (parts[2] == "cancel" || parts[2] == "wait")
+}
+
+// WaitSubject is where one process waits for a call about one thing, such
+// as the answer to a tool call its chat round is paused on (forge 21c):
+// svc.<service>.wait.<key>…, each key a token. Send to it with CallAt and
+// serve it with ServeAt.
+func WaitSubject(service string, keys ...string) string {
+	out := Prefix + "." + service + ".wait"
+	for _, k := range keys {
+		out += "." + SubjectToken(k)
+	}
+	return out
+}
+
+// SubjectToken makes s a single subject token: '.', '*', '>' and spaces become
+// '_' (an empty s is "_").
+func SubjectToken(s string) string {
+	if s == "" {
+		return "_"
+	}
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '.', '*', '>', ' ', '\t', '\r', '\n':
+			return '_'
+		}
+		return r
+	}, s)
 }
 
 func (s *Server) reply(ctx context.Context, m *nats.Msg, op string, start time.Time, resp any) {

@@ -12,14 +12,16 @@ var (
 	textMarshaler = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
 )
 
-// CannotTravel lists why each operation of spec that is neither local nor
-// streamed cannot travel: a field of its args or response, at any depth,
-// holding a channel, a function or an interface with methods (a reader, a
-// database handle). Empty when every one can.
+// CannotTravel lists why each operation of spec that is not local cannot
+// travel: a field of its args or response, at any depth, holding a
+// channel, a function or an interface with methods (a reader, a database
+// handle). A streamed operation's request may hold channels at its top
+// level (forge 21c); their values and its other fields must travel.
+// Empty when every one can.
 func CannotTravel(spec Spec) []string {
 	var out []string
 	for _, op := range spec.Ops {
-		if op.Local || op.Stream {
+		if op.Local {
 			continue
 		}
 		m, ok := spec.Interface.MethodByName(op.Name)
@@ -27,7 +29,11 @@ func CannotTravel(spec Spec) []string {
 			out = append(out, fmt.Sprintf("%s.%s: not on the interface", spec.Name, op.Name))
 			continue
 		}
-		for _, t := range []reflect.Type{m.Type.In(0), m.Type.Out(0)} {
+		types := []reflect.Type{m.Type.In(0), m.Type.Out(0)}
+		if op.Stream {
+			types = streamParts(m.Type.In(0), m.Type.Out(0))
+		}
+		for _, t := range types {
 			if why := travels(t, t.Name(), map[reflect.Type]bool{}); why != "" {
 				out = append(out, fmt.Sprintf("%s.%s: %s cannot travel; mark the operation //svc:local or reshape it", spec.Name, op.Name, why))
 			}
@@ -74,4 +80,28 @@ func travels(t reflect.Type, path string, seen map[reflect.Type]bool) string {
 		}
 	}
 	return ""
+}
+
+// streamParts are what a streamed operation sends: its args, and its
+// request's fields with each channel's values in place of the channel.
+func streamParts(args, req reflect.Type) []reflect.Type {
+	out := []reflect.Type{args}
+	if req.Kind() == reflect.Pointer {
+		req = req.Elem()
+	}
+	if req.Kind() != reflect.Struct {
+		return append(out, req)
+	}
+	for i := 0; i < req.NumField(); i++ {
+		f := req.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+		if f.Type.Kind() == reflect.Chan {
+			out = append(out, f.Type.Elem())
+		} else {
+			out = append(out, f.Type)
+		}
+	}
+	return out
 }

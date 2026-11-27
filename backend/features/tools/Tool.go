@@ -70,11 +70,13 @@ type Tool struct {
 	Timeout time.Duration
 	// Asks, when set, decides per call whether it asks first, in place of
 	// its effect: forge.apply asks only for a batch that publishes,
-	// installs or writes records (forge 06 question 2).
-	Asks func(args json.RawMessage) bool
+	// installs or writes records (forge 06 question 2). Like Run, it
+	// stays in its process: a tool sent to another (a chat's client tools,
+	// forge 21c) travels as metadata.
+	Asks func(args json.RawMessage) bool `json:"-"`
 	// Run runs a server tool. An error's text goes to the model and the
 	// user, so it names nothing private (a service's Common.Message is safe).
-	Run func(call Call) (Result, error)
+	Run func(call Call) (Result, error) `json:"-"`
 }
 
 // AsksFor reports whether a call with these arguments needs the user's

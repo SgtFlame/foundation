@@ -18,7 +18,7 @@ func proxyFile(o Options, s Service) ([]byte, error) {
 	b.WriteString(")\n\n")
 	fmt.Fprintf(&b, "// Service is the %s service's name on the wire.\nconst Service = %q\n\n", s.Name, s.Name)
 	b.WriteString("// Proxy sends each call to a server of the service.\ntype Proxy struct {\n\tC *services.Client\n")
-	fmt.Fprintf(&b, "\t// Local, when set, runs the operations that cannot be sent (local and\n\t// streamed ones) in this process.\n\tLocal %s.Service\n", s.Pkg)
+	fmt.Fprintf(&b, "\t// Local, when set, runs the operations that cannot be sent (local\n\t// ones) in this process, and streamed ones without a stream.\n\tLocal %s.Service\n", s.Pkg)
 	for _, e := range s.Embedded {
 		fmt.Fprintf(&b, "\t// %s.%s cannot be sent as it is: the caller sets it.\n\t%s.%s\n", e.Alias, e.Name, e.Alias, e.Name)
 	}
@@ -49,7 +49,7 @@ func proxyFile(o Options, s Service) ([]byte, error) {
 		case op.Local:
 			fmt.Fprintf(&b, "\treturn services.NotServed[%s](Service, %q, services.CodeLocal)\n", res, op.Name)
 		case op.Stream:
-			fmt.Fprintf(&b, "\treturn services.NotServed[%s](Service, %q, services.CodeStream)\n", res, op.Name)
+			fmt.Fprintf(&b, "\treturn services.Stream[%s](p.C, Service, %q, args)\n", res, op.Name)
 		default:
 			opts := ""
 			if op.Idempotent {
@@ -67,12 +67,15 @@ func serverFile(o Options, s Service) ([]byte, error) {
 	b.WriteString(Header)
 	fmt.Fprintf(&b, "// Package server serves %s.Service's calls from NATS (forge 21a-2),\n// handing each to a real implementation.\npackage server\n\n", s.Pkg)
 	fmt.Fprintf(&b, "import (\n\t%q\n\t%q\n\t%q\n)\n\n", o.Services, s.Import, "github.com/nats-io/nats.go")
-	fmt.Fprintf(&b, "// Ops are the operations a server runs; local and streamed ones are\n// left out.\nfunc Ops(svc %s.Service) map[string]services.Handler {\n\treturn map[string]services.Handler{\n", s.Pkg)
+	fmt.Fprintf(&b, "// Ops are the operations a server runs; local ones are left out.\nfunc Ops(svc %s.Service) map[string]services.Handler {\n\treturn map[string]services.Handler{\n", s.Pkg)
 	for _, op := range s.Ops {
-		if op.Local || op.Stream {
-			continue
+		switch {
+		case op.Local:
+		case op.Stream:
+			fmt.Fprintf(&b, "\t\t%q: services.Streamed(svc.%s),\n", op.Name, op.Name)
+		default:
+			fmt.Fprintf(&b, "\t\t%q: services.Unary(svc.%s),\n", op.Name, op.Name)
 		}
-		fmt.Fprintf(&b, "\t\t%q: services.Unary(svc.%s),\n", op.Name, op.Name)
 	}
 	b.WriteString("\t}\n}\n\n")
 	fmt.Fprintf(&b, "// Serve serves svc's calls on nc.\nfunc Serve(nc *nats.Conn, svc %s.Service, opts ...services.ServerOption) (*services.Server, error) {\n\treturn services.Serve(nc, %q, Ops(svc), opts...)\n}\n", s.Pkg, s.Name)

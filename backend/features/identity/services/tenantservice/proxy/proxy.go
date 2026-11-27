@@ -15,8 +15,8 @@ const Service = "tenant"
 // Proxy sends each call to a server of the service.
 type Proxy struct {
 	C *services.Client
-	// Local, when set, runs the operations that cannot be sent (local and
-	// streamed ones) in this process.
+	// Local, when set, runs the operations that cannot be sent (local
+	// ones) in this process, and streamed ones without a stream.
 	Local tenantservice.Service
 }
 

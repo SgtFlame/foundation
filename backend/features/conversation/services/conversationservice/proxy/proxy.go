@@ -15,8 +15,8 @@ const Service = "conversation"
 // Proxy sends each call to a server of the service.
 type Proxy struct {
 	C *services.Client
-	// Local, when set, runs the operations that cannot be sent (local and
-	// streamed ones) in this process.
+	// Local, when set, runs the operations that cannot be sent (local
+	// ones) in this process, and streamed ones without a stream.
 	Local conversationservice.Service
 }
 
@@ -37,7 +37,7 @@ func (p *Proxy) Send(args conversationservice.SendArgs) *conversationservice.Sen
 	if p.Local != nil {
 		return p.Local.Send(args)
 	}
-	return services.NotServed[*conversationservice.SendRequest](Service, "Send", services.CodeStream)
+	return services.Stream[*conversationservice.SendRequest](p.C, Service, "Send", args)
 }
 
 func (p *Proxy) Feedback(args conversationservice.FeedbackArgs) conversationservice.FeedbackResponse {

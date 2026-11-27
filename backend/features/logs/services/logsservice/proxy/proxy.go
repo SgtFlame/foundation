@@ -15,8 +15,8 @@ const Service = "logs"
 // Proxy sends each call to a server of the service.
 type Proxy struct {
 	C *services.Client
-	// Local, when set, runs the operations that cannot be sent (local and
-	// streamed ones) in this process.
+	// Local, when set, runs the operations that cannot be sent (local
+	// ones) in this process, and streamed ones without a stream.
 	Local logsservice.Service
 }
 
@@ -53,7 +53,7 @@ func (p *Proxy) Tail(args logsservice.TailArgs) *logsservice.TailRequest {
 	if p.Local != nil {
 		return p.Local.Tail(args)
 	}
-	return services.NotServed[*logsservice.TailRequest](Service, "Tail", services.CodeStream)
+	return services.Stream[*logsservice.TailRequest](p.C, Service, "Tail", args)
 }
 
 func (p *Proxy) Ingest(args logsservice.IngestArgs) logsservice.IngestResponse {

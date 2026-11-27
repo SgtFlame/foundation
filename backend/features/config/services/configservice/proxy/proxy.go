@@ -16,8 +16,8 @@ const Service = "config"
 // Proxy sends each call to a server of the service.
 type Proxy struct {
 	C *services.Client
-	// Local, when set, runs the operations that cannot be sent (local and
-	// streamed ones) in this process.
+	// Local, when set, runs the operations that cannot be sent (local
+	// ones) in this process, and streamed ones without a stream.
 	Local configservice.Service
 	// config.Reader cannot be sent as it is: the caller sets it.
 	config.Reader
@@ -51,5 +51,5 @@ func (p *Proxy) Watch(args configservice.WatchArgs) *configservice.WatchRequest 
 	if p.Local != nil {
 		return p.Local.Watch(args)
 	}
-	return services.NotServed[*configservice.WatchRequest](Service, "Watch", services.CodeStream)
+	return services.Stream[*configservice.WatchRequest](p.C, Service, "Watch", args)
 }

@@ -10,8 +10,7 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-// Ops are the operations a server runs; local and streamed ones are
-// left out.
+// Ops are the operations a server runs; local ones are left out.
 func Ops(svc embedservice.Service) map[string]services.Handler {
 	return map[string]services.Handler{
 		"Embed":    services.Unary(svc.Embed),
