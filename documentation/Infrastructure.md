@@ -27,6 +27,10 @@ Forge iteration 22 (`../forge/documentation/plans/022-InfrastructureAsCode.md`):
 - `infra.ReadActual` lists each account's hosts and sizes through `infra.compute` (over `Deps.Compute`, `infra.DispatcherCompute` in `serve.go`) and asks `Deps.Actual` for the rest (`infraapply.RecordsActual`: instances by their desired-state records, a cluster once one of its hosts is recorded).
 - `infra.Plan` (pure) gives steps `{id, op: create | change | remove, kind, site, account, before, desired, after, holdsData, summary}`: removals first, dependents before what they depend on, then creations and changes in dependency order; **refusals** for a VM where no host of the site can run VMs (*no host on west can run VMs*) or a host size without `vms` that must have it; **notes** for a cluster of fewer than three hosts.
 - The `infra.plan {config?, version?}` tool (`infra.MakePlan`) stores the plan as an `infraPlan` on the live area `infra` (internal `infra.plan.record`; status `ready`, or `refused` with refusals), read by `infra.plans` and `infra.planOf {id}`.
+- `infra.plan` checks `infra.operate` and never asks (it changes nothing at the providers), so a page's *Call tool* and the chat plan freely; applying is the person's decision. `infra.LoadDocument` reads the draft or a version, waiting a little for one committed a moment ago.
+- `infra.describe {config?, version?}` (`infra.Describe`, read, `infra.read`): a version (left out: the applied one, else the head; 0 the draft) as resources by site, each `present`, `missing`, `changed` or `extra` by the plan against what exists, which it does not store; with refusals, notes and counts (forge 22q).
+- `infra.RegisterToolAndCall` registers a tool and a live call of the same id ending with one `result {content, summary}`: `infra.plan`, `infra.describe` and `infra.drift` are both, so the forge tools call them over the live connection.
+- `infra.versions` watches every version and keeps the configuration's (a KV pattern matches whole tokens, so `main-*` matched nothing).
 
 ### The infrastructure nodes (22e, `features/infra/nodes`)
 
@@ -38,6 +42,9 @@ Forge iteration 22 (`../forge/documentation/plans/022-InfrastructureAsCode.md`):
 - A step's job runs `infraapply.RunStep`: a retryable provider error fails the run so the job retries; otherwise the outcome is recorded by the internal `infra.apply.step`, whose decision enqueues the steps it unblocks **in the same commit**, so whichever runner finishes the last dependency enqueues the next, and no leader is needed. A step not ready does nothing. The last step marks the version applied.
 - `infra.apply.resume` runs failed (and stuck) steps again as new attempts. `infra.applies` and `infra.applyOf {id}` read applies.
 - `infra.drift` (`infraapply.CheckDrift`) plans the applied version against what exists; with `onDrift: correct` it applies that plan. Rollback is planning and applying an earlier version.
+- The step jobs a commit names are enqueued by the `infra` area's outbox follower, which the apply commands make sure is followed first (`infraapply.Deps.Outbox`, `jobs.Runner.Outbox` in `serve.go`).
+- `infra.topology {config?}` (`infraapply.Topology`, a live query): the applied version (else the head, else the draft) as resources by site, each `present` or `missing` by the Control Plane record it is made as (`extra` for an `infraHost`/`infraInstance` record made by an apply that no resource names any more), with the record's health and status; it follows the configuration, the versions and the records and sends the whole view again when it changes (forge 22p).
+- `serve --control-plane` on a fresh server makes the root tenant before anyone exists; the next start gives it user 1 as Owner while it has no member (`controlplane.EnsureRootTenant`), else `cli controlplane init --user 1`.
 
 ## Not built yet
 
