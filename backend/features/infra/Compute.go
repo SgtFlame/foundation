@@ -100,9 +100,9 @@ func ComputeContract() connectors.Contract {
 			},
 			{
 				ID: "host.list", Title: "List hosts", Description: "Lists every host this connection made (those with our resource ids), to compare with the configuration.",
-				Effect: connectors.EffectRead,
-				Args:   json.RawMessage(`{"type":"object","properties":{"region":{"type":"string","description":"Only hosts in this region; every region when left out"}}}`),
-				Result: json.RawMessage(`{"type":"object","properties":{"hosts":{"type":"array","items":` + hostSchema + `,"description":"The hosts"}},"required":["hosts"]}`),
+				Effect:   connectors.EffectRead,
+				Args:     json.RawMessage(`{"type":"object","properties":{"region":{"type":"string","description":"Only hosts in this region; every region when left out"}}}`),
+				Result:   json.RawMessage(`{"type":"object","properties":{"hosts":{"type":"array","items":` + hostSchema + `,"description":"The hosts"}},"required":["hosts"]}`),
 				Examples: []connectors.Example{{Args: json.RawMessage(`{}`), Result: json.RawMessage(`{"hosts":[` + hostExample + `]}`)}},
 				Errors:   retryable,
 			},

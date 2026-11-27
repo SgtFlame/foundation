@@ -11,7 +11,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	contributeDiff(reg)
 	contributeExport(reg)
 	contributeCompute(reg)
+	contributeResources(reg)
+	contributePlans(reg, deps)
 }
 
-// Deps are what infra needs at run time, made after the registry.
-type Deps struct{}

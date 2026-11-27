@@ -625,7 +625,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var transcriptFiles recordsfiles.Files // Parse transcript's files, once the store is made (forge 18e)
 		registry := extensions.NewRegistry()
 		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.Modes, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, tools.Sources, authz.ResourceTypes,
-			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents, connectors.Contracts, connectors.Types, connections.Validators, authz.ContributedRoles)
+			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents, connectors.Contracts, connectors.Types, connections.Validators, authz.ContributedRoles, infra.ResourceKinds)
 		// Each feature declares its resource types and their actions
 		authz.Contribute(registry)
 		authz.ContributeAgents(registry) // agent (forge 07j)
@@ -1144,7 +1144,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Modes people made are listed after the chat.modes settings (forge 15h)
 		workspaceDeps = workspace.Deps{Store: projections, Bus: liveBus}
 		gameDeps = game.Deps{Store: projections}
-		infraDeps = infra.Deps{}
+		infraDeps = infra.Deps{Bus: liveBus, Store: projections, Compute: infra.DispatcherCompute{D: connectorDispatcher}} // plans read the providers through infra.compute (forge 22d)
 		workbenchcontext.SetWorkspaceNames(func(args features.ServiceArgs, id string) (string, bool) {
 			return workspace.Name(args, projections, id)
 		})

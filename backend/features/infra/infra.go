@@ -37,6 +37,7 @@ const (
 // the infra resource type, pinned to the root tenant).
 const (
 	ActionRead    = "infra.read"
+	ActionOperate = "infra.operate"
 	ActionAdmin   = "infra.admin"
 	ActionApprove = "infra.approve"
 )
