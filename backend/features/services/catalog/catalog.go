@@ -86,6 +86,9 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/services/services/servicesservice"
 	servicesproxy "github.com/SgtFlame/foundation/backend/features/services/services/servicesservice/proxy"
 	servicesserver "github.com/SgtFlame/foundation/backend/features/services/services/servicesservice/server"
+	"github.com/SgtFlame/foundation/backend/features/text/services/parseservice"
+	parseproxy "github.com/SgtFlame/foundation/backend/features/text/services/parseservice/proxy"
+	parseserver "github.com/SgtFlame/foundation/backend/features/text/services/parseservice/server"
 	"github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice"
 	prefabproxy "github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice/proxy"
 	prefabserver "github.com/SgtFlame/foundation/backend/features/ui/services/prefabservice/server"
@@ -425,6 +428,18 @@ var Services = []services.Spec{
 			return logsserver.Serve(nc, svc.(logsservice.Service), opts...)
 		},
 		Manifest: services.Named(logsservice.Manifest, "logs"),
+	},
+	{
+		Name:      "parse",
+		Interface: reflect.TypeOf((*parseservice.Service)(nil)).Elem(),
+		Ops: []services.OpSpec{
+			{Name: "ParseCSV", Idempotent: true},
+		},
+		Proxy: func(c *services.Client) any { return parseproxy.New(c) },
+		Serve: func(nc *nats.Conn, svc any, opts ...services.ServerOption) (*services.Server, error) {
+			return parseserver.Serve(nc, svc.(parseservice.Service), opts...)
+		},
+		Manifest: services.Named(parseservice.Manifest, "parse"),
 	},
 	{
 		Name:      "prefab",

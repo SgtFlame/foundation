@@ -51,6 +51,7 @@ func Contribute(reg *extensions.Registry, deps func() data.Deps) {
 	contributeWrites(reg, deps)
 	contributeReads(reg, deps)
 	contributeFiles(reg, deps)
+	contributePrepare(reg, deps) // Prepare rows (forge 40c)
 	node(reg, 690, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "records.rankBetween"}, Title: "Rank between",
 		Description: "A position (rank) between two others, for a record made in place: a new card at the top of a column has after empty and before the top card's rank. Leave after empty for the start and before empty for the end; both empty give a first rank. Moving an existing record is record.move, which computes its rank itself (forge 30a).",

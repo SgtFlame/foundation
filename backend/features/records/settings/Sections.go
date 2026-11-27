@@ -20,10 +20,12 @@ type Records struct {
 	// aggregates) waits after a change for more before it does
 	DebounceMs int `json:"debounceMs"`
 	MaxFileMB  int `json:"maxFileMB"` // the largest file a file field takes
+	// ImportMaxRows is the most rows Parse CSV reads from one file (forge 40c)
+	ImportMaxRows int `json:"importMaxRows"`
 }
 
 // Defaults are the section's defaults, also used when it cannot be read.
-var Defaults = Records{ScanLimit: 10000, ImportConcurrency: 8, DebounceMs: 100, MaxFileMB: 25}
+var Defaults = Records{ScanLimit: 10000, ImportConcurrency: 8, DebounceMs: 100, MaxFileMB: 25, ImportMaxRows: 50000}
 
 const schema = `{
   "type": "object",
@@ -31,7 +33,8 @@ const schema = `{
     "scanLimit": {"type": "integer", "title": "Scan limit", "description": "How many records of one entity type a query reads without an index (or while walking one for its order). A scan stops there and says so; a live list over more fails. Declare an index for what is filtered or sorted by.", "min": 100, "max": 1000000},
     "importConcurrency": {"type": "integer", "title": "Import concurrency", "description": "How many records an import creates at once.", "min": 1, "max": 64},
     "debounceMs": {"type": "integer", "title": "Re-run delay (ms)", "description": "How long a live query that runs again on every change (one with expansions, or an aggregate) waits after a change for others, so a burst of changes runs it once.", "min": 10, "max": 10000},
-    "maxFileMB": {"type": "integer", "title": "Largest file (MB)", "description": "The largest file a record's file field takes; larger uploads are refused.", "min": 1, "max": 1024}
+    "maxFileMB": {"type": "integer", "title": "Largest file (MB)", "description": "The largest file a record's file field takes; larger uploads are refused.", "min": 1, "max": 1024},
+    "importMaxRows": {"type": "integer", "title": "Import rows", "description": "The most rows Parse CSV reads from one file; a larger file is refused, to be split.", "min": 100, "max": 1000000}
   }
 }`
 

@@ -1,0 +1,1 @@
+| [Services.md](Services.md) › *Built in forge 40c* | The parse service (forge 40c): `parseservice.ParseCSV`, files from strangers read in a service that can move out of process; `wiring.Feature.Services` |

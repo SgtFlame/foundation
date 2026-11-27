@@ -22,7 +22,7 @@ func FoundationGroups() Groups {
 	return Groups{
 		"web":    {"extensions", "ui", "collab", "kb", "volume", "live"},
 		"data":   {"identity", "tenant", "user", "authz", "secrets", "config", "usage", "conversation", "chronicle", "retrieval", "cognition", "entity", "prefab", "app", "record", "files", "live", "connectors", "logs"},
-		"runner": {"chat", "embed", "index"},
+		"runner": {"chat", "embed", "index", "parse"},
 	}
 }
 

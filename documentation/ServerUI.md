@@ -525,3 +525,13 @@ Verification:
   - a drop with no server change went back after 5 s;
   - scrolling a column ran at about 50 frames a second on the headless development build.
 - The two-session browser walk comes with forge 30d's Board view.
+
+## Built in forge 40a and 40b: charts, stat values and the relation picker
+
+Forge's parts 40a and 40b (plans `../forge/documentation/plans/040a-Charts.md`, `040b-RelationPicker.md`) added three primitives, whole, to Foundation:
+
+- **`mui.chart`** (`ui/components/chart.go`; renderer `frontend/common/src/ui/renderers/mui/chart/Chart.tsx`, Recharts 3, lazy-loaded with the renderer): `kind` `bar`, `stackedBar`, `line`, `area`, `pie` or `funnel`; data as `series` (`[{key, label, points: [{x, y}]}]`) or as `rows` with `xField`, `yField` and `seriesField` (dotted paths), so a `records.aggregate` result (`{groups}`) or a `records.find` page (`{records}`) binds directly; `labels` (x value → label, such as stage ids to names), `order` (the x values in order; a funnel shows every one of them, empty stages too), `format` (`number`, `money` with `currency`, `percent`, `duration` in seconds), `stacked`, `legend`, `height`, `title`. At most seven series plus a grey *Other* (pie slices fold the same way; a funnel never folds), in the dashboard palette, which moved to `components/charts/palette.ts`. Event `select {series, x}` on a bar, point or slice. The conversion is `components/charts/chartData.ts`, pure and unit-tested (`yarn test`).
+- **`mui.metric`** (`Metric.tsx`): one number formatted as the chart's are, with an optional `compare` value shown as a delta arrow (`upIsBad` turns its colours), tweened when it changes.
+- **`mui.relationPicker`** (`ui/components/relationpicker.go`; `renderers/mui/relation/RelationPicker.tsx`, helpers in `picker.ts`, unit-tested): search as you type over an entity type's records, `multiple` or single, narrowed by `where`, through `records.search` when the type has searchable fields (and `searchable` is not false) and the text has two characters, else a prefix scan of the title field through `records.find`; a one-off read per keystroke, debounced 250 ms, an older answer dropped. The chosen records show by title, each kept live by its own `records.get` subscription; `display` names fields shown under each option; `create` adds a *Create "…"* row. Events `change {value}` (an id, a list of ids, or null) and `create {text}`. `record.fieldEditor` uses it (exported `RelationPicker`) for every relation field but those to `user`, which keep the people select.
+
+Forge's starter library builds on them: *Stat tile* (`statTile`, a live aggregate with an optional compare aggregate) and *Stage funnel* (`stageFunnel`, records grouped by a stage relation ordered by the stages' own rank field).

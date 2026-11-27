@@ -1,0 +1,1 @@
+| [Records.md](Records.md) › *Built in forge 40c* | CSV import (forge 40c): `record.upsert` (batches of 500 created or matched and updated as one command), *Parse CSV*, *Prepare rows* (titles resolved, missing related records listed), `importMaxRows` |
