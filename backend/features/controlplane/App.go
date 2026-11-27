@@ -28,15 +28,16 @@ const AppID = "infrastructure"
 
 // The desired state's entity types.
 const (
-	EntityHost       = "infraHost"
-	EntityProfile    = "infraProfile"
-	EntityInstance   = "infraInstance"
-	EntityUnit       = "infraUnit"
-	EntityPackagePin = "infraPackagePin"
-	EntityEnrollment = "infraEnrollment"
-	EntityNatsAcct   = "infraNatsAccount"
-	EntityScript     = "infraScript"
-	EntityAptSource  = "infraAptSource"
+	EntityHost        = "infraHost"
+	EntityProfile     = "infraProfile"
+	EntityInstance    = "infraInstance"
+	EntityUnit        = "infraUnit"
+	EntityPackagePin  = "infraPackagePin"
+	EntityEnrollment  = "infraEnrollment"
+	EntityNatsAcct    = "infraNatsAccount"
+	EntityNatsCluster = "infraNatsCluster"
+	EntityScript      = "infraScript"
+	EntityAptSource   = "infraAptSource"
 )
 
 //go:embed infra

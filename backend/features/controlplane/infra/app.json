@@ -2,7 +2,7 @@
   "id": "infrastructure",
   "name": "Infrastructure",
   "icon": "dns",
-  "description": "The deployment's desired state as records, installed only in the root tenant: hosts, profiles, instances, units, package pins, enrollments, NATS accounts, signed scripts and approved apt sources. axiomd daemons read it resolved from the control account; Forge's Infrastructure app shows it.",
+  "description": "The deployment's desired state as records, installed only in the root tenant: hosts, profiles, instances, units, package pins, enrollments, NATS accounts and clusters, signed scripts and approved apt sources. axiomd daemons read it resolved from the control account; Forge's Infrastructure app shows it.",
   "entities": [
     "infraHost",
     "infraProfile",
@@ -11,6 +11,7 @@
     "infraPackagePin",
     "infraEnrollment",
     "infraNatsAccount",
+    "infraNatsCluster",
     "infraScript",
     "infraAptSource"
   ],
@@ -27,6 +28,7 @@
         "entity:infraPackagePin.*",
         "entity:infraEnrollment.*",
         "entity:infraNatsAccount.*",
+        "entity:infraNatsCluster.*",
         "entity:infraScript.*",
         "entity:infraAptSource.*"
       ],
@@ -44,6 +46,7 @@
         "entity:infraPackagePin.read",
         "entity:infraEnrollment.read",
         "entity:infraNatsAccount.read",
+        "entity:infraNatsCluster.read",
         "entity:infraScript.read",
         "entity:infraAptSource.read",
         "entity:infraInstance.update",
@@ -62,6 +65,7 @@
         "entity:infraPackagePin.read",
         "entity:infraEnrollment.read",
         "entity:infraNatsAccount.read",
+        "entity:infraNatsCluster.read",
         "entity:infraScript.read",
         "entity:infraAptSource.read"
       ]

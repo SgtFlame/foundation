@@ -20,15 +20,20 @@ import (
 // (forge 20b-2): desired state resolved per target, reported facts and
 // health, and the CTL stream of control requests' progress.
 const (
-	DesiredBucket = "ctl_desired" // host.<id>, inst.<id>: the resolved desired state
-	FactsBucket   = "ctl_facts"   // host.<id>, inst.<id>: facts, written on start and on change
-	HealthBucket  = "ctl_health"  // host.<id>, inst.<id>: heartbeats, gone after HealthTTL
-	StreamName    = "CTL"         // ctl.evt.<host|inst>.<id>.<event>
+	DesiredBucket = "ctl_desired"      // host.<id>, inst.<id>: the resolved desired state
+	FactsBucket   = "ctl_facts"        // host.<id>, inst.<id>: facts, written on start and on change
+	HealthBucket  = "ctl_health"       // host.<id>, inst.<id>: heartbeats, gone after HealthTTL
+	RolloutBucket = "ctl_nats_rollout" // <cluster>: the NATS node changing now, gone after RolloutTTL
+	StreamName    = "CTL"              // ctl.evt.<host|inst>.<id>.<event>
 )
 
 // HealthTTL is how long a heartbeat counts: a daemon beats more often.
 // Tests shorten it before anything is made.
 var HealthTTL = 30 * time.Second
+
+// RolloutTTL is how long a NATS cluster's rollout lease lives unrefreshed
+// (forge 20e): a crashed agent's lease frees itself.
+var RolloutTTL = 2 * time.Minute
 
 // Target kinds: a host's daemon or an instance's.
 const (
@@ -128,6 +133,9 @@ func (c *Control) Ensure(ctx context.Context) error {
 		return err
 	}
 	if err := c.ensureKV(ctx, natsd.KV(jetstream.KeyValueConfig{Bucket: HealthBucket, Description: "Each daemon's heartbeat", History: 1, TTL: HealthTTL, Storage: jetstream.MemoryStorage})); err != nil {
+		return err
+	}
+	if err := c.ensureKV(ctx, natsd.KV(jetstream.KeyValueConfig{Bucket: RolloutBucket, Description: "Each NATS cluster's rollout lease: the one node changing now (forge 20e)", History: 1, TTL: RolloutTTL, Storage: jetstream.FileStorage})); err != nil {
 		return err
 	}
 	_, err := c.JS.CreateOrUpdateStream(ctx, natsd.Stream(jetstream.StreamConfig{

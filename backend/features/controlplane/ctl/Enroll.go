@@ -77,7 +77,11 @@ func DaemonPermissions(t Target) natsauth.Permissions {
 		p.Pub = append(p.Pub, MintSubject(t.ID))
 	}
 	if t.Kind == KindInstance {
-		p.Pub = append(p.Pub, IssuerSubject(t.ID))
+		p.Pub = append(p.Pub, IssuerSubject(t.ID),
+			// NATS nodes' rollout lease (forge 20e)
+			"$KV."+RolloutBucket+".>",
+			"$JS.API.STREAM.INFO.KV_"+RolloutBucket,
+			"$JS.API.DIRECT.GET.KV_"+RolloutBucket+".$KV."+RolloutBucket+".>")
 	}
 	return p
 }

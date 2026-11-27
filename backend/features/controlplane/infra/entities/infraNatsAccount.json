@@ -16,13 +16,13 @@
       "id": "limits",
       "name": "Limits",
       "type": "json",
-      "description": "Connections, storage, memory and streams"
+      "description": "{connections, storage, memory, streams}: storage and memory in bytes; 0 or left out is unlimited"
     },
     {
       "id": "placement",
       "name": "Placement",
       "type": "text",
-      "description": "The cluster its streams are placed in"
+      "description": "The cluster its streams are placed in; changing it moves them one at a time"
     }
   ],
   "indexes": []

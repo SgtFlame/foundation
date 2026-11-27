@@ -1,0 +1,19 @@
+{
+  "id": "infraNatsCluster",
+  "owner": "app:infrastructure",
+  "name": "NATS cluster",
+  "description": "A NATS cluster: its nodes (units of kind nats), JetStream domain, gateways to other clusters, leaf remotes and the replicas each stream class keeps (forge 20e). The instance agents render each node's nats-server.conf from it and apply a change one node at a time.",
+  "titleField": "name",
+  "fields": [
+    {"id": "name", "name": "Name", "type": "text", "description": "The cluster's name (changing it needs every node restarted together: allowFullRestart)", "required": true},
+    {"id": "site", "name": "Site", "type": "text", "description": "The site it serves"},
+    {"id": "domain", "name": "JetStream domain", "type": "text", "description": "The JetStream domain, for a leaf site with its own JetStream (changing it needs allowFullRestart)"},
+    {"id": "nodes", "name": "Nodes", "type": "json", "description": "The ids of its units of kind nats, one per node"},
+    {"id": "gateways", "name": "Gateways", "type": "json", "description": "The other clusters it joins: [{name, urls}]"},
+    {"id": "leafRemotes", "name": "Leaf remotes", "type": "json", "description": "For a leaf site, the hub it connects to: [{url, account, credentials}], credentials a path on the node"},
+    {"id": "ports", "name": "Ports", "type": "json", "description": "{client, cluster, gateway, leaf, monitor}: 4222, 6222, 7222, 7422 and 8222 when left out"},
+    {"id": "replicas", "name": "Replicas", "type": "json", "description": "Replicas per stream class: {events, projections, jobs, …}"},
+    {"id": "allowFullRestart", "name": "Allow full restart", "type": "bool", "description": "Lets a change of name or domain, which no node can take alone, restart the nodes one at a time anyway", "default": false}
+  ],
+  "indexes": []
+}

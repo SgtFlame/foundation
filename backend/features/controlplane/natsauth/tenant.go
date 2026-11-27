@@ -2,6 +2,7 @@ package natsauth
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -131,4 +132,47 @@ func SysConn(o natsd.Options, keysDir, name string) (*nats.Conn, error) {
 	o.Creds, o.CredsData = filepath.Join(KeysDir(keysDir), "sys.creds"), nil
 	nc, err := nats.Connect(o.URL, natsd.ConnectOptions(o, name)...)
 	return nc, log.Wrapf(err, "connect as the system user")
+}
+
+// ApplyTenant makes a tenant's account match its desired limits (forge
+// 20e, the infraNatsAccount record): it reads the deployment from keys
+// again, makes the account when the tenant has none, sets the limits,
+// signs and saves it when they changed, and pushes it to every server
+// through sys. The account's revocations are kept. A push is idempotent,
+// so several processes applying one record converge; it reports whether
+// the account changed.
+func ApplyTenant(keys Keys, sys *nats.Conn, tenant uint64, l Limits) (bool, error) {
+	d, err := Load(keys)
+	if err != nil {
+		return false, err
+	}
+	name := TenantAccount(tenant)
+	a := d.Account(name)
+	changed := false
+	if a == nil {
+		if a, err = d.AddTenant(tenant, l); err != nil {
+			return false, err
+		}
+		changed = true
+	} else {
+		before, _ := json.Marshal(a.Claims.Limits)
+		a.SetLimits(l)
+		if after, _ := json.Marshal(a.Claims.Limits); string(after) != string(before) {
+			if err := d.Operator.Sign(a); err != nil {
+				return false, err
+			}
+			changed = true
+		}
+	}
+	if changed {
+		if err := d.SaveAccount(keys, name); err != nil {
+			return false, err
+		}
+	}
+	if sys != nil {
+		if err := Push(sys, a); err != nil {
+			return changed, err
+		}
+	}
+	return changed, nil
 }

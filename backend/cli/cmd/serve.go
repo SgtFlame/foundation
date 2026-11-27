@@ -964,6 +964,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			// the followers between its records and the control account
 			// (its own account with --nats-keys)
 			control := &ctl.Control{NC: nats.Conn(), JS: nats.JS()}
+			var natsDesired controlplane.Deps // forge 20e: NATS accounts and nodes from records
 			ctlConn, err := natsauth.AccountConn(natsOptions, serveNatsKeys, natsauth.Control, "serve-ctl")
 			if err != nil {
 				return err
@@ -983,14 +984,17 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 				if _, err := ctl.ServeEnroll(ctx, control, keys.Account(natsauth.Control)); err != nil {
 					return err
 				}
+				// a system user pushes accounts: tenant accounts from their
+				// records (forge 20e) and the issuer's revocations (20h)
+				sys, err := natsauth.SysConn(natsOptions, serveNatsKeys, "serve-ctl-sys")
+				if err != nil {
+					return err
+				}
+				defer sys.Close()
+				natsDesired = controlplane.Deps{NatsKeys: natsauth.DirKeys(natsauth.KeysDir(serveNatsKeys)), NatsSys: sys, NatsTrust: keys.Trust}
 				// forge 20h: the credential issuer, with Vault for the
-				// units' SecretIDs and a system user to push revocations
+				// units' SecretIDs
 				if boot.Vault() {
-					sys, err := natsauth.SysConn(natsOptions, serveNatsKeys, "serve-issuer")
-					if err != nil {
-						return err
-					}
-					defer sys.Close()
 					iss := &issuer.Issuer{C: control, D: keys, Sys: sys, Vault: boot.Client()}
 					if err := iss.Serve(ctx); err != nil {
 						return err
@@ -1006,7 +1010,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			if err != nil {
 				return err
 			}
-			controlDeps := controlplane.Deps{Projections: projections, Data: recordDeps, Bus: liveBus, Control: control, ScriptKey: scriptKey}
+			controlDeps := controlplane.Deps{Projections: projections, Data: recordDeps, Bus: liveBus, Control: control, ScriptKey: scriptKey,
+				NatsKeys: natsDesired.NatsKeys, NatsSys: natsDesired.NatsSys, NatsTrust: natsDesired.NatsTrust}
 			if err := controlplane.Start(ctx, func() controlplane.Deps { return controlDeps }); err != nil {
 				return err
 			}

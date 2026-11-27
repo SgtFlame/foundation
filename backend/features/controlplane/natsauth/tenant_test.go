@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -106,5 +108,57 @@ func TestMinterFindsNewAccounts(t *testing.T) {
 	}
 	if _, ok := TenantOf(App); ok {
 		t.Fatal("APP is not a tenant account")
+	}
+}
+
+// TestApplyTenant: a tenant account made and limited from its desired
+// limits takes effect on a running server with no restart: a stream past
+// the limit is refused, and raising the limit lets it through.
+func TestApplyTenant(t *testing.T) {
+	ctx := context.Background()
+	s := StartTestSecure(t)
+	keys := DirKeys(t.TempDir())
+	if err := s.D.Save(keys); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := ApplyTenant(keys, s.System(), 7, Limits{Streams: 1})
+	if err != nil || !changed {
+		t.Fatalf("apply: %v %v", changed, err)
+	}
+	if again, err := ApplyTenant(keys, s.System(), 7, Limits{Streams: 1}); err != nil || again {
+		t.Fatalf("a second apply changed it: %v %v", again, err)
+	}
+	d, _ := Load(keys)
+	u, err := d.Account(TenantAccount(7)).NewUser("t7", Everything, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "t7.creds")
+	_ = os.WriteFile(path, u.Creds, 0o600)
+	nc, err := nats.Connect(s.URL, nats.UserCredentials(path), nats.MaxReconnects(0))
+	if err != nil {
+		t.Fatalf("the tenant's user cannot connect: %v", err)
+	}
+	defer nc.Close()
+	js, _ := jetstream.New(nc)
+	if _, err := js.CreateStream(ctx, jetstream.StreamConfig{Name: "EVT_7_a", Subjects: []string{"a.>"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := js.CreateStream(ctx, jetstream.StreamConfig{Name: "EVT_7_b", Subjects: []string{"b.>"}}); err == nil {
+		t.Fatal("a second stream past the limit was made")
+	}
+	if _, err := ApplyTenant(keys, s.System(), 7, Limits{Streams: 2}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		_, err := js.CreateStream(ctx, jetstream.StreamConfig{Name: "EVT_7_b", Subjects: []string{"b.>"}})
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the raised limit did not take effect: %v", err)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }

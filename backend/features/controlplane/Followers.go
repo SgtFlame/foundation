@@ -11,10 +11,12 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/natsauth"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	"github.com/SgtFlame/foundation/backend/features/live/project"
 	"github.com/SgtFlame/foundation/backend/features/records/data"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -27,6 +29,15 @@ type Deps struct {
 	Control     *ctl.Control
 	// Sweep is how often health is checked (2 s when 0).
 	Sweep time.Duration
+	// NatsTrust is what every NATS node's configuration trusts (forge
+	// 20e): the operator's JWT, the system account and the accounts it
+	// preloads. Nil renders no trust chain.
+	NatsTrust func() *natsauth.Trust
+	// NatsKeys and NatsSys apply infraNatsAccount records: the
+	// deployment's keys and a system account connection that pushes
+	// accounts. Nil applies none.
+	NatsKeys natsauth.Keys
+	NatsSys  *nats.Conn
 	// ScriptKey signs infraScript records' content (forge 20c-3); its
 	// public half is every target's trusted scriptKeys. Nil signs nothing.
 	ScriptKey ed25519.PrivateKey
@@ -47,7 +58,7 @@ func Start(ctx context.Context, deps func() Deps) error {
 		return err
 	}
 	var subjects []string
-	for _, e := range []string{EntityHost, EntityProfile, EntityInstance, EntityUnit, EntityPackagePin, EntityAptSource} {
+	for _, e := range []string{EntityHost, EntityProfile, EntityInstance, EntityUnit, EntityPackagePin, EntityAptSource, EntityNatsCluster} {
 		subjects = append(subjects, "evt."+strconv.FormatUint(features.RootTenantID, 10)+".rec."+e+".>")
 	}
 	err := d.Projections.Follow(ctx, features.RootTenantID, live.AreaRecords, "controlplane.desired", subjects, func(e live.Event) error {
@@ -62,6 +73,9 @@ func Start(ctx context.Context, deps func() Deps) error {
 		})
 	if err != nil {
 		return log.Wrap(err)
+	}
+	if err := followNats(ctx, deps); err != nil {
+		return err
 	}
 	if err := followEvents(ctx, deps); err != nil {
 		return err
@@ -121,7 +135,7 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 		return log.Wrap(err)
 	}
 	read := map[string]map[string]map[string]json.RawMessage{}
-	for _, e := range []string{EntityHost, EntityProfile, EntityInstance, EntityUnit, EntityPackagePin, EntityAptSource} {
+	for _, e := range []string{EntityHost, EntityProfile, EntityInstance, EntityUnit, EntityPackagePin, EntityAptSource, EntityNatsCluster} {
 		rs, err := all(ctx, d, e)
 		if err != nil {
 			return err
@@ -159,7 +173,13 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 		var units, pins []map[string]json.RawMessage
 		for _, u := range read[EntityUnit] {
 			if str(u, "instance") == id {
-				units = append(units, desired(u))
+				du := desired(u)
+				if str(u, "kind") == "nats" {
+					if n := natsOf(read, d, u); n != nil {
+						du["nats"], _ = json.Marshal(n)
+					}
+				}
+				units = append(units, du)
 			}
 		}
 		for _, p := range read[EntityPackagePin] {

@@ -54,6 +54,8 @@ type Unit struct {
 	Files      []File          `json:"files"`
 	Health     []Check         `json:"health"`
 	Status     string          `json:"status"` // running (default), stopped
+	// Nats is a nats unit's node configuration, from its cluster (forge 20e).
+	Nats *NatsNode `json:"nats,omitempty"`
 }
 
 // File is a file a unit needs: content is a Go template over .Config
@@ -63,6 +65,8 @@ type File struct {
 	Content string `json:"content"`
 	Mode    string `json:"mode,omitempty"` // octal, 0644 by default
 	Owner   string `json:"owner,omitempty"`
+	// Raw is content the agent rendered itself, written as it is.
+	Raw bool `json:"-"`
 }
 
 // Check is a health check: unit (systemd active), tcp (the port
@@ -107,6 +111,9 @@ type Agent struct {
 	Control  func() *ctl.Control
 	Instance string
 	NatsURLs []string
+	// NatsReady tells when a NATS node is back and current after a
+	// change (the node's /healthz when nil); tests replace it.
+	NatsReady func(ctx context.Context, u Unit) error
 
 	mu     sync.Mutex
 	facts  map[string]any
@@ -214,14 +221,35 @@ func (a *Agent) Reconcile(ctx context.Context, raw json.RawMessage) error {
 	}
 	pkgs, perrs := a.packages(ctx, want, refused)
 	errs = append(errs, perrs...)
-	units := serveUnits(want.Units)
+	units, nodes, nerrs := a.natsUnits(serveUnits(want.Units))
+	errs = append(errs, nerrs...)
 	restart, err := a.files(units)
 	if err != nil {
 		errs = append(errs, err)
 	}
+	// NATS nodes change one at a time, under the cluster's lease (forge 20e)
+	var roll, fresh []natsChange
+	for _, n := range nodes {
+		delete(restart, n.systemd)
+		if n.action != "" && a.active(ctx, n.systemd) {
+			roll = append(roll, n)
+		} else {
+			fresh = append(fresh, n) // new, unchanged or stopped: started as it is
+		}
+	}
 	states, err := a.units(ctx, units, restart)
 	if err != nil {
 		errs = append(errs, err)
+	}
+	for _, n := range fresh {
+		a.saveApplied(n)
+	}
+	for _, n := range roll {
+		if err := a.rollout(ctx, n); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		a.saveApplied(n)
 	}
 	if err := a.renew(ctx, want.Units); err != nil {
 		errs = append(errs, err)
@@ -400,15 +428,19 @@ func (a *Agent) files(units []Unit) (map[string]bool, error) {
 				errs = append(errs, log.Code("bad_path").Errorf("unit %s: %s is not an absolute path", u.Name, f.Path))
 				continue
 			}
-			t, err := template.New(f.Path).Option("missingkey=zero").Parse(f.Content)
-			if err != nil {
-				errs = append(errs, log.Code("bad_template").Errorf("unit %s, %s: %v", u.Name, f.Path, err))
-				continue
-			}
 			var out bytes.Buffer
-			if err := t.Execute(&out, map[string]any{"Config": cfg, "Facts": facts, "Unit": u.Name}); err != nil {
-				errs = append(errs, log.Code("bad_template").Errorf("unit %s, %s: %v", u.Name, f.Path, err))
-				continue
+			if f.Raw {
+				out.WriteString(f.Content)
+			} else {
+				t, err := template.New(f.Path).Option("missingkey=zero").Parse(f.Content)
+				if err != nil {
+					errs = append(errs, log.Code("bad_template").Errorf("unit %s, %s: %v", u.Name, f.Path, err))
+					continue
+				}
+				if err := t.Execute(&out, map[string]any{"Config": cfg, "Facts": facts, "Unit": u.Name}); err != nil {
+					errs = append(errs, log.Code("bad_template").Errorf("unit %s, %s: %v", u.Name, f.Path, err))
+					continue
+				}
 			}
 			mode := os.FileMode(0o644)
 			if f.Mode != "" {

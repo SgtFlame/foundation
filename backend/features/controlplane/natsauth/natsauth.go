@@ -298,3 +298,27 @@ func sortedNames(m map[string]*Account) []string {
 	}
 	return names
 }
+
+// Trust is what a NATS node's configuration trusts (forge 20e): the
+// operator's JWT, the system account's public key, and the accounts its
+// full resolver preloads (SYS and CTL, so a node joining knows the control
+// account before any push; the others reach it from the resolver).
+type Trust struct {
+	Operator      string            `json:"operator"`
+	SystemAccount string            `json:"systemAccount"`
+	Preload       map[string]string `json:"preload"`
+}
+
+// Trust is the deployment's trust chain for node configurations.
+func (d *Deployment) Trust() *Trust {
+	t := &Trust{Operator: d.Operator.JWT, Preload: map[string]string{}}
+	if a := d.Accounts[System]; a != nil {
+		t.SystemAccount = a.Public()
+	}
+	for _, name := range []string{System, Control} {
+		if a := d.Accounts[name]; a != nil {
+			t.Preload[a.Public()] = a.JWT
+		}
+	}
+	return t
+}

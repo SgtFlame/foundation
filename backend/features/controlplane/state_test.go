@@ -25,6 +25,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/controlplane"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/controlplanetest"
 	"github.com/SgtFlame/foundation/backend/features/controlplane/ctl"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/natsauth"
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
@@ -51,6 +52,7 @@ type stack struct {
 	data data.Deps
 	ctl  *ctl.Control
 	key  ed25519.PrivateKey
+	keys natsauth.DirKeys
 	n    atomic.Int64
 }
 
@@ -122,7 +124,16 @@ func newStack(t *testing.T) *stack {
 	}
 	s := &stack{t: t, bus: b, p: p, data: dataDeps, ctl: &ctl.Control{NC: srv.Conn(), JS: srv.JS()}}
 	s.key, _ = ctl.MakeSigningKey(filepath.Join(t.TempDir(), "script.key"))
-	deps := controlplane.Deps{Projections: p, Data: dataDeps, Bus: b, Control: s.ctl, Sweep: 200 * time.Millisecond, ScriptKey: s.key}
+	nd, err := natsauth.Init("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.keys = natsauth.DirKeys(t.TempDir())
+	if err := nd.Save(s.keys); err != nil {
+		t.Fatal(err)
+	}
+	deps := controlplane.Deps{Projections: p, Data: dataDeps, Bus: b, Control: s.ctl, Sweep: 200 * time.Millisecond, ScriptKey: s.key,
+		NatsKeys: s.keys, NatsTrust: nd.Trust}
 	if err := controlplane.Start(ctx, func() controlplane.Deps { return deps }); err != nil {
 		t.Fatal(err)
 	}
@@ -297,5 +308,55 @@ func TestScriptsSigned(t *testing.T) {
 	until(t, "desired state carries the script key", func() bool {
 		raw, ok, _ := s.ctl.Desired(ctx, ctl.Target{Kind: ctl.KindHost, ID: host})
 		return ok && strings.Contains(string(raw), ctl.PublicKey(s.key))
+	})
+}
+
+// TestNatsDesiredState: a NATS cluster's nodes get their node
+// configuration in their instances' desired state, routes to each other
+// by instance name; a tenant's NATS account record makes and limits its
+// account.
+func TestNatsDesiredState(t *testing.T) {
+	ctx := context.Background()
+	s := newStack(t)
+	host := s.create(controlplane.EntityHost, map[string]any{"name": "lxd1", "site": "east", "provider": "lxd"})
+	var insts, units []string
+	for _, n := range []string{"nats1", "nats2", "nats3"} {
+		in := s.create(controlplane.EntityInstance, map[string]any{"name": n, "host": host})
+		insts = append(insts, in)
+		units = append(units, s.create(controlplane.EntityUnit, map[string]any{"instance": in, "name": "nats", "kind": "nats"}))
+	}
+	s.create(controlplane.EntityNatsCluster, map[string]any{"name": "east", "nodes": units, "ports": map[string]any{"cluster": 6333},
+		"gateways": []map[string]any{{"name": "west", "urls": []string{"nats://w1:7222"}}}})
+	var doc struct {
+		Units []struct {
+			Kind string `json:"kind"`
+			Nats *struct {
+				Cluster    string         `json:"cluster"`
+				ServerName string         `json:"serverName"`
+				Routes     []string       `json:"routes"`
+				Ports      map[string]int `json:"ports"`
+				Gateways   []map[string]any
+				Trust      map[string]any `json:"trust"`
+			} `json:"nats"`
+		} `json:"units"`
+	}
+	until(t, "the first node's configuration is resolved", func() bool {
+		raw, ok, _ := s.ctl.Desired(ctx, ctl.Target{Kind: ctl.KindInstance, ID: insts[0]})
+		return ok && json.Unmarshal(raw, &doc) == nil && len(doc.Units) == 1 && doc.Units[0].Nats != nil
+	})
+	n := doc.Units[0].Nats
+	if n.Cluster != "east" || n.ServerName != "nats1-nats" || fmt.Sprint(n.Routes) != "[nats-route://nats2:6333 nats-route://nats3:6333]" ||
+		n.Ports["client"] != 4222 || len(n.Gateways) != 1 || n.Trust["operator"] == nil {
+		t.Fatalf("node %+v", n)
+	}
+
+	s.create(controlplane.EntityNatsAcct, map[string]any{"tenant": "7", "limits": map[string]any{"streams": 5, "storage": 1 << 20}})
+	until(t, "tenant 7's account is made with its limits", func() bool {
+		d, err := natsauth.Load(s.keys)
+		if err != nil {
+			return false
+		}
+		a := d.Account(natsauth.TenantAccount(7))
+		return a != nil && a.Claims.Limits.Streams == 5 && a.Claims.Limits.DiskStorage == 1<<20
 	})
 }
