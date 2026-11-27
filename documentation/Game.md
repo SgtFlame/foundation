@@ -480,6 +480,90 @@ Ion thruster kits: the fabricator's second product, the first ship part, a step 
 - Engine: `craft/Fabricator.ts` gains the kit (`KIT_MS`, `KIT_IRON`, `KIT_CIRCUITS`, `KIT_BOOST`, `MAX_BOOST`; `fabAction(…, item)`); at the fabricator U makes a circuit board and I a kit, the hint offering what the pack can make; by a ship, O fits a kit (`canFitKit`, `fitKit`). A ship's thrust is the pilot's skill times 1 + its boost (`thrustOf`).
 - `TestFabricator` checks the refusals; `Fabricator.test.ts` the kit's timing and needs.
 
+## Built in V25 (forge 360)
+
+The ore barge: the job board's biggest ship, the first that needs ion thruster kits.
+
+- `designs/barge.json` (112 blocks): the freighter lengthened by five rows to 21 cargo holds (126 m³), with no more thrusters. A design's `lift` (`ShipDesign.Lift`, the barge's 0.5) is the share of its holds its stock thrusters lift; each kit's boost adds to it, so two kits lift a full hold.
+- `game.startShip` takes `barge` once the player's Trade reaches 4 (`game.handIn` unlocks it at 300 trade xp, as it unlocks the freighter at 200).
+- `game.loadShip` loads the barge up to `holds × 6 × min(1, lift + boost)` and then refuses with *the barge's stock thrusters lift only N of its M m³: fit ion thruster kits*. It also loads the freighter's eleven holds, which were missing from the blueprint since V11 (the *Ore for the new station* job could not be done).
+- A new job, *Ore for the refinery* (`refinery-ore`, 100 m³ of ore, Trade 4, 200 xp), needs a barge.
+- Engine: `liftOf(design, boost)` in `ship/Ship.ts`; a ship's line shows what its thrusters lift when that is less than its holds.
+- `TestBarge` checks the unlock, the lift refusal and the freighter's holds; `Ship.test.ts` the lift and that the empty barge hovers.
+
+## Built in S23 (forge 375)
+
+What the ward keeps out: the night the threshold ward is tried.
+
+- Step `tried` (Go `StorySteps`, engine `STORY_STEPS`, the reachStory blueprint's list); the fold gives `items.hearthlore`.
+- `story/Tried.ts`: `triedReady(done)` (the ward laid, the night not yet kept), `TRIED_NIGHT` (one raider, 70 s to dawn) and the night's lines.
+- Once the ward is laid, R by Hawk's Rest's hearth waits for the next night with no moon (`wardNight`, 23:00 that night): the ward holds the door (*the scratching stops dead at the ward*), and a night of hearth defence (S5's `HearthNight`) starts at Hawk's Rest itself, with nobody keeping the watch but the character: one Hollowed comes up through the hearthstone. Held until dawn, the step is reached (*A hearthstone is a threshold too*); left alone, the cottage is lost and R waits for the next dark night.
+- `story_test` checks `tried` and the hearth lore; `Tried.test.ts` when the night is ready.
+
+## Built in S24 (forge 375)
+
+The hearth ward: the hearth lore (S23) put to use.
+
+- Step `hearthward`; the fold spends a sage and the river stones and gives `items.hearthward`.
+- `story/HearthWard.ts`: `hearthStonesReady` (the culvert gives five more stones once `tried` is reached, spot `culvert-stones-2`), `bankSageReady` and `bankSageSpot` (sage seeded on the ditch bank beside the culvert, spot `ditch-sage`), `hearthWardReady`, `hearthWardMissing` and the lines. Both show in the senses layer (*Clean water running over stones*, *Sage, sharp and green*).
+- Standing on Hawk's Rest's hearthstone (`hearthOf(area).stone`, S5's) with both lays the ward: a frame of sage round the stone and five stones at its corners and heart.
+- `story_test` checks the two pickings and the step; `HearthWard.test.ts` the conditions.
+
+## Built in V26 (forge 360)
+
+Cargo weighs in flight: the barge's lift (V25) as physics, not only a loading rule.
+
+- `ship/Ship.ts`: `CARGO_KG` (300 kg a m³) and `cargoOf(state)`; `ShipBody` takes `load` (m³) and adds it to its mass (`setLoad`), and `canLift(g)` says whether its thrusters, at the pilot's scale (skill times 1 + kits' boost), climb against a pull. `ShipLayer.sit` weighs the hold when a ship is taken.
+- At 300 kg a m³ the ore barge climbs off the moon with half its hold on its stock thrusters, and with a full hold only with two kits; the freighter climbs full off the moon, the hauler and prospector full off the planet with air. A full barge cannot climb off the planet (2.27 m/s²) even with kits.
+- While piloting, the ship's line says *too heavy to climb here* when the pull is more than its thrusters give.
+- `Ship.test.ts` checks the weights and each ship's climb.
+
+## Built in S25 (forge 375)
+
+Wenlan's hearth ward, and what a warded hearth does on a dark night.
+
+- Step `farmward`; the fold spends a sage and the river stones and gives `items.farmward`.
+- `story/HearthWard.ts`: `nextHearthWard(done)` (Hawk's Rest's, then Wenlan's) and `wardSpots(ward)` (`culvert-stones-3`, `ditch-sage-2` for the second), so the culvert and the bank give a third handful; `hearthWarded(done, house)` (Hawk's Rest, a house with nobody in it, once `hearthward`; a house with Wenlan or a watcher once `farmward`).
+- In Wenlan's kitchen (an interior with the farmer in it), standing on the hearthstone with both lays the ward, drawn as at Hawk's Rest.
+- `HearthNight` takes `warded`: the stone stirs once (event `settled`) and nothing comes through, so the house holds until dawn. `startHearthNight` sets it from `hearthWarded`.
+- Tests: `story_test` (`farmward`), `HearthWard.test.ts`, `HearthNight.test.ts` (a warded night).
+
+## Built in V27 (forge 360)
+
+The jump drive: the first part made from something the moon's ground does not give.
+
+- **The jump coil**: block 26 of each moon wreck is its drive core (`DRIVE_CORE_BLOCK` in `wreck/Wreck.ts`); salvaging it (`cmd-game-salvage`) also puts a jump coil in the pack (`Pack.Coils`), so a world holds two.
+- **Making it**: `game.fabricate {item: "jumpDrive"}` takes a jump coil, 1 m³ of iron, 1 m³ of ore and 2 circuit boards, and 90 s (`DRIVE_MS` in `craft/Fabricator.ts`, which now has `fabTime(item)`); `game.takeFabricated` puts it in the pack as `drives` (`Pack.Drives`); a finished drive or kit is taken whatever boards the pack holds.
+- **Fitting it**: `game.fitDrive` (`cmd-game-fitDrive`, event `driveFitted`, `Ship.Jump`) fits one from the pack to a powered ship, refused for a cabin, the skiff (no battery), a ship that has one or a pack without one.
+- **Jumping**: `ship/Jump.ts` (`jumpTarget`, `canJump`): from the cockpit, M jumps a ship with a drive and at least half its battery (`JUMP_CHARGE`) to `JUMP_HEIGHT` (60 m) above the other body's top, the planet from the moon and the moon from the planet, spending half its charge; the pilot saves the place with `game.flyShip`, which has never limited distance.
+- Keys: M at the fabricator makes a drive, M by a ship fits it, M in the seat jumps. `TestJumpDrive` checks the coil and the refusals; `Jump.test.ts` and the Fabricator test the rest.
+
+## Built in S26 (forge 375)
+
+The well: with both hearths warded, the Hollowed's next way in.
+
+- Step `well`; the fold gives `items.welllore`.
+- `story/Well.ts`: `wellSpot(pieces, cell)` (the yard piece's well, where `Models.ts` draws it), `wellReady(done)` (both `hearthward` and `farmward`, not yet `well`), and the lines.
+- Once Wenlan's hearth is warded, frost rings the well's stones (drawn in `drawMarks`) and the senses layer smells *frost, at noon* from it; walking to the well reaches the step.
+- Tests: `story_test` (`well`), `Well.test.ts`, and the step order in `FirstHourStory.test.ts`.
+
+## Built in V28 (forge 360)
+
+The jump trial: the outpost's first contract that needs a jump drive.
+
+- `contracts.json` gains `jump-trial` (Piloting, 150 xp, once): a ship with a jump drive fitted and 2 m³ of iron in its hold; a contract's `needs.jump` asks for `Ship.jump`.
+- `cmd-game-handIn` refuses it with *this job needs a ship with a jump drive fitted*; `handInProblem` in `outpost/Outpost.ts` says the same on the contract board.
+- Tests: `TestJumpDrive` (the refusal), `Outpost.test.ts` (the board's reasons), the contract count in `TestOutpost`.
+
+## Built in S27 (forge 375)
+
+The well ward: the threshold nobody warded, warded.
+
+- Step `wellward`; the fold spends a sage and the river stones and gives `items.wellward`.
+- `story/HearthWard.ts`: `nextHearthWard` gives `wellward` once `well` is reached (type `Ward`), `wardSpots('wellward')` is `culvert-stones-4` and `ditch-sage-3`, and `hearthWardMissing(items, what)` names the well; so the culvert and the bank give a fourth handful through the same senses and steps as before.
+- At the well's rim with both, the ward is laid (`WELL_WARD_LINE` in `story/Well.ts`); the frost ring gives way to sage round the rim and five stones, four on it and one on the windlass beam.
+- Tests: `story_test` (`wellward`), `HearthWard.test.ts`, the step order in `FirstHourStory.test.ts`.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

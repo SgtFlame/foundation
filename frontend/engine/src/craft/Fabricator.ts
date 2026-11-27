@@ -18,7 +18,19 @@ export const KIT_CIRCUITS = 2
 export const KIT_BOOST = 0.25 // added to a ship's thrust, at most MAX_BOOST
 export const MAX_BOOST = 0.5
 
-export type FabItem = 'circuit' | 'ionKit'
+// V27: the jump drive, from a jump coil (a wreck's drive core), iron, ore
+// and circuit boards, fitted to a powered ship to jump between the moon and
+// the planet
+export const DRIVE_MS = 90_000
+export const DRIVE_IRON = 1
+export const DRIVE_ORE = 1
+export const DRIVE_CIRCUITS = 2
+export const JUMP_CHARGE = 0.5 // the battery a jump needs and spends
+
+export type FabItem = 'circuit' | 'ionKit' | 'jumpDrive'
+
+// What each item takes to make, in milliseconds
+export const fabTime = (item: string): number => (item === 'jumpDrive' ? DRIVE_MS : item === 'ionKit' ? KIT_MS : FAB_MS)
 
 export interface FabState {
   item: string
@@ -27,7 +39,7 @@ export interface FabState {
 
 // Milliseconds left until the board is done, 0 when it is
 export function fabLeft(f: FabState, now: number): number {
-  return Math.max(0, (f.item === 'ionKit' ? KIT_MS : FAB_MS) - (now - f.at))
+  return Math.max(0, fabTime(f.item) - (now - f.at))
 }
 
 export type FabAction =
@@ -36,14 +48,19 @@ export type FabAction =
   | { kind: 'take' }
   | { kind: 'none'; why: string }
 
-export function fabAction(f: FabState | null | undefined, pack: { ore?: number; iron?: number; circuits?: number } | null, powered: boolean, now: number, item: FabItem = 'circuit'): FabAction {
+export function fabAction(f: FabState | null | undefined, pack: { ore?: number; iron?: number; circuits?: number; coils?: number } | null, powered: boolean, now: number, item: FabItem = 'circuit'): FabAction {
   if (f) {
     const left = fabLeft(f, now)
     if (left > 0) return { kind: 'wait', seconds: Math.ceil(left / 1000) }
-    if (f.item !== 'ionKit' && (pack?.circuits ?? 0) >= MAX_CIRCUITS) return { kind: 'none', why: `you can carry no more than ${MAX_CIRCUITS} circuit boards` }
+    if (f.item === 'circuit' && (pack?.circuits ?? 0) >= MAX_CIRCUITS) return { kind: 'none', why: `you can carry no more than ${MAX_CIRCUITS} circuit boards` }
     return { kind: 'take' }
   }
   if (!powered) return { kind: 'none', why: 'no power: place the solar panel on the roof' }
+  if (item === 'jumpDrive') {
+    if ((pack?.coils ?? 0) < 1) return { kind: 'none', why: 'a jump drive needs a jump coil: salvage the drive core of a wreck on the moon' }
+    if ((pack?.iron ?? 0) < DRIVE_IRON || (pack?.ore ?? 0) < DRIVE_ORE || (pack?.circuits ?? 0) < DRIVE_CIRCUITS) return { kind: 'none', why: `a jump drive takes a jump coil, ${DRIVE_IRON} m³ of iron, ${DRIVE_ORE} m³ of ore and ${DRIVE_CIRCUITS} circuit boards` }
+    return { kind: 'make' }
+  }
   if (item === 'ionKit') {
     if ((pack?.iron ?? 0) < KIT_IRON || (pack?.circuits ?? 0) < KIT_CIRCUITS) return { kind: 'none', why: `an ion thruster kit takes ${KIT_IRON} m³ of iron and ${KIT_CIRCUITS} circuit boards` }
     return { kind: 'make' }

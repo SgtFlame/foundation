@@ -134,4 +134,35 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "ward" || p.Items["ward"] != 1 || p.Items["riverstones"] != 0 || p.Items["sage"] != 0 {
 		t.Fatalf("ward %+v", p)
 	}
+	// S23: the night the ward is tried leaves the hearth lore
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "tried", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "tried" || p.Items["hearthlore"] != 1 || p.Items["ward"] != 1 {
+		t.Fatalf("tried %+v", p)
+	}
+	// S24: stones from the culvert again, a sage from the ditch bank, and the hearth ward
+	st.ok("game.reachStory", farm, map[string]any{"area": farm, "x": 9, "z": 3, "item": "riverstones", "spot": "culvert-stones-2"})
+	st.ok("game.reachStory", farm, map[string]any{"area": farm, "x": 9, "z": 3, "item": "sage", "spot": "ditch-sage"})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "hearthward", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "hearthward" || p.Items["hearthward"] != 1 || p.Items["riverstones"] != 0 || p.Items["sage"] != 0 {
+		t.Fatalf("hearthward %+v", p)
+	}
+	// S25: a third handful of stones and sage for Wenlan's hearth
+	st.ok("game.reachStory", farm, map[string]any{"area": farm, "x": 9, "z": 3, "item": "riverstones", "spot": "culvert-stones-3"})
+	st.ok("game.reachStory", farm, map[string]any{"area": farm, "x": 9, "z": 3, "item": "sage", "spot": "ditch-sage-2"})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "farmward", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "farmward" || p.Items["farmward"] != 1 || p.Items["riverstones"] != 0 || p.Items["sage"] != 0 {
+		t.Fatalf("farmward %+v", p)
+	}
+	// S26: the well, where they come up now
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "well", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "well" || p.Items["welllore"] != 1 {
+		t.Fatalf("well %+v", p)
+	}
+	// S27: a fourth handful, and the well warded
+	st.ok("game.reachStory", farm, map[string]any{"area": farm, "x": 9, "z": 3, "item": "riverstones", "spot": "culvert-stones-4"})
+	st.ok("game.reachStory", farm, map[string]any{"area": farm, "x": 9, "z": 3, "item": "sage", "spot": "ditch-sage-3"})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "wellward", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "wellward" || p.Items["wellward"] != 1 || p.Items["riverstones"] != 0 || p.Items["sage"] != 0 {
+		t.Fatalf("wellward %+v", p)
+	}
 }

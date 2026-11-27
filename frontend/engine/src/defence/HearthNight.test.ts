@@ -54,3 +54,11 @@ test('slaying what came through leaves the house quiet once none are left to com
   for (const e of run(n, 120, () => true)) if (e.kind === 'through') n.slay(e.foe.id)
   assert.ok(n.quietForGood)
 })
+
+test('a warded hearthstone stirs once and nothing comes through (S25)', () => {
+  const n = new HearthNight(kitchen(false), { warded: true, length: 120, seed: 3 })
+  const seen: string[] = []
+  for (let t = 0; t < 130; t += 0.5) for (const e of n.step(0.5, false)) seen.push(e.kind)
+  assert.deepEqual(seen, ['settled', 'dawn'])
+  assert.equal(n.outcome, 'held')
+})

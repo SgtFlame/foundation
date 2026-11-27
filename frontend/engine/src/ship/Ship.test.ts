@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
-import { axisAngle, buildingDistance, IDLE_HELM, lookQuat, rotate, ShipBody, type ShipDesign, type ShipTerrain } from './Ship.ts'
+import { axisAngle, buildingDistance, CARGO_KG, IDLE_HELM, liftOf, lookQuat, rotate, ShipBody, type ShipDesign, type ShipTerrain } from './Ship.ts'
 
 const skiff = JSON.parse(readFileSync(new URL('../../../../backend/features/game/designs/skiff.json', import.meta.url), 'utf8')) as ShipDesign
 const all = skiff.blocks.map((_, i) => i)
@@ -125,4 +125,38 @@ test('a cabin is solid to the walker but for its doorway, and holds them up on i
   assert.ok(Math.abs(buildingDistance(cabin, placed, pose, { x: 10, y: 2, z: 0 }) - 0.5) < 1e-9)
   // nothing placed, nothing solid
   assert.equal(buildingDistance(cabin, [], pose, { x: 10, y: 0, z: 2 }), Infinity)
+})
+
+test('the ore barge lifts its holds half full, a quarter more for each ion kit (V25)', () => {
+  const barge = JSON.parse(readFileSync(new URL('../../../../backend/features/game/designs/barge.json', import.meta.url), 'utf8')) as ShipDesign
+  assert.equal(barge.blocks.length, 112)
+  assert.equal(barge.blocks.filter((b) => b.type === 'cargo').length, 21)
+  assert.equal(liftOf(barge), 0.5)
+  assert.equal(liftOf(barge, 0.25), 0.75)
+  assert.equal(liftOf(barge, 0.5), 1)
+  assert.equal(liftOf({}, 0), 1)
+  // it still hovers empty on its stock thrusters
+  const b = new ShipBody(barge, barge.blocks.map((_, i) => i), { x: 0, y: 20, z: 0, q: [0, 0, 0, 1] }, flat)
+  assert.ok(b.reach().y[1] > 1.62, `up ${b.reach().y[1]}`)
+})
+
+test('a full hold weighs: the barge climbs with half a hold, or a full one with two kits (V26)', () => {
+  const design = (id: string) => JSON.parse(readFileSync(new URL(`../../../../backend/features/game/designs/${id}.json`, import.meta.url), 'utf8')) as ShipDesign
+  const made = (d: ShipDesign, load: number) => new ShipBody(d, d.blocks.map((_, i) => i), { x: 0, y: 20, z: 0, q: [0, 0, 0, 1], load }, flat)
+  const barge = design('barge')
+  const empty = made(barge, 0)
+  const half = made(barge, 63)
+  assert.equal(half.mass - empty.mass, 63 * CARGO_KG)
+  assert.ok(half.canLift(1.62), 'half a hold, stock')
+  const full = made(barge, 126)
+  assert.ok(!full.canLift(1.62), 'a full hold, stock')
+  full.thrustScale = 1.5 // two ion kits
+  assert.ok(full.canLift(1.62), 'a full hold, two kits')
+  // the other ships climb full off the moon, and the hauler off the planet with air
+  assert.ok(made(design('freighter'), 66).canLift(1.62))
+  assert.ok(made(design('hauler'), 36).canLift(2.27))
+  assert.ok(made(design('prospector'), 6).canLift(2.27))
+  // loading while it stands changes its weight
+  empty.setLoad(126)
+  assert.equal(empty.mass, full.mass)
 })

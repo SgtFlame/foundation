@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu'
-import { blockWorld, buildingDistance, type DesignBlock, type Helm, PUSH, type Quat, rotate, ShipBody, type ShipDesign, type ShipState, type ShipTerrain, type Vec3 } from './Ship.ts'
+import { blockWorld, buildingDistance, cargoOf, type DesignBlock, type Helm, PUSH, type Quat, rotate, ShipBody, type ShipDesign, type ShipState, type ShipTerrain, type Vec3 } from './Ship.ts'
 
 // Ships in a voxel viewport (forge 360 V3): each ship's blocks drawn as
 // boxes, the blocks still to place as a translucent outline the walker can
@@ -414,12 +414,13 @@ export class ShipLayer {
     return best
   }
 
-  // Takes the seat: the ship is flown from here on by its body
+  // Takes the seat: the ship is flown from here on by its body (V26: weighing
+  // what its hold carries)
   sit(id: string, terrain: ShipTerrain): ShipBody | null {
     const s = this.shown.get(id)
     if (!s) return null
     const st = s.state
-    this.body = new ShipBody(s.design, st.placed, { x: s.at.x, y: s.at.y, z: s.at.z, q: [s.q.x, s.q.y, s.q.z, s.q.w], v: st.v, charge: st.charge }, terrain)
+    this.body = new ShipBody(s.design, st.placed, { x: s.at.x, y: s.at.y, z: s.at.z, q: [s.q.x, s.q.y, s.q.z, s.q.w], v: st.v, charge: st.charge, load: cargoOf(st) }, terrain)
     // the panels charged it while it stood
     if (st.updatedAt) this.body.recharge(Math.max(0, (Date.now() - Date.parse(st.updatedAt)) / 1000))
     this.pilotOf = id

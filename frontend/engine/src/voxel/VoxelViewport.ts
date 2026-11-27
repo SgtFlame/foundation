@@ -1,5 +1,6 @@
 import { forgeAction, SMELT_MS, type ForgeState } from '../craft/Forge.ts'
-import { FAB_IRON, FAB_MS, FAB_ORE, fabAction, KIT_CIRCUITS, KIT_IRON, KIT_MS, MAX_BOOST, type FabItem, type FabState } from '../craft/Fabricator.ts'
+import { DRIVE_CIRCUITS, DRIVE_IRON, DRIVE_MS, DRIVE_ORE, FAB_IRON, FAB_MS, FAB_ORE, fabAction, JUMP_CHARGE, KIT_CIRCUITS, KIT_IRON, KIT_MS, MAX_BOOST, type FabItem, type FabState } from '../craft/Fabricator.ts'
+import { canJump, jumpTarget } from '../ship/Jump.ts'
 import * as THREE from 'three/webgpu'
 import { surfaceBelow, Walker, type WalkerTerrain } from '../character/Walker.ts'
 import { FlyCamera } from '../camera/FlyCamera.ts'
@@ -8,7 +9,7 @@ import { StatsOverlay } from '../debug/StatsOverlay.ts'
 import { Input } from '../input/Input.ts'
 import { Renderer } from '../render/Renderer.ts'
 import { mulberry32 } from './Noise.ts'
-import { CARGO_PER_HOLD, IDLE_HELM, lookQuat, type Helm, type Quat, type ShipDesign, type ShipState } from '../ship/Ship.ts'
+import { CARGO_PER_HOLD, IDLE_HELM, liftOf, lookQuat, type Helm, type Quat, type ShipDesign, type ShipState } from '../ship/Ship.ts'
 import { type GhostHit, ShipLayer } from '../ship/ShipLayer.ts'
 import { DropPod } from '../landing/DropPod.ts'
 import { firstHour, FirstHourPanel } from '../objectives/FirstHour.ts'
@@ -19,7 +20,7 @@ import { PLANET } from './Bodies.ts'
 import { available, Fishing, FLEE_RANGE, floatModel, grazerDir, grazerModel, herdOf, HUNT_REACH, SEA_RADIUS, seaMesh, type Grazer } from '../wildlife/Wildlife.ts'
 import { eat, FRESH, hungry, NeedsHud, ratesFor, rounded, stepNeeds, type Needs } from '../survival/Needs.ts'
 import { countdown, DRONE_HIT, DRONE_SCRAP, dronesOf, shotHits, surgeAt, TURRET_RANGE, TURRET_RELOAD, turretPick, type Drone } from '../surge/Surge.ts'
-import { MANUAL_BLOCK, nearestSalvage, SALVAGE_ORE, salvageKey, wreckSites, type Vec3 as WVec3 } from '../wreck/Wreck.ts'
+import { DRIVE_CORE_BLOCK, MANUAL_BLOCK, nearestSalvage, SALVAGE_ORE, salvageKey, wreckSites, type Vec3 as WVec3 } from '../wreck/Wreck.ts'
 import { digLimits, missing, named, nextRecipe, spend, type DigLimits } from '../craft/Crafting.ts'
 import { scan, scanLine, SCAN_COOLDOWN, SCAN_SHOW } from '../craft/Scanner.ts'
 import { MATERIAL_ORE } from './Types.ts'
@@ -47,6 +48,8 @@ export interface Carried {
   iron?: number // V20: smelted at a cabin's forge
   circuits?: number // V23: circuit boards from a cabin's fabricator, a count
   kits?: number // V24: ion thruster kits
+  coils?: number // V27: jump coils from the wrecks' drive cores
+  drives?: number // V27: jump drives
   capacity: number
 }
 
@@ -85,6 +88,7 @@ export type ShipIntent =
   | { kind: 'takeIngots'; id: string } // V20: the forge's iron taken into the pack
   | { kind: 'fabricate'; id: string; item: FabItem } // V23: a circuit board (V24: or an ion thruster kit) started at a cabin's fabricator
   | { kind: 'fitKit'; id: string } // V24: an ion thruster kit fitted to a ship
+  | { kind: 'fitDrive'; id: string } // V27: a jump drive fitted to a ship
   | { kind: 'takeFabricated'; id: string } // V23: the fabricator's board taken into the pack
   | { kind: 'plant'; x: number; y: number; z: number } // V9: barley in the planet's soil
   | { kind: 'harvest'; crop: string } // V9: a ripe crop, as food
@@ -621,7 +625,7 @@ export class VoxelViewport {
   private updateHint(): void {
     if (this.shipLayer.pilotOf) {
       this.hint.textContent = this.input.locked
-        ? 'W/S forward and back · A/D sideways · Space up · C down · mouse to turn · Q/E roll · F to leave the seat · Esc: release'
+        ? `W/S forward and back · A/D sideways · Space up · C down · mouse to turn · Q/E roll · ${this.shipLayer.ships().find((s) => s.id === this.shipLayer.pilotOf)?.jump ? 'M: jump · ' : ''}F to leave the seat · Esc: release`
         : 'Click to fly the ship'
       return
     }
@@ -725,7 +729,7 @@ export class VoxelViewport {
       const ore = c.ore ?? 0
       const iron = c.iron ?? 0
       const total = c.dust + c.rock + ore + iron
-      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}${iron > 0 ? ` · iron ${iron.toFixed(2)}` : ''}${(c.circuits ?? 0) > 0 ? ` · circuits ${c.circuits}` : ''}${(c.kits ?? 0) > 0 ? ` · ion kits ${c.kits}` : ''}${(c.food ?? 0) > 0 ? ` · food ${c.food}` : ''}`)
+      lines.push(`Pack ${total.toFixed(2)} / ${c.capacity.toFixed(1)} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}${iron > 0 ? ` · iron ${iron.toFixed(2)}` : ''}${(c.circuits ?? 0) > 0 ? ` · circuits ${c.circuits}` : ''}${(c.kits ?? 0) > 0 ? ` · ion kits ${c.kits}` : ''}${(c.coils ?? 0) > 0 ? ` · jump coils ${c.coils}` : ''}${(c.drives ?? 0) > 0 ? ` · jump drives ${c.drives}` : ''}${(c.food ?? 0) > 0 ? ` · food ${c.food}` : ''}`)
     }
     if (w && !this.riding && !this.pod.falling) {
       const g = Math.hypot(w.gravity.x, w.gravity.y, w.gravity.z)
@@ -970,12 +974,18 @@ export class VoxelViewport {
     if (!s) return ''
     const d = this.shipLayer.design(s.design)
     const has = (type: string) => d?.blocks.some((b, i) => b.type === type && s.placed.includes(i))
-    return `${has('cargo') ? 'L: load your pack into the hold · ' : ''}${has('refinery') ? 'R: refine rock · ' : ''}${this.canBoard(s) ? 'B: board as crew · ' : ''}${this.canFitKit(s) ? 'O: fit an ion thruster kit · ' : ''}`
+    return `${has('cargo') ? 'L: load your pack into the hold · ' : ''}${has('refinery') ? 'R: refine rock · ' : ''}${this.canBoard(s) ? 'B: board as crew · ' : ''}${this.canFitKit(s) ? 'O: fit an ion thruster kit · ' : ''}${this.canFitDrive(s) ? 'M: fit the jump drive · ' : ''}`
   }
 
   // V24: an ion thruster kit in the pack and a ship with room for one
   private canFitKit(s: ShipState): boolean {
     return (this.carried?.kits ?? 0) >= 1 && !this.shipLayer.design(s.design)?.static && (s.boost ?? 0) < MAX_BOOST - 1e-6
+  }
+
+  // V27: a jump drive in the pack and a powered ship without one
+  private canFitDrive(s: ShipState): boolean {
+    const d = this.shipLayer.design(s.design)
+    return (this.carried?.drives ?? 0) >= 1 && !!d && !d.static && d.id !== 'skiff' && !s.jump
   }
 
   // V24: a ship's thrust: the pilot's skill and its ion thruster kits
@@ -995,10 +1005,17 @@ export class VoxelViewport {
       const charge = body ? body.charge : (s.charge ?? 0)
       parts.push(`charge ${Math.round(charge * 100)}%${body && body.power < 0.999 ? ` · power ${Math.round(body.power * 100)}%` : ''}`)
     }
+    // V26: a full hold weighs; say when the thrusters cannot lift it here
+    if (body) {
+      const g = this.terrain().gravity(body.x, body.y, body.z, { x: 0, y: 0, z: 0 })
+      const pull = Math.hypot(g.x, g.y, g.z)
+      if (pull > 0.05 && !body.canLift(pull)) parts.push(holds ? 'too heavy to climb here: unload some of the hold, or fit ion kits' : 'its thrusters cannot climb against this pull')
+    }
     if (holds) {
       const c = s.cargo ?? { dust: 0, rock: 0, iron: 0 }
       const ore = c.ore ?? 0
-      parts.push(`hold ${(c.dust + c.rock + c.iron + ore).toFixed(2)} / ${holds * CARGO_PER_HOLD} m³ · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)} · iron ${c.iron.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}`)
+      const lift = liftOf(d, s.boost ?? 0)
+      parts.push(`hold ${(c.dust + c.rock + c.iron + ore).toFixed(2)} / ${holds * CARGO_PER_HOLD} m³${lift < 1 ? ` (its thrusters lift ${Math.round(holds * CARGO_PER_HOLD * lift)} m³: fit ion kits for more)` : ''} · dust ${c.dust.toFixed(2)} · rock ${c.rock.toFixed(2)} · iron ${c.iron.toFixed(2)}${ore > 0 ? ` · ore ${ore.toFixed(2)}` : ''}`)
     }
     return parts.join(' · ')
   }
@@ -1078,7 +1095,7 @@ export class VoxelViewport {
     const p = this.walker?.pos ?? { x: 0, y: 0, z: 0 }
     this.salvaged = { ...this.salvaged, [salvageKey(wreck, index)]: true }
     this.showSalvaged()
-    if (c) this.carried = { ...c, ore: Math.round(((c.ore ?? 0) + SALVAGE_ORE) * 1000) / 1000 }
+    if (c) this.carried = { ...c, ore: Math.round(((c.ore ?? 0) + SALVAGE_ORE) * 1000) / 1000, coils: (c.coils ?? 0) + (index === DRIVE_CORE_BLOCK ? 1 : 0) }
     this.drawPack()
     this.opts.onShipIntent?.({ kind: 'salvage', wreck, index, x: round2(p.x), y: round2(p.y), z: round2(p.z) })
     if (index === MANUAL_BLOCK) {
@@ -1086,6 +1103,11 @@ export class VoxelViewport {
       if (this.progress) this.progress = { ...this.progress, manuals: { ...this.progress.manuals, powerDrill: true } }
       this.flashHint('Behind the cockpit plate, a waterlogged binder: a fabricator\'s manual for a powered drill. A cabin\'s bench can build it now')
       this.updateHint()
+      return
+    }
+    if (index === DRIVE_CORE_BLOCK) {
+      // V27: the drive core's jump coil
+      this.flashHint('Inside the drive core, wrapped in scorched foil: a jump coil, still whole. The cabin\'s fabricator could build a drive around it (M)')
       return
     }
     this.flashHint(`You wrench a plate off the wreck: ${SALVAGE_ORE} m³ of scrap for the refinery, counted as ore`)
@@ -1385,6 +1407,7 @@ export class VoxelViewport {
     }
     if (fab && input.locked && input.pressed('KeyU')) this.fabAt(fab)
     if (fab && input.locked && input.pressed('KeyI')) this.fabAt(fab, 'ionKit')
+    if (fab && input.locked && input.pressed('KeyM')) this.fabAt(fab, 'jumpDrive')
     const bench = this.walker && !seat && !forge && !fab ? this.shipLayer.benchNear(this.walker.pos) : null
     if (bench !== this.nearBench) {
       this.nearBench = bench
@@ -1401,6 +1424,7 @@ export class VoxelViewport {
     if (near && input.locked && input.pressed('KeyR')) this.opts.onShipIntent?.({ kind: 'refine', id: near.id })
     if (near && input.locked && input.pressed('KeyB') && this.canBoard(near)) this.opts.onShipIntent?.({ kind: 'crew', id: near.id, aboard: true })
     if (near && input.locked && input.pressed('KeyO') && this.canFitKit(near)) this.fitKit(near.id)
+    if (near && input.locked && input.pressed('KeyM') && this.canFitDrive(near)) this.fitDrive(near.id)
     this.stepOutpost()
   }
 
@@ -1522,12 +1546,13 @@ export class VoxelViewport {
     if (!f && powered) {
       // V24: what it can make now: a circuit board (U), an ion thruster kit (I)
       const kit = fabAction(f, this.carried, powered, Date.now(), 'ionKit')
-      const parts = [a.kind === 'make' ? `U: make a circuit board (${FAB_IRON} m³ iron, ${FAB_ORE} m³ ore) · ` : '', kit.kind === 'make' ? `I: make an ion thruster kit (${KIT_IRON} m³ iron, ${KIT_CIRCUITS} boards) · ` : ''].join('')
+      const drive = fabAction(f, this.carried, powered, Date.now(), 'jumpDrive')
+      const parts = [a.kind === 'make' ? `U: make a circuit board (${FAB_IRON} m³ iron, ${FAB_ORE} m³ ore) · ` : '', kit.kind === 'make' ? `I: make an ion thruster kit (${KIT_IRON} m³ iron, ${KIT_CIRCUITS} boards) · ` : '', drive.kind === 'make' ? `M: make a jump drive (the coil, ${DRIVE_IRON} m³ iron, ${DRIVE_ORE} m³ ore, ${DRIVE_CIRCUITS} boards) · ` : ''].join('')
       if (parts) return parts
     }
     if (a.kind === 'make') return `U: make a circuit board (${FAB_IRON} m³ iron, ${FAB_ORE} m³ ore) · `
     if (a.kind === 'wait') return `The fabricator is at work: ${a.seconds} s left · `
-    if (a.kind === 'take') return `U: take the ${this.fabOf(this.nearFab)?.item === 'ionKit' ? 'ion thruster kit' : 'circuit board'} · `
+    if (a.kind === 'take') return `U: take the ${({ ionKit: 'ion thruster kit', jumpDrive: 'jump drive' } as Record<string, string>)[this.fabOf(this.nearFab)?.item ?? ''] ?? 'circuit board'} · `
     return `The fabricator: ${a.why} · `
   }
 
@@ -1535,7 +1560,11 @@ export class VoxelViewport {
   fabAt(id: string, item: FabItem = 'circuit'): void {
     const f = this.fabOf(id)
     const a = fabAction(f, this.carried, this.shipLayer.hasPlaced(id, 'solar'), Date.now(), item)
-    if (a.kind === 'make' && item === 'ionKit') {
+    if (a.kind === 'make' && item === 'jumpDrive') {
+      if (this.carried) this.carried = { ...this.carried, coils: (this.carried.coils ?? 0) - 1, iron: (this.carried.iron ?? 0) - DRIVE_IRON, ore: (this.carried.ore ?? 0) - DRIVE_ORE, circuits: (this.carried.circuits ?? 0) - DRIVE_CIRCUITS }
+      this.opts.onShipIntent?.({ kind: 'fabricate', id, item })
+      this.flashHint(`You seat the jump coil in an iron cradle and wire two boards to it. The fabricator starts to tune the drive: ${DRIVE_MS / 1000} s`)
+    } else if (a.kind === 'make' && item === 'ionKit') {
       if (this.carried) this.carried = { ...this.carried, iron: (this.carried.iron ?? 0) - KIT_IRON, circuits: (this.carried.circuits ?? 0) - KIT_CIRCUITS }
       this.opts.onShipIntent?.({ kind: 'fabricate', id, item })
       this.flashHint(`You slot two circuit boards and an iron housing into the fabricator. It starts to wind an ion thruster: ${KIT_MS / 1000} s`)
@@ -1543,6 +1572,10 @@ export class VoxelViewport {
       if (this.carried) this.carried = { ...this.carried, iron: (this.carried.iron ?? 0) - FAB_IRON, ore: (this.carried.ore ?? 0) - FAB_ORE }
       this.opts.onShipIntent?.({ kind: 'fabricate', id, item })
       this.flashHint(`You feed iron and ore into the fabricator. Its arm starts to etch a circuit board: ${FAB_MS / 1000} s`)
+    } else if (a.kind === 'take' && f?.item === 'jumpDrive') {
+      if (this.carried) this.carried = { ...this.carried, drives: (this.carried.drives ?? 0) + 1 }
+      this.opts.onShipIntent?.({ kind: 'takeFabricated', id })
+      this.flashHint('You lift out the jump drive, its coil ticking as it cools. M by a powered ship fits it')
     } else if (a.kind === 'take' && f?.item === 'ionKit') {
       if (this.carried) this.carried = { ...this.carried, kits: (this.carried.kits ?? 0) + 1 }
       this.opts.onShipIntent?.({ kind: 'takeFabricated', id })
@@ -1564,6 +1597,37 @@ export class VoxelViewport {
     this.flashHint('You bolt the ion thruster kit into the ship\'s thruster bus: it will push a quarter harder')
     this.drawPack()
     this.updateHint()
+  }
+
+  // V27: M by a ship fits the jump drive from the pack
+  fitDrive(id: string): void {
+    if (this.carried) this.carried = { ...this.carried, drives: (this.carried.drives ?? 0) - 1 }
+    this.opts.onShipIntent?.({ kind: 'fitDrive', id })
+    this.flashHint('You bolt the jump drive behind the cockpit and run its cable to the battery. From the seat, M jumps')
+    this.drawPack()
+    this.updateHint()
+  }
+
+  // V27: M in the cockpit jumps to the other body, spending half the battery
+  jump(): boolean {
+    const b = this.shipLayer.body
+    const id = this.shipLayer.pilotOf
+    if (!b || !id) return false
+    const ok = canJump(this.shipLayer.ships().find((s) => s.id === id), b.charge)
+    if (!ok.ok) {
+      this.flashHint(ok.why[0].toUpperCase() + ok.why.slice(1))
+      return false
+    }
+    const out = jumpTarget(b, this.opts.params.radius)
+    b.x = out.at.x
+    b.y = out.at.y
+    b.z = out.at.z
+    b.v = { x: 0, y: 0, z: 0 }
+    b.charge = Math.max(0, b.charge - JUMP_CHARGE)
+    this.sendFly(true)
+    this.flashHint(out.to === 'planet' ? 'The drive whines, the stars smear, and the green planet fills the canopy' : 'The drive whines, the stars smear, and the grey moon hangs below you again')
+    this.drawPack()
+    return true
   }
 
   // V20: U at the forge puts ore in, or takes the iron once it is smelted
@@ -1939,6 +2003,7 @@ export class VoxelViewport {
       this.leaveSeat()
       return
     }
+    if (input.locked && input.pressed('KeyM')) this.jump()
     this.shipLayer.step(dt, this.helm())
     if (this.crashed()) return
     this.packTick -= dt

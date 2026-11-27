@@ -65,8 +65,8 @@ export function asteroidsOf(params: MoonParams): Body[] {
   return out
 }
 
-// V9: the planet with air, a short flight from the moon (a jump drive comes
-// later): green soil, gentle hills, no craters, at PLANET's place for every
+// V9: the planet with air, a short flight from the moon (V27: or a jump with
+// a jump drive, ship/Jump.ts): green soil, gentle hills, no craters, at PLANET's place for every
 // world. The server's play graphs allow points near it too.
 export const PLANET = { x: 1600, y: 0, z: 0, radius: 140, amplitude: 9, air: 60 }
 

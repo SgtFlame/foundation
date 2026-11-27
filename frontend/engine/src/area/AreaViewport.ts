@@ -8,7 +8,7 @@ import { WalkGrid, type Point } from '../nav/WalkGrid.ts'
 import { moonLight, moons, type MoonPhase } from '../sky/Moons.ts'
 import { Combat, HERO_HP, isHostile, WEAPONS, type CombatEvent, type Skills, type Stance } from '../combat/Combat.ts'
 import { CombatHud } from '../combat/CombatHud.ts'
-import { HearthNight, WATCHER_HP } from '../defence/HearthNight.ts'
+import { HearthNight, hearthOf, WATCHER_HP } from '../defence/HearthNight.ts'
 import { NightHud } from '../defence/NightHud.ts'
 import { whistle } from '../defence/Whistle.ts'
 import { DialoguePanel } from './DialoguePanel.ts'
@@ -20,6 +20,9 @@ import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../sto
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
+import { WELL_LINE, WELL_REACH, WELL_SENSE, WELL_WARD_LINE, wellReady, wellSpot } from '../story/Well.ts'
+import { bankSageReady, bankSageSpot, FARM_WARD_LINE, FARM_WARDED_NIGHT, HEARTH_REACH, HEARTH_WARD_LINE, hearthStonesReady, hearthWarded, hearthWardMissing, hearthWardReady, nextHearthWard, SAGE_LINE, SAGE_REACH, wardSpots } from '../story/HearthWard.ts'
+import { TRIED_DOOR_LINE, TRIED_LINE, TRIED_LOST, TRIED_NIGHT, triedReady } from '../story/Tried.ts'
 import { riverStonesReady, STONES_LINE, STONES_REACH, thresholdSpot, WARD_LINE, WARD_REACH, wardedNight, wardMissing, wardReady } from '../story/Ward.ts'
 import { TINCTURE, TINCTURE_ALSO, tinctureReady, TRUE_DREAM, TRUE_DREAM_LINE } from '../story/Tincture.ts'
 import { BUNDLE_HERBS, BUNDLE_REACH, bundleSpots, bundlesReady, HEDGE_DISHES, SILL_REACH, sillLine, sillSpot } from '../story/Bundles.ts'
@@ -251,6 +254,7 @@ export class AreaViewport {
   private atSill = false // S20: standing by the moon calendar
   private tincture = false // S21: the dream tincture drunk, for the next sleep
   private atThreshold = false // S22: standing at Hawk's Rest's door
+  private atHearthStone = false // S24: standing on Hawk's Rest's hearthstone
   private signature: Point | null = null
   private barnDoor: Point | null = null
   private resumeAt: { area: string; at: Point } | null = null
@@ -1473,7 +1477,9 @@ export class AreaViewport {
   // hearth and, by day, a hearth-watch), while playing; length in seconds
   startHearthNight(house: AreaDef, opts: { length?: number; seed?: number; raiders?: number; cell?: number } = {}): boolean {
     if (!this.playing) return false
-    this.hearth = new HearthNight(house, { seed: opts.seed ?? hash(house.id + house.version), length: opts.length, raiders: opts.raiders, cell: opts.cell ?? 2 })
+    // S25: a warded hearth lets nothing through
+    const warded = !!this.story && hearthWarded(this.story.done, house)
+    this.hearth = new HearthNight(house, { seed: opts.seed ?? hash(house.id + house.version), length: opts.length, raiders: opts.raiders, cell: opts.cell ?? 2, warded })
     this.hearthSignals = []
     this.nightHud.show(true)
     this.nightHud.say(
@@ -1525,14 +1531,24 @@ export class AreaViewport {
             this.hud.say('The hearthstone heaves. Something comes up out of the dark.')
           }
           break
+        case 'settled':
+          this.nightHud.say(FARM_WARDED_NIGHT)
+          this.hud.say(FARM_WARDED_NIGHT)
+          break
         case 'taken':
           this.nightHud.say(`The whistle stops. ${h.watcher ? `${h.watcher.name} is gone, and` : 'Nobody kept the watch, and'} the family with them, dragged under the stone.`)
-          if (this.story?.done.watch && !this.story.done.defended) this.say('The house was lost. Wenlan will not forgive it, but the dark comes round again: by a hearth, press R to wait for the next night with no moon.')
+          if (this.story && triedReady(this.story.done) && h.house !== this.story.area && this.story.done.defended) this.say(TRIED_LOST)
+          else if (this.story?.done.watch && !this.story.done.defended) this.say('The house was lost. Wenlan will not forgive it, but the dark comes round again: by a hearth, press R to wait for the next night with no moon.')
           else this.flash('The house was lost. Press Stop to try the night again.')
           break
         case 'dawn':
           this.nightHud.say('Dawn greys the shutters. The house held.')
           this.flash('The house held until dawn')
+          // S23: the night the ward was tried, held
+          if (this.story && triedReady(this.story.done) && h.house !== this.story.area && this.story.done.defended) {
+            this.reach('tried')
+            this.say(TRIED_LINE)
+          }
           // S14: the foretold night, survived
           if (this.story?.done.watch && !this.story.done.defended) {
             this.reach('defended')
@@ -1788,6 +1804,24 @@ export class AreaViewport {
     this.drawHerbs()
     this.drawStones()
     const st = this.story
+    // S26: frost on the well's stones once the hearths are shut
+    const well = st && this.area.id === st.area && st.done.farmward && !this.set.interior ? wellSpot(Object.values(this.area.pieces), this.set.cell) : null
+    if (well && !st?.done.wellward) {
+      const frost = new THREE.Mesh(new THREE.RingGeometry(1.25, 1.9, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicNodeMaterial({ color: 0xdfeaf2, transparent: true, opacity: 0.7 }))
+      frost.position.set(well.x, 0.06, well.z)
+      this.marks.add(frost)
+    } else if (well) {
+      // S27: the well ward: sage round the rim, a stone at each quarter and one on the beam
+      const sage = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.06, 6, 24).rotateX(Math.PI / 2), new THREE.MeshStandardNodeMaterial({ color: 0x8fa38a, roughness: 1 }))
+      sage.position.set(well.x, 1.02, well.z)
+      this.marks.add(sage)
+      const pale = new THREE.MeshStandardNodeMaterial({ color: 0xe6e1d3, roughness: 0.6 })
+      for (const [dx, dy, dz] of [[1.25, 1.06, 0], [-1.25, 1.06, 0], [0, 1.06, 1.25], [0, 1.06, -1.25], [0, 2.7, 0]]) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), pale)
+        m.position.set(well.x + dx, dy, well.z + dz)
+        this.marks.add(m)
+      }
+    }
     if (!st || this.area.id !== st.area || !st.done.howl) return
     const c = this.set.cell
     const yard = Object.values(this.area.pieces).find((p) => p.piece === 'yard')
@@ -1836,7 +1870,8 @@ export class AreaViewport {
       if (this.dayEffect().reveal) this.herbs.add(this.glowAt(h.x, h.z))
     }
     // S22: the river stones in the cleared culvert, once the true dream has taught the ward
-    const rs = riverStonesReady(st.done, st.items) ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
+    // S24: and again for the hearth ward, once the tried night taught it
+    const rs = riverStonesReady(st.done, st.items) || hearthStonesReady(st.done, st.items) ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
     if (rs) {
       const pale = new THREE.MeshStandardNodeMaterial({ color: 0xe6e1d3, roughness: 0.6 })
       for (let i = 0; i < 5; i++) {
@@ -1847,10 +1882,18 @@ export class AreaViewport {
       }
       if (this.dayEffect().reveal) this.herbs.add(this.glowAt(rs.x, rs.z))
     }
+    // S24: the sage seeded on the ditch bank
+    const bank = bankSageReady(st.done, st.items, st.picked) ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
+    if (bank) {
+      const at = bankSageSpot(bank)
+      const clump = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.45, 7), new THREE.MeshStandardNodeMaterial({ color: 0x8fa38a, roughness: 1 }))
+      clump.position.set(at.x, 0.22, at.z)
+      this.herbs.add(clump)
+      if (this.dayEffect().reveal) this.herbs.add(this.glowAt(at.x, at.z))
+    }
     // S10: the willow bough in the culvert and the water backed up into the wheat, until cleared
     const ditch = st.done.reading && !st.done.ditch ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
     if (ditch) {
-      const c = this.set.cell
       const flood = new THREE.Mesh(new THREE.PlaneGeometry(ditch.field.w - 1, ditch.field.d - 1.6).rotateX(-Math.PI / 2), new THREE.MeshStandardNodeMaterial({ color: 0x4f86ad, transparent: true, opacity: 0.75, roughness: 0.1 }))
       flood.position.set(ditch.field.x, 0.62, ditch.field.z)
       this.herbs.add(flood)
@@ -1948,13 +1991,27 @@ export class AreaViewport {
       }
     }
     // S22: the river stones, taken by walking up to the culvert
-    if (this.area.id === st.area && riverStonesReady(st.done, st.items)) {
+    const again = hearthStonesReady(st.done, st.items)
+    if (this.area.id === st.area && (riverStonesReady(st.done, st.items) || again)) {
       const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
       if (d && Math.hypot(p.x - d.x, p.z - d.z) < STONES_REACH) {
         st.items.riverstones = 1
-        this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: 'riverstones', spot: 'culvert-stones' })
+        this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: 'riverstones', spot: again ? wardSpots(nextHearthWard(st.done)!).stones : 'culvert-stones' })
         this.drawHerbs()
         this.say(STONES_LINE)
+      }
+    }
+    // S24: the sage on the ditch bank, taken by walking up to it
+    if (this.area.id === st.area && bankSageReady(st.done, st.items, st.picked)) {
+      const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
+      const at = d ? bankSageSpot(d) : null
+      if (at && Math.hypot(p.x - at.x, p.z - at.z) < SAGE_REACH) {
+        const spot = wardSpots(nextHearthWard(st.done)!).sage
+        st.items.sage = (st.items.sage ?? 0) + 1
+        st.picked[spot] = true
+        this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: 'sage', spot })
+        this.drawHerbs()
+        this.say(SAGE_LINE)
       }
     }
     // S10: the willow bough the cards showed, hauled out by walking up to it
@@ -1981,6 +2038,8 @@ export class AreaViewport {
     this.stepStones(p)
     this.stepCache(p)
     this.stepBundles(p)
+    this.stepFarmWard(p)
+    this.stepWell(p)
     this.stepSenses(p)
     this.savePlace()
   }
@@ -2006,6 +2065,8 @@ export class AreaViewport {
   // found, and her moon calendar on the sill
   private drawBundles(): void {
     const st = this.story
+    // S25: Wenlan's hearth ward, drawn in his kitchen
+    if (st?.done.farmward && this.inKitchen()) this.drawHearthWard()
     if (!st || !this.blessed()) return
     const pieces = Object.values(this.area.pieces)
     const sill = sillSpot(pieces, this.set.cell)
@@ -2032,6 +2093,8 @@ export class AreaViewport {
         this.herbs.add(m)
       }
     }
+    // S24: the hearth ward: sage round the hearthstone and a stone at each corner and the heart
+    if (st.done.hearthward) this.drawHearthWard()
     if (!st.done.cache) return
     const string = new THREE.MeshBasicNodeMaterial({ color: 0x6b5236 })
     for (const b of bundleSpots(pieces, this.set.cell)) {
@@ -2046,6 +2109,80 @@ export class AreaViewport {
       g.userData.spot = b.spot
       this.herbs.add(g)
     }
+  }
+
+  // S24: the hearth ward on this house's hearthstone: sage round it, a stone at each corner and the heart
+  private drawHearthWard(): void {
+    const hs = hearthOf(this.area, this.set.cell)?.stone
+    if (hs) {
+      const sageMat = new THREE.MeshStandardNodeMaterial({ color: 0x8fa38a, roughness: 1 })
+      const pale = new THREE.MeshStandardNodeMaterial({ color: 0xe6e1d3, roughness: 0.6 })
+      for (const [dx, dz, w, d] of [[0, -0.85, 1.8, 0.07], [0, 0.85, 1.8, 0.07], [-0.9, 0, 0.07, 1.7], [0.9, 0, 0.07, 1.7]]) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.04, d), sageMat)
+        m.position.set(hs.x + dx, 0.03, hs.z + dz)
+        this.herbs.add(m)
+      }
+      for (const [dx, dz] of [[-0.75, -0.7], [0.75, -0.7], [-0.75, 0.7], [0.75, 0.7], [0, 0]]) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), pale)
+        m.scale.y = 0.6
+        m.position.set(hs.x + dx, 0.05, hs.z + dz)
+        this.herbs.add(m)
+      }
+    }
+  }
+
+  // S25: Wenlan's kitchen, the house with the farmer in it
+  private inKitchen(): boolean {
+    return !!this.set.interior && Object.values(this.area.npcs ?? {}).some((n) => n.dialogue === 'farmer')
+  }
+
+  // S25: standing on the farmhouse hearthstone with stones and a sage lays Wenlan's hearth ward
+  private atFarmStone = false
+  private stepFarmWard(p: { x: number; z: number }): void {
+    const st = this.story!
+    if (nextHearthWard(st.done) !== 'farmward' || !this.inKitchen()) return
+    const hs = hearthOf(this.area, this.set.cell)?.stone
+    const at = !!hs && Math.hypot(p.x - hs.x, p.z - hs.z) < HEARTH_REACH
+    if (at && !this.atFarmStone) {
+      if (hearthWardReady(st.done, st.items, 'farmward')) {
+        st.items.sage--
+        st.items.riverstones = 0
+        st.items.farmward = 1
+        this.reach('farmward')
+        this.drawHerbs()
+        this.say(FARM_WARD_LINE)
+      } else this.say(hearthWardMissing(st.items))
+    }
+    this.atFarmStone = at
+  }
+
+  // S26: the frost-cold well in the yard, once both hearths are warded;
+  // S27: standing at its rim with stones and sage wards it
+  private atWell = false
+  private stepWell(p: { x: number; z: number }): void {
+    const st = this.story!
+    if (this.set.interior || this.area.id !== st.area) return
+    const ward = nextHearthWard(st.done) === 'wellward'
+    if (!wellReady(st.done) && !ward) return
+    const w = wellSpot(Object.values(this.area.pieces), this.set.cell)
+    const at = !!w && Math.hypot(p.x - w.x, p.z - w.z) <= WELL_REACH
+    if (at && !this.atWell) {
+      if (wellReady(st.done)) {
+        st.items.welllore = 1
+        this.reach('well')
+        this.drawMarks()
+        this.say(WELL_LINE)
+      } else if (hearthWardReady(st.done, st.items, 'wellward')) {
+        st.items.sage--
+        st.items.riverstones = 0
+        st.items.wellward = 1
+        this.reach('wellward')
+        this.drawMarks()
+        this.drawHerbs()
+        this.say(WELL_WARD_LINE)
+      } else this.say(hearthWardMissing(st.items, 'The well'))
+    }
+    this.atWell = at
   }
 
   // S20: walking up to a bundle takes it into the herbal; the sill tells the moons
@@ -2071,6 +2208,20 @@ export class AreaViewport {
       } else this.say(wardMissing(st.items))
     }
     this.atThreshold = atTh
+    // S24: the hearthstone: lay the hearth ward when the stones and a sage are in hand
+    const hs = nextHearthWard(st.done) === 'hearthward' ? hearthOf(this.area, this.set.cell)?.stone : null
+    const atHs = !!hs && Math.hypot(p.x - hs.x, p.z - hs.z) < HEARTH_REACH
+    if (atHs && !this.atHearthStone) {
+      if (hearthWardReady(st.done, st.items)) {
+        st.items.sage--
+        st.items.riverstones = 0
+        st.items.hearthward = 1
+        this.reach('hearthward')
+        this.drawHerbs()
+        this.say(HEARTH_WARD_LINE)
+      } else this.say(hearthWardMissing(st.items))
+    }
+    this.atHearthStone = atHs
     if (!bundlesReady(st.done)) return
     const spots = bundleSpots(pieces, this.set.cell)
     for (const b of spots) {
@@ -2174,6 +2325,9 @@ export class AreaViewport {
     }
     if (!st || this.area.id !== st.area) return []
     const out: Source[] = []
+    // S26: the well, frost-cold once both hearths are shut
+    const well = wellReady(st.done) ? wellSpot(Object.values(this.area.pieces), this.set.cell) : null
+    if (well) out.push({ id: 'well', ...well, sense: 'smell', text: WELL_SENSE, from: 'from the well', range: 30 })
     if (st.done.howl && !st.done.signature && this.signature) {
       out.push({ id: 'signature', ...this.signature, sense: 'smell', text: 'Old pennies, and scorched snow', from: 'out by the well', range: 30 })
     }
@@ -2189,9 +2343,13 @@ export class AreaViewport {
     if (this.ringHeart && this.stonesAwake && !st.done.stones) {
       out.push({ id: 'stones', ...this.ringHeart, sense: 'sound', text: 'A low hum, like a held note', from: 'from the stones by the signpost', range: 45 })
     }
-    if (riverStonesReady(st.done, st.items)) {
+    if (riverStonesReady(st.done, st.items) || hearthStonesReady(st.done, st.items)) {
       const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
       if (d) out.push({ id: 'riverstones', x: d.x, z: d.z, sense: 'sound', text: 'Clean water running over stones', from: 'at the culvert by the east field', range: 35 })
+    }
+    if (bankSageReady(st.done, st.items, st.picked)) {
+      const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
+      if (d) out.push({ id: 'banksage', ...bankSageSpot(d), sense: 'smell', text: 'Sage, sharp and green', from: 'on the ditch bank by the culvert', range: 25 })
     }
     if (st.done.reading && !st.done.ditch) {
       const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
@@ -2230,6 +2388,8 @@ export class AreaViewport {
   private rest(): void {
     const st = this.story
     if (st?.done.foretold && !st.done.defended) return this.waitForDark()
+    // S23: once the ward is laid, R at Hawk's Rest waits for the night it is tried
+    if (st && triedReady(st.done) && this.blessed()) return this.wardNight()
     if (st?.done.rest) return this.sleepHere()
     if (!st || !st.done.road || st.done.rest) return
     if (!this.nearHearth()) {
@@ -2265,6 +2425,28 @@ export class AreaViewport {
     else this.reach('watch')
     this.say(`The days pass. You help Wenlan bar the byre and set a hooded lamp by the hearthstone. Day ${st.clock.day + 1}: no moon tonight. Keep the watch at the farmhouse.`)
     this.opts.onStoryNight?.()
+  }
+
+  // S23: R by Hawk's Rest's hearth once the ward is laid: the days pass to
+  // the next night with no moon; the ward holds the door, and one comes up
+  // through the hearthstone instead
+  private wardNight(): void {
+    const st = this.story!
+    if (!this.nearHearth()) return this.flash('Stand by the hearth to wait for the dark night')
+    if (this.hearth && !this.hearth.outcome) return this.flash('The night has come: hold the cottage until dawn')
+    const n = nextNoMoon(nightOf(st.clock))
+    st.clock = { day: n - FIRST_NIGHT, hour: 23 }
+    this.slept = true
+    const fade = document.createElement('div')
+    fade.style.cssText = 'position:absolute;inset:0;background:#000;opacity:1;transition:opacity 2s;z-index:3;pointer-events:none'
+    this.container.appendChild(fade)
+    setTimeout(() => (fade.style.opacity = '0'), 600)
+    setTimeout(() => fade.remove(), 2800)
+    this.drawMarks()
+    this.savePlace(true)
+    this.startHearthNight(this.area, { ...TRIED_NIGHT, seed: hash(this.area.id) + n, cell: this.set.cell })
+    this.nightHud.say(`Day ${st.clock.day + 1}, no moon. Nobody keeps the watch but you: stay in the cottage until dawn.`)
+    this.say(TRIED_DOOR_LINE)
   }
 
   // S9: R by a hearth once night is falling: sleep until seven

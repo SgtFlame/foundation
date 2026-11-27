@@ -72,6 +72,25 @@
       "xp": 150,
       "needs": {"ore": 50},
       "level": 3
+    },
+    {
+      "id": "refinery-ore",
+      "job": true,
+      "title": "Ore for the refinery",
+      "description": "Job board, for pilots of Trade 4: bring 100 m³ of ore in one trip. Only an ore barge carries it, and only with ion thruster kits fitted.",
+      "skill": "trade",
+      "xp": 200,
+      "needs": {"ore": 100},
+      "design": "barge",
+      "level": 4
+    },
+    {
+      "id": "jump-trial",
+      "title": "A ship that can jump",
+      "description": "The quartermaster wants proof the old drives can be made to work again: bring a ship with a jump drive fitted, its hold carrying 2 m³ of iron for the farm on the green planet.",
+      "skill": "piloting",
+      "xp": 150,
+      "needs": {"iron": 2, "jump": true}
     }
   ]
 }

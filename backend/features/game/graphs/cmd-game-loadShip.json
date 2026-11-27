@@ -7,7 +7,7 @@
   "spec": {
     "command": "game.loadShip",
     "title": "Load a ship's hold",
-    "description": "Empties the sender's pack (game.pack) into a ship's cargo hold, dust first, as much as the hold has room for (6 m³ for each cargo block placed); the target is the ship's id. Refused when the ship does not exist, has no cargo block placed, its hold is full or the pack is empty.",
+    "description": "Empties the sender's pack (game.pack) into a ship's cargo hold, dust first, as much as the hold has room for (6 m³ for each cargo block placed); the target is the ship's id. Refused when the ship does not exist, has no cargo block placed, its hold is full or the pack is empty. V25: the freighter loads all its holds, and the ore barge only half until ion thruster kits are fitted (each adds a quarter, two lift it full).",
     "args": {
       "type": "object",
       "properties": {}
@@ -96,7 +96,7 @@
         "y": 0
       },
       "config": {
-        "expr": "let holds = {skiff: [], prospector: [28], hauler: [27, 37, 38, 39, 40, 41]}; let mine = found ? (holds[ship.design] ?? []) : []; let placed = filter(mine, # in ship.placed); let room = len(placed) * 6 - (ship?.cargo?.dust ?? 0) - (ship?.cargo?.rock ?? 0) - (ship?.cargo?.iron ?? 0) - (ship?.cargo?.ore ?? 0); let have = packed ? pack : {dust: 0, rock: 0, ore: 0}; let o = min(max(have?.ore ?? 0, 0), max(room, 0)); let d = min(max(have.dust, 0), max(room - o, 0)); let r = min(max(have.rock, 0), max(room - o - d, 0)); {holds: len(placed), room: room, d: d, r: r, o: o}",
+        "expr": "let holds = {skiff: [], prospector: [28], hauler: [27, 37, 38, 39, 40, 41], freighter: [27, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52], barge: [27, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106]}; let mine = found ? (holds[ship.design] ?? []) : []; let placed = filter(mine, # in ship.placed); let lift = found && ship.design == \"barge\" ? min(1.0, 0.5 + (ship?.boost ?? 0)) : 1.0; let full = len(placed) * 6.0; let room = full * lift - (ship?.cargo?.dust ?? 0) - (ship?.cargo?.rock ?? 0) - (ship?.cargo?.iron ?? 0) - (ship?.cargo?.ore ?? 0); let have = packed ? pack : {dust: 0, rock: 0, ore: 0}; let o = min(max(have?.ore ?? 0, 0), max(room, 0)); let d = min(max(have.dust, 0), max(room - o, 0)); let r = min(max(have.rock, 0), max(room - o - d, 0)); {holds: len(placed), room: room, lift: lift, full: full, d: d, r: r, o: o}",
         "type": "json"
       }
     },
@@ -109,7 +109,7 @@
         "y": 150
       },
       "config": {
-        "expr": "!found ? \"there is no ship \" + target : hold.holds == 0 ? \"this ship has no cargo hold placed\" : hold.room \u003c= 0.0001 ? \"the hold is full\" : hold.d + hold.r + hold.o \u003c= 0.0001 ? \"your pack is empty: dig first\" : \"\"",
+        "expr": "!found ? \"there is no ship \" + target : hold.holds == 0 ? \"this ship has no cargo hold placed\" : hold.room <= 0.0001 ? (hold.lift < 1 ? \"the barge's stock thrusters lift only \" + string(int(hold.full * hold.lift)) + \" of its \" + string(int(hold.full)) + \" m³: fit ion thruster kits (O by the ship) to load more\" : \"the hold is full\") : hold.d + hold.r + hold.o <= 0.0001 ? \"your pack is empty: dig first\" : \"\"",
         "type": "string"
       }
     },

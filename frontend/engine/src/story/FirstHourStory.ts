@@ -56,6 +56,16 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'truedream', title: 'A true dream', how: 'On a night of the lesser full moon (the sill or the almanac tells when), press C at a hearth for the dream tincture, then sleep (R).' },
   // S22: the threshold ward
   { id: 'ward', title: 'The threshold ward', how: "Take five river stones from the culvert by the east field, then walk to Hawk's Rest's door with a sage to lay the ward." },
+  // S23: the night the ward is tried
+  { id: 'tried', title: 'What the ward keeps out', how: "Stand by Hawk's Rest's hearth and press R to wait for the next night with no moon. Stay in the cottage: whatever the ward keeps from the door may find another way in." },
+  // S24: the hearth ward
+  { id: 'hearthward', title: 'Ward the hearth', how: "Take five more river stones from the culvert and the sage seeded on the ditch bank beside it, then stand on Hawk's Rest's hearthstone to lay the ward." },
+  // S25: Wenlan's hearth
+  { id: 'farmward', title: "Ward Wenlan's hearth", how: "The farmhouse hearthstone is where they came up before. Take five more river stones from the culvert and sage from the ditch bank, then go into the farmhouse kitchen and stand on its hearthstone." },
+  // S26: the well
+  { id: 'well', title: 'The way they will come', how: 'With both hearths warded, follow the cold in the yard by day: something is wrong with the well.' },
+  // S27: the well ward
+  { id: 'wellward', title: 'Ward the well', how: 'Take five more river stones from the culvert and sage from the ditch bank, then go to the frost-cold well in the yard and stand at its rim.' },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

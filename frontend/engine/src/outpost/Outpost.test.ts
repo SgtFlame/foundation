@@ -36,3 +36,12 @@ test('each piloting level past the first adds a tenth to thrust', () => {
   assert.equal(thrustFor(undefined), 1)
   assert.ok(Math.abs(thrustFor({ piloting: 3 }) - 1.2) < 1e-9)
 })
+
+test('the jump trial needs a jump drive fitted and iron in the hold (V28)', () => {
+  const contracts = JSON.parse(readFileSync(new URL('../../../../backend/features/game/contracts/contracts.json', import.meta.url), 'utf8')).contracts
+  const trial = contracts.find((c: { id: string }) => c.id === 'jump-trial')
+  const iron = { cargo: { dust: 0, rock: 0, iron: 2 } }
+  assert.match(handInProblem('jump-trial', ship({ design: 'prospector', ...iron }), null, 32, trial), /jump drive/)
+  assert.match(handInProblem('jump-trial', ship({ design: 'prospector', jump: true }), null, 32, trial), /iron/)
+  assert.equal(handInProblem('jump-trial', ship({ design: 'prospector', jump: true, ...iron }), null, 32, trial), '')
+})
