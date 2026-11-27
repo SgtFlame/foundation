@@ -3,9 +3,12 @@ package natsauth
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/SgtFlame/foundation/backend/features/live/natsd"
 )
 
 // TenantAccount is the name of a tenant's account (forge 20a-3): T<id>.
@@ -60,4 +63,29 @@ func Minter(d *Deployment, keys Keys, name string) func(ctx context.Context, ten
 		}
 		return u.Creds, nil
 	}
+}
+
+// EnvKeys names the keys directory when serve's --nats-keys is not given.
+const EnvKeys = "FOUNDATION_NATS_KEYS"
+
+// TenantAccounts is how serve reaches each tenant's account: with a
+// deployment's keys directory (`cli nats init`; keysDir, else
+// $FOUNDATION_NATS_KEYS) every tenant's streams and buckets live in its
+// own account T<id>, reached at o's URL and CA by a user minted from the
+// keys; without one it is nil and every tenant shares the account serve
+// connected to. Until the credential issuer (forge 20h) the keys stay in
+// a directory only serve's user reads.
+func TenantAccounts(o natsd.Options, keysDir string) (*natsd.PerTenant, error) {
+	if keysDir == "" {
+		keysDir = os.Getenv(EnvKeys)
+	}
+	if keysDir == "" {
+		return nil, nil
+	}
+	keys := DirKeys(keysDir)
+	d, err := Load(keys)
+	if err != nil {
+		return nil, err
+	}
+	return natsd.NewPerTenant(o, Minter(d, keys, "serve")), nil
 }

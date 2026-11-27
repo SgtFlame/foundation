@@ -70,6 +70,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
+	"github.com/SgtFlame/foundation/backend/features/controlplane/natsauth"
 	"github.com/SgtFlame/foundation/backend/features/conversation"
 	"github.com/SgtFlame/foundation/backend/features/conversation/made"
 	conversationnodes "github.com/SgtFlame/foundation/backend/features/conversation/nodes"
@@ -361,7 +362,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		defer nats.Close() // drained after the HTTP server has shut down
 		// forge 20a-3: with --nats-keys each tenant's streams and buckets
 		// are in its own account; connectors' state stays in APP
-		perTenant, err := tenantAccounts(natsOptions, serveNatsKeys)
+		perTenant, err := natsauth.TenantAccounts(natsOptions, serveNatsKeys)
 		if err != nil {
 			return err
 		}
