@@ -37,6 +37,9 @@ type Config struct {
 	// EnrollCreds is the shared enroll user's creds file, kept by a host
 	// to hand to the instances it makes (forge 20c-2).
 	EnrollCreds string `json:"enrollCreds,omitempty"`
+	// ScriptKeys are the script signing keys trusted until desired state
+	// names its own (scriptKeys; forge 20c-3), base64 Ed25519 public keys.
+	ScriptKeys []string `json:"scriptKeys,omitempty"`
 	// Creds is the creds file's path (/var/lib/axiomd/creds), State the
 	// directory of its own state (/var/lib/axiomd).
 	Creds string `json:"creds"`
@@ -305,7 +308,7 @@ func (d *Daemon) serve(ctx context.Context, m *nats.Msg) {
 		_ = m.Respond(raw)
 		return
 	}
-	if r.Verb != "reconcile" && d.Handlers[r.Verb] == nil {
+	if r.Verb != "reconcile" && r.Verb != "script" && d.Handlers[r.Verb] == nil {
 		raw, _ := json.Marshal(ctl.Reply{Error: "unknown verb " + r.Verb})
 		_ = m.Respond(raw)
 		return
@@ -331,9 +334,12 @@ func (d *Daemon) handle(ctx context.Context, r ctl.Request) {
 	n := 0
 	progress := func(msg string) { n++; report(ctl.EventProgress, msg, n) }
 	var err error
-	if r.Verb == "reconcile" {
+	switch r.Verb {
+	case "reconcile":
 		err = d.reconcile(ctx)
-	} else {
+	case "script":
+		err = d.script(ctx, r, func(msg string, seq int) { report(ctl.EventProgress, msg, seq) })
+	default:
 		err = d.Handlers[r.Verb](ctx, r, progress)
 	}
 	if ctx.Err() != nil {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -34,6 +35,7 @@ const (
 	EntityPackagePin = "infraPackagePin"
 	EntityEnrollment = "infraEnrollment"
 	EntityNatsAcct   = "infraNatsAccount"
+	EntityScript     = "infraScript"
 )
 
 //go:embed infra
@@ -116,4 +118,14 @@ func problems(msg string, v any) string {
 		s = s[:600]
 	}
 	return strings.TrimSpace(fmt.Sprintf("%s %s", msg, s))
+}
+
+// ScriptKeyPath is where the root tenant's script signing key is kept
+// (forge 20c-3): with the deployment's NATS keys, else in the data
+// directory.
+func ScriptKeyPath(keysDir, dataDir string) string {
+	if keysDir != "" {
+		return filepath.Join(keysDir, "script-signing.key")
+	}
+	return filepath.Join(dataDir, "script-signing.key")
 }

@@ -61,6 +61,8 @@ func DaemonPermissions(t Target) natsauth.Permissions {
 			"$JS.API.STREAM.INFO.KV_" + DesiredBucket,
 			"$JS.API.STREAM.INFO.KV_" + FactsBucket,
 			"$JS.API.STREAM.INFO.KV_" + HealthBucket,
+			"$JS.API.STREAM.INFO.KV_" + ScriptsBucket,
+			"$JS.API.DIRECT.GET.KV_" + ScriptsBucket + ".$KV." + ScriptsBucket + ".>",
 			"$JS.API.INFO",
 		},
 		Sub:       []string{t.Requests(), "_INBOX.>"},

@@ -986,7 +986,13 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			if err := controlplane.SeedApp(features.BackgroundArgs(ctx), projections, appService, liveBus); err != nil {
 				return err
 			}
-			controlDeps := controlplane.Deps{Projections: projections, Data: recordDeps, Bus: liveBus, Control: control}
+			// forge 20c-3: the root tenant's script signing key, kept with
+			// the deployment's keys (else in the data directory)
+			scriptKey, err := ctl.LoadOrMakeSigningKey(controlplane.ScriptKeyPath(natsauth.KeysDir(serveNatsKeys), dataDir))
+			if err != nil {
+				return err
+			}
+			controlDeps := controlplane.Deps{Projections: projections, Data: recordDeps, Bus: liveBus, Control: control, ScriptKey: scriptKey}
 			if err := controlplane.Start(ctx, func() controlplane.Deps { return controlDeps }); err != nil {
 				return err
 			}

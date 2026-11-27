@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -26,10 +27,13 @@ type Deps struct {
 	Control     *ctl.Control
 	// Sweep is how often health is checked (2 s when 0).
 	Sweep time.Duration
+	// ScriptKey signs infraScript records' content (forge 20c-3); its
+	// public half is every target's trusted scriptKeys. Nil signs nothing.
+	ScriptKey ed25519.PrivateKey
 }
 
 // reported are the fields daemons fill: never part of desired state.
-var reported = map[string]bool{"facts": true, "health": true, "lastEvent": true, "capabilities": true}
+var reported = map[string]bool{"facts": true, "health": true, "lastEvent": true, "capabilities": true, "hash": true, "problem": true}
 
 // Start runs the control plane's followers in this process (every process
 // runs them; each is idempotent): controlplane.desired copies each host's
@@ -49,6 +53,13 @@ func Start(ctx context.Context, deps func() Deps) error {
 	err := d.Projections.Follow(ctx, features.RootTenantID, live.AreaRecords, "controlplane.desired", subjects, func(e live.Event) error {
 		return Resolve(ctx, deps(), e.Actor)
 	})
+	if err != nil {
+		return log.Wrap(err)
+	}
+	err = d.Projections.Follow(ctx, features.RootTenantID, live.AreaRecords, "controlplane.scripts",
+		[]string{"evt." + strconv.FormatUint(features.RootTenantID, 10) + ".rec." + EntityScript + ".>"}, func(live.Event) error {
+			return SignScripts(ctx, deps())
+		})
 	if err != nil {
 		return log.Wrap(err)
 	}
@@ -161,6 +172,9 @@ func Resolve(ctx context.Context, d Deps, actor string) error {
 		docs[ctl.Target{Kind: ctl.KindInstance, ID: id}] = map[string]any{"instance": doc, "profile": profile, "units": units, "pins": pins}
 	}
 	for t, doc := range docs {
+		if d.ScriptKey != nil {
+			doc.(map[string]any)["scriptKeys"] = []string{ctl.PublicKey(d.ScriptKey)}
+		}
 		raw, _ := json.Marshal(doc)
 		changed, err := d.Control.PutDesired(ctx, t, raw)
 		if err != nil {
@@ -213,8 +227,11 @@ func nudge(ctx context.Context, d Deps, t ctl.Target, actor string) {
 }
 
 func entityOf(t ctl.Target) string {
-	if t.Kind == ctl.KindHost {
+	switch t.Kind {
+	case ctl.KindHost:
 		return EntityHost
+	case "script":
+		return EntityScript
 	}
 	return EntityInstance
 }
@@ -360,4 +377,42 @@ func sweepHealth(ctx context.Context, deps func() Deps) {
 			}
 		}
 	}
+}
+
+// SignScripts signs and keeps every infraScript record's content whose
+// hash is not yet reported (forge 20c-3), reporting its hash, or the
+// problem that stopped it. Idempotent: a script is kept by its hash.
+func SignScripts(ctx context.Context, d Deps) error {
+	if d.ScriptKey == nil {
+		return nil
+	}
+	if err := d.Projections.Settle(ctx, features.RootTenantID, "records.record"); err != nil {
+		return log.Wrap(err)
+	}
+	scripts, err := all(ctx, d, EntityScript)
+	if err != nil {
+		return err
+	}
+	t := ctl.Target{Kind: "script"}
+	for id, r := range scripts {
+		content := str(r, "content")
+		hash := ctl.HashOf([]byte(content))
+		if str(r, "hash") == hash && str(r, "problem") == "" {
+			continue
+		}
+		set := map[string]any{"hash": hash, "problem": ""}
+		if err := ctl.CheckScript(content); err != nil {
+			set = map[string]any{"hash": "", "problem": err.Error()}
+		} else if _, err := d.Control.PutScript(ctx, d.ScriptKey, content); err != nil {
+			return err
+		}
+		if str(r, "hash") == set["hash"] && str(r, "problem") == set["problem"] {
+			continue
+		}
+		t.ID = id
+		if err := update(ctx, d, t, "ctl-script-"+id+"-"+hash, set); err != nil {
+			return err
+		}
+	}
+	return nil
 }

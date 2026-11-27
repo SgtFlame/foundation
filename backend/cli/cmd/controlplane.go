@@ -121,7 +121,45 @@ control account with --keys (serve --nats-keys).`,
 	},
 }
 
+var cpRotate bool
+
+var controlplaneScriptKeyCmd = &cobra.Command{
+	Use:   "script-key",
+	Short: "Print, or rotate, the root tenant's script signing key",
+	Long: `Print the public half of the key that signs the scripts daemons may run
+(forge 20c-3), kept as script-signing.key with the deployment's keys (--keys,
+serve --nats-keys), else in --data-dir; made when missing. --rotate makes a
+new one: restart serve, and daemons trust only scripts it signs once their
+desired state carries it (scripts signed before are signed again when their
+record is saved).`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		dir := cpDataDir
+		if dir == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return err
+			}
+			dir = filepath.Join(home, ".foundation")
+		}
+		path := controlplane.ScriptKeyPath(natsauth.KeysDir(cpKeys), dir)
+		load := ctl.LoadOrMakeSigningKey
+		if cpRotate {
+			load = ctl.MakeSigningKey
+		}
+		k, err := load(path)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), ctl.PublicKey(k))
+		return nil
+	},
+}
+
 func init() {
+	controlplaneScriptKeyCmd.Flags().StringVar(&cpKeys, "keys", "", "the deployment's keys (default $FOUNDATION_NATS_KEYS)")
+	controlplaneScriptKeyCmd.Flags().StringVar(&cpDataDir, "data-dir", "", "serve's data directory, when there are no keys (default ~/.foundation)")
+	controlplaneScriptKeyCmd.Flags().BoolVar(&cpRotate, "rotate", false, "make a new key in place of the old")
+	controlplaneCmd.AddCommand(controlplaneScriptKeyCmd)
 	controlplaneEnrollCmd.Flags().StringVar(&cpTarget, "target", "", "the daemon's target: host.<id> or inst.<id>")
 	controlplaneEnrollCmd.Flags().StringVar(&cpKeys, "keys", "", "the deployment's keys (default $FOUNDATION_NATS_KEYS)")
 	controlplaneEnrollCmd.Flags().StringVar(&cpNatsURL, "nats-url", "", "the cluster's URLs (default $FOUNDATION_NATS_URL)")

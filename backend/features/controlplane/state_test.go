@@ -2,10 +2,12 @@ package controlplane_test
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -48,6 +50,7 @@ type stack struct {
 	p    *project.Projections
 	data data.Deps
 	ctl  *ctl.Control
+	key  ed25519.PrivateKey
 	n    atomic.Int64
 }
 
@@ -118,7 +121,8 @@ func newStack(t *testing.T) *stack {
 		t.Fatalf("a second seed: %v", err)
 	}
 	s := &stack{t: t, bus: b, p: p, data: dataDeps, ctl: &ctl.Control{NC: srv.Conn(), JS: srv.JS()}}
-	deps := controlplane.Deps{Projections: p, Data: dataDeps, Bus: b, Control: s.ctl, Sweep: 200 * time.Millisecond}
+	s.key, _ = ctl.MakeSigningKey(filepath.Join(t.TempDir(), "script.key"))
+	deps := controlplane.Deps{Projections: p, Data: dataDeps, Bus: b, Control: s.ctl, Sweep: 200 * time.Millisecond, ScriptKey: s.key}
 	if err := controlplane.Start(ctx, func() controlplane.Deps { return deps }); err != nil {
 		t.Fatal(err)
 	}
@@ -264,5 +268,34 @@ func TestDesiredAndActualState(t *testing.T) {
 	until(t, "the instance's desired state is gone", func() bool {
 		_, ok, _ := s.ctl.Desired(ctx, it)
 		return !ok
+	})
+}
+
+// TestScriptsSigned: a script record is signed and kept by its hash, a
+// bad one reports its problem, and every target trusts the key.
+func TestScriptsSigned(t *testing.T) {
+	ctx := context.Background()
+	s := newStack(t)
+	good := s.create(controlplane.EntityScript, map[string]any{"title": "Hello", "content": "#!/usr/bin/env bash\nset -euo pipefail\necho hi\n"})
+	bad := s.create(controlplane.EntityScript, map[string]any{"title": "Bad", "content": "echo hi\n"})
+	var hash string
+	until(t, "the script is signed", func() bool {
+		_ = json.Unmarshal([]byte(s.field(controlplane.EntityScript, good, "hash")), &hash)
+		return hash != ""
+	})
+	if _, err := s.ctl.FetchScript(ctx, hash, []string{ctl.PublicKey(s.key)}); err != nil {
+		t.Fatalf("the kept script: %v", err)
+	}
+	until(t, "the bad script reports its problem", func() bool {
+		return strings.Contains(s.field(controlplane.EntityScript, bad, "problem"), "set -euo pipefail")
+	})
+	s.set(controlplane.EntityScript, bad, map[string]any{"content": "#!/usr/bin/env bash\nset -euo pipefail\necho fixed\n"})
+	until(t, "the fixed script is signed", func() bool {
+		return strings.Contains(s.field(controlplane.EntityScript, bad, "hash"), "sha256:") && s.field(controlplane.EntityScript, bad, "problem") == `""`
+	})
+	host := s.create(controlplane.EntityHost, map[string]any{"name": "lxd1", "provider": "lxd"})
+	until(t, "desired state carries the script key", func() bool {
+		raw, ok, _ := s.ctl.Desired(ctx, ctl.Target{Kind: ctl.KindHost, ID: host})
+		return ok && strings.Contains(string(raw), ctl.PublicKey(s.key))
 	})
 }
