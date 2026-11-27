@@ -193,7 +193,7 @@ func Apply(d *Draft, e live.Event) error {
 	}
 	d.Rev++
 	d.UpdatedBy, d.UpdatedAt = e.UserID, e.Time
-	x.ID = e.Target.ID
+	x.ID = live.PartID(e.Target.ID)
 	if x.Fields == nil {
 		x.Fields = []records.Field{}
 	}

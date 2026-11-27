@@ -24,6 +24,8 @@ import (
 	"testing"
 
 	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/apps/branches"
+	appdiff "github.com/SgtFlame/foundation/backend/features/apps/diff"
 	"github.com/SgtFlame/foundation/backend/features/apps/installs"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	"github.com/SgtFlame/foundation/backend/features/apps/ops"
@@ -74,6 +76,7 @@ func everything(t *testing.T) *extensions.Registry {
 	recordsnodes.Contribute(reg, func() recordsdata.Deps { return recordsdata.Deps{} })
 	prefabs.Contribute(reg, func() prefabs.Deps { return prefabs.Deps{} })
 	manifests.Contribute(reg, func() manifests.Deps { return manifests.Deps{} })
+	branches.Contribute(reg, func() branches.Deps { return branches.Deps{} })
 	installs.Contribute(reg, func() installs.Deps { return installs.Deps{} })
 	ops.Contribute(reg)
 	activity.Contribute(reg, activity.NewRecorder(func() activity.Deps { return activity.Deps{} }))
@@ -88,6 +91,7 @@ func everything(t *testing.T) *extensions.Registry {
 	jobsnodes.Contribute(reg, func() jobsnodes.Deps { return jobsnodes.Deps{} })
 	authznodes.Contribute(reg)
 	textnodes.Contribute(reg)                                                                                   // Text diff, Anchor resolve (forge 18b)
+	appdiff.Contribute(reg)                                                                                     // Structured diff (forge 19d)
 	textnodes.ContributeTranscripts(reg, func() textnodes.TranscriptDeps { return textnodes.TranscriptDeps{} }) // Parse transcript (forge 18e)
 	kbnodes.Contribute(reg, func() collabservice.Service { return nil })                                        // Edit text together (forge 18c)
 	authz.ContributeAgents(reg)

@@ -155,7 +155,7 @@ export interface AppVersions {
   published: number
   publishedRev: number
   rev: number
-  versions: { version: number; rev: number; publishedBy: string; publishedAt: string }[]
+  versions: { version: number; rev: number; commit?: string; publishedBy: string; publishedAt: string }[] // commit: main's commit it froze (forge 19c)
 }
 
 // One command or query of an installed app, by its name on the live core

@@ -93,11 +93,11 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 		return nil
 	}
 	// changes are the app's ops after a sequence that are not this request's
-	changes := func(call tools.Call, app string, after uint64, request string) ([]Change, error) {
+	changes := func(call tools.Call, app, branch string, after uint64, request string) ([]Change, error) {
 		if err := settle(call); err != nil {
 			return nil, err
 		}
-		raw, _ := json.Marshal(map[string]any{"app": app, "after": after})
+		raw, _ := json.Marshal(map[string]any{"app": app, "after": after, "branch": cmp.Or(branch, live.Main)})
 		data, _, fail := deps().Subscriptions.Once(call.ServiceArgs, "ops.list", raw)
 		if fail != nil {
 			return nil, fmt.Errorf("%s", fail.Message)
@@ -123,12 +123,13 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 		Descriptor: extensions.Descriptor{ID: "forge.apply", Source: "apps"}, Title: "Change an app", Effect: tools.EffectWrite,
 		Asks:        func(args json.RawMessage) bool { return asks(deps().Bus, args) },
 		Description: "Applies a batch of ops (commands such as entity.create, entity.addField, prefab.insertNode, app.addPage, app.setNav) to an app's drafts as one atomic change: each op is decided against the state the ops before it left, and either all commit or none. An op with no target, of a command that makes one, gets a new id (returned in results). A refused op names its index (ops.<i>) with a fix, and nothing is committed: correct it and apply the batch again. Gives the sequence, each op's result, the app's problems after it, and, given after (the sequence you last read, from forge.app's position or a previous apply), the ops other authors applied since, so you do not work from a stale view. Drafts change without asking the user; a batch that publishes, installs or writes records asks first. Every op must be in one area: records go in a batch of their own. One batch holds at most 1000 events: split a larger change.",
-		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string","description":"The app the batch is for (app.list)"},"ops":{"type":"array","description":"The ops, in order","items":{"type":"object","properties":{"command":{"type":"string","description":"A command type, e.g. entity.addField"},"target":{"type":"string","description":"The id of what it changes; leave it out for a command that makes its target"},"args":{"type":"object","description":"The command's arguments, as its own tool takes them in args"}},"required":["command"]}},"after":{"type":"integer","description":"The definitions stream's sequence you last read: other authors' ops after it are listed"}},"required":["appId","ops"]}`),
+		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string","description":"The app the batch is for (app.list)"},"ops":{"type":"array","description":"The ops, in order","items":{"type":"object","properties":{"command":{"type":"string","description":"A command type, e.g. entity.addField"},"target":{"type":"string","description":"The id of what it changes; leave it out for a command that makes its target"},"args":{"type":"object","description":"The command's arguments, as its own tool takes them in args"}},"required":["command"]}},"after":{"type":"integer","description":"The definitions stream's sequence you last read: other authors' ops after it are listed"},"branch":{"type":"string","description":"The app's branch the ops change (app.branches); main when left out"}},"required":["appId","ops"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
 			a, err := tools.Decode[struct {
-				AppID string
-				Ops   []live.Op
-				After uint64
+				AppID  string
+				Ops    []live.Op
+				After  uint64
+				Branch string
 			}](call)
 			if err != nil {
 				return tools.Result{}, err
@@ -141,7 +142,7 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 			}
 			request := livetools.RequestOf(call)
 			t := deps().Bus.Transact(bus.Request{ServiceArgs: call.ServiceArgs, ID: fmt.Sprintf("tool-%d", features.NewTSID()), RequestID: request, App: a.AppID,
-				Actor: livetools.ActorOf(call)}, a.Ops, false)
+				Actor: livetools.ActorOf(call), Branch: branchName(a.Branch)}, a.Ops, false)
 			if t.Common.Code >= 300 {
 				if len(t.Problems) == 0 {
 					return tools.Result{}, fmt.Errorf("%s", t.Common.Message)
@@ -168,14 +169,18 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 				return tools.Result{}, err
 			}
 			problems := []live.Problem{}
-			store := deps().Store
+			store := OnBranch(deps().Store, reg, a.AppID, a.Branch)
 			if d, ok := manifests.GetDraft(call.Context(), store, call.Principal.TenantID, a.AppID); ok {
 				problems = append(problems, apps.CheckManifest(d.Manifest, manifests.Env(call.Context(), store, call.Principal.TenantID, reg))...)
 			}
 			content["problems"] = problems
 			summary := fmt.Sprintf("Applied %d ops to %s", len(results), a.AppID)
+			if b := branchName(a.Branch); b != "" {
+				content["branch"] = b
+				summary += " on branch " + b
+			}
 			if a.After > 0 {
-				others, err := changes(call, a.AppID, a.After, request)
+				others, err := changes(call, a.AppID, a.Branch, a.After, request)
 				if err != nil {
 					return tools.Result{}, err
 				}
@@ -194,11 +199,12 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "forge.changes", Source: "apps"}, Title: "Others' changes to an app", Effect: tools.EffectRead,
 		Description: "Lists the ops other authors (people, or another chat) applied to an app after a sequence, oldest first, each with its summary, who made it and its request; your own ops in this round are left out. Use it to catch up during a long build, before changing what someone else may have changed.",
-		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string"},"after":{"type":"integer","description":"A definitions stream sequence, from forge.app's position or forge.apply's seq"}},"required":["appId","after"]}`),
+		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string"},"after":{"type":"integer","description":"A definitions stream sequence, from forge.app's position or forge.apply's seq"},"branch":{"type":"string","description":"The app's branch; main when left out"}},"required":["appId","after"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
 			a, err := tools.Decode[struct {
-				AppID string
-				After uint64
+				AppID  string
+				After  uint64
+				Branch string
 			}](call)
 			if err != nil {
 				return tools.Result{}, err
@@ -206,7 +212,7 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 			if err := mayRead(call, a.AppID); err != nil {
 				return tools.Result{}, err
 			}
-			out, err := changes(call, a.AppID, a.After, livetools.RequestOf(call))
+			out, err := changes(call, a.AppID, a.Branch, a.After, livetools.RequestOf(call))
 			if err != nil {
 				return tools.Result{}, err
 			}
@@ -217,9 +223,9 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "forge.check", Source: "apps"}, Title: "Check an app", Effect: tools.EffectRead,
 		Description: "Checks an app's draft as it would be published and exported. errors stop it publishing or running: validation of the manifest and every part, and the blueprints-only check (every reference a primitive or one of the app's, the tenant's or a required app's parts). warnings do not: pages nothing reaches (not home, in the nav or an editor kind, and no part navigates to them), parts of the app nothing uses, and parts and pages with no description. Each has a path and a fix.",
-		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string"}},"required":["appId"]}`),
+		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string"},"branch":{"type":"string","description":"The app's branch to check, its parts as the branch has them; main when left out"}},"required":["appId"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
-			a, err := tools.Decode[struct{ AppID string }](call)
+			a, err := tools.Decode[struct{ AppID, Branch string }](call)
 			if err != nil {
 				return tools.Result{}, err
 			}
@@ -229,7 +235,7 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 			if err := settle(call); err != nil {
 				return tools.Result{}, err
 			}
-			errs, warnings, ok := manifests.CheckDraft(call.Context(), deps().Store, call.Principal.TenantID, reg, a.AppID)
+			errs, warnings, ok := manifests.CheckDraft(call.Context(), OnBranch(deps().Store, reg, a.AppID, a.Branch), call.Principal.TenantID, reg, a.AppID)
 			if !ok {
 				return tools.Result{}, fmt.Errorf("there is no app %q; list them with app.list", a.AppID)
 			}
@@ -241,20 +247,24 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "forge.preview", Source: "apps"}, Title: "Preview a page", Effect: tools.EffectRead,
 		Description: "Renders a page of an app's draft at a route (with its params, e.g. /task/42) as the app's draft run shows it: every prefab in its draft, its queries read once on the app's records. as names one of the manifest's roles: the page is read with that role's actions and row rules in place of yours, as a user holding only that role would see it (your own user id stays principal.user). When none of the app's entity types is published yet, the page prefab is rendered with its preview data instead. Gives the tree summarized (types, keys, texts and data, events, bindings; no styling) and the problems each at its key path. No screenshot.",
-		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string"},"route":{"type":"string","description":"A route of the app, its params filled in, e.g. /mine or /task/42"},"as":{"type":"string","description":"The id of one of the manifest's roles, e.g. member"}},"required":["appId","route"]}`),
+		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string"},"route":{"type":"string","description":"A route of the app, its params filled in, e.g. /mine or /task/42"},"as":{"type":"string","description":"The id of one of the manifest's roles, e.g. member"},"branch":{"type":"string","description":"The app's branch whose draft run to preview (app.branches); main when left out"}},"required":["appId","route"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
-			a, err := tools.Decode[struct{ AppID, Route, As string }](call)
+			a, err := tools.Decode[struct{ AppID, Route, As, Branch string }](call)
 			if err != nil {
 				return tools.Result{}, err
 			}
 			if err := settle(call); err != nil {
 				return tools.Result{}, err
 			}
-			out, err := preview(call, reg, deps(), a.AppID, a.Route, a.As)
+			b := live.Branch{App: a.AppID, Name: branchName(a.Branch)}
+			out, err := preview(call, reg, deps(), b, a.Route, a.As)
 			if err != nil {
 				return tools.Result{}, err
 			}
 			summary := fmt.Sprintf("Previewed %s %s", a.AppID, a.Route)
+			if !b.IsMain() {
+				summary += " on " + b.Name
+			}
 			if a.As != "" {
 				summary += " as " + a.As
 			}
@@ -266,9 +276,9 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 		Descriptor: extensions.Descriptor{ID: "forge.undo", Source: "apps"}, Title: "Undo a chat's change", Effect: tools.EffectWrite,
 		Asks:        func(json.RawMessage) bool { return false },
 		Description: "Undoes a request's changes to an app's drafts as one new request: the last request a chat made for you on the app that is not undone yet, or the one named by request (from forge.changes or a result's request). Another author's later change to the same item is a conflict: nothing is undone and they are named; ask the user, then call ops.undo with force to undo the rest. Publishing and installs are not undone.",
-		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string"},"request":{"type":"string","description":"A request id, e.g. round-42; the chat's last when left out"}},"required":["appId"]}`),
+		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string"},"request":{"type":"string","description":"A request id, e.g. round-42; the chat's last when left out"},"branch":{"type":"string","description":"The app's branch whose last chat request is undone; main when left out"}},"required":["appId"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
-			a, err := tools.Decode[struct{ AppID, Request string }](call)
+			a, err := tools.Decode[struct{ AppID, Request, Branch string }](call)
 			if err != nil {
 				return tools.Result{}, err
 			}
@@ -281,7 +291,11 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 				if err := settle(call); err != nil {
 					return tools.Result{}, err
 				}
-				raw, _ := json.Marshal(map[string]any{"scope": "app:" + a.AppID})
+				scope := "app:" + a.AppID
+				if b := branchName(a.Branch); b != "" {
+					scope += "@" + b
+				}
+				raw, _ := json.Marshal(map[string]any{"scope": scope})
 				data, _, fail := d.Subscriptions.Once(call.ServiceArgs, "ops.stack", raw)
 				if fail != nil {
 					return tools.Result{}, fmt.Errorf("%s", fail.Message)
@@ -311,8 +325,8 @@ func ContributeApply(reg *extensions.Registry, deps func() ForgeDeps) {
 // preview renders a page of an app's draft for forge.preview (forge 06e
 // question 3): the draft run at route, as a manifest role when as is
 // given, its tree summarized.
-func preview(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route, as string) (map[string]any, error) {
-	pv, err := PreviewPage(call, reg, d, app, route, as)
+func preview(call tools.Call, reg *extensions.Registry, d ForgeDeps, b live.Branch, route, as string) (map[string]any, error) {
+	pv, err := PreviewPage(call, reg, d, b, route, as)
 	if err != nil {
 		return nil, err
 	}
@@ -322,6 +336,9 @@ func preview(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route,
 	}
 	if as != "" {
 		out["as"] = as
+	}
+	if !b.IsMain() {
+		out["branch"] = b.Name
 	}
 	return out, nil
 }
@@ -338,14 +355,17 @@ type Previewed struct {
 
 // PreviewPage renders a page of an app's draft at route, as a manifest
 // role when as is given: forge.preview's page with its whole tree, styling
-// included, for tests that assert on it (forge 06h).
-func PreviewPage(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, route, as string) (Previewed, error) {
+// included, for tests that assert on it (forge 06h). On a branch it is
+// the branch's draft run, <appId>/draft@<branch> (forge 19b).
+func PreviewPage(call tools.Call, reg *extensions.Registry, d ForgeDeps, b live.Branch, route, as string) (Previewed, error) {
+	app := b.App
 	res := apps.Resource(call.Principal, app)
 	if err := authz.Check(call.Context(), call.Principal, "app.write", res).Err("app.write", res); err != nil {
 		return Previewed{}, err
 	}
 	tenant := call.Principal.TenantID
-	dr, ok := manifests.GetDraft(call.Context(), d.Store, tenant, app)
+	call.Ctx = live.WithBranch(call.Context(), b)
+	dr, ok := manifests.GetDraft(call.Context(), live.StoreFor(call.Context(), d.Store), tenant, app)
 	if !ok {
 		return Previewed{}, fmt.Errorf("there is no app %q; list them with app.list", app)
 	}
@@ -383,7 +403,11 @@ func PreviewPage(call tools.Call, reg *extensions.Registry, d ForgeDeps, app, ro
 	} else {
 		var page ui.Page
 		for _, src := range ui.AppSources.All(reg) {
-			if p, mine, err := src.Page(args, app+"/draft"); err == nil && mine {
+			name := app + "/draft"
+			if !b.IsMain() {
+				name += "@" + b.Name
+			}
+			if p, mine, err := src.Page(args, name); err == nil && mine {
 				page, ok = p, true
 				break
 			}
@@ -567,4 +591,21 @@ func Summarize(n *ui.Node) map[string]any {
 		out["slots"] = slots
 	}
 	return out
+}
+
+// branchName is a tool's branch argument as the bus takes it: "" for main.
+func branchName(b string) string {
+	if b == live.Main {
+		return ""
+	}
+	return b
+}
+
+// OnBranch is the store reading app's parts as its branch has them
+// (forge 19a); main's store for main.
+func OnBranch(store ops.Store, reg *extensions.Registry, app, branch string) live.Store {
+	if branchName(branch) == "" {
+		return store
+	}
+	return live.OnBranch(store, reg, live.Branch{App: app, Name: branch})
 }

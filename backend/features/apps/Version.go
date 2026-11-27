@@ -18,9 +18,12 @@ import (
 // published again reaches the app's users only through a new app version
 // and an upgrade.
 type Version struct {
-	App      string   `json:"app"`
-	Version  int      `json:"version"`
-	Rev      int      `json:"rev"` // the draft's rev it was published from
+	App     string `json:"app"`
+	Version int    `json:"version"`
+	Rev     int    `json:"rev"` // the draft's rev it was published from
+	// Commit is main's commit it was published from (forge 19c); empty for
+	// a version published from a rev before the app had commits.
+	Commit   string   `json:"commit,omitempty"`
 	Manifest Manifest `json:"manifest"`
 	// Prefabs are the published versions of the prefabs its pages and frame
 	// render, and of those they render in turn.
@@ -92,6 +95,37 @@ func DraftUnscoped(typ string) (app, name string, ok bool) {
 		return "", "", false
 	}
 	return Unscoped(rest)
+}
+
+// DraftBranchPrefix starts the live name of a command or query of a
+// branch's draft run (forge 19b): draft@<branch>.<appId>.<name>.
+const DraftBranchPrefix = "draft@"
+
+// DraftBranchScoped is a draft run's name on a branch for one of the
+// app's own commands or queries; on main it is DraftScoped's.
+func DraftBranchScoped(branch, app, name string) string {
+	if branch == "" || branch == "main" {
+		return DraftScoped(app, name)
+	}
+	return DraftBranchPrefix + branch + "." + Scoped(app, name)
+}
+
+// DraftBranchUnscoped splits a draft run's name, on main or a branch,
+// into the branch ("" for main), the app and the name inside it.
+func DraftBranchUnscoped(typ string) (branch, app, name string, ok bool) {
+	if app, name, ok := DraftUnscoped(typ); ok {
+		return "", app, name, true
+	}
+	rest, ok := strings.CutPrefix(typ, DraftBranchPrefix)
+	if !ok {
+		return "", "", "", false
+	}
+	branch, rest, ok = strings.Cut(rest, ".")
+	if !ok || branch == "" {
+		return "", "", "", false
+	}
+	app, name, ok = Unscoped(rest)
+	return branch, app, name, ok
 }
 
 // Install is an app installed in a tenant (forge 05b question 2: once per

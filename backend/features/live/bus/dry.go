@@ -91,9 +91,12 @@ func (o *Overlay) Apply(e live.Event, base func(projector string, t live.Target)
 			}
 			cur = v
 		}
-		next, err := pr.Fold(live.Fold{Key: e.Target.Key(), State: cur, Event: e})
+		next, skip, err := pr.Apply(live.Fold{Key: e.Target.Key(), State: cur, Event: e})
 		if err != nil {
 			return err
+		}
+		if skip {
+			continue
 		}
 		o.mu.Lock()
 		o.values[overlayKey(pr.ID, e.Target.Key())] = next

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features/apps"
+	"github.com/SgtFlame/foundation/backend/features/apps/branches"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	"github.com/SgtFlame/foundation/backend/features/apps/ops"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
@@ -296,15 +297,103 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 	})
 
 	tools.Tools.Register(reg, tools.Tool{
-		Descriptor: extensions.Descriptor{ID: "forge.app", Source: "apps"}, Title: "Read an app", Effect: tools.EffectRead,
-		Description: "Reads an application's draft: its manifest (pages with their titles and descriptions, nav, editor kinds, entity types, commands, queries, roles, settings, triggers), its rev, and a summary of each part (the prefabs, graphs and entity types it names or owns: name, description, kind, rev, published version, missing); its current problems, each at a path with a fix; who else has it open; the position (stream → sequence) it was read at, and after, the sequence of the app's last op, to pass to forge.apply and forge.changes. Read a part in full with forge.read.",
-		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string","description":"The app's id (app.list)"}},"required":["appId"]}`),
+		Descriptor: extensions.Descriptor{ID: "forge.history", Source: "apps"}, Title: "Read an app's history", Effect: tools.EffectRead,
+		Description: "Lists an app's branches and commits (forge 19c): each branch with its status, base, head and the parts it changed since its last commit (what a commit now would hold), and the commits newest first with their branch, message, author, parents and the parts each froze (type.id@seq). branch keeps the commits that branch's head reaches. Commit a branch with app.commit; only main's head commit is published (app.publish {commit}).",
+		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string","description":"The app's id (app.list)"},"branch":{"type":"string","description":"Only the commits this branch's head reaches"}},"required":["appId"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
-			a, err := tools.Decode[struct{ AppID string }](call)
+			a, err := tools.Decode[struct{ AppID, Branch string }](call)
 			if err != nil {
 				return tools.Result{}, err
 			}
-			data, pos, err := once(call, "app.describe", map[string]any{"id": a.AppID})
+			if !live.ValidToken(a.AppID) {
+				return tools.Result{}, fmt.Errorf("%q is not an app id", a.AppID)
+			}
+			brs, _, err := once(call, "app.branches", map[string]any{"app": a.AppID})
+			if err != nil {
+				return tools.Result{}, err
+			}
+			params := map[string]any{"app": a.AppID}
+			if b := branchName(a.Branch); b != "" {
+				params["branch"] = b
+			}
+			hist, _, err := once(call, "app.history", params)
+			if err != nil {
+				return tools.Result{}, err
+			}
+			content := map[string]any{"branches": brs, "history": hist}
+			raw, _ := json.Marshal(hist)
+			var h struct{ Commits []json.RawMessage }
+			_ = json.Unmarshal(raw, &h)
+			return tools.Result{Content: content, Summary: fmt.Sprintf("%s: %d commits", a.AppID, len(h.Commits))}, nil
+		},
+	})
+
+	tools.Tools.Register(reg, tools.Tool{
+		Descriptor: extensions.Descriptor{ID: "forge.approvals", Source: "apps"}, Title: "Read an app's approvals", Effect: tools.EffectRead,
+		Description: "Lists an app's commits with what each needs approved (forge 19d), newest first: its id, branch, message, the part kinds it touches (entities, pages, access, graphs), whether it is approved, the kinds still waiting, its approvals (who, kinds, comment), its semantic diff (summary and changes) and how many structured changes it holds; and the kinds the caller approves (mine). branch keeps the commits that branch's head reaches; pending keeps those not yet approved. Approve with app.approve {commit, comment}.",
+		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string","description":"The app's id (app.list)"},"branch":{"type":"string","description":"Only the commits this branch's head reaches"},"pending":{"type":"boolean","description":"Only commits not yet approved"}},"required":["appId"]}`),
+		Run: func(call tools.Call) (tools.Result, error) {
+			a, err := tools.Decode[struct {
+				AppID, Branch string
+				Pending       bool
+			}](call)
+			if err != nil {
+				return tools.Result{}, err
+			}
+			if !live.ValidToken(a.AppID) {
+				return tools.Result{}, fmt.Errorf("%q is not an app id", a.AppID)
+			}
+			params := map[string]any{"app": a.AppID}
+			if b := branchName(a.Branch); b != "" {
+				params["branch"] = b
+			}
+			hist, _, err := once(call, "app.history", params)
+			if err != nil {
+				return tools.Result{}, err
+			}
+			raw, _ := json.Marshal(hist)
+			var h branches.History
+			if err := json.Unmarshal(raw, &h); err != nil {
+				return tools.Result{}, err
+			}
+			out := []map[string]any{}
+			waiting := 0
+			for _, c := range h.Commits {
+				if a.Pending && c.Approved {
+					continue
+				}
+				if !c.Approved {
+					waiting++
+				}
+				var pd []branches.PartDiff
+				_ = json.Unmarshal(c.Structured, &pd)
+				n := 0
+				for _, d := range pd {
+					n += len(d.Changes)
+				}
+				out = append(out, map[string]any{"id": c.ID, "branch": c.Branch, "message": c.Message, "kinds": c.Kinds, "approved": c.Approved,
+					"waiting": c.Waiting, "approvals": c.Approvals, "semantic": c.Semantic, "structuredChanges": n})
+			}
+			mine := branches.ApproverKinds(call.ServiceArgs, a.AppID)
+			return tools.Result{Content: map[string]any{"app": a.AppID, "commits": out, "mine": mine},
+				Summary: fmt.Sprintf("%s: %d commits, %d waiting for approval", a.AppID, len(out), waiting)}, nil
+		},
+	})
+
+	tools.Tools.Register(reg, tools.Tool{
+		Descriptor: extensions.Descriptor{ID: "forge.app", Source: "apps"}, Title: "Read an app", Effect: tools.EffectRead,
+		Description: "Reads an application's draft: its manifest (pages with their titles and descriptions, nav, editor kinds, entity types, commands, queries, roles, settings, triggers), its rev, and a summary of each part (the prefabs, graphs and entity types it names or owns: name, description, kind, rev, published version, missing); its current problems, each at a path with a fix; who else has it open; the position (stream → sequence) it was read at, and after, the sequence of the app's last op, to pass to forge.apply and forge.changes. Read a part in full with forge.read.",
+		Input:       json.RawMessage(`{"type":"object","properties":{"appId":{"type":"string","description":"The app's id (app.list)"},"branch":{"type":"string","description":"The app's branch to read (app.branches), its parts as the branch has them; main when left out"}},"required":["appId"]}`),
+		Run: func(call tools.Call) (tools.Result, error) {
+			a, err := tools.Decode[struct{ AppID, Branch string }](call)
+			if err != nil {
+				return tools.Result{}, err
+			}
+			params := map[string]any{"id": a.AppID}
+			if b := branchName(a.Branch); b != "" {
+				params["branch"] = a.AppID + ":" + b
+			}
+			data, pos, err := once(call, "app.describe", params)
 			if err != nil {
 				return tools.Result{}, err
 			}
@@ -313,7 +402,7 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 			_ = json.Unmarshal(raw, &v)
 			problems := []live.Problem{}
 			if store := deps().Store; store != nil {
-				env := manifests.Env(call.ServiceArgs.Context(), store, call.ServiceArgs.Principal.TenantID, reg)
+				env := manifests.Env(call.ServiceArgs.Context(), OnBranch(store, reg, a.AppID, a.Branch), call.ServiceArgs.Principal.TenantID, reg)
 				problems = append(problems, apps.CheckManifest(v.Manifest, env)...)
 			}
 			// Who else: the other users present in the app
@@ -336,13 +425,19 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 			if store := deps().Store; store != nil {
 				if entries, err := ops.Entries(call.ServiceArgs, store, a.AppID); err == nil {
 					var after uint64
-					if len(entries) > 0 {
-						after = entries[len(entries)-1].Seq
+					for _, e := range entries {
+						if e.Branch == branchName(a.Branch) {
+							after = e.Seq
+						}
 					}
 					content["after"] = after
 				}
 			}
 			summary := fmt.Sprintf("Read the app %s: %d parts, %d problems", v.Manifest.Name, len(v.Parts), len(problems))
+			if b := branchName(a.Branch); b != "" {
+				content["branch"] = b
+				summary += " on branch " + b
+			}
 			return tools.Result{Content: content, Summary: summary}, nil
 		},
 	})
@@ -350,9 +445,9 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "forge.read", Source: "apps"}, Title: "Read a part", Effect: tools.EffectRead,
 		Description: "Reads one part of an app in full, as its draft is now: prefab:<id> (its interface, variants, template with key paths, graphs and preview data), graph:<id> (its nodes with their config, edges, variables, each node's pins and its problems) or entity:<id> (its fields, title field, indexes and row rules); with its rev, the published version, and the position (stream → sequence) it was read at. forge.app lists an app's parts.",
-		Input:       json.RawMessage(`{"type":"object","properties":{"ref":{"type":"string","description":"prefab:<id>, graph:<id> or entity:<id>, e.g. graph:cmd-tasks-task-reassign"}},"required":["ref"]}`),
+		Input:       json.RawMessage(`{"type":"object","properties":{"ref":{"type":"string","description":"prefab:<id>, graph:<id> or entity:<id>, e.g. graph:cmd-tasks-task-reassign"},"appId":{"type":"string","description":"The app whose branch to read it on, with branch"},"branch":{"type":"string","description":"The app's branch: the part as the branch has it; main when left out"}},"required":["ref"]}`),
 		Run: func(call tools.Call) (tools.Result, error) {
-			a, err := tools.Decode[struct{ Ref string }](call)
+			a, err := tools.Decode[struct{ Ref, AppID, Branch string }](call)
 			if err != nil {
 				return tools.Result{}, err
 			}
@@ -361,7 +456,14 @@ func ContributeForge(reg *extensions.Registry, deps func() ForgeDeps) {
 			if !ok || id == "" {
 				return tools.Result{}, fmt.Errorf("%q is not a part: use prefab:<id>, graph:<id> or entity:<id>, as forge.app's parts name them", a.Ref)
 			}
-			data, pos, err := once(call, query, map[string]any{"id": id})
+			params := map[string]any{"id": id}
+			if b := branchName(a.Branch); b != "" {
+				if !live.ValidToken(a.AppID) {
+					return tools.Result{}, fmt.Errorf("a branch is an app's: give appId with branch")
+				}
+				params["branch"] = a.AppID + ":" + b
+			}
+			data, pos, err := once(call, query, params)
 			if err != nil {
 				return tools.Result{}, err
 			}

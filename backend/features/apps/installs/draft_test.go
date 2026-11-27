@@ -1,9 +1,16 @@
 package installs_test
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
+	apptools "github.com/SgtFlame/foundation/backend/features/apps/tools"
+	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/SgtFlame/foundation/backend/features/tools"
+
 	"github.com/SgtFlame/foundation/backend/features/records/entities"
+	"github.com/SgtFlame/foundation/backend/features/ui"
 )
 
 // An app's draft run (forge 05f question 3): its pages render the drafts
@@ -71,4 +78,74 @@ func TestDraftRun(t *testing.T) {
 
 	// No app may take the id draft
 	f.refused("app.create", "draft", map[string]any{"name": "Draft"}, "manifest.id", "kept for apps' draft runs")
+}
+
+// A branch's draft run (forge 19b): <appId>/draft@<branch> renders the
+// branch's drafts while <appId>/draft keeps main's, and its commands,
+// draft@<branch>.<appId>.<name>, are decided by the branch's graphs.
+func TestBranchDraftRun(t *testing.T) {
+	f := setup(t)
+	f.tasks(false)
+	res := f.ok("entity.publish", "task", map[string]any{"rev": 1})
+	f.wait(entities.PublishedProjector, "entity.task", res.Seq)
+	f.ok("prefab.insertNode", "myTasks", map[string]any{"node": map[string]any{"type": "mui.heading", "key": "h", "props": map[string]any{"text": "On main"}}})
+	f.ok("record.create", "t1", map[string]any{"entity": "task", "values": map[string]any{"title": "Write docs"}})
+	f.ok("app.branch.create", "", map[string]any{"app": "tasks", "name": "redo"})
+
+	f.okOn("tasks:redo", "prefab.updateNode", "myTasks", map[string]any{"path": "h", "props": map[string]any{"text": "On redo"}})
+	onBranch := f.open("tasks/draft@redo", map[string]any{})
+	onBranch.until("showing the branch's draft", func(p *page) bool { return p.shows("On redo") })
+	if onBranch.title != "Tasks (draft on redo)" {
+		t.Errorf("title %q", onBranch.title)
+	}
+	onMain := f.open("tasks/draft", map[string]any{})
+	onMain.until("main's draft unchanged", func(p *page) bool { return p.shows("On main") })
+	if onMain.shows("On redo") {
+		t.Error("main's draft run shows the branch's change")
+	}
+	// A later change on the branch reaches its open page
+	f.okOn("tasks:redo", "prefab.updateNode", "myTasks", map[string]any{"path": "h", "props": map[string]any{"text": "Redone"}})
+	onBranch.until("showing the branch's edit", func(p *page) bool { return p.shows("Redone") })
+
+	// The command, decided by the branch's draft of its graph
+	f.okOn("tasks:redo", "bp.import", "cmd-tasks-task-reassign", map[string]any{"graph": reassign("?")})
+	eventually(t, "the branch's graph deciding", func() bool {
+		f.ok("draft@redo.tasks.task.reassign", "t1", map[string]any{"assignee": "ada"})
+		return f.record("t1")["assignee"] == "ada?"
+	})
+	f.ok("draft.tasks.task.reassign", "t1", map[string]any{"assignee": "bob"})
+	if r := f.record("t1"); r["assignee"] != "bob" {
+		t.Errorf("main's draft command decided by the branch's graph: %+v", r)
+	}
+	// forge.test on the branch: decided by the branch's graph, never committed
+	fd := apptools.ForgeDeps{Store: f.p, Bus: f.bus, Engine: f.eng, Subscriptions: f.subs}
+	tr, err := apptools.Test(args(), f.reg, fd, apptools.TestArgs{Graph: "cmd-tasks-task-reassign", Branch: "redo",
+		Inputs: map[string]any{"target": "t1", "args": map[string]any{"assignee": "zed"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := json.Marshal(tr.Events); !strings.Contains(string(raw), `"zed?"`) {
+		t.Errorf("forge.test on the branch: %s %+v %+v", raw, tr.Problems, tr.Failed)
+	}
+	tm, err := apptools.Test(args(), f.reg, fd, apptools.TestArgs{Graph: "cmd-tasks-task-reassign",
+		Inputs: map[string]any{"target": "t1", "args": map[string]any{"assignee": "zed"}}})
+	if raw, _ := json.Marshal(tm.Events); err != nil || strings.Contains(string(raw), `"zed?"`) {
+		t.Errorf("forge.test on main ran the branch's graph: %s %v", raw, err)
+	}
+	if f.record("t1")["assignee"] != "bob" {
+		t.Error("forge.test committed")
+	}
+	// forge.preview on the branch
+	pv, err := apptools.PreviewPage(tools.Call{ServiceArgs: args()}, f.reg, fd, live.Branch{App: "tasks", Name: "redo"}, "/mine", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := json.Marshal(pv.Tree); !strings.Contains(string(raw), "Redone") {
+		t.Errorf("forge.preview on the branch: %s", raw)
+	}
+
+	// No such branch, no page
+	if _, ok, _ := ui.AppSources.All(f.reg)[0].Page(args(), "tasks/draft@nope"); ok {
+		t.Error("a page for a branch that does not exist")
+	}
 }

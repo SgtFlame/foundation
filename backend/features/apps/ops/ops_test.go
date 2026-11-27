@@ -16,6 +16,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/apps"
+	"github.com/SgtFlame/foundation/backend/features/apps/branches"
 	"github.com/SgtFlame/foundation/backend/features/apps/installs"
 	"github.com/SgtFlame/foundation/backend/features/apps/manifests"
 	"github.com/SgtFlame/foundation/backend/features/apps/ops"
@@ -78,6 +79,8 @@ func setup(t *testing.T) *fixture {
 	prefabs.Contribute(reg, func() prefabs.Deps { return prefabDeps })
 	manifests.Contribute(reg, func() manifests.Deps { return appDeps })
 	installs.Contribute(reg, func() installs.Deps { return installDep })
+	var branchDeps branches.Deps
+	branches.Contribute(reg, func() branches.Deps { return branchDeps }) // app.branch.*, app.commit (forge 19a)
 	ui.ContributeOverlays(reg)
 	made.Contribute(reg, func() made.Deps { return madeDeps })    // chat.mode.* (forge 15h)
 	game.Contribute(reg, func() game.Deps { return game.Deps{} }) // game.* worlds (forge 360 V1)
@@ -99,6 +102,7 @@ func setup(t *testing.T) *fixture {
 	eng.SetSource(drafts.Source{Store: p})
 	f := &fixture{t: t, reg: reg, bus: bus.New(p), subs: subscribe.New(p, reg), p: p}
 	undoDeps = ops.Deps{Bus: f.bus, Store: p}
+	branchDeps = branches.Deps{Projections: p}
 	nodeDeps = livenodes.Deps{Engine: eng, Bus: f.bus, Subscriptions: f.subs, Store: p}
 	draftDeps = drafts.Deps{Engine: eng, Projections: p}
 	dataDeps = data.Deps{Projections: p, Bus: f.bus}
@@ -547,12 +551,13 @@ func TestEveryOpUndoes(t *testing.T) {
 	}
 }
 
-// irreversible are the commands no op undoes: publishing and installs.
+// irreversible are the commands no op undoes: publishing and installs,
+// and branches and commits, kept for the history (forge 19a).
 // Making and deleting parts are undone by their restorable deletes (forge
 // 06b).
 func irreversible(command string) bool {
 	return slices.Contains([]string{"bp.publish", "prefab.publish", "entity.publish", "app.publish",
-		"app.install", "app.upgrade", "app.uninstall"}, command)
+		"app.install", "app.upgrade", "app.uninstall", "app.branch.create", "app.branch.abandon", "app.commit", "app.discard", "app.approve", "app.explain", "app.merge.request", "app.merge.resolve", "app.merge.approve", "app.merge.complete"}, command)
 }
 
 func mustJSON(v any) string {

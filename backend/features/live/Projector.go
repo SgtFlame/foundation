@@ -17,6 +17,10 @@ type Projector struct {
 	Description string // for a model: what the projection holds
 	Area        Area
 	Types       []string // the target types it folds; empty folds every type in the area
+	// Branchable projectors keep a part's drafts on branches beside its
+	// draft on main (forge 19a): a branched event copies the base's state
+	// in, and a branch draft folded to nil is kept as a tombstone.
+	Branchable bool
 	// Fold is the key's next value after the event, from its current one
 	// (nil when there is none). A nil result deletes the key.
 	Fold func(f Fold) (json.RawMessage, error)

@@ -175,6 +175,17 @@ func Open(args features.ServiceArgs, id string, page Page, params json.RawMessag
 	args.Ctx = ctx
 	s := &Session{id: id, principal: args.Principal, page: page, params: params, state: map[string]any{}, regions: map[*Node]*region{},
 		queries: map[string]*heldQuery{}, instances: map[string]*instance{}, seen: map[string]bool{}, ctx: ctx, cancel: cancel, args: args, o: o}
+	if page.Dry && page.Branch.IsMain() {
+		// A dry page (the Prefab Editor's Canvas) draws a branch's drafts
+		// when its params name one, {"branch": "<app>:<name>"} (forge 19b)
+		var p struct {
+			Branch string `json:"branch"`
+		}
+		_ = json.Unmarshal(params, &p)
+		if b, ok := live.ParseBranch(p.Branch); ok {
+			s.page.Branch = b
+		}
+	}
 	if rec != nil {
 		s.state, s.rev = rec.State, rec.Rev
 		if s.state == nil {
@@ -182,7 +193,7 @@ func Open(args features.ServiceArgs, id string, page Page, params json.RawMessag
 		}
 	}
 	if page.Setup != nil {
-		h := &Handle{ServiceArgs: args, Params: params, s: s, request: newID()}
+		h := &Handle{ServiceArgs: s.onBranch(args), Params: params, s: s, request: newID()}
 		if err := page.Setup(h); err != nil {
 			cancel()
 			return nil, args.Fail(http.StatusInternalServerError, Log.Wrapf(err, "%s could not be set up", page.ID))
@@ -199,7 +210,7 @@ func Open(args features.ServiceArgs, id string, page Page, params json.RawMessag
 	// A new session's view state comes first, so queries bound to it
 	// open with it
 	if rec == nil && page.OnOpen != nil {
-		h := &Handle{ServiceArgs: args, Params: params, s: s, request: newID()}
+		h := &Handle{ServiceArgs: s.onBranch(args), Params: params, s: s, request: newID()}
 		if err := page.OnOpen(h); err != nil {
 			cancel()
 			return nil, args.Fail(http.StatusInternalServerError, Log.Wrapf(err, "%s could not open", page.ID))
@@ -360,7 +371,7 @@ func (s *Session) Event(args features.ServiceArgs, handler string, path []string
 		return
 	}
 	fn := s.page.Handlers[handler]
-	h := &Handle{ServiceArgs: args, Payload: payload, Params: s.params, s: s, request: request}
+	h := &Handle{ServiceArgs: s.onBranch(args), Payload: payload, Params: s.params, s: s, request: request}
 	if fn == nil && s.o.Graphs != nil {
 		fn = func(h *Handle) error {
 			found, err := s.o.Graphs.RunHandler(h, handler)

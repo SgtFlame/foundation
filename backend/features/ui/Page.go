@@ -128,6 +128,9 @@ type Page struct {
 	// drafts, but sends its commands: an app's draft run by its authors
 	// (forge 05f question 3).
 	Drafts bool
+	// Branch is the app's branch a draft run runs (forge 19b): its
+	// prefabs, graphs and manifest as the branch has them. Main when zero.
+	Branch live.Branch
 
 	// An installed app's page (forge 05d):
 	// Reach replaces Action: opening needs any one of them.
@@ -437,6 +440,18 @@ func (h *Handle) Dry() bool { return h.s.page.Dry }
 // Drafts is whether the handle's graphs run in their drafts: a dry page,
 // or an app's draft run.
 func (h *Handle) Drafts() bool { return h.s.page.Dry || h.s.page.Drafts }
+
+// Branch is the app's branch the handle's page runs (forge 19b).
+func (h *Handle) Branch() live.Branch { return h.s.page.Branch }
+
+// onBranch is args reading definitions on the page's branch, so graphs
+// run in their drafts run the branch's.
+func (s *Session) onBranch(args features.ServiceArgs) features.ServiceArgs {
+	if !s.page.Branch.IsMain() {
+		args.Ctx = live.WithBranch(args.Context(), s.page.Branch)
+	}
+	return args
+}
 
 // Do adds a client action. A navigate action on an app's page goes to
 // the route in the page itself (forge 05d).

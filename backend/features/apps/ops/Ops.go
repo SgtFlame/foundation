@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
@@ -52,7 +53,9 @@ type Entry struct {
 	Inverse      []live.Op `json:"inverse"`
 	Irreversible string    `json:"irreversible,omitempty"`
 	// Undoes is the request this op's request undoes (forge 06b).
-	Undoes string    `json:"undoes,omitempty"`
+	Undoes string `json:"undoes,omitempty"`
+	// Branch is the app's branch it changed (forge 19a), "" for main.
+	Branch string    `json:"branch,omitempty"`
 	Time   time.Time `json:"time"`
 	// Summary is the op in a few words, given by ops.list (forge 06c)
 	Summary string `json:"summary,omitempty"`
@@ -101,7 +104,7 @@ func fold(f live.Fold) (json.RawMessage, error) {
 	return json.Marshal(Entry{
 		Seq: seq, Decided: e.Op.Decided, Command: e.Op.Command, TargetType: e.Target.Type, Target: e.Op.Target, Args: e.Op.Args,
 		App: e.Op.App, Request: e.RequestID, CommandID: e.CommandID, Principal: principalOf(e), Actor: e.Actor,
-		Inverse: e.Op.Inverse, Irreversible: e.Op.Irreversible, Undoes: e.Op.Undoes, Time: e.Time,
+		Inverse: e.Op.Inverse, Irreversible: e.Op.Irreversible, Undoes: e.Op.Undoes, Branch: e.Op.Branch, Time: e.Time,
 	})
 }
 
@@ -115,9 +118,14 @@ type Params struct {
 	// Activity tab on one prefab, graph or entity type
 	Scope string `json:"scope,omitempty"`
 	scope *Scope
+	// Branch keeps one branch's ops (forge 19a): main for main's.
+	Branch string `json:"branch,omitempty"`
 }
 
 func (p Params) keeps(e Entry) bool {
+	if p.Branch != "" && e.Branch != strings.TrimPrefix(p.Branch, live.Main) {
+		return false
+	}
 	return (p.Request == "" || e.Request == p.Request) && (p.Principal == 0 || e.Principal == p.Principal) && e.Seq > p.After && (p.scope == nil || p.scope.Has(e))
 }
 
@@ -135,7 +143,7 @@ func (p Params) pattern() string {
 func Contribute(reg *extensions.Registry) {
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: Projector, Source: "apps"}, Title: "The operation log",
-		Description: "Every definition command as an op, keyed <app>.<sequence> (_ for none): {seq, decided, command, targetType, target, args, app, request, commandId, principal, actor, inverse, irreversible, undoes, time}",
+		Description: "Every definition command as an op, keyed <app>.<sequence> (_ for none): {seq, decided, command, targetType, target, args, app, request, commandId, principal, actor, inverse, irreversible, undoes, branch, time}",
 		Area:        live.AreaDefinitions, Fold: fold, KeyOf: keyOf,
 	})
 	live.Queries.Register(reg, live.Query{

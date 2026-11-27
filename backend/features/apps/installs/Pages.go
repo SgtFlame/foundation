@@ -12,6 +12,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/apps"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/ui"
 	"github.com/SgtFlame/foundation/backend/features/ui/prefabs"
 )
@@ -132,7 +133,14 @@ func pageOf(args features.ServiceArgs, d Deps, id string) (ui.Page, bool, error)
 		return ui.Page{}, false, nil
 	}
 	if name == draftPage {
-		return draftPageOf(args, d, app)
+		return draftPageOf(args, d, live.Branch{App: app})
+	}
+	if branch, ok := strings.CutPrefix(name, draftPage+"@"); ok {
+		// A branch's draft run, <appId>/draft@<branch> (forge 19b)
+		if !live.ValidBranchName(branch) {
+			return ui.Page{}, false, nil
+		}
+		return draftPageOf(args, d, live.Branch{App: app, Name: branch})
 	}
 	tenant := args.Principal.TenantID
 	c := cacheOf(d.Projections)
@@ -408,7 +416,7 @@ func mainPage(page ui.Page, src manifestOf, frame string, declared map[string]bo
 	})
 	out.Descriptor, out.App, out.Description, out.Title = page.Descriptor, page.App, page.Description, page.Title
 	out.Reach, out.Pins, out.Graph, out.AppCommands, out.AppQueries, out.Stale = page.Reach, page.Pins, page.Graph, page.AppCommands, page.AppQueries, page.Stale
-	out.Drafts, out.Queries = page.Drafts, page.Queries
+	out.Drafts, out.Branch, out.Queries = page.Drafts, page.Branch, page.Queries
 	out.Framed = frame != ""
 	out.OnOpen = func(h *ui.Handle) error {
 		var p struct{ Route string }

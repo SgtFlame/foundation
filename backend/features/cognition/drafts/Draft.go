@@ -259,7 +259,7 @@ func fold(f live.Fold) (json.RawMessage, error) {
 			return nil, err
 		}
 	}
-	d.Graph.ID = f.Event.Target.ID
+	d.Graph.ID = live.PartID(f.Event.Target.ID)
 	if err := Apply(&d, f.Event); err != nil {
 		return nil, err
 	}

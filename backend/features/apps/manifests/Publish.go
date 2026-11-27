@@ -12,6 +12,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/apps"
+	"github.com/SgtFlame/foundation/backend/features/apps/branches"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/cognition/drafts"
 	"github.com/SgtFlame/foundation/backend/features/live"
@@ -25,13 +26,23 @@ import (
 func publishSpec() spec {
 	return spec{
 		id: "app.publish", title: "Publish an app", events: []string{EventPublished}, action: "app.publish",
-		description: "Publishes the app as a new version, which installs and upgrades take: the manifest as it was at rev (the draft's rev its publisher last saw; changes others made since stay in the draft for the next version), with the published version of every part it uses pinned. Every page's prefab, the frame, the prefabs they render, the command and query graphs and the entity types must be published, and are checked as published; a part published again later reaches the app's users only by publishing the app again and upgrading.",
-		args:        `{"type":"object","properties":{"rev":{"type":"integer","description":"The draft's rev as last seen (app.* results and app.describe give it)"}},"required":["rev"]}`,
+		description: "Publishes the app as a new version, which installs and upgrades take: the manifest as main's head commit froze it (commit; forge 19c), or, for an app that has never been committed, as it was at rev (the draft's rev its publisher last saw), with the published version of every part it uses pinned. Once an app has commits only a commit on main is published, and main must have no uncommitted changes. Every page's prefab, the frame, the prefabs they render, the command and query graphs and the entity types must be published, and are checked as published; a part published again later reaches the app's users only by publishing the app again and upgrading.",
+		args:        `{"type":"object","properties":{"rev":{"type":"integer","description":"The draft's rev as last seen (app.* results and app.describe give it), for an app with no commits"},"commit":{"type":"string","description":"Main's head commit (app.branches), for an app with commits"}}}`,
 		example:     `{"rev":14}`,
 		decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
-			a, problems := args[struct{ Rev int }](c)
+			a, problems := args[struct {
+				Rev    int
+				Commit string
+			}](c)
 			if problems != nil {
 				return nil, problems
+			}
+			commit, problems := c.publishCommit(a.Commit)
+			if problems != nil {
+				return nil, problems
+			}
+			if commit != "" {
+				a.Rev = c.draft.Rev // main has nothing past its head: the draft is the commit
 			}
 			if a.Rev < 1 || a.Rev > c.draft.Rev {
 				return nil, problem("args.rev", fmt.Sprintf("the draft has no rev %d: it is at rev %d", a.Rev, c.draft.Rev), "publish rev "+strconv.Itoa(c.draft.Rev))
@@ -52,17 +63,61 @@ func publishSpec() spec {
 			if err := FollowVersions(c.ServiceArgs, c.deps); err != nil {
 				return nil, problem("", "the published versions cannot be kept: "+err.Error(), "")
 			}
-			v.App, v.Version, v.Rev = c.Target.ID, c.draft.Published+1, a.Rev
+			v.App, v.Version, v.Rev, v.Commit = c.Target.ID, c.draft.Published+1, a.Rev, commit
 			v.Manifest.Version = v.Version
 			v.Seed = d.Seed
 			v.PublishedBy, v.PublishedAt = c.Principal.UserID, time.Now().UTC()
 			target := live.Target{Area: live.AreaDefinitions, Type: VersionTargetType, ID: apps.VersionID(v.App, v.Version)}
 			return []live.NewEvent{
-				{Type: EventPublished, Data: Published{Version: v.Version, Rev: a.Rev}},
+				{Type: EventPublished, Data: Published{Version: v.Version, Rev: a.Rev, Commit: commit}},
 				{Type: EventPublished, Data: v, Target: &target},
 			}, nil
 		},
 	}
+}
+
+// publishCommit checks what a publish names against main's commits (forge
+// 19c, iteration question 6): an app with commits publishes only main's
+// head, and only while main has no uncommitted changes; an app never
+// committed publishes a rev as before. It gives the commit published, ""
+// for a rev.
+func (c *decision) publishCommit(commit string) (string, []live.Problem) {
+	app := c.Target.ID
+	store, ok := c.deps.Projections.(branches.Projections)
+	if !ok {
+		return "", problem("", "the app's commits cannot be read here", "")
+	}
+	// The heads as every commit so far left them
+	if err := store.Settle(c.Context(), c.Principal.TenantID, branches.Projector); err != nil {
+		return "", problem("", "the app's commits cannot be read: "+err.Error(), "")
+	}
+	rec, committed := branches.GetRecord(c.Context(), c.deps.Projections, c.Principal.TenantID, app, live.Main)
+	committed = committed && rec.Head != ""
+	switch {
+	case commit == "" && committed:
+		return "", []live.Problem{{Code: "app_commit_required", Path: "args.commit", Message: fmt.Sprintf("%s has commits: only a commit on main is published", app), Fix: fmt.Sprintf("publish main's head with app.publish {commit: %q}", rec.Head)}}
+	case commit == "":
+		return "", nil
+	case !committed:
+		return "", []live.Problem{{Code: "app_commit_not_head", Path: "args.commit", Message: fmt.Sprintf("%s has no commits on main", app), Fix: fmt.Sprintf("commit main with app.commit {app: %q, message}", app)}}
+	case commit != rec.Head:
+		if cm, ok := branches.GetCommit(c.Context(), c.deps.Projections, c.Principal.TenantID, commit); !ok || cm.App != app {
+			return "", []live.Problem{{Code: "app_commit_not_found", Path: "args.commit", Message: fmt.Sprintf("%s has no commit %q", app, commit), Fix: fmt.Sprintf("publish main's head, %s", rec.Head)}}
+		}
+		return "", []live.Problem{{Code: "app_commit_not_head", Path: "args.commit", Message: fmt.Sprintf("%s is not main's head: only main's head is published", commit), Fix: fmt.Sprintf("publish main's head, %s", rec.Head)}}
+	}
+	changes, err := branches.ChangesOf(c.reg, func() branches.Deps { return branches.Deps{Projections: store} })(c.ServiceArgs, live.Branch{App: app}, rec.Head)
+	if err != nil {
+		return "", problem("", "main's changes cannot be read: "+err.Error(), "")
+	}
+	if len(changes) > 0 {
+		var names []string
+		for _, p := range changes {
+			names = append(names, p.Key())
+		}
+		return "", []live.Problem{{Code: "app_uncommitted", Path: "args.commit", Message: fmt.Sprintf("main has changes after %s: %s", rec.Head, strings.Join(names, ", ")), Fix: fmt.Sprintf("commit them with app.commit {app: %q, message}, then publish the new head", app)}}
+	}
+	return commit, nil
 }
 
 // draftAt is the draft as it was at rev: the draft itself when rev is

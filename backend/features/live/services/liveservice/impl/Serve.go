@@ -268,7 +268,7 @@ func (c *conn) execute(ctx context.Context, f liveservice.CommandFrame) any {
 	if c.svc.bus == nil {
 		return liveservice.RejectedFrame{Type: "rejected", ID: f.ID, Code: http.StatusServiceUnavailable, Message: "commands are not available"}
 	}
-	res := c.svc.bus.Execute(bus.Request{ServiceArgs: c.traced(ctx, f.Trace), ID: f.ID, Type: f.Command, Target: f.Target, RequestID: f.Request, App: f.App, Actor: f.Actor, Args: f.Args})
+	res := c.svc.bus.Execute(bus.Request{ServiceArgs: c.traced(ctx, f.Trace), ID: f.ID, Type: f.Command, Target: f.Target, RequestID: f.Request, App: f.App, Actor: f.Actor, Branch: f.Branch, Args: f.Args})
 	if res.Common.Code >= 300 {
 		return liveservice.RejectedFrame{Type: "rejected", ID: f.ID, Code: res.Common.Code, Message: res.Common.Message, ErrorCode: res.Common.ErrorCode, Problems: res.Problems}
 	}

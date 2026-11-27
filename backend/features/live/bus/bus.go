@@ -60,6 +60,9 @@ type Request struct {
 	// Undoes is the request this request undoes (forge 06b), logged on
 	// each of its ops.
 	Undoes string
+	// Branch is the branch of App the command changes (forge 19a): the
+	// part's draft there. Empty, or main, is the app's main line.
+	Branch string
 	Args   json.RawMessage
 }
 
@@ -186,6 +189,11 @@ func (b *Bus) Execute(r Request) Result {
 
 	ctx := r.Context()
 	tenant := r.Principal.TenantID
+	br, problem := b.newBranching(ctx, tenant, r, cmd, tg)
+	if problem != nil {
+		return rejected(*problem)
+	}
+	ptg := br.physical(tg) // where its events go: its draft on the branch
 	stream, err := b.p.Stream(ctx, tenant, cmd.Area)
 	if err != nil {
 		return Result{Common: *r.Fail(http.StatusInternalServerError, err)}
@@ -193,7 +201,7 @@ func (b *Bus) Execute(r Request) Result {
 	streamName := stream.CachedInfo().Config.Name
 	// The command's target is locked, and after a conflict every target its
 	// events change, so the next decision is the only one in this process
-	keys := []string{b.lockKey(tenant, tg)}
+	keys := []string{b.lockKey(tenant, ptg)}
 	if cmd.Holds != nil {
 		for _, t := range cmd.Holds(live.Decision{ServiceArgs: r.ServiceArgs, Target: tg, Args: r.Args}) {
 			if t.Area == cmd.Area {
@@ -213,22 +221,36 @@ func (b *Bus) Execute(r Request) Result {
 	}
 	busy := 0
 	for try := 0; try < Tries; try++ {
-		state, err := b.p.WaitFor(ctx, tenant, cmd.Projection, tg.Key(), waitFor(tg), catchUp)
-		if err != nil {
+		var state live.Projected
+		if br != nil {
+			br.copies = map[string]copied{}
+			value, seq, err := br.read(cmd.Projection, tg, waitFor(ptg))
+			if err != nil {
+				return Result{Common: *r.Fail(http.StatusInternalServerError, err)}
+			}
+			state = live.Projected{Seq: seq, Value: value}
+		} else if state, err = b.p.WaitFor(ctx, tenant, cmd.Projection, tg.Key(), waitFor(tg), catchUp); err != nil {
 			return Result{Common: *r.Fail(http.StatusInternalServerError, err)}
 		}
-		read := map[string]uint64{tg.Key(): state.Seq} // the sequence each target was read at
-		d := live.Decision{ServiceArgs: r.ServiceArgs, Target: tg, State: state.Value, Args: r.Args}
+		read := map[string]uint64{ptg.Key(): state.Seq} // the sequence each target was read at
+		d := live.Decision{ServiceArgs: r.ServiceArgs, Target: tg, State: state.Value, Args: r.Args, Branch: br.name()}
 		d.Read = func(projection string, t live.Target) (json.RawMessage, error) {
 			if t.Area != cmd.Area {
 				return nil, log.Code("other_area").Errorf("%s changes targets in the %s area only, not %s", r.Type, cmd.Area, t.Area)
 			}
-			v, err := b.p.WaitFor(ctx, tenant, projection, t.Key(), waitFor(t), catchUp)
-			if err != nil {
+			pt := br.physical(t)
+			var v live.Projected
+			if br != nil {
+				value, seq, err := br.read(projection, t, waitFor(pt))
+				if err != nil {
+					return nil, err
+				}
+				v = live.Projected{Seq: seq, Value: value}
+			} else if v, err = b.p.WaitFor(ctx, tenant, projection, t.Key(), waitFor(t), catchUp); err != nil {
 				return nil, err
 			}
-			if seq, ok := read[t.Key()]; !ok || v.Seq < seq {
-				read[t.Key()] = v.Seq
+			if seq, ok := read[pt.Key()]; !ok || v.Seq < seq {
+				read[pt.Key()] = v.Seq
 			}
 			return v.Value, nil
 		}
@@ -246,19 +268,27 @@ func (b *Bus) Execute(r Request) Result {
 		if len(events) == 0 {
 			return Result{Common: features.OK(), Stream: streamName, Target: tg.ID, Seq: state.Seq, RequestID: r.RequestID}
 		}
+		opAt := 0
+		if br != nil {
+			var problem *live.Problem
+			if events, opAt, problem = br.events(tg, events); problem != nil {
+				return rejected(*problem)
+			}
+		}
 		var op *live.LoggedOp
 		if d.Op != nil {
 			op = &live.LoggedOp{Command: r.Type, Target: tg.ID, Args: r.Args, App: cmp.Or(d.Op.App, r.App),
-				Inverse: d.Op.Inverse, Irreversible: d.Op.Irreversible, Decided: state.Seq, Undoes: r.Undoes}
+				Inverse: d.Op.Inverse, Irreversible: d.Op.Irreversible, Decided: state.Seq, Undoes: r.Undoes, Branch: br.name()}
 			if op.Inverse == nil {
 				op.Inverse = []live.Op{}
 			}
 		}
-		res, conflict, err := b.commit(r, cmd, tg, stream, read, events, op, d.Jobs())
+		res, conflict, err := b.commit(r, cmd, ptg, stream, read, events, op, d.Jobs(), opAt)
+		res.Target = tg.ID
 		if conflict {
 			// Someone committed since: decide again once projected
 			var keys []string
-			for _, t := range targets(tg, events) {
+			for _, t := range targets(ptg, events) {
 				wait[t.Key()] = max(wait[t.Key()], read[t.Key()]+1, b.lastSeq(ctx, stream, tenant, t))
 				keys = append(keys, b.lockKey(tenant, t))
 			}
@@ -385,7 +415,7 @@ func problemOf(err error) (live.Problem, bool) {
 // expected as the stream has it now. One event is published alone, and
 // several as one atomic batch: every check passes and all are stored, or
 // none is.
-func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstream.Stream, read map[string]uint64, events []live.NewEvent, op *live.LoggedOp, jobs []live.Job) (Result, bool, error) {
+func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstream.Stream, read map[string]uint64, events []live.NewEvent, op *live.LoggedOp, jobs []live.Job, opAt int) (Result, bool, error) {
 	ctx := r.Context()
 	tenant := r.Principal.TenantID
 	streamName := stream.CachedInfo().Config.Name
@@ -410,7 +440,7 @@ func (b *Bus) commit(r Request, cmd live.Command, tg live.Target, stream jetstre
 			return res, false, err
 		}
 		e := live.Event{Type: ne.Type, Target: t, Data: data, CommandID: r.ID, Command: r.Type, App: r.App, RequestID: r.RequestID, UserID: r.Principal.UserID, AgentID: r.Principal.AgentID, OnBehalfOf: r.Principal.OnBehalfOf, Actor: ActorOf(r), TenantID: tenant, Time: now}
-		if i == 0 {
+		if i == opAt {
 			e.Op, e.Jobs = op, jobs
 		}
 		if len(events) > 1 {

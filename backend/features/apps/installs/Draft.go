@@ -53,33 +53,57 @@ func draftShape(m apps.Manifest) string {
 	return m.Frame + "|" + strings.Join(names, ",")
 }
 
-// draftPageOf is the draft run of an app; mine is false when the tenant
-// has no draft of it.
-func draftPageOf(args features.ServiceArgs, d Deps, app string) (ui.Page, bool, error) {
+// onBranch is args reading definitions on branch b (forge 19b).
+func onBranch(args features.ServiceArgs, b live.Branch) features.ServiceArgs {
+	args.Ctx = live.WithBranch(args.Context(), b)
+	return args
+}
+
+// branchName is a branch's name, "" for main.
+func branchName(b live.Branch) string {
+	if b.IsMain() {
+		return ""
+	}
+	return b.Name
+}
+
+// draftPageOf is the draft run of an app on branch b, <appId>/draft on
+// main and <appId>/draft@<branch> on a branch (forge 19b): the manifest,
+// prefabs and graphs as the branch has them. mine is false when the
+// tenant has no draft of it there.
+func draftPageOf(args features.ServiceArgs, d Deps, b live.Branch) (ui.Page, bool, error) {
+	app := b.App
 	tenant := args.Principal.TenantID
-	dr, ok := manifests.GetDraft(args.Context(), d.Projections, tenant, app)
+	args = onBranch(args, b)
+	store := live.StoreFor(args.Context(), d.Projections)
+	dr, ok := manifests.GetDraft(args.Context(), store, tenant, app)
 	if !ok {
 		return ui.Page{}, false, nil
 	}
 	m0 := dr.Manifest
 	shape := draftShape(m0)
+	id, suffix, describe := app+"/"+draftPage, " (draft)", map[string]any{"id": app}
+	if !b.IsMain() {
+		id, suffix = id+"@"+b.Name, " (draft on "+b.Name+")"
+		describe["branch"] = b.String()
+	}
 	page := ui.Page{
-		Descriptor: extensions.Descriptor{ID: app + "/" + draftPage, Source: "apps"}, App: app, Title: m0.Name + " (draft)", Description: m0.Description,
-		Reach: draftReach(app), Drafts: true,
+		Descriptor: extensions.Descriptor{ID: id, Source: "apps"}, App: app, Title: m0.Name + suffix, Description: m0.Description,
+		Reach: draftReach(app), Drafts: true, Branch: b,
 		AppCommands: map[string]string{}, AppQueries: map[string]string{},
 		Queries: func(json.RawMessage) map[string]ui.QueryRef {
-			return map[string]ui.QueryRef{draftHeld: {Query: "app.describe", Params: map[string]any{"id": app}}}
+			return map[string]ui.QueryRef{draftHeld: {Query: "app.describe", Params: describe}}
 		},
 		Stale: func() bool {
-			cur, ok := manifests.GetDraft(context.Background(), d.Projections, tenant, app)
+			cur, ok := manifests.GetDraft(context.Background(), store, tenant, app)
 			return !ok || draftShape(cur.Manifest) != shape
 		},
 	}
 	for _, c := range m0.Commands {
-		page.AppCommands[c.Type] = apps.DraftScoped(app, c.Type)
+		page.AppCommands[c.Type] = apps.DraftBranchScoped(branchName(b), app, c.Type)
 	}
 	for _, q := range m0.Queries {
-		page.AppQueries[q.Name] = apps.DraftScoped(app, q.Name)
+		page.AppQueries[q.Name] = apps.DraftBranchScoped(branchName(b), app, q.Name)
 	}
 	src := manifestOf{
 		render: func(r *ui.Render) apps.Manifest {
@@ -92,12 +116,12 @@ func draftPageOf(args features.ServiceArgs, d Deps, app string) (ui.Page, bool, 
 			return m
 		},
 		handle: func(h *ui.Handle) apps.Manifest {
-			if cur, ok := manifests.GetDraft(h.Context(), d.Projections, tenant, app); ok {
+			if cur, ok := manifests.GetDraft(h.Context(), store, tenant, app); ok {
 				return cur.Manifest
 			}
 			return m0
 		},
-		suffix: " (draft)",
+		suffix: suffix,
 	}
 	frame, declared := frameOf(args, d, m0.Frame, nil, true)
 	return mainPage(page, src, frame, declared), true, nil
@@ -105,8 +129,10 @@ func draftPageOf(args features.ServiceArgs, d Deps, app string) (ui.Page, bool, 
 
 // draftGraph is the draft of the graph the app's draft names for one of
 // its commands (command) or queries, and the draft's item.
-func draftGraph(args features.ServiceArgs, d Deps, app, name string, command bool) (cognition.Graph, bool) {
-	dr, ok := manifests.GetDraft(args.Context(), d.Projections, args.Principal.TenantID, app)
+func draftGraph(args features.ServiceArgs, d Deps, b live.Branch, name string, command bool) (cognition.Graph, bool) {
+	app := b.App
+	args = onBranch(args, b)
+	dr, ok := manifests.GetDraft(args.Context(), live.StoreFor(args.Context(), d.Projections), args.Principal.TenantID, app)
 	if !ok || d.Nodes.Engine == nil {
 		return cognition.Graph{}, false
 	}
@@ -129,8 +155,9 @@ func draftGraph(args features.ServiceArgs, d Deps, app, name string, command boo
 // draftCommand is a command of an app's draft run, draft.<appId>.<type>:
 // sent only by the app's authors and decided by the draft of its command
 // graph as it is when the command is decided.
-func draftCommand(args features.ServiceArgs, d Deps, typ, app, name string) (live.Command, bool) {
-	g, ok := draftGraph(args, d, app, name, true)
+func draftCommand(args features.ServiceArgs, d Deps, typ string, b live.Branch, name string) (live.Command, bool) {
+	app := b.App
+	g, ok := draftGraph(args, d, b, name, true)
 	if !ok {
 		return live.Command{}, false
 	}
@@ -140,10 +167,11 @@ func draftCommand(args features.ServiceArgs, d Deps, typ, app, name string) (liv
 		Args: spec.Args, Events: spec.Events, Area: live.Area(spec.Area), TargetType: spec.TargetType, Projection: spec.Projection,
 		Action: "app.write", Resource: func(p features.Principal, _ live.Target) string { return apps.Resource(p, app) },
 		Decide: func(dec live.Decision) ([]live.NewEvent, []live.Problem) {
-			g, ok := draftGraph(dec.ServiceArgs, d, app, name, true)
+			g, ok := draftGraph(dec.ServiceArgs, d, b, name, true)
 			if !ok {
 				return nil, []live.Problem{{Code: "app_command_removed", Message: fmt.Sprintf("the draft of %s has no command %s now", app, name)}}
 			}
+			dec.ServiceArgs = onBranch(dec.ServiceArgs, b)
 			return livenodes.Decide(d.Nodes, dec, typ, g.ID, &g)
 		},
 	}, true
@@ -152,8 +180,9 @@ func draftCommand(args features.ServiceArgs, d Deps, typ, app, name string) (liv
 // draftQuery is a query of an app's draft run, draft.<appId>.<name>: read
 // only by the app's authors, answered by the draft of its query graph and
 // run again whenever that draft changes.
-func draftQuery(args features.ServiceArgs, d Deps, typ, app, name string) (live.Query, bool) {
-	g, ok := draftGraph(args, d, app, name, false)
+func draftQuery(args features.ServiceArgs, d Deps, typ string, b live.Branch, name string) (live.Query, bool) {
+	app := b.App
+	g, ok := draftGraph(args, d, b, name, false)
 	if !ok {
 		return live.Query{}, false
 	}
@@ -164,14 +193,15 @@ func draftQuery(args features.ServiceArgs, d Deps, typ, app, name string) (live.
 		Run: func(f live.Feed) error {
 			return livenodes.RunQuery(f, d.Nodes, livenodes.QueryRun{ID: g.ID,
 				Graph: func() (*cognition.Graph, error) {
-					g, ok := draftGraph(f.Args(), d, app, name, false)
+					g, ok := draftGraph(f.Args(), d, b, name, false)
 					if !ok {
 						msg := fmt.Sprintf("the draft of %s has no query %s now", app, name)
 						return nil, log.Code("app_query_removed").Public(msg).New(msg)
 					}
 					return &g, nil
 				},
-				Watch: livenodes.Read{Projector: drafts.DraftProjector, Key: drafts.TargetType + "." + g.ID},
+				// On a branch, its draft there: made by the first change
+				Watch: livenodes.Read{Projector: drafts.DraftProjector, Key: drafts.TargetType + "." + live.BranchTargetID(g.ID, b)},
 			})
 		},
 	}, true

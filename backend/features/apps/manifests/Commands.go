@@ -199,13 +199,14 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: DraftProjector, Source: "apps"}, Title: "App drafts",
 		Description: "Each app's draft, as its app.* commands left it: {manifest, rev, createdBy, updatedBy, updatedAt}",
-		Area:        live.AreaDefinitions, Types: []string{TargetType}, Fold: fold,
+		Area:        live.AreaDefinitions, Types: []string{TargetType}, Fold: fold, Branchable: true,
 	})
 	for _, s := range commandSpecs() {
 		cmd := live.Command{
 			Descriptor: extensions.Descriptor{ID: s.id, Source: "apps"}, Title: s.title, Description: s.description,
 			Args: json.RawMessage(s.args), Examples: []json.RawMessage{json.RawMessage(s.example)}, Events: s.events,
 			Area: live.AreaDefinitions, TargetType: TargetType, Projection: DraftProjector, Action: cmp.Or(s.action, "app.write"),
+			NoBranch: live.MainOnly(s.id),
 			Resource: func(p features.Principal, t live.Target) string {
 				if s.create {
 					return apps.Resource(p, "")

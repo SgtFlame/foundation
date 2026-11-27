@@ -17,6 +17,13 @@ func ContributeAccess(reg *extensions.Registry) {
 			{Name: "write", Title: "Make apps and edit their drafts", Class: authz.ClassWrite},
 			{Name: "publish", Title: "Publish apps as new versions", Class: authz.ClassWrite},
 			{Name: "install", Title: "Install, upgrade and uninstall apps", Class: authz.ClassAdmin},
+			// Approvers (forge 19d): approve commits of every part kind, or of
+			// one kind each
+			{Name: "approve", Title: "Approve commits of apps, of every kind", Class: authz.ClassModerate},
+			{Name: "approveEntities", Title: "Approve commits changing entity types", Class: authz.ClassModerate},
+			{Name: "approvePages", Title: "Approve commits changing pages and prefabs", Class: authz.ClassModerate},
+			{Name: "approveAccess", Title: "Approve commits changing roles and access", Class: authz.ClassModerate},
+			{Name: "approveGraphs", Title: "Approve commits changing blueprints", Class: authz.ClassModerate},
 		},
 	})
 }

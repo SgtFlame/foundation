@@ -177,6 +177,10 @@ type LoggedOp struct {
 	// Undoes is the request this op's request undoes (forge 06b): its
 	// ops are that request's inverses. A redo undoes an undo.
 	Undoes string `json:"undoes,omitempty"`
+	// Branch is the branch of its app it changed (forge 19a), "" for
+	// main; Target is then the part's own id, and its events are on the
+	// part's draft on that branch.
+	Branch string `json:"branch,omitempty"`
 	// Events is how many events the op committed, when it shares an
 	// atomic batch with other ops (an undo's); 0 when the batch is its own.
 	Events int `json:"events,omitempty"`
@@ -238,6 +242,10 @@ type Decision struct {
 	Target Target
 	State  json.RawMessage
 	Args   json.RawMessage
+	// Branch is the branch of the request's app the command is decided
+	// on (forge 19a), "" for main: Target is the part's own id, State
+	// and Read the parts as the branch has them.
+	Branch string
 	// Read is another target's state in a projection (nil when it has
 	// none), for a command whose events change it: the commit then expects
 	// it unchanged since, as it does the command's own target.
@@ -343,6 +351,9 @@ type Command struct {
 	// command (not again on a conflict); in a dry run Dry is set and it
 	// must store nothing.
 	Seal func(s Sealing) (json.RawMessage, *Problem)
+	// NoBranch commands are refused on a branch (forge 19a): publishing,
+	// which only main does.
+	NoBranch bool
 	// Report, when set, is what the command's tool returns after a commit
 	// at seq, beside the sequence: a graph draft's problems, for example,
 	// so a model sees what its change left to fix.
