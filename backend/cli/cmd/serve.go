@@ -157,6 +157,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/index/store/lancestore"
 	"github.com/SgtFlame/foundation/backend/features/infra"
 	"github.com/SgtFlame/foundation/backend/features/infra/infratest"
+	infranodes "github.com/SgtFlame/foundation/backend/features/infra/nodes"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	kblive "github.com/SgtFlame/foundation/backend/features/kb/live"
@@ -755,6 +756,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		game.Contribute(registry, func() game.Deps { return gameDeps })                // game.* worlds, game.editTerrain, game.describeWorld (forge 360 V1)
 		infra.Contribute(registry, func() infra.Deps { return infraDeps })             // infra.config.* configurations and versions (forge 22a)
 		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
+		var infraNodeDeps infranodes.Deps
+		infranodes.Contribute(registry, func() infranodes.Deps { return infraNodeDeps }) // Ensure host, instance, unit, packages, Wait healthy, Remove (forge 22e)
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
 		uihandlers.ContributeLive(registry, func() uiservice.Service { return uiService })
 		confighandlers.ContributeLive(registry, func() configservice.Service { return configLive })
@@ -1145,6 +1148,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		workspaceDeps = workspace.Deps{Store: projections, Bus: liveBus}
 		gameDeps = game.Deps{Store: projections}
 		infraDeps = infra.Deps{Bus: liveBus, Store: projections, Compute: infra.DispatcherCompute{D: connectorDispatcher}} // plans read the providers through infra.compute (forge 22d)
+		infraNodeDeps = infranodes.Deps{Bus: liveBus, Data: recordDeps, Compute: infraDeps.Compute}
 		workbenchcontext.SetWorkspaceNames(func(args features.ServiceArgs, id string) (string, bool) {
 			return workspace.Name(args, projections, id)
 		})

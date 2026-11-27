@@ -14,4 +14,3 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	contributeResources(reg)
 	contributePlans(reg, deps)
 }
-
