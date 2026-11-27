@@ -502,11 +502,15 @@ func (c *prefabCheck) node(n *Node, parent []string) {
 			}
 		}
 	}
-	if Windowed(n.Type) {
-		// A virtualList's row template reads its record under as
+	if Windowed(n.Type) || n.Type == KanbanType {
+		// A virtualList's row template reads its record under as (a
+		// board's card template too, forge 30b)
 		as, _ := n.Props["as"].(string)
 		if as == "" {
 			as = "row"
+			if n.Type == KanbanType {
+				as = "card"
+			}
 		}
 		c.rows = append(c.rows, as)
 		defer func() { c.rows = c.rows[:len(c.rows)-1] }()

@@ -495,3 +495,33 @@ Forge's part 18e (meeting import, [forge RequirementsApp.md](../../forge/documen
 - Common's icon map gains `record_voice_over` and `upload_file`.
 
 Verification: forge's walk `documentation/walks/18e.json` uploads nothing but picks people in the dialog and sends them; `yarn build` in common type-checks.
+
+## Built in forge 30b
+
+`mui.kanban` (forge's part 30b, [030b-Kanban.md](../../forge/documentation/plans/030b-Kanban.md)) is a board: columns of cards dragged between and within columns. The blueprints decide what a drop means; the board only reports it.
+
+- **Metadata**: `ui/components/kanban.go`. Its props are `cards` (records; a `records.find` page is taken as its records), `columns` (`{id, title, color, count, limit}`), `columnField` (`status` when left out), `titleField`, `as` (`card`), `cardHeight`, `columnWidth`, `height`, `readOnly`, `collapsed`, `addable`, `reorderColumns`, `busy` (`cardId → [{name}]`, from presence) and `sx`. It takes one child, the **card template**. Its events are:
+  - `move {id, from, to, index, after, before}`, where `after` and `before` are the cards above and below the drop, as `record.move` takes them;
+  - `open {id}`;
+  - `add {column}`;
+  - `columnMove {id, index}`;
+  - `lift {id}`, where an empty `id` means the card was put down. Use it to set presence state such as `{dragging: id}`.
+- **Evaluation** (`ui/Kanban.go`): inside a prefab the board is a region of its own. The evaluator reads `cards` and renders the template once per card under `as`, as a repeat's row is rendered, keyed `<board>_<id>`. It sends `placed` (`{id, column, version, key}`, where `version` is the record's `_seq`) in place of the cards, so the records themselves never travel. A card id seen twice is shown once. `ui.CheckPrefab` knows that the template reads its card under `as`.
+- **Renderer** (`frontend/common/src/ui/renderers/mui/kanban/`):
+  - The pure logic is in `kanbanHold.ts` and is tested by `kanbanHold.test.ts`. It covers placing cards from `placed` or from `cards`, holding drops, finding the cards a drop falls between, and keyboard steps.
+  - A drop is **held** where it fell until the card's server `version` changes, or until 5 s pass, after which the card goes back. Someone else's later move changes the version too, so the later move wins on every screen.
+  - Pointer drags start past 4 px. The drag shows a floating copy of the card and opens a gap where the card will fall. Escape cancels a drag.
+  - Each column is windowed with `@tanstack/react-virtual`. Cards are positioned by an inline `transform`, with a transition, so a card moved by someone else slides into place.
+  - Keyboard: Space lifts a card, the arrow keys move it (the card is drawn where it would drop, and the focus follows it), Space drops it and Escape puts it back. An ARIA live region announces each step. Enter or a click sends `open`.
+- **Without a prefab** (a Go-rendered page), the browser places `cards` by `columnField` and draws a card from its title field.
+
+Verification:
+- `go test ./features/ui/...`, including `prefabs/kanban_test.go`, which evaluates a card template and checks the prefab check.
+- `go test ./features/apps/tools -run TestMetadata`.
+- `yarn build && yarn test` in common.
+- A scratch page with 2 000 cards over four columns, in a dark theme, driven by Playwright:
+  - a drag sent one `move` with the right neighbours and the card held its place;
+  - a keyboard move sent the right `move`;
+  - a drop with no server change went back after 5 s;
+  - scrolling a column ran at about 50 frames a second on the headless development build.
+- The two-session browser walk comes with forge 30d's Board view.
