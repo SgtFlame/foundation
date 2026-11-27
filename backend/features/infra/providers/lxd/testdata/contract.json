@@ -1,0 +1,750 @@
+{
+  "provider": "lxd",
+  "source": "written from the LXD REST API reference (documentation.ubuntu.com/lxd, API 1.0, LXD 5.21) for the contract suite; re-record with INFRA_RECORD=1 against a real server",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://lxd.test:8443/1.0"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "type": "sync",
+          "status": "Success",
+          "status_code": 200,
+          "operation": "",
+          "error_code": 0,
+          "error": "",
+          "metadata": {
+            "api_extensions": [
+              "instances",
+              "virtual-machines"
+            ],
+            "api_status": "stable",
+            "api_version": "1.0",
+            "auth": "trusted",
+            "public": false,
+            "auth_methods": [
+              "tls"
+            ],
+            "environment": {
+              "server_name": "lxd01",
+              "server_version": "5.21.2",
+              "driver": "lxc | qemu",
+              "server_clustered": false,
+              "project": "default"
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://lxd.test:8443/1.0/instances/contract-suite-1",
+        "query": "project=default&recursion=1"
+      },
+      "response": {
+        "status": 404,
+        "body": {
+          "type": "error",
+          "status": "",
+          "status_code": 0,
+          "operation": "",
+          "error_code": 404,
+          "error": "Instance not found",
+          "metadata": null
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://lxd.test:8443/1.0/instances",
+        "query": "project=default",
+        "body": {
+          "name": "contract-suite-1",
+          "type": "virtual-machine",
+          "profiles": [
+            "default"
+          ],
+          "config": {
+            "user.axiom.host": "contract-suite-1",
+            "user.axiom.size": "m",
+            "limits.cpu": "2",
+            "limits.memory": "4096MiB"
+          },
+          "devices": {
+            "root": {
+              "type": "disk",
+              "path": "/",
+              "size": "40GiB"
+            }
+          },
+          "source": {
+            "type": "image",
+            "alias": "24.04",
+            "server": "https://cloud-images.ubuntu.com/releases",
+            "protocol": "simplestreams"
+          },
+          "start": true
+        }
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "Location": "/1.0/operations/0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a01"
+        },
+        "body": {
+          "type": "async",
+          "status": "Operation created",
+          "status_code": 100,
+          "operation": "/1.0/operations/0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a01",
+          "error_code": 0,
+          "error": "",
+          "metadata": {
+            "id": "0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a01",
+            "class": "task",
+            "description": "Creating instance",
+            "status": "Running",
+            "status_code": 103,
+            "resources": {
+              "instances": [
+                "/1.0/instances/contract-suite-1"
+              ]
+            },
+            "may_cancel": false,
+            "err": ""
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://lxd.test:8443/1.0/operations/0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a01/wait",
+        "query": "project=default&timeout=60"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "type": "sync",
+          "status": "Success",
+          "status_code": 200,
+          "operation": "",
+          "error_code": 0,
+          "error": "",
+          "metadata": {
+            "id": "0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a01",
+            "class": "task",
+            "description": "Creating instance",
+            "status": "Success",
+            "status_code": 200,
+            "may_cancel": false,
+            "err": "",
+            "location": "none"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://lxd.test:8443/1.0/instances/contract-suite-1",
+        "query": "project=default&recursion=1"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "type": "sync",
+          "status": "Success",
+          "status_code": 200,
+          "operation": "",
+          "error_code": 0,
+          "error": "",
+          "metadata": {
+            "name": "contract-suite-1",
+            "type": "virtual-machine",
+            "status": "Running",
+            "status_code": 103,
+            "project": "default",
+            "location": "none",
+            "architecture": "x86_64",
+            "profiles": [
+              "default"
+            ],
+            "config": {
+              "user.axiom.host": "contract-suite-1",
+              "user.axiom.size": "m",
+              "limits.cpu": "2",
+              "limits.memory": "4096MiB",
+              "image.os": "ubuntu",
+              "image.release": "24.04",
+              "volatile.uuid": "5b3c9f2e-6a41-4d1c-9a0e-1f7e2c8d4b60"
+            },
+            "devices": {
+              "root": {
+                "type": "disk",
+                "path": "/",
+                "size": "40GiB"
+              }
+            },
+            "created_at": "2026-11-27T15:02:11.482Z",
+            "state": {
+              "status": "Running",
+              "status_code": 103,
+              "network": {
+                "lo": {
+                  "addresses": [
+                    {
+                      "family": "inet",
+                      "address": "127.0.0.1",
+                      "netmask": "8",
+                      "scope": "local"
+                    }
+                  ],
+                  "state": "up",
+                  "type": "loopback"
+                },
+                "enp5s0": {
+                  "addresses": [
+                    {
+                      "family": "inet6",
+                      "address": "fe80::216:3eff:fe4a:2b91",
+                      "netmask": "64",
+                      "scope": "link"
+                    }
+                  ],
+                  "state": "up",
+                  "type": "broadcast",
+                  "hwaddr": "00:16:3e:4a:2b:91"
+                }
+              },
+              "pid": 4182
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://lxd.test:8443/1.0/instances/contract-suite-1",
+        "query": "project=default&recursion=1"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "type": "sync",
+          "status": "Success",
+          "status_code": 200,
+          "operation": "",
+          "error_code": 0,
+          "error": "",
+          "metadata": {
+            "name": "contract-suite-1",
+            "type": "virtual-machine",
+            "status": "Running",
+            "status_code": 103,
+            "project": "default",
+            "location": "none",
+            "architecture": "x86_64",
+            "profiles": [
+              "default"
+            ],
+            "config": {
+              "user.axiom.host": "contract-suite-1",
+              "user.axiom.size": "m",
+              "limits.cpu": "2",
+              "limits.memory": "4096MiB",
+              "image.os": "ubuntu",
+              "image.release": "24.04",
+              "volatile.uuid": "5b3c9f2e-6a41-4d1c-9a0e-1f7e2c8d4b60"
+            },
+            "devices": {
+              "root": {
+                "type": "disk",
+                "path": "/",
+                "size": "40GiB"
+              }
+            },
+            "created_at": "2026-11-27T15:02:11.482Z",
+            "state": {
+              "status": "Running",
+              "status_code": 103,
+              "network": {
+                "lo": {
+                  "addresses": [
+                    {
+                      "family": "inet",
+                      "address": "127.0.0.1",
+                      "netmask": "8",
+                      "scope": "local"
+                    }
+                  ],
+                  "state": "up",
+                  "type": "loopback"
+                },
+                "enp5s0": {
+                  "addresses": [
+                    {
+                      "family": "inet",
+                      "address": "10.84.31.17",
+                      "netmask": "24",
+                      "scope": "global"
+                    },
+                    {
+                      "family": "inet6",
+                      "address": "fe80::216:3eff:fe4a:2b91",
+                      "netmask": "64",
+                      "scope": "link"
+                    }
+                  ],
+                  "state": "up",
+                  "type": "broadcast",
+                  "hwaddr": "00:16:3e:4a:2b:91"
+                }
+              },
+              "pid": 4182
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://lxd.test:8443/1.0/instances",
+        "query": "project=default&recursion=2"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "type": "sync",
+          "status": "Success",
+          "status_code": 200,
+          "operation": "",
+          "error_code": 0,
+          "error": "",
+          "metadata": [
+            {
+              "name": "contract-suite-1",
+              "type": "virtual-machine",
+              "status": "Running",
+              "status_code": 103,
+              "project": "default",
+              "location": "none",
+              "architecture": "x86_64",
+              "profiles": [
+                "default"
+              ],
+              "config": {
+                "user.axiom.host": "contract-suite-1",
+                "user.axiom.size": "m",
+                "limits.cpu": "2",
+                "limits.memory": "4096MiB",
+                "image.os": "ubuntu",
+                "image.release": "24.04",
+                "volatile.uuid": "5b3c9f2e-6a41-4d1c-9a0e-1f7e2c8d4b60"
+              },
+              "devices": {
+                "root": {
+                  "type": "disk",
+                  "path": "/",
+                  "size": "40GiB"
+                }
+              },
+              "created_at": "2026-11-27T15:02:11.482Z",
+              "state": {
+                "status": "Running",
+                "status_code": 103,
+                "network": {
+                  "lo": {
+                    "addresses": [
+                      {
+                        "family": "inet",
+                        "address": "127.0.0.1",
+                        "netmask": "8",
+                        "scope": "local"
+                      }
+                    ],
+                    "state": "up",
+                    "type": "loopback"
+                  },
+                  "enp5s0": {
+                    "addresses": [
+                      {
+                        "family": "inet",
+                        "address": "10.84.31.17",
+                        "netmask": "24",
+                        "scope": "global"
+                      },
+                      {
+                        "family": "inet6",
+                        "address": "fe80::216:3eff:fe4a:2b91",
+                        "netmask": "64",
+                        "scope": "link"
+                      }
+                    ],
+                    "state": "up",
+                    "type": "broadcast",
+                    "hwaddr": "00:16:3e:4a:2b:91"
+                  }
+                },
+                "pid": 4182
+              }
+            },
+            {
+              "name": "web",
+              "type": "container",
+              "status": "Running",
+              "config": {
+                "image.release": "24.04"
+              },
+              "location": "none"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://lxd.test:8443/1.0/instances/contract-suite-1",
+        "query": "project=default&recursion=1"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "type": "sync",
+          "status": "Success",
+          "status_code": 200,
+          "operation": "",
+          "error_code": 0,
+          "error": "",
+          "metadata": {
+            "name": "contract-suite-1",
+            "type": "virtual-machine",
+            "status": "Running",
+            "status_code": 103,
+            "project": "default",
+            "location": "none",
+            "architecture": "x86_64",
+            "profiles": [
+              "default"
+            ],
+            "config": {
+              "user.axiom.host": "contract-suite-1",
+              "user.axiom.size": "m",
+              "limits.cpu": "2",
+              "limits.memory": "4096MiB",
+              "image.os": "ubuntu",
+              "image.release": "24.04",
+              "volatile.uuid": "5b3c9f2e-6a41-4d1c-9a0e-1f7e2c8d4b60"
+            },
+            "devices": {
+              "root": {
+                "type": "disk",
+                "path": "/",
+                "size": "40GiB"
+              }
+            },
+            "created_at": "2026-11-27T15:02:11.482Z",
+            "state": {
+              "status": "Running",
+              "status_code": 103,
+              "network": {
+                "lo": {
+                  "addresses": [
+                    {
+                      "family": "inet",
+                      "address": "127.0.0.1",
+                      "netmask": "8",
+                      "scope": "local"
+                    }
+                  ],
+                  "state": "up",
+                  "type": "loopback"
+                },
+                "enp5s0": {
+                  "addresses": [
+                    {
+                      "family": "inet",
+                      "address": "10.84.31.17",
+                      "netmask": "24",
+                      "scope": "global"
+                    },
+                    {
+                      "family": "inet6",
+                      "address": "fe80::216:3eff:fe4a:2b91",
+                      "netmask": "64",
+                      "scope": "link"
+                    }
+                  ],
+                  "state": "up",
+                  "type": "broadcast",
+                  "hwaddr": "00:16:3e:4a:2b:91"
+                }
+              },
+              "pid": 4182
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://lxd.test:8443/1.0/instances/contract-suite-1",
+        "query": "project=default&recursion=1"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "type": "sync",
+          "status": "Success",
+          "status_code": 200,
+          "operation": "",
+          "error_code": 0,
+          "error": "",
+          "metadata": {
+            "name": "contract-suite-1",
+            "type": "virtual-machine",
+            "status": "Running",
+            "status_code": 103,
+            "project": "default",
+            "location": "none",
+            "architecture": "x86_64",
+            "profiles": [
+              "default"
+            ],
+            "config": {
+              "user.axiom.host": "contract-suite-1",
+              "user.axiom.size": "m",
+              "limits.cpu": "2",
+              "limits.memory": "4096MiB",
+              "image.os": "ubuntu",
+              "image.release": "24.04",
+              "volatile.uuid": "5b3c9f2e-6a41-4d1c-9a0e-1f7e2c8d4b60"
+            },
+            "devices": {
+              "root": {
+                "type": "disk",
+                "path": "/",
+                "size": "40GiB"
+              }
+            },
+            "created_at": "2026-11-27T15:02:11.482Z",
+            "state": {
+              "status": "Running",
+              "status_code": 103,
+              "network": {
+                "lo": {
+                  "addresses": [
+                    {
+                      "family": "inet",
+                      "address": "127.0.0.1",
+                      "netmask": "8",
+                      "scope": "local"
+                    }
+                  ],
+                  "state": "up",
+                  "type": "loopback"
+                },
+                "enp5s0": {
+                  "addresses": [
+                    {
+                      "family": "inet",
+                      "address": "10.84.31.17",
+                      "netmask": "24",
+                      "scope": "global"
+                    },
+                    {
+                      "family": "inet6",
+                      "address": "fe80::216:3eff:fe4a:2b91",
+                      "netmask": "64",
+                      "scope": "link"
+                    }
+                  ],
+                  "state": "up",
+                  "type": "broadcast",
+                  "hwaddr": "00:16:3e:4a:2b:91"
+                }
+              },
+              "pid": 4182
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://lxd.test:8443/1.0/instances/contract-suite-1/state",
+        "query": "project=default",
+        "body": {
+          "action": "stop",
+          "force": true
+        }
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "Location": "/1.0/operations/0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a02"
+        },
+        "body": {
+          "type": "async",
+          "status": "Operation created",
+          "status_code": 100,
+          "operation": "/1.0/operations/0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a02",
+          "error_code": 0,
+          "error": "",
+          "metadata": {
+            "id": "0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a02",
+            "class": "task",
+            "description": "Stopping instance",
+            "status": "Running",
+            "status_code": 103,
+            "resources": {
+              "instances": [
+                "/1.0/instances/contract-suite-1"
+              ]
+            },
+            "may_cancel": false,
+            "err": ""
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://lxd.test:8443/1.0/operations/0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a02/wait",
+        "query": "project=default&timeout=60"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "type": "sync",
+          "status": "Success",
+          "status_code": 200,
+          "operation": "",
+          "error_code": 0,
+          "error": "",
+          "metadata": {
+            "id": "0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a02",
+            "class": "task",
+            "description": "Stopping instance",
+            "status": "Success",
+            "status_code": 200,
+            "may_cancel": false,
+            "err": "",
+            "location": "none"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://lxd.test:8443/1.0/instances/contract-suite-1",
+        "query": "project=default"
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "Location": "/1.0/operations/0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a03"
+        },
+        "body": {
+          "type": "async",
+          "status": "Operation created",
+          "status_code": 100,
+          "operation": "/1.0/operations/0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a03",
+          "error_code": 0,
+          "error": "",
+          "metadata": {
+            "id": "0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a03",
+            "class": "task",
+            "description": "Deleting instance",
+            "status": "Running",
+            "status_code": 103,
+            "resources": {
+              "instances": [
+                "/1.0/instances/contract-suite-1"
+              ]
+            },
+            "may_cancel": false,
+            "err": ""
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://lxd.test:8443/1.0/operations/0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a03/wait",
+        "query": "project=default&timeout=60"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "type": "sync",
+          "status": "Success",
+          "status_code": 200,
+          "operation": "",
+          "error_code": 0,
+          "error": "",
+          "metadata": {
+            "id": "0b6c5e0e-7d0e-4e8b-9b1f-6b2f4c2c1a03",
+            "class": "task",
+            "description": "Deleting instance",
+            "status": "Success",
+            "status_code": 200,
+            "may_cancel": false,
+            "err": "",
+            "location": "none"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://lxd.test:8443/1.0/instances/contract-suite-1",
+        "query": "project=default&recursion=1"
+      },
+      "response": {
+        "status": 404,
+        "body": {
+          "type": "error",
+          "status": "",
+          "status_code": 0,
+          "operation": "",
+          "error_code": 404,
+          "error": "Instance not found",
+          "metadata": null
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://lxd.test:8443/1.0/instances/contract-suite-1",
+        "query": "project=default&recursion=1"
+      },
+      "response": {
+        "status": 404,
+        "body": {
+          "type": "error",
+          "status": "",
+          "status_code": 0,
+          "operation": "",
+          "error_code": 404,
+          "error": "Instance not found",
+          "metadata": null
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,608 @@
+{
+  "provider": "digitalocean",
+  "source": "written from DigitalOcean's API v2 reference (docs.digitalocean.com/reference/api) for the contract suite; re-record with INFRA_RECORD=1 and DIGITALOCEAN_TOKEN",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/account"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "account": {
+            "droplet_limit": 25,
+            "floating_ip_limit": 3,
+            "email": "ops@example.test",
+            "uuid": "b6fr89dbf6d9156cace5f3c78dc9851d957381ef",
+            "email_verified": true,
+            "status": "active",
+            "status_message": ""
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/sizes",
+        "query": "per_page=200"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sizes": [
+            {
+              "slug": "s-1vcpu-1gb",
+              "memory": 1024,
+              "vcpus": 1,
+              "disk": 25,
+              "transfer": 1.0,
+              "price_monthly": 6.0,
+              "price_hourly": 0.00893,
+              "regions": [
+                "ams3",
+                "fra1",
+                "nyc1"
+              ],
+              "available": true,
+              "description": "Basic"
+            },
+            {
+              "slug": "s-2vcpu-4gb",
+              "memory": 4096,
+              "vcpus": 2,
+              "disk": 80,
+              "transfer": 4.0,
+              "price_monthly": 24.0,
+              "price_hourly": 0.03571,
+              "regions": [
+                "ams3",
+                "fra1",
+                "nyc1"
+              ],
+              "available": true,
+              "description": "Basic"
+            },
+            {
+              "slug": "g-2vcpu-8gb",
+              "memory": 8192,
+              "vcpus": 2,
+              "disk": 25,
+              "transfer": 4.0,
+              "price_monthly": 63.0,
+              "price_hourly": 0.09375,
+              "regions": [
+                "nyc1"
+              ],
+              "available": true,
+              "description": "General Purpose"
+            },
+            {
+              "slug": "s-8vcpu-16gb-legacy",
+              "memory": 16384,
+              "vcpus": 8,
+              "disk": 320,
+              "transfer": 6.0,
+              "price_monthly": 160.0,
+              "price_hourly": 0.238,
+              "regions": [],
+              "available": false,
+              "description": "Basic"
+            }
+          ],
+          "links": {},
+          "meta": {
+            "total": 4
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/regions",
+        "query": "per_page=200"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "regions": [
+            {
+              "name": "New York 1",
+              "slug": "nyc1",
+              "features": [
+                "backups",
+                "ipv6",
+                "metadata",
+                "install_agent",
+                "storage",
+                "image_transfer"
+              ],
+              "available": true,
+              "sizes": [
+                "s-1vcpu-1gb",
+                "s-2vcpu-4gb",
+                "g-2vcpu-8gb"
+              ]
+            },
+            {
+              "name": "Amsterdam 3",
+              "slug": "ams3",
+              "features": [
+                "backups",
+                "ipv6",
+                "metadata",
+                "install_agent",
+                "storage",
+                "image_transfer"
+              ],
+              "available": true,
+              "sizes": [
+                "s-1vcpu-1gb",
+                "s-2vcpu-4gb"
+              ]
+            },
+            {
+              "name": "San Francisco 1",
+              "slug": "sfo1",
+              "features": [],
+              "available": false,
+              "sizes": []
+            }
+          ],
+          "links": {},
+          "meta": {
+            "total": 3
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/droplets",
+        "query": "per_page=200&tag_name=axiom-host%3Acontract-suite-1"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "droplets": [],
+          "links": {},
+          "meta": {
+            "total": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.digitalocean.test/v2/droplets",
+        "body": {
+          "name": "contract-suite-1",
+          "region": "ams3",
+          "size": "s-2vcpu-4gb",
+          "image": "ubuntu-24-04-x64",
+          "tags": [
+            "axiom",
+            "axiom-host:contract-suite-1"
+          ]
+        }
+      },
+      "response": {
+        "status": 202,
+        "body": {
+          "droplet": {
+            "id": 486093213,
+            "name": "contract-suite-1",
+            "memory": 4096,
+            "vcpus": 2,
+            "disk": 80,
+            "locked": true,
+            "status": "new",
+            "created_at": "2026-11-27T15:10:42Z",
+            "features": [
+              "monitoring",
+              "droplet_agent",
+              "private_networking"
+            ],
+            "backup_ids": [],
+            "snapshot_ids": [],
+            "volume_ids": [],
+            "image": {
+              "id": 168435427,
+              "name": "24.04 (LTS) x64",
+              "distribution": "Ubuntu",
+              "slug": "ubuntu-24-04-x64",
+              "public": true
+            },
+            "size_slug": "s-2vcpu-4gb",
+            "networks": {
+              "v4": [],
+              "v6": []
+            },
+            "region": {
+              "name": "Amsterdam 3",
+              "slug": "ams3",
+              "available": true
+            },
+            "tags": [
+              "axiom",
+              "axiom-host:contract-suite-1"
+            ],
+            "vpc_uuid": "5a4981aa-9653-4bd1-bef5-d6bff52042e4"
+          },
+          "links": {
+            "actions": [
+              {
+                "id": 2489352612,
+                "rel": "create",
+                "href": "https://api.digitalocean.test/v2/actions/2489352612"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/droplets",
+        "query": "per_page=200&tag_name=axiom-host%3Acontract-suite-1"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "droplets": [
+            {
+              "id": 486093213,
+              "name": "contract-suite-1",
+              "memory": 4096,
+              "vcpus": 2,
+              "disk": 80,
+              "locked": true,
+              "status": "new",
+              "created_at": "2026-11-27T15:10:42Z",
+              "features": [
+                "monitoring",
+                "droplet_agent",
+                "private_networking"
+              ],
+              "backup_ids": [],
+              "snapshot_ids": [],
+              "volume_ids": [],
+              "image": {
+                "id": 168435427,
+                "name": "24.04 (LTS) x64",
+                "distribution": "Ubuntu",
+                "slug": "ubuntu-24-04-x64",
+                "public": true
+              },
+              "size_slug": "s-2vcpu-4gb",
+              "networks": {
+                "v4": [],
+                "v6": []
+              },
+              "region": {
+                "name": "Amsterdam 3",
+                "slug": "ams3",
+                "available": true
+              },
+              "tags": [
+                "axiom",
+                "axiom-host:contract-suite-1"
+              ],
+              "vpc_uuid": "5a4981aa-9653-4bd1-bef5-d6bff52042e4"
+            }
+          ],
+          "links": {},
+          "meta": {
+            "total": 1
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/droplets",
+        "query": "per_page=200&tag_name=axiom"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "droplets": [
+            {
+              "id": 486093213,
+              "name": "contract-suite-1",
+              "memory": 4096,
+              "vcpus": 2,
+              "disk": 80,
+              "locked": true,
+              "status": "new",
+              "created_at": "2026-11-27T15:10:42Z",
+              "features": [
+                "monitoring",
+                "droplet_agent",
+                "private_networking"
+              ],
+              "backup_ids": [],
+              "snapshot_ids": [],
+              "volume_ids": [],
+              "image": {
+                "id": 168435427,
+                "name": "24.04 (LTS) x64",
+                "distribution": "Ubuntu",
+                "slug": "ubuntu-24-04-x64",
+                "public": true
+              },
+              "size_slug": "s-2vcpu-4gb",
+              "networks": {
+                "v4": [],
+                "v6": []
+              },
+              "region": {
+                "name": "Amsterdam 3",
+                "slug": "ams3",
+                "available": true
+              },
+              "tags": [
+                "axiom",
+                "axiom-host:contract-suite-1"
+              ],
+              "vpc_uuid": "5a4981aa-9653-4bd1-bef5-d6bff52042e4"
+            }
+          ],
+          "links": {},
+          "meta": {
+            "total": 1
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/droplets",
+        "query": "per_page=200&tag_name=axiom-host%3Acontract-suite-1"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "droplets": [
+            {
+              "id": 486093213,
+              "name": "contract-suite-1",
+              "memory": 4096,
+              "vcpus": 2,
+              "disk": 80,
+              "locked": true,
+              "status": "new",
+              "created_at": "2026-11-27T15:10:42Z",
+              "features": [
+                "monitoring",
+                "droplet_agent",
+                "private_networking"
+              ],
+              "backup_ids": [],
+              "snapshot_ids": [],
+              "volume_ids": [],
+              "image": {
+                "id": 168435427,
+                "name": "24.04 (LTS) x64",
+                "distribution": "Ubuntu",
+                "slug": "ubuntu-24-04-x64",
+                "public": true
+              },
+              "size_slug": "s-2vcpu-4gb",
+              "networks": {
+                "v4": [],
+                "v6": []
+              },
+              "region": {
+                "name": "Amsterdam 3",
+                "slug": "ams3",
+                "available": true
+              },
+              "tags": [
+                "axiom",
+                "axiom-host:contract-suite-1"
+              ],
+              "vpc_uuid": "5a4981aa-9653-4bd1-bef5-d6bff52042e4"
+            }
+          ],
+          "links": {},
+          "meta": {
+            "total": 1
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/droplets",
+        "query": "per_page=200&tag_name=axiom-host%3Acontract-suite-1"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "droplets": [
+            {
+              "id": 486093213,
+              "name": "contract-suite-1",
+              "memory": 4096,
+              "vcpus": 2,
+              "disk": 80,
+              "locked": false,
+              "status": "active",
+              "created_at": "2026-11-27T15:10:42Z",
+              "features": [
+                "monitoring",
+                "droplet_agent",
+                "private_networking"
+              ],
+              "backup_ids": [],
+              "snapshot_ids": [],
+              "volume_ids": [],
+              "image": {
+                "id": 168435427,
+                "name": "24.04 (LTS) x64",
+                "distribution": "Ubuntu",
+                "slug": "ubuntu-24-04-x64",
+                "public": true
+              },
+              "size_slug": "s-2vcpu-4gb",
+              "networks": {
+                "v4": [
+                  {
+                    "ip_address": "10.110.0.4",
+                    "netmask": "255.255.240.0",
+                    "gateway": "10.110.0.1",
+                    "type": "private"
+                  },
+                  {
+                    "ip_address": "188.166.42.17",
+                    "netmask": "255.255.240.0",
+                    "gateway": "188.166.32.1",
+                    "type": "public"
+                  }
+                ],
+                "v6": []
+              },
+              "region": {
+                "name": "Amsterdam 3",
+                "slug": "ams3",
+                "available": true
+              },
+              "tags": [
+                "axiom",
+                "axiom-host:contract-suite-1"
+              ],
+              "vpc_uuid": "5a4981aa-9653-4bd1-bef5-d6bff52042e4"
+            }
+          ],
+          "links": {},
+          "meta": {
+            "total": 1
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/droplets",
+        "query": "per_page=200&tag_name=axiom-host%3Acontract-suite-1"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "droplets": [
+            {
+              "id": 486093213,
+              "name": "contract-suite-1",
+              "memory": 4096,
+              "vcpus": 2,
+              "disk": 80,
+              "locked": false,
+              "status": "active",
+              "created_at": "2026-11-27T15:10:42Z",
+              "features": [
+                "monitoring",
+                "droplet_agent",
+                "private_networking"
+              ],
+              "backup_ids": [],
+              "snapshot_ids": [],
+              "volume_ids": [],
+              "image": {
+                "id": 168435427,
+                "name": "24.04 (LTS) x64",
+                "distribution": "Ubuntu",
+                "slug": "ubuntu-24-04-x64",
+                "public": true
+              },
+              "size_slug": "s-2vcpu-4gb",
+              "networks": {
+                "v4": [
+                  {
+                    "ip_address": "10.110.0.4",
+                    "netmask": "255.255.240.0",
+                    "gateway": "10.110.0.1",
+                    "type": "private"
+                  },
+                  {
+                    "ip_address": "188.166.42.17",
+                    "netmask": "255.255.240.0",
+                    "gateway": "188.166.32.1",
+                    "type": "public"
+                  }
+                ],
+                "v6": []
+              },
+              "region": {
+                "name": "Amsterdam 3",
+                "slug": "ams3",
+                "available": true
+              },
+              "tags": [
+                "axiom",
+                "axiom-host:contract-suite-1"
+              ],
+              "vpc_uuid": "5a4981aa-9653-4bd1-bef5-d6bff52042e4"
+            }
+          ],
+          "links": {},
+          "meta": {
+            "total": 1
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://api.digitalocean.test/v2/droplets/486093213"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/droplets",
+        "query": "per_page=200&tag_name=axiom-host%3Acontract-suite-1"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "droplets": [],
+          "links": {},
+          "meta": {
+            "total": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.digitalocean.test/v2/droplets",
+        "query": "per_page=200&tag_name=axiom-host%3Acontract-suite-1"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "droplets": [],
+          "links": {},
+          "meta": {
+            "total": 0
+          }
+        }
+      }
+    }
+  ]
+}

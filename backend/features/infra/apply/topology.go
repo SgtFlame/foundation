@@ -78,6 +78,7 @@ func runTopology(reg *extensions.Registry, f live.Feed) error {
 		{projector: data.Projector, pattern: controlplane.EntityHost + ".*"},
 		{projector: data.Projector, pattern: controlplane.EntityInstance + ".*"},
 		{projector: data.Projector, pattern: controlplane.EntityNatsCluster + ".*"},
+		{projector: data.Projector, pattern: controlplane.EntityNatsAcct + ".*"},
 	}
 	type update struct {
 		w *watch
@@ -121,7 +122,7 @@ func runTopology(reg *extensions.Registry, f live.Feed) error {
 			if started < len(watches) {
 				continue
 			}
-			view := Topology(reg, p.Config, watches[0].values[infra.ConfigType+"."+p.Config], watches[1].values, watches[2].values, watches[3].values, watches[4].values)
+			view := Topology(reg, p.Config, watches[0].values[infra.ConfigType+"."+p.Config], watches[1].values, watches[2].values, watches[3].values, watches[4].values, watches[5].values)
 			raw, _ := json.Marshal(view)
 			switch {
 			case last == nil:
@@ -137,9 +138,9 @@ func runTopology(reg *extensions.Registry, f live.Feed) error {
 }
 
 // Topology computes the view from the configuration's value, its
-// versions and the host, instance and NATS cluster records, each keyed as
-// projected.
-func Topology(reg *extensions.Registry, config string, cfgRaw json.RawMessage, versions, hosts, instances, natsClusters map[string]json.RawMessage) TopologyView {
+// versions and the host, instance, NATS cluster and NATS account records,
+// each keyed as projected.
+func Topology(reg *extensions.Registry, config string, cfgRaw json.RawMessage, versions, hosts, instances, natsClusters, natsAccounts map[string]json.RawMessage) TopologyView {
 	view := TopologyView{Config: config, Sites: []TopologySite{}, Counts: map[string]int{}}
 	var cfg infra.Config
 	_ = json.Unmarshal(cfgRaw, &cfg)
@@ -176,6 +177,17 @@ func Topology(reg *extensions.Registry, config string, cfgRaw json.RawMessage, v
 		}
 	}
 	str := func(r map[string]any, f string) string { s, _ := r[f].(string); return s }
+	acctRecs := map[string]map[string]json.RawMessage{}
+	for k, raw := range natsAccounts {
+		var r map[string]json.RawMessage
+		if json.Unmarshal(raw, &r) == nil {
+			acctRecs[strings.TrimPrefix(k, controlplane.EntityNatsAcct+".")] = r
+		}
+	}
+	placed := map[string]infra.Resource{}
+	for _, r := range StreamsActual(acctRecs) {
+		placed[r.ID] = r
+	}
 
 	norm := doc.Normalized()
 	bySite := map[string]int{}
@@ -210,6 +222,10 @@ func Topology(reg *extensions.Registry, config string, cfgRaw json.RawMessage, v
 			rec = instRecs[e.Record]
 		case infra.KindGateway:
 			if Joined(r, natsRecs) {
+				e.State = infra.StatePresent
+			}
+		case infra.KindStreams:
+			if a, ok := placed[r.ID]; ok && a.Props["cluster"] == r.Props["cluster"] {
 				e.State = infra.StatePresent
 			}
 		}

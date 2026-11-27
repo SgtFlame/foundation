@@ -165,7 +165,7 @@ func contributeConfig(reg *extensions.Registry) {
 
 	register(live.Command{
 		Descriptor: extensions.Descriptor{ID: "infra.config.put"}, Title: "Add or change a configuration item",
-		Description: "Puts one item into the infrastructure configuration's draft, replacing the item with the same id: a provider account, a site, a cluster, a host pool, an instance profile, a stack, a placement or a tenant override ({id, tenant, spec: {runners: {profile | stack, sites: [{site, count}], vm}}}: the tenant's own instances, in VMs of their own with vm). The whole draft is checked; a reference to an item that does not exist is refused. The target is the configuration, main when left out.",
+		Description: "Puts one item into the infrastructure configuration's draft, replacing the item with the same id: a provider account, a site, a cluster, a host pool, an instance profile, a stack, a placement or a tenant override ({id, tenant, spec: {runners?: {profile | stack, sites: [{site, count}], vm?}, cluster?: {site}, streams?: {site}}}, each switch on its own: runners are the tenant's own instances, in VMs of their own with vm; cluster makes a site's cluster the tenant's alone; streams places the tenant's JetStream streams in a site's NATS cluster). The whole draft is checked; a reference to an item that does not exist is refused. The target is the configuration, main when left out.",
 		Args: json.RawMessage(`{"type":"object","properties":{
   "kind":` + kinds + `,
   "item":{"type":"object","description":"The whole item, with its id (lower case letters, digits and dashes), e.g. a site {id, name, account, region}"}},"required":["kind","item"]}`),

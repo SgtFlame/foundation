@@ -23,9 +23,9 @@ func unitServices() infra.Services {
 
 func unitDoc() infra.Document {
 	return infra.Document{
-		Accounts: []infra.Account{{ID: "test", Name: "Test", Provider: "infratest", Connection: "c1"}},
-		Sites:    []infra.Site{{ID: "east", Name: "East", Account: "test", Region: "r1"}, {ID: "west", Name: "West", Account: "test", Region: "r2"}},
-		Clusters: []infra.Cluster{{ID: "east", Site: "east"}, {ID: "west", Site: "west"}},
+		Accounts:  []infra.Account{{ID: "test", Name: "Test", Provider: "infratest", Connection: "c1"}},
+		Sites:     []infra.Site{{ID: "east", Name: "East", Account: "test", Region: "r1"}, {ID: "west", Name: "West", Account: "test", Region: "r2"}},
+		Clusters:  []infra.Cluster{{ID: "east", Site: "east"}, {ID: "west", Site: "west"}},
 		HostPools: []infra.HostPool{{ID: "e", Site: "east", Size: "m", Count: 1}, {ID: "w", Site: "west", Size: "m", Count: 1}},
 		Profiles: []infra.Profile{
 			{ID: "front", Name: "Front", Kind: "container", Units: []infra.Unit{{Name: "serve", Kind: "serve", Services: []string{"front"}}}},

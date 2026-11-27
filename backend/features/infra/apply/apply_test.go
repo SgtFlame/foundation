@@ -318,3 +318,40 @@ func TestNatsClusters(t *testing.T) {
 		t.Fatalf("after growing = %+v", p.Steps)
 	}
 }
+
+func TestTenantStreamsApplied(t *testing.T) {
+	f := newFixture(t)
+	put := func(kind string, item m) {
+		f.must("infra.config.put", infra.DefaultConfig, m{"kind": kind, "item": item})
+	}
+	put("accounts", m{"id": "test", "name": "Test", "provider": "infratest", "connection": "c1"})
+	put("sites", m{"id": "west", "name": "West", "account": "test", "region": "r1"})
+	put("clusters", m{"id": "west", "site": "west", "natsReplicas": 1})
+	put("hostPools", m{"id": "w", "site": "west", "size": "m", "count": 1})
+	put("overrides", m{"id": "acme", "tenant": "42", "spec": m{"streams": m{"site": "west"}}})
+	v1 := f.commit("Tenant 42's streams at west")
+	p, a := f.planAndApply(v1)
+	if a.Status != infraapply.ApplyDone || p.Steps[len(p.Steps)-1].ID != "streams:42" {
+		t.Fatalf("apply = %+v, steps %+v", a, p.Steps)
+	}
+	acct := f.record(controlplane.EntityNatsAcct, "natsAccount_42")
+	if acct == nil || string(acct["placement"]) != `"west"` || string(acct["tenant"]) != `"42"` {
+		t.Fatalf("tenant 42's account = %v", acct)
+	}
+	if p, _ := f.planAndApply(v1); len(p.Steps) != 0 {
+		t.Fatalf("a second plan = %+v", p.Steps)
+	}
+	// Dropping the switch clears the placement; the streams stay where they are.
+	f.must("infra.config.remove", infra.DefaultConfig, m{"kind": "overrides", "id": "acme"})
+	v2 := f.commit("No placement")
+	p, a = f.planAndApply(v2)
+	if len(p.Steps) != 1 || p.Steps[0].Op != infra.OpRemove || a.Status != infraapply.ApplyDone {
+		t.Fatalf("removing = %+v %+v", p.Steps, a)
+	}
+	if acct := f.record(controlplane.EntityNatsAcct, "natsAccount_42"); acct == nil || string(acct["placement"]) != `""` {
+		t.Fatalf("after removing, the account = %v", acct)
+	}
+	if p, _ := f.planAndApply(v2); len(p.Steps) != 0 {
+		t.Fatalf("a plan after removing = %+v", p.Steps)
+	}
+}

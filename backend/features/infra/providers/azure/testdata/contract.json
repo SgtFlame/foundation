@@ -1,0 +1,963 @@
+{
+  "provider": "azure",
+  "source": "written from the Azure Resource Manager REST API reference (learn.microsoft.com/rest/api: Resource Groups 2021-04-01, Virtual Machines 2024-03-01, Network 2023-09-01, Resource SKUs 2021-07-01, Subscriptions 2022-12-01) and the Microsoft identity platform's client credentials flow, with every identifier scrubbed; re-record with INFRA_RECORD=1 and AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SUBSCRIPTION_ID",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://login.azure.test/11111111-2222-3333-4444-555555555555/oauth2/v2.0/token",
+        "body": "client_id=99999999-8888-7777-6666-555555555555&client_secret=REDACTED&grant_type=client_credentials&scope=https%3A%2F%2Fmanagement.azure.com%2F.default"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token_type": "Bearer",
+          "expires_in": 3599,
+          "ext_expires_in": 3599,
+          "access_token": "REDACTED"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "query": "api-version=2022-12-01"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+          "authorizationSource": "RoleBased",
+          "subscriptionId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+          "tenantId": "11111111-2222-3333-4444-555555555555",
+          "displayName": "Axiom infrastructure",
+          "state": "Enabled",
+          "subscriptionPolicies": {
+            "locationPlacementId": "Public_2014-09-01",
+            "quotaId": "PayAsYouGo_2014-09-01",
+            "spendingLimit": "Off"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/providers/Microsoft.Compute/skus",
+        "query": "%24filter=location+eq+%27westeurope%27&api-version=2021-07-01"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "value": [
+            {
+              "resourceType": "virtualMachines",
+              "name": "Standard_B2s",
+              "tier": "Standard",
+              "size": "B2s",
+              "family": "standardBSFamily",
+              "locations": [
+                "westeurope"
+              ],
+              "capabilities": [
+                {
+                  "name": "MaxResourceVolumeMB",
+                  "value": "8192"
+                },
+                {
+                  "name": "vCPUs",
+                  "value": "2"
+                },
+                {
+                  "name": "MemoryGB",
+                  "value": "4"
+                },
+                {
+                  "name": "HyperVGenerations",
+                  "value": "V1,V2"
+                }
+              ],
+              "restrictions": []
+            },
+            {
+              "resourceType": "virtualMachines",
+              "name": "Standard_D2s_v3",
+              "tier": "Standard",
+              "size": "D2s_v3",
+              "family": "standardDSv3Family",
+              "locations": [
+                "westeurope"
+              ],
+              "capabilities": [
+                {
+                  "name": "MaxResourceVolumeMB",
+                  "value": "16384"
+                },
+                {
+                  "name": "vCPUs",
+                  "value": "2"
+                },
+                {
+                  "name": "MemoryGB",
+                  "value": "8"
+                },
+                {
+                  "name": "HyperVGenerations",
+                  "value": "V1,V2"
+                }
+              ],
+              "restrictions": []
+            },
+            {
+              "resourceType": "virtualMachines",
+              "name": "Standard_E4s_v5",
+              "tier": "Standard",
+              "size": "E4s_v5",
+              "family": "standardESv5Family",
+              "locations": [
+                "westeurope"
+              ],
+              "capabilities": [
+                {
+                  "name": "MaxResourceVolumeMB",
+                  "value": "0"
+                },
+                {
+                  "name": "vCPUs",
+                  "value": "4"
+                },
+                {
+                  "name": "MemoryGB",
+                  "value": "32"
+                },
+                {
+                  "name": "HyperVGenerations",
+                  "value": "V1,V2"
+                }
+              ],
+              "restrictions": []
+            },
+            {
+              "resourceType": "virtualMachines",
+              "name": "Standard_NC6",
+              "tier": "Standard",
+              "size": "NC6",
+              "family": "standardNCFamily",
+              "locations": [
+                "westeurope"
+              ],
+              "capabilities": [
+                {
+                  "name": "vCPUs",
+                  "value": "6"
+                },
+                {
+                  "name": "MemoryGB",
+                  "value": "56"
+                }
+              ],
+              "restrictions": [
+                {
+                  "type": "Location",
+                  "values": [
+                    "westeurope"
+                  ],
+                  "reasonCode": "NotAvailableForSubscription"
+                }
+              ]
+            },
+            {
+              "resourceType": "disks",
+              "name": "Premium_LRS",
+              "tier": "Premium",
+              "locations": [
+                "westeurope"
+              ],
+              "capabilities": [],
+              "restrictions": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/locations",
+        "query": "api-version=2022-12-01"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "value": [
+            {
+              "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/locations/westeurope",
+              "name": "westeurope",
+              "displayName": "West Europe",
+              "regionalDisplayName": "(Europe) West Europe",
+              "metadata": {
+                "regionType": "Physical",
+                "regionCategory": "Recommended",
+                "geographyGroup": "Europe"
+              }
+            },
+            {
+              "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/locations/northeurope",
+              "name": "northeurope",
+              "displayName": "North Europe",
+              "regionalDisplayName": "(Europe) North Europe",
+              "metadata": {
+                "regionType": "Physical",
+                "regionCategory": "Recommended",
+                "geographyGroup": "Europe"
+              }
+            },
+            {
+              "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/locations/europe",
+              "name": "europe",
+              "displayName": "Europe",
+              "regionalDisplayName": "Europe",
+              "metadata": {
+                "regionType": "Logical",
+                "regionCategory": "Other"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+        "query": "%24expand=instanceView&api-version=2024-03-01"
+      },
+      "response": {
+        "status": 404,
+        "body": {
+          "error": {
+            "code": "ResourceGroupNotFound",
+            "message": "Resource group 'axiom-contract-suite-1' could not be found."
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1",
+        "query": "api-version=2021-04-01",
+        "body": {
+          "location": "westeurope",
+          "tags": {
+            "axiom-host": "contract-suite-1",
+            "axiom": "true"
+          }
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1",
+          "name": "axiom-contract-suite-1",
+          "type": "Microsoft.Resources/resourceGroups",
+          "location": "westeurope",
+          "tags": {
+            "axiom-host": "contract-suite-1",
+            "axiom": "true"
+          },
+          "properties": {
+            "provisioningState": "Succeeded"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/virtualNetworks/contract-suite-1-vnet",
+        "query": "api-version=2023-09-01",
+        "body": {
+          "location": "westeurope",
+          "properties": {
+            "addressSpace": {
+              "addressPrefixes": [
+                "10.0.0.0/16"
+              ]
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "Azure-AsyncOperation": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/providers/Microsoft.Network/locations/westeurope/operations/0c2b7d3a-1f4e-4b6a-9d8c-000000000001?api-version=2023-09-01"
+        },
+        "body": {
+          "name": "contract-suite-1-vnet",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/virtualNetworks/contract-suite-1-vnet",
+          "location": "westeurope",
+          "properties": {
+            "provisioningState": "Updating",
+            "addressSpace": {
+              "addressPrefixes": [
+                "10.0.0.0/16"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/providers/Microsoft.Network/locations/westeurope/operations/0c2b7d3a-1f4e-4b6a-9d8c-000000000001",
+        "query": "api-version=2023-09-01"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "status": "Succeeded"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+        "query": "api-version=2023-09-01",
+        "body": {
+          "sku": {
+            "name": "Standard"
+          },
+          "properties": {
+            "publicIPAllocationMethod": "Static"
+          }
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "Azure-AsyncOperation": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/providers/Microsoft.Network/locations/westeurope/operations/0c2b7d3a-1f4e-4b6a-9d8c-000000000002?api-version=2023-09-01"
+        },
+        "body": {
+          "name": "contract-suite-1-ip",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+          "location": "westeurope",
+          "sku": {
+            "name": "Standard",
+            "tier": "Regional"
+          },
+          "properties": {
+            "provisioningState": "Updating",
+            "publicIPAllocationMethod": "Static"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/providers/Microsoft.Network/locations/westeurope/operations/0c2b7d3a-1f4e-4b6a-9d8c-000000000002",
+        "query": "api-version=2023-09-01"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "status": "Succeeded"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic",
+        "query": "api-version=2023-09-01",
+        "body": {
+          "properties": {
+            "ipConfigurations": [
+              {
+                "name": "ipconfig1",
+                "properties": {
+                  "subnet": {
+                    "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/virtualNetworks/contract-suite-1-vnet/subnets/default"
+                  },
+                  "publicIPAddress": {
+                    "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "name": "contract-suite-1-nic",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic",
+          "location": "westeurope",
+          "properties": {
+            "provisioningState": "Succeeded",
+            "ipConfigurations": [
+              {
+                "name": "ipconfig1",
+                "properties": {
+                  "privateIPAddress": "10.0.0.4",
+                  "privateIPAllocationMethod": "Dynamic"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+        "query": "api-version=2024-03-01",
+        "body": {
+          "location": "westeurope",
+          "properties": {
+            "hardwareProfile": {
+              "vmSize": "Standard_D2s_v3"
+            },
+            "storageProfile": {
+              "imageReference": {
+                "publisher": "Canonical",
+                "offer": "ubuntu-24_04-lts",
+                "sku": "server",
+                "version": "latest"
+              }
+            },
+            "osProfile": {
+              "computerName": "contract-suite-1",
+              "adminUsername": "axiom"
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "Azure-AsyncOperation": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/providers/Microsoft.Compute/locations/westeurope/operations/7f3d1e2c-5b6a-4c8d-9e0f-000000000001?p=2b3c&api-version=2024-03-01"
+        },
+        "body": {
+          "name": "contract-suite-1",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+          "type": "Microsoft.Compute/virtualMachines",
+          "location": "westeurope",
+          "tags": {
+            "axiom-host": "contract-suite-1",
+            "axiom": "true"
+          },
+          "properties": {
+            "vmId": "4c1e8a3b-0d2f-4e5a-8b7c-9d0e1f2a3b4c",
+            "hardwareProfile": {
+              "vmSize": "Standard_D2s_v3"
+            },
+            "storageProfile": {
+              "imageReference": {
+                "publisher": "Canonical",
+                "offer": "ubuntu-24_04-lts",
+                "sku": "server",
+                "version": "latest",
+                "exactVersion": "24.04.202411050"
+              },
+              "osDisk": {
+                "osType": "Linux",
+                "name": "contract-suite-1_OsDisk_1",
+                "createOption": "FromImage",
+                "deleteOption": "Delete",
+                "diskSizeGB": 30
+              }
+            },
+            "osProfile": {
+              "computerName": "contract-suite-1",
+              "adminUsername": "axiom",
+              "linuxConfiguration": {
+                "disablePasswordAuthentication": true
+              }
+            },
+            "networkProfile": {
+              "networkInterfaces": [
+                {
+                  "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
+                }
+              ]
+            },
+            "provisioningState": "Creating"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/providers/Microsoft.Compute/locations/westeurope/operations/7f3d1e2c-5b6a-4c8d-9e0f-000000000001",
+        "query": "api-version=2024-03-01&p=2b3c"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "startTime": "2026-11-27T15:20:01Z",
+          "endTime": "2026-11-27T15:21:12Z",
+          "status": "Succeeded",
+          "name": "7f3d1e2c-5b6a-4c8d-9e0f-000000000001"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+        "query": "%24expand=instanceView&api-version=2024-03-01"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "name": "contract-suite-1",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+          "type": "Microsoft.Compute/virtualMachines",
+          "location": "westeurope",
+          "tags": {
+            "axiom-host": "contract-suite-1",
+            "axiom": "true"
+          },
+          "properties": {
+            "vmId": "4c1e8a3b-0d2f-4e5a-8b7c-9d0e1f2a3b4c",
+            "hardwareProfile": {
+              "vmSize": "Standard_D2s_v3"
+            },
+            "storageProfile": {
+              "imageReference": {
+                "publisher": "Canonical",
+                "offer": "ubuntu-24_04-lts",
+                "sku": "server",
+                "version": "latest",
+                "exactVersion": "24.04.202411050"
+              },
+              "osDisk": {
+                "osType": "Linux",
+                "name": "contract-suite-1_OsDisk_1",
+                "createOption": "FromImage",
+                "deleteOption": "Delete",
+                "diskSizeGB": 30
+              }
+            },
+            "osProfile": {
+              "computerName": "contract-suite-1",
+              "adminUsername": "axiom",
+              "linuxConfiguration": {
+                "disablePasswordAuthentication": true
+              }
+            },
+            "networkProfile": {
+              "networkInterfaces": [
+                {
+                  "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
+                }
+              ]
+            },
+            "provisioningState": "Succeeded",
+            "instanceView": {
+              "computerName": "contract-suite-1",
+              "osName": "ubuntu",
+              "osVersion": "24.04",
+              "statuses": [
+                {
+                  "code": "ProvisioningState/succeeded",
+                  "level": "Info",
+                  "displayStatus": "Provisioning succeeded"
+                },
+                {
+                  "code": "PowerState/running",
+                  "level": "Info",
+                  "displayStatus": "VM running"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+        "query": "api-version=2023-09-01"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "name": "contract-suite-1-ip",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+          "location": "westeurope",
+          "properties": {
+            "provisioningState": "Succeeded",
+            "ipAddress": "20.86.143.27",
+            "publicIPAllocationMethod": "Static"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+        "query": "%24expand=instanceView&api-version=2024-03-01"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "name": "contract-suite-1",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+          "type": "Microsoft.Compute/virtualMachines",
+          "location": "westeurope",
+          "tags": {
+            "axiom-host": "contract-suite-1",
+            "axiom": "true"
+          },
+          "properties": {
+            "vmId": "4c1e8a3b-0d2f-4e5a-8b7c-9d0e1f2a3b4c",
+            "hardwareProfile": {
+              "vmSize": "Standard_D2s_v3"
+            },
+            "storageProfile": {
+              "imageReference": {
+                "publisher": "Canonical",
+                "offer": "ubuntu-24_04-lts",
+                "sku": "server",
+                "version": "latest",
+                "exactVersion": "24.04.202411050"
+              },
+              "osDisk": {
+                "osType": "Linux",
+                "name": "contract-suite-1_OsDisk_1",
+                "createOption": "FromImage",
+                "deleteOption": "Delete",
+                "diskSizeGB": 30
+              }
+            },
+            "osProfile": {
+              "computerName": "contract-suite-1",
+              "adminUsername": "axiom",
+              "linuxConfiguration": {
+                "disablePasswordAuthentication": true
+              }
+            },
+            "networkProfile": {
+              "networkInterfaces": [
+                {
+                  "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
+                }
+              ]
+            },
+            "provisioningState": "Succeeded",
+            "instanceView": {
+              "computerName": "contract-suite-1",
+              "osName": "ubuntu",
+              "osVersion": "24.04",
+              "statuses": [
+                {
+                  "code": "ProvisioningState/succeeded",
+                  "level": "Info",
+                  "displayStatus": "Provisioning succeeded"
+                },
+                {
+                  "code": "PowerState/running",
+                  "level": "Info",
+                  "displayStatus": "VM running"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+        "query": "api-version=2023-09-01"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "name": "contract-suite-1-ip",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+          "location": "westeurope",
+          "properties": {
+            "provisioningState": "Succeeded",
+            "ipAddress": "20.86.143.27",
+            "publicIPAllocationMethod": "Static"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/providers/Microsoft.Compute/virtualMachines",
+        "query": "api-version=2024-03-01&statusOnly=true"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "value": [
+            {
+              "name": "contract-suite-1",
+              "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+              "type": "Microsoft.Compute/virtualMachines",
+              "location": "westeurope",
+              "tags": {
+                "axiom-host": "contract-suite-1",
+                "axiom": "true"
+              },
+              "properties": {
+                "vmId": "4c1e8a3b-0d2f-4e5a-8b7c-9d0e1f2a3b4c",
+                "hardwareProfile": {
+                  "vmSize": "Standard_D2s_v3"
+                },
+                "storageProfile": {
+                  "imageReference": {
+                    "publisher": "Canonical",
+                    "offer": "ubuntu-24_04-lts",
+                    "sku": "server",
+                    "version": "latest",
+                    "exactVersion": "24.04.202411050"
+                  },
+                  "osDisk": {
+                    "osType": "Linux",
+                    "name": "contract-suite-1_OsDisk_1",
+                    "createOption": "FromImage",
+                    "deleteOption": "Delete",
+                    "diskSizeGB": 30
+                  }
+                },
+                "osProfile": {
+                  "computerName": "contract-suite-1",
+                  "adminUsername": "axiom",
+                  "linuxConfiguration": {
+                    "disablePasswordAuthentication": true
+                  }
+                },
+                "networkProfile": {
+                  "networkInterfaces": [
+                    {
+                      "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
+                    }
+                  ]
+                },
+                "provisioningState": "Succeeded",
+                "instanceView": {
+                  "computerName": "contract-suite-1",
+                  "osName": "ubuntu",
+                  "osVersion": "24.04",
+                  "statuses": [
+                    {
+                      "code": "ProvisioningState/succeeded",
+                      "level": "Info",
+                      "displayStatus": "Provisioning succeeded"
+                    },
+                    {
+                      "code": "PowerState/running",
+                      "level": "Info",
+                      "displayStatus": "VM running"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "legacy-web",
+              "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/web/providers/Microsoft.Compute/virtualMachines/legacy-web",
+              "location": "westeurope",
+              "tags": {},
+              "properties": {
+                "provisioningState": "Succeeded",
+                "hardwareProfile": {
+                  "vmSize": "Standard_B2s"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+        "query": "%24expand=instanceView&api-version=2024-03-01"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "name": "contract-suite-1",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+          "type": "Microsoft.Compute/virtualMachines",
+          "location": "westeurope",
+          "tags": {
+            "axiom-host": "contract-suite-1",
+            "axiom": "true"
+          },
+          "properties": {
+            "vmId": "4c1e8a3b-0d2f-4e5a-8b7c-9d0e1f2a3b4c",
+            "hardwareProfile": {
+              "vmSize": "Standard_D2s_v3"
+            },
+            "storageProfile": {
+              "imageReference": {
+                "publisher": "Canonical",
+                "offer": "ubuntu-24_04-lts",
+                "sku": "server",
+                "version": "latest",
+                "exactVersion": "24.04.202411050"
+              },
+              "osDisk": {
+                "osType": "Linux",
+                "name": "contract-suite-1_OsDisk_1",
+                "createOption": "FromImage",
+                "deleteOption": "Delete",
+                "diskSizeGB": 30
+              }
+            },
+            "osProfile": {
+              "computerName": "contract-suite-1",
+              "adminUsername": "axiom",
+              "linuxConfiguration": {
+                "disablePasswordAuthentication": true
+              }
+            },
+            "networkProfile": {
+              "networkInterfaces": [
+                {
+                  "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/networkInterfaces/contract-suite-1-nic"
+                }
+              ]
+            },
+            "provisioningState": "Succeeded",
+            "instanceView": {
+              "computerName": "contract-suite-1",
+              "osName": "ubuntu",
+              "osVersion": "24.04",
+              "statuses": [
+                {
+                  "code": "ProvisioningState/succeeded",
+                  "level": "Info",
+                  "displayStatus": "Provisioning succeeded"
+                },
+                {
+                  "code": "PowerState/running",
+                  "level": "Info",
+                  "displayStatus": "VM running"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+        "query": "api-version=2023-09-01"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "name": "contract-suite-1-ip",
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Network/publicIPAddresses/contract-suite-1-ip",
+          "location": "westeurope",
+          "properties": {
+            "provisioningState": "Succeeded",
+            "ipAddress": "20.86.143.27",
+            "publicIPAllocationMethod": "Static"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1",
+        "query": "api-version=2021-04-01"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1",
+          "name": "axiom-contract-suite-1",
+          "location": "westeurope",
+          "tags": {
+            "axiom-host": "contract-suite-1",
+            "axiom": "true"
+          },
+          "properties": {
+            "provisioningState": "Succeeded"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1",
+        "query": "api-version=2021-04-01"
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "Location": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BWElPTS0xIn0?api-version=2021-04-01",
+          "Retry-After": "15"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BWElPTS0xIn0",
+        "query": "api-version=2021-04-01"
+      },
+      "response": {
+        "status": 200
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1",
+        "query": "api-version=2021-04-01"
+      },
+      "response": {
+        "status": 404,
+        "body": {
+          "error": {
+            "code": "ResourceGroupNotFound",
+            "message": "Resource group 'axiom-contract-suite-1' could not be found."
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.test/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/axiom-contract-suite-1/providers/Microsoft.Compute/virtualMachines/contract-suite-1",
+        "query": "%24expand=instanceView&api-version=2024-03-01"
+      },
+      "response": {
+        "status": 404,
+        "body": {
+          "error": {
+            "code": "ResourceGroupNotFound",
+            "message": "Resource group 'axiom-contract-suite-1' could not be found."
+          }
+        }
+      }
+    }
+  ]
+}

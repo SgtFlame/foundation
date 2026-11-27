@@ -3,6 +3,8 @@ package infranodes
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -257,6 +259,13 @@ func RemoveStep(args features.ServiceArgs, d Deps, s infra.Step, account infra.A
 		return removed || ok, err
 	case infra.KindInstance:
 		return d.Remove(args, controlplane.EntityInstance, id, "infra-"+id)
+	case infra.KindStreams:
+		props := s.Before
+		if props == nil {
+			props = s.Desired
+		}
+		rec, err := EnsureStreams(args, d, str(props, "tenant"), "")
+		return rec != "", err
 	case infra.KindNatsNode:
 		u, err := d.Remove(args, controlplane.EntityUnit, id+"__nats", "infra-"+id+"__nats")
 		if err != nil {
@@ -266,4 +275,58 @@ func RemoveStep(args features.ServiceArgs, d Deps, s infra.Step, account infra.A
 		return u || ok, err
 	}
 	return false, nil // a cluster is its hosts and instances: nothing of its own yet (22h)
+}
+
+// NatsAccountOf finds the tenant's infraNatsAccount record (one the
+// operator made, or the one a streams step made); "" when it has none.
+func NatsAccountOf(args features.ServiceArgs, d Deps, tenant string) (string, string, error) {
+	d.settle(args)
+	res, err := data.Find(args, d.Data, data.Query{Entity: controlplane.EntityNatsAcct, Fields: []string{"tenant", "placement"}})
+	if err != nil {
+		return "", "", err
+	}
+	var ids []string
+	placement := map[string]string{}
+	for _, rec := range res.Records {
+		var id, t, p string
+		_ = json.Unmarshal(rec["_id"], &id)
+		_ = json.Unmarshal(rec["tenant"], &t)
+		_ = json.Unmarshal(rec["placement"], &p)
+		if strings.TrimSpace(t) == tenant {
+			ids = append(ids, id)
+			placement[id] = p
+		}
+	}
+	if len(ids) == 0 {
+		return "", "", nil
+	}
+	sort.Strings(ids)
+	return ids[0], placement[ids[0]], nil
+}
+
+// EnsureStreams places a tenant's JetStream streams in a site's NATS
+// cluster (forge 22k): the placement of its infraNatsAccount record, made
+// when it has none, which the Control Plane's NATS follower moves the
+// streams to one at a time (controlplane.ApplyNatsAccounts). cluster ""
+// clears the placement, leaving the streams where they are.
+func EnsureStreams(args features.ServiceArgs, d Deps, tenant, cluster string) (string, error) {
+	if tenant == "" {
+		return "", fmt.Errorf("the step names no tenant")
+	}
+	id, _, err := NatsAccountOf(args, d, tenant)
+	if err != nil {
+		return "", err
+	}
+	if id == "" {
+		if cluster == "" {
+			return "", nil
+		}
+		n, _ := strconv.ParseUint(tenant, 10, 64)
+		id = infra.NatsAccountRecord(n)
+	}
+	values := map[string]any{"tenant": tenant, "placement": cluster}
+	if _, err := d.Ensure(args, controlplane.EntityNatsAcct, id, values, "infra-streams-"+tenant+"-"+cluster); err != nil {
+		return id, err
+	}
+	return id, nil
 }

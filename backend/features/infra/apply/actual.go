@@ -3,6 +3,9 @@ package infraapply
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/controlplane"
@@ -111,6 +114,12 @@ func RecordsActual(reg *extensions.Registry, nd func() infranodes.Deps) func(arg
 				out = append(out, g)
 			}
 		}
+		// A tenant's streams placement (forge 22k), from its account record.
+		accts, err := recs(controlplane.EntityNatsAcct, "tenant", "placement")
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, StreamsActual(accts)...)
 		return out, nil
 	}
 }
@@ -148,4 +157,32 @@ func Joined(g infra.Resource, natsRecs map[string]map[string]json.RawMessage) bo
 	}
 	a, b := fmt.Sprint(sites[0]), fmt.Sprint(sites[1])
 	return names(a, b) || names(b, a)
+}
+
+// StreamsActual is each tenant's streams placement as its
+// infraNatsAccount record (by record id, the first for a tenant) holds it.
+func StreamsActual(accts map[string]map[string]json.RawMessage) []infra.Resource {
+	ids := make([]string, 0, len(accts))
+	for id := range accts {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	seen := map[string]bool{}
+	var out []infra.Resource
+	for _, id := range ids {
+		var tenant, placement string
+		_ = json.Unmarshal(accts[id]["tenant"], &tenant)
+		_ = json.Unmarshal(accts[id]["placement"], &placement)
+		tenant = strings.TrimSpace(tenant)
+		n, err := strconv.ParseUint(tenant, 10, 64)
+		if err != nil || seen[tenant] {
+			continue
+		}
+		seen[tenant] = true
+		if placement = strings.TrimSpace(placement); placement != "" {
+			out = append(out, infra.Resource{ID: infra.StreamsID(n), Kind: infra.KindStreams, Site: placement,
+				Props: map[string]any{"tenant": tenant, "cluster": placement}})
+		}
+	}
+	return out
 }
