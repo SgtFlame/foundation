@@ -1,0 +1,19 @@
+{
+  "name": "infra.compute.host.start",
+  "title": "Start a host",
+  "description": "Starts a stopped host; starting a running one does nothing.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The host's resource id"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  },
+  "effect": "write",
+  "source": "connector"
+}

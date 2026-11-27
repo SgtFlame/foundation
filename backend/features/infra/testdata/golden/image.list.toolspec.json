@@ -1,0 +1,11 @@
+{
+  "name": "infra.compute.image.list",
+  "title": "List images",
+  "description": "The images hosts can be made from.",
+  "input": {
+    "type": "object",
+    "properties": {}
+  },
+  "effect": "read",
+  "source": "connector"
+}

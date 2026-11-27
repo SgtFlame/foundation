@@ -1,0 +1,19 @@
+{
+  "name": "infra.compute.host.stop",
+  "title": "Stop a host",
+  "description": "Stops a running host, keeping its disk; stopping a stopped one does nothing.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The host's resource id"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  },
+  "effect": "write",
+  "source": "connector"
+}

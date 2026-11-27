@@ -1,0 +1,16 @@
+{
+  "name": "infra.compute.host.list",
+  "title": "List hosts",
+  "description": "Lists every host this connection made (those with our resource ids), to compare with the configuration.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "region": {
+        "type": "string",
+        "description": "Only hosts in this region; every region when left out"
+      }
+    }
+  },
+  "effect": "read",
+  "source": "connector"
+}

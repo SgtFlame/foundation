@@ -1,0 +1,11 @@
+{
+  "type": "function",
+  "function": {
+    "name": "infra_compute_region_list",
+    "description": "The regions hosts can be made in.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "infra.compute.host.get",
+  "title": "Get a host",
+  "description": "Reads one host by our resource id: its state, addresses and facts. notFound when the provider has no such host.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The host's resource id"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  },
+  "effect": "read",
+  "source": "connector"
+}

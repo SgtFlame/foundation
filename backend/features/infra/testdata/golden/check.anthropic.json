@@ -1,0 +1,8 @@
+{
+  "name": "infra_compute_check",
+  "description": "Signs in and lists nothing: whether the connection's credentials work.",
+  "input_schema": {
+    "type": "object",
+    "properties": {}
+  }
+}

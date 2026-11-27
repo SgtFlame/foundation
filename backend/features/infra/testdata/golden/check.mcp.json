@@ -1,0 +1,25 @@
+{
+  "name": "infra_compute_check",
+  "title": "Check",
+  "description": "Signs in and lists nothing: whether the connection's credentials work.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean",
+        "description": "Always true: a failure is an error"
+      }
+    }
+  },
+  "annotations": {
+    "title": "Check",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}
