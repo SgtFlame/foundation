@@ -70,6 +70,10 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'track', title: 'The road they took', how: 'The morning after the well is warded, follow the frost prints from the well to the signpost where the road leaves the farmstead.' },
   // S29: the emptied village
   { id: 'ashby', title: 'What is left of Ashby', how: 'Take the road at the signpost to Ashby and look at what the raid left: a door, a table, a shoe, and the furrows in the lane.' },
+  // S30: word of Ashby
+  { id: 'told', title: 'Word of Ashby', how: 'Back at the farmstead, click Wenlan and tell him what you found in Ashby.' },
+  // S31: the hearth-watch meets
+  { id: 'council', title: 'The hearth-watch meets', how: "Go up the road to Hawk's Rest and press R by its hearth: the hearth-watch comes to hear about Ashby." },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

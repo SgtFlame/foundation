@@ -100,6 +100,15 @@
       "xp": 80,
       "needs": {"parts": {"plate": 4, "wire": 2}},
       "unlocks": "cutter"
+    },
+    {
+      "id": "refinery-chip",
+      "title": "A blueprint chip for the refinery",
+      "description": "The quartermaster has a refinery's blueprint for anyone who has outgrown a cabin forge: bring 6 steel plates, 4 coils of copper wire and 2 bags of cement in your pack, with a ship parked within 40 m of the beacon. A refinery's kilns take bigger loads and work twice as fast (forge 360 V35).",
+      "skill": "prospecting",
+      "xp": 120,
+      "needs": {"parts": {"plate": 6, "wire": 4, "cement": 2}},
+      "unlocks": "refinehouse"
     }
   ]
 }

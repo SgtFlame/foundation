@@ -100,28 +100,40 @@ interface PackLike {
 
 // V30: what the forge takes next from a pack: ore first, then the
 // refinable mineral the pack holds most of, then rock for cement
-export function nextLoad(pack: PackLike | null): { kind: ForgeKind; load: number } | null {
+export function nextLoad(pack: PackLike | null, cap = FORGE_LOAD): { kind: ForgeKind; load: number } | null {
   if (!pack) return null
-  if ((pack.ore ?? 0) > 0.001) return { kind: 'ore', load: Math.min(pack.ore ?? 0, FORGE_LOAD) }
+  if ((pack.ore ?? 0) > 0.001) return { kind: 'ore', load: Math.min(pack.ore ?? 0, cap) }
   const mins = Object.entries(pack.minerals ?? {})
     .filter(([k, v]) => k in REFINES && (v ?? 0) > 0.001)
     .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
-  if (mins.length) return { kind: mins[0][0] as ForgeKind, load: Math.min(mins[0][1] ?? 0, FORGE_LOAD) }
+  if (mins.length) return { kind: mins[0][0] as ForgeKind, load: Math.min(mins[0][1] ?? 0, cap) }
   // V33: cement takes lime too
-  const rock = Math.min(pack.rock, FORGE_LOAD, (pack.parts?.lime ?? 0) / CEMENT_LIME)
+  const rock = Math.min(pack.rock, cap, (pack.parts?.lime ?? 0) / CEMENT_LIME)
   if (rock >= CEMENT_MIN) return { kind: 'rock', load: Math.floor(rock * 1000) / 1000 }
   return null
 }
 
 // What U at the forge does now, given the forge and the pack
 export type ForgeAction =
-  | { kind: 'smelt'; ore: number; what: ForgeKind; fuel: boolean }
+  | { kind: 'smelt'; ore: number; what: ForgeKind; fuel: boolean; fromStock?: boolean } // V36: fed from storage
   | { kind: 'wait'; seconds: number }
   | { kind: 'take'; iron: number }
   | { kind: 'takeParts'; part: Part; count: number }
   | { kind: 'none'; why: string }
 
-export function forgeAction(f: ForgeState | null | undefined, pack: PackLike | null, now: number): ForgeAction {
+// V35: what a building's forge takes: a cabin's 2 m³ at a time, a
+// refinery's kilns 8 m³ twice as fast (the smelt blueprint agrees)
+export interface ForgeSpec {
+  cap: number
+  rate: number
+}
+export const CABIN_FORGE: ForgeSpec = { cap: FORGE_LOAD, rate: 1 }
+export const REFINERY_FORGE: ForgeSpec = { cap: 8, rate: 2 }
+export function forgeSpec(design: string | undefined): ForgeSpec {
+  return design === 'refinehouse' ? REFINERY_FORGE : CABIN_FORGE
+}
+
+export function forgeAction(f: ForgeState | null | undefined, pack: PackLike | null, now: number, spec: ForgeSpec = CABIN_FORGE, stock?: Readonly<Record<string, number>>): ForgeAction {
   if (f) {
     const left = smeltLeft(f, now)
     if (left > 0) return { kind: 'wait', seconds: Math.ceil(left / 1000) }
@@ -132,7 +144,35 @@ export function forgeAction(f: ForgeState | null | undefined, pack: PackLike | n
     if (pack && held + iron > pack.capacity + 1e-4) return { kind: 'none', why: 'your pack has no room for the iron' }
     return { kind: 'take', iron }
   }
-  const next = nextLoad(pack)
+  const next = nextLoad(pack, spec.cap)
+  // V36: with nothing in the pack, a refinery's storage feeds its minerals
+  const fed = !next && stock ? stockLoad(stock, spec.cap) : null
+  if (fed) return { kind: 'smelt', ore: fed.load, what: fed.kind, fuel: (pack?.minerals?.coal ?? 0) >= FUEL_COAL, fromStock: true }
   if (!next) return { kind: 'none', why: 'the forge needs ore (the asteroids hold it), a mineral to refine, or rock and lime for cement' }
   return { kind: 'smelt', ore: next.load, what: next.kind, fuel: (pack?.minerals?.coal ?? 0) >= FUEL_COAL }
+}
+
+// V36: the mineral a storage building feeds a refinery's kilns: the one it
+// holds most of (never ore or rock, which come by hand)
+export function stockLoad(stock: Readonly<Record<string, number>>, cap: number): { kind: ForgeKind; load: number } | null {
+  const best = Object.entries(stock)
+    .filter(([k, v]) => k in REFINES && k !== 'rock' && v > 0.001)
+    .sort((a, b) => b[1] - a[1])[0]
+  return best ? { kind: best[0] as ForgeKind, load: Math.floor(Math.min(best[1], cap) * 1000) / 1000 } : null
+}
+
+// V36: what U at storage puts in: every component and material in the
+// pack but the coal, which stays as fuel
+export function storable(pack: PackLike | null): Record<string, number> {
+  if (!pack) return {}
+  const out: Record<string, number> = {}
+  for (const k of ['ore', 'rock', 'iron'] as const) if ((pack[k] ?? 0) > 0.0005) out[k] = Math.round((pack[k] ?? 0) * 1000) / 1000
+  for (const [k, v] of Object.entries(pack.minerals ?? {})) if (k !== 'coal' && (v ?? 0) > 0.0005) out[k] = Math.round((v ?? 0) * 1000) / 1000
+  for (const [k, v] of Object.entries(pack.parts ?? {})) if ((v ?? 0) > 0) out[k] = v ?? 0
+  return out
+}
+
+// V36: what H at storage takes: the components it holds (they take no room)
+export function components(stock: Readonly<Record<string, number>>): Record<string, number> {
+  return Object.fromEntries(Object.entries(stock).filter(([k, v]) => k in PART_NAMES && v > 0))
 }

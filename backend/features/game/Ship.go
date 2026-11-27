@@ -42,6 +42,7 @@ const (
 	EventFabricated     = "fabricated"  // {world, item, pack} (V23: the fabricator's work taken into the sender's pack)
 	EventKitFitted      = "kitFitted"   // {world, boost, pack} (V24: an ion thruster kit from the sender's pack fitted to this ship)
 	EventDriveFitted    = "driveFitted" // {world, pack} (V27: a jump drive from the sender's pack fitted to this ship)
+	EventStored         = "stored"      // {world, stock, pack?} (V36: what a storage building gained or gave, by name, and the sender's pack's change)
 )
 
 // ShipDesign is a premade ship: its blocks in its own grid, x right, y up
@@ -74,8 +75,13 @@ var BlockCosts = map[string]map[string]float64{
 	"solar":    {"solarCell": 2, "wire": 1},
 	"light":    {"wire": 1},
 	"cargo":    {"plate": 4},
-	"refinery": {"plate": 6, "wire": 4}, // V32
-	"concrete": {"cement": 2},           // V33
+	"refinery": {"plate": 6, "wire": 4},   // V32
+	"concrete": {"cement": 2},             // V33
+	"deck":     {"plate": 1},              // V34: the bay floor's
+	"clamp":    {"plate": 4, "wire": 2},   // V34
+	"kiln":     {"plate": 3, "cement": 2}, // V35: the refinery's
+	"control":  {"plate": 2, "wire": 3},
+	"rack":     {"plate": 3}, // V36: storage's
 }
 
 // DesignBlock is one block of a design: armor, cockpit, gyro, light,
@@ -116,9 +122,12 @@ type Ship struct {
 	// V27: a jump drive is fitted: it jumps between the moon and the planet
 	Jump bool `json:"jump,omitempty"`
 	// V31: a chip design's block types by index, so placing one knows its cost
-	Types     []string  `json:"types,omitempty"`
-	Seq       uint64    `json:"seq"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Types []string `json:"types,omitempty"`
+	// V36: what a storage building holds, by name: components (a count),
+	// minerals, ore, rock and iron (m³)
+	Stock     map[string]float64 `json:"stock,omitempty"`
+	Seq       uint64             `json:"seq"`
+	UpdatedAt time.Time          `json:"updatedAt"`
 }
 
 // Fab is the work in a cabin's fabricator (V23): one circuit board,
@@ -223,7 +232,7 @@ func (d ShipDesign) Check() string {
 		switch b.Type {
 		case "cockpit":
 			cockpits++
-		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar", "log", "door", "bed", "bench", "forge", "fabricator", "concrete":
+		case "armor", "gyro", "light", "battery", "cargo", "refinery", "solar", "log", "door", "bed", "bench", "forge", "fabricator", "concrete", "deck", "clamp", "kiln", "control", "rack":
 		case "thruster":
 			switch b.Push {
 			case "up", "down", "forward", "back", "left", "right":
@@ -254,29 +263,30 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		}
 	}
 	var d struct {
-		World  string     `json:"world"`
-		Design string     `json:"design"`
-		Blocks int        `json:"blocks"`
-		Index  *int       `json:"index"`
-		X      float64    `json:"x"`
-		Y      float64    `json:"y"`
-		Z      float64    `json:"z"`
-		Q      [4]float64 `json:"q"`
-		V      [3]float64 `json:"v"`
-		Pilot  string     `json:"pilot"`
-		Charge *float64   `json:"charge"`
-		Cargo  Cargo      `json:"cargo"`
-		Rock   float64    `json:"rock"`
-		Iron   float64    `json:"iron"`
-		Ore    float64    `json:"ore"`
-		User   string     `json:"user"`
-		Aboard bool       `json:"aboard"`
-		At     int64      `json:"at"`
-		Item   string     `json:"item"`
-		Kind   string     `json:"kind"`
-		Rate   float64    `json:"rate"`
-		Types  []string   `json:"types"`
-		Boost  float64    `json:"boost"`
+		World  string             `json:"world"`
+		Design string             `json:"design"`
+		Blocks int                `json:"blocks"`
+		Index  *int               `json:"index"`
+		X      float64            `json:"x"`
+		Y      float64            `json:"y"`
+		Z      float64            `json:"z"`
+		Q      [4]float64         `json:"q"`
+		V      [3]float64         `json:"v"`
+		Pilot  string             `json:"pilot"`
+		Charge *float64           `json:"charge"`
+		Cargo  Cargo              `json:"cargo"`
+		Rock   float64            `json:"rock"`
+		Iron   float64            `json:"iron"`
+		Ore    float64            `json:"ore"`
+		User   string             `json:"user"`
+		Aboard bool               `json:"aboard"`
+		At     int64              `json:"at"`
+		Item   string             `json:"item"`
+		Kind   string             `json:"kind"`
+		Rate   float64            `json:"rate"`
+		Types  []string           `json:"types"`
+		Boost  float64            `json:"boost"`
+		Stock  map[string]float64 `json:"stock"`
 	}
 	// a damaged event's blocks are indices, read on their own below
 	if err := json.Unmarshal(f.Event.Data, &d); err != nil && f.Event.Type != EventShipDamaged {
@@ -332,6 +342,15 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		s.Forge = &Forge{Ore: d.Ore, At: d.At, Kind: d.Kind, Rate: d.Rate}
 	case EventIngots:
 		s.Forge = nil
+	case EventStored:
+		for k, v := range d.Stock {
+			if s.Stock == nil {
+				s.Stock = map[string]float64{}
+			}
+			if s.Stock[k] = math.Max(0, math.Round((s.Stock[k]+v)*1000)/1000); s.Stock[k] == 0 {
+				delete(s.Stock, k)
+			}
+		}
 	case EventFabricating:
 		s.Fab = &Fab{Item: d.Item, At: d.At}
 	case EventFabricated:
