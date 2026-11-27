@@ -72,6 +72,10 @@ type Tool struct {
 	// its effect: forge.apply asks only for a batch that publishes,
 	// installs or writes records (forge 06 question 2).
 	Asks func(args json.RawMessage) bool
+	// Checks marks a tool forge.check calls for every app it checks, with
+	// {appId, branch}, joining its warnings output to the check's (an
+	// installed app's manifest tool with checks, forge 19f).
+	Checks bool
 	// Run runs a server tool. An error's text goes to the model and the
 	// user, so it names nothing private (a service's Common.Message is safe).
 	Run func(call Call) (Result, error)

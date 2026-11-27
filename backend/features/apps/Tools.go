@@ -22,6 +22,11 @@ type Tool struct {
 	// Effect is none, read (the default), write or external: write and
 	// external ask a user before they run.
 	Effect string `json:"effect,omitempty"`
+	// Checks marks a check of other apps (forge 19f): forge.check calls it
+	// with {appId, branch} for every app it checks, and its warnings
+	// output ({path, message, fix} each) joins the check's warnings. Its
+	// effect is read.
+	Checks bool `json:"checks,omitempty"`
 }
 
 // ToolID is a tool's installed name: <appId>.<name>.
@@ -62,6 +67,9 @@ func (c *check) tools() {
 		}
 		if t.Effect != "" && !slices.Contains(ToolEffects, t.Effect) {
 			c.add(path+".effect", fmt.Sprintf("there is no effect %q", t.Effect), "use none, read, write or external")
+		}
+		if t.Checks && t.Effect != "" && t.Effect != "read" {
+			c.add(path+".checks", "a check of other apps only reads", "leave its effect read")
 		}
 		var g cognition.Graph
 		ok := false
