@@ -1,8 +1,13 @@
 package infraapply_test
 
 import (
+	"context"
 	"encoding/json"
+	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/live"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
@@ -173,4 +178,89 @@ func TestStepGraphResolves(t *testing.T) {
 		return
 	}
 	t.Fatal("no step graph")
+}
+
+// feed runs a query in a test, keeping its last result.
+type feed struct {
+	args   features.ServiceArgs
+	params json.RawMessage
+	store  live.Store
+	mu     sync.Mutex
+	value  json.RawMessage
+}
+
+func (f *feed) Args() features.ServiceArgs { return f.args }
+func (f *feed) Context() context.Context   { return f.args.Ctx }
+func (f *feed) Params() json.RawMessage    { return f.params }
+func (f *feed) Store() live.Store          { return f.store }
+func (f *feed) Snapshot(data any, _ live.Position) {
+	raw, _ := json.Marshal(data)
+	f.mu.Lock()
+	f.value = raw
+	f.mu.Unlock()
+}
+func (f *feed) Change(d live.Delta, _ live.Position) {
+	if d.Op == "replace" {
+		f.mu.Lock()
+		f.value = d.Value
+		f.mu.Unlock()
+	}
+}
+
+// TestTopology (forge 22p): infra.topology shows the applied version's
+// resources by site with their records' states, live: a resource is
+// missing until its record is made, and present after.
+func TestTopology(t *testing.T) {
+	f := newFixture(t)
+	put := func(kind string, item m) {
+		f.must("infra.config.put", infra.DefaultConfig, m{"kind": kind, "item": item})
+	}
+	put("accounts", m{"id": "test", "name": "Test", "provider": "infratest", "connection": "c1"})
+	put("sites", m{"id": "west", "name": "West", "account": "test", "region": "r1"})
+	put("clusters", m{"id": "west", "site": "west"})
+	put("hostPools", m{"id": "general", "site": "west", "size": "m", "count": 2})
+	put("profiles", m{"id": "web", "name": "Web", "kind": "container"})
+	put("placements", m{"id": "web", "profile": "web", "sites": []m{{"site": "west", "count": 1}}})
+	v1 := f.commit("Two hosts and a web instance")
+
+	var q live.Query
+	for _, c := range live.Queries.All(f.reg) {
+		if c.ID == "infra.topology" {
+			q = c
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	args := root()
+	args.Ctx = ctx
+	fd := &feed{args: args, params: json.RawMessage(`{}`), store: f.p}
+	go func() { _ = q.Run(fd) }()
+	view := func() infraapply.TopologyView {
+		fd.mu.Lock()
+		defer fd.mu.Unlock()
+		var v infraapply.TopologyView
+		_ = json.Unmarshal(fd.value, &v)
+		return v
+	}
+	wait := func(what string, ok func(infraapply.TopologyView) bool) infraapply.TopologyView {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for !ok(view()) {
+			if time.Now().After(deadline) {
+				t.Fatalf("%s: %+v", what, view())
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		return view()
+	}
+	v := wait("before applying", func(v infraapply.TopologyView) bool {
+		return v.Version == v1 && len(v.Sites) == 1 && v.Counts[infra.StateMissing] == 4
+	})
+	if rs := v.Sites[0].Resources; rs[0].Kind != "host" || rs[2].Kind != "cluster" || rs[3].Kind != "instance" {
+		t.Fatalf("order = %+v", rs)
+	}
+	f.planAndApply(v1)
+	wait("after applying", func(v infraapply.TopologyView) bool {
+		return v.Applied == v1 && v.Counts[infra.StatePresent] == 4 && v.Counts[infra.StateMissing] == 0
+	})
 }

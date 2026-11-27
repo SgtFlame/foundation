@@ -208,6 +208,7 @@ func emit(typ string, a *Apply) []live.NewEvent {
 // Contribute registers applies: the projector, commands, queries, the
 // step node and its built-in graph, and the drift tool.
 func Contribute(reg *extensions.Registry, deps func() Deps) {
+	contributeTopology(reg)
 	live.Projectors.Register(reg, live.Projector{
 		Descriptor: extensions.Descriptor{ID: ApplyProjector, Source: source},
 		Area:       infra.Area, Types: []string{ApplyType}, Fold: foldApply,
