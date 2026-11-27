@@ -509,6 +509,15 @@ The hearth ward: the hearth lore (S23) put to use.
 - Standing on Hawk's Rest's hearthstone (`hearthOf(area).stone`, S5's) with both lays the ward: a frame of sage round the stone and five stones at its corners and heart.
 - `story_test` checks the two pickings and the step; `HearthWard.test.ts` the conditions.
 
+## Built in V26 (forge 360)
+
+Cargo weighs in flight: the barge's lift (V25) as physics, not only a loading rule.
+
+- `ship/Ship.ts`: `CARGO_KG` (300 kg a m³) and `cargoOf(state)`; `ShipBody` takes `load` (m³) and adds it to its mass (`setLoad`), and `canLift(g)` says whether its thrusters, at the pilot's scale (skill times 1 + kits' boost), climb against a pull. `ShipLayer.sit` weighs the hold when a ship is taken.
+- At 300 kg a m³ the ore barge climbs off the moon with half its hold on its stock thrusters, and with a full hold only with two kits; the freighter climbs full off the moon, the hauler and prospector full off the planet with air. A full barge cannot climb off the planet (2.27 m/s²) even with kits.
+- While piloting, the ship's line says *too heavy to climb here* when the pull is more than its thrusters give.
+- `Ship.test.ts` checks the weights and each ship's climb.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

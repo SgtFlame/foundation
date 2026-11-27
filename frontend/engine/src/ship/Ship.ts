@@ -65,6 +65,17 @@ export const CARGO_PER_HOLD = 6 // m³; the loadShip blueprint holds the same
 // V25: the share of a design's holds its thrusters lift with the ion kits'
 // boost fitted (the ore barge: half, a quarter more for each kit), as the
 // loadShip blueprint has it
+// V26: what a m³ in the hold weighs (kg): a full hold is heavy, so a
+// loaded ship climbs slower, and the ore barge's thrusters cannot lift more
+// than half its hold without ion kits, as the loadShip rule says
+export const CARGO_KG = 300
+
+// V26: all a ship's hold carries, m³
+export function cargoOf(s: Pick<ShipState, 'cargo'>): number {
+  const c = s.cargo
+  return c ? c.dust + c.rock + c.iron + (c.ore ?? 0) : 0
+}
+
 export function liftOf(design: Pick<ShipDesign, 'lift'>, boost = 0): number {
   return design.lift ? Math.min(1, design.lift + boost) : 1
 }
@@ -227,9 +238,14 @@ export class ShipBody {
   private broken: number[] = []
   private readonly terrain: ShipTerrain
 
-  constructor(design: ShipDesign, placed: readonly number[], state: { x: number; y: number; z: number; q: Quat; v?: [number, number, number]; charge?: number }, terrain: ShipTerrain) {
+  // V26: what its hold carries (m³), part of its mass
+  private load = 0
+  private blockMass = 1
+
+  constructor(design: ShipDesign, placed: readonly number[], state: { x: number; y: number; z: number; q: Quat; v?: [number, number, number]; charge?: number; load?: number }, terrain: ShipTerrain) {
     this.design = design
     this.terrain = terrain
+    this.load = Math.max(0, state.load ?? 0)
     this.powered = design.blocks.some((b) => b.type === 'battery' || b.type === 'solar')
     this.refit(placed)
     this.charge = Math.min(1, Math.max(0, state.charge ?? 1))
@@ -244,12 +260,24 @@ export class ShipBody {
   private refit(placed: readonly number[]): void {
     this.placedIdx = placed.filter((i) => this.design.blocks[i])
     this.placed = this.placedIdx.map((i) => this.design.blocks[i])
-    this.mass = this.placed.reduce((m, b) => m + BLOCK_MASS[b.type], 0) || 1
+    this.blockMass = this.placed.reduce((m, b) => m + BLOCK_MASS[b.type], 0) || 1
+    this.mass = this.blockMass + this.load * CARGO_KG
     this.thrust = { up: 0, down: 0, forward: 0, back: 0, left: 0, right: 0 }
     for (const b of this.placed) if (b.type === 'thruster' && b.push) this.thrust[b.push] += THRUST
     this.canTurn = this.placed.some((b) => b.type === 'gyro')
     this.store = this.placed.filter((b) => b.type === 'battery').length * BATTERY_KJ
     this.solar = this.placed.filter((b) => b.type === 'solar').length * SOLAR_KW
+  }
+
+  // V26: what its hold now carries (m³), which it weighs
+  setLoad(m3: number): void {
+    this.load = Math.max(0, m3)
+    this.mass = this.blockMass + this.load * CARGO_KG
+  }
+
+  // Whether its thrusters (by the pilot's scale) can lift it against a pull (m/s²)
+  canLift(g: number): boolean {
+    return this.reach().y[1] > g
   }
 
   // The design's indices of the blocks still placed

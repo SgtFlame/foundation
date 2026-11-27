@@ -995,6 +995,12 @@ export class VoxelViewport {
       const charge = body ? body.charge : (s.charge ?? 0)
       parts.push(`charge ${Math.round(charge * 100)}%${body && body.power < 0.999 ? ` · power ${Math.round(body.power * 100)}%` : ''}`)
     }
+    // V26: a full hold weighs; say when the thrusters cannot lift it here
+    if (body) {
+      const g = this.terrain().gravity(body.x, body.y, body.z, { x: 0, y: 0, z: 0 })
+      const pull = Math.hypot(g.x, g.y, g.z)
+      if (pull > 0.05 && !body.canLift(pull)) parts.push(holds ? 'too heavy to climb here: unload some of the hold, or fit ion kits' : 'its thrusters cannot climb against this pull')
+    }
     if (holds) {
       const c = s.cargo ?? { dust: 0, rock: 0, iron: 0 }
       const ore = c.ore ?? 0
