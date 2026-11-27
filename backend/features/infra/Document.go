@@ -1,8 +1,10 @@
 package infra
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/SgtFlame/foundation/backend/features"
 	"reflect"
 	"regexp"
 	"sort"
@@ -124,6 +126,33 @@ type Override struct {
 	ID     string          `json:"id"`
 	Tenant uint64          `json:"tenant,string"`
 	Spec   json.RawMessage `json:"spec,omitempty"`
+}
+
+// OverrideSpec is an override's switches (iteration question 7: each a
+// separate switch). Built so far (forge 22k): runners, the tenant's own
+// instances of a profile or stack at sites, in VMs of their own with vm.
+type OverrideSpec struct {
+	Runners *TenantRunners `json:"runners,omitempty"`
+}
+
+// TenantRunners are a tenant's own instances.
+type TenantRunners struct {
+	Profile string      `json:"profile,omitempty"`
+	Stack   string      `json:"stack,omitempty"`
+	Sites   []SiteCount `json:"sites"`
+	VM      bool        `json:"vm,omitempty"` // each in an LXD VM of its own, so only on hosts that can run VMs
+}
+
+// Switches reads the override's spec.
+func (o Override) Switches() (OverrideSpec, error) {
+	var s OverrideSpec
+	if len(o.Spec) == 0 || string(o.Spec) == "null" {
+		return s, nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(o.Spec))
+	dec.DisallowUnknownFields()
+	err := dec.Decode(&s)
+	return s, err
 }
 
 // Settings are the configuration's own settings.
@@ -399,6 +428,30 @@ func (d Document) Check() []live.Problem {
 			ref(fmt.Sprintf("placements[%s].sites.%d.site", pl.ID, i), "sites", sc.Site)
 			if sc.Count < 0 || sc.Count > 1000 {
 				add(fmt.Sprintf("placements[%s].sites.%d.count", pl.ID, i), "count is 0 to 1000", "")
+			}
+		}
+	}
+	for _, o := range d.Overrides {
+		path := fmt.Sprintf("overrides[%s]", o.ID)
+		if o.Tenant == 0 || o.Tenant == features.RootTenantID {
+			add(path+".tenant", "an override names a tenant other than the root tenant", "")
+		}
+		sw, err := o.Switches()
+		if err != nil {
+			add(path+".spec", "the spec is {runners: {profile | stack, sites: [{site, count}], vm}}: "+err.Error(), "")
+			continue
+		}
+		if r := sw.Runners; r != nil {
+			if (r.Stack == "") == (r.Profile == "") {
+				add(path+".spec.runners", "runners name a stack or a profile, not both", "")
+			}
+			ref(path+".spec.runners.stack", "stacks", r.Stack)
+			ref(path+".spec.runners.profile", "profiles", r.Profile)
+			for i, sc := range r.Sites {
+				ref(fmt.Sprintf("%s.spec.runners.sites.%d.site", path, i), "sites", sc.Site)
+				if sc.Count < 0 || sc.Count > 1000 {
+					add(fmt.Sprintf("%s.spec.runners.sites.%d.count", path, i), "count is 0 to 1000", "")
+				}
 			}
 		}
 	}

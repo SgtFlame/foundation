@@ -245,6 +245,12 @@ func expandGateways(doc Document) []Resource {
 	return out
 }
 
+// TenantPlacement is the placement id a tenant override's own instances
+// are made under.
+func TenantPlacement(o Override) string {
+	return "tenant-" + strconv.FormatUint(o.Tenant, 10) + "-" + o.ID
+}
+
 func propsOf(v any) map[string]any {
 	raw, _ := json.Marshal(v)
 	var m map[string]any
@@ -319,12 +325,12 @@ func expandInstances(doc Document) []Resource {
 		clusters[c.Site] = true
 	}
 	var out []Resource
-	for _, pl := range doc.Placements {
-		names := []string{pl.Profile}
-		if pl.Stack != "" {
-			names = stacks[pl.Stack].Profiles
+	place := func(id, profile, stack string, sites []SiteCount, vms bool, tenant uint64) {
+		names := []string{profile}
+		if stack != "" {
+			names = stacks[stack].Profiles
 		}
-		for _, sc := range pl.Sites {
+		for _, sc := range sites {
 			deps := hostsAt(doc, sc.Site)
 			if clusters[sc.Site] {
 				deps = []string{ClusterID(sc.Site)}
@@ -338,11 +344,28 @@ func expandInstances(doc Document) []Resource {
 				delete(props, "id")
 				delete(props, "name")
 				props["profile"] = name
+				if tenant != 0 {
+					props["tenant"] = strconv.FormatUint(tenant, 10)
+					if vms {
+						props["kind"] = "vm"
+					}
+				}
 				for i := 1; i <= sc.Count; i++ {
-					out = append(out, Resource{ID: InstanceID(sc.Site, pl.ID, name, i), Kind: KindInstance, Site: sc.Site, Props: props, DependsOn: deps,
-						NeedsVMs: prof.Kind == "vm" || pl.RequiresVMs, HoldsData: true})
+					out = append(out, Resource{ID: InstanceID(sc.Site, id, name, i), Kind: KindInstance, Site: sc.Site, Props: props, DependsOn: deps,
+						NeedsVMs: prof.Kind == "vm" || vms, HoldsData: true})
 				}
 			}
+		}
+	}
+	for _, pl := range doc.Placements {
+		place(pl.ID, pl.Profile, pl.Stack, pl.Sites, pl.RequiresVMs, 0)
+	}
+	// A tenant's own instances (forge 22k): instance:<site>/tenant-<t>-<override>/<profile>/<n>,
+	// serving only that tenant, each in a VM of its own when asked.
+	for _, o := range doc.Overrides {
+		if sw, err := o.Switches(); err == nil && sw.Runners != nil {
+			r := sw.Runners
+			place(TenantPlacement(o), r.Profile, r.Stack, r.Sites, r.VM, o.Tenant)
 		}
 	}
 	return out
