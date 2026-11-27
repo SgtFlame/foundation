@@ -462,6 +462,15 @@ The fabricator: the third rung of the crafting ladder ("fabricator (powered; ele
 - Engine: `craft/Fabricator.ts` (`fabAction`, `fabLeft`), the fabricator's mesh (a grey cabinet with a green screen and a tool arm), `ShipLayer.fabricatorNear` and `hasPlaced`, and U at the fabricator in `VoxelViewport` (`fabAt`, `fabHint`), the forge taking U when nearer. Circuit boards are for what the fabricator builds next (thrusters, bigger ships).
 - `TestFabricator` checks the refusals and `TestCabin` the design; `Fabricator.test.ts` the engine's view.
 
+## Built in S22 (forge 375)
+
+The threshold ward, from the design's hedge-craft ("Wards. Arrangements of herbs and stones on a threshold so nothing unwelcome crosses") and its blessed places ("Sleep there is dreamless and healing").
+
+- **The river stones** (`story/Ward.ts`): after the true dream (`truedream`), five pale stones lie in the cleared culvert by the east field (the ditch's spot), heard as *clean water running over stones*. Walking up to them takes them (`item: "riverstones"`, spot `culvert-stones`; `riverStonesReady`).
+- **Laying it**: at Hawk's Rest's door (`thresholdSpot`, the door's cell) with the stones and a sage, the ward is laid: the new last step **`ward`**, whose fold spends a sage and the stones and gives `items.ward` 1. Without them the door says what is missing (`wardMissing`). The ward shows as a line of sage and five stones on the threshold.
+- **A warded night**: sleeping at a warded blessed place clears the Chill by morning (`wardedNight`) and closes a dream's wound, warm food or not.
+- `TestStory` lays the ward; `Ward.test.ts` covers the rest.
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

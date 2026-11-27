@@ -127,4 +127,11 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "truedream" || p.Items["wardlore"] != 1 {
 		t.Fatalf("true dream %+v", p)
 	}
+	// S22: the river stones and a sage lay the ward
+	st.ok("game.reachStory", farm, map[string]any{"item": "riverstones", "spot": "culvert-stones", "area": farm, "x": 9, "z": 3})
+	st.ok("game.reachStory", farm, map[string]any{"item": "sage", "spot": "bundle-sage", "area": farm, "x": 9, "z": 3})
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "ward", "area": farm, "x": 9, "z": 3})
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "ward" || p.Items["ward"] != 1 || p.Items["riverstones"] != 0 || p.Items["sage"] != 0 {
+		t.Fatalf("ward %+v", p)
+	}
 }

@@ -20,6 +20,7 @@ import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../sto
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
+import { riverStonesReady, STONES_LINE, STONES_REACH, thresholdSpot, WARD_LINE, WARD_REACH, wardedNight, wardMissing, wardReady } from '../story/Ward.ts'
 import { TINCTURE, TINCTURE_ALSO, tinctureReady, TRUE_DREAM, TRUE_DREAM_LINE } from '../story/Tincture.ts'
 import { BUNDLE_HERBS, BUNDLE_REACH, bundleSpots, bundlesReady, HEDGE_DISHES, SILL_REACH, sillLine, sillSpot } from '../story/Bundles.ts'
 import { HEART, nextWaking, ringSpot, STARLORE_LINE, starlorePool, stonePoints, STONES_MEMORY, stonesWake } from '../story/Stones.ts'
@@ -249,6 +250,7 @@ export class AreaViewport {
   private cacheOpen = false // S19: the cache's notes are being read
   private atSill = false // S20: standing by the moon calendar
   private tincture = false // S21: the dream tincture drunk, for the next sleep
+  private atThreshold = false // S22: standing at Hawk's Rest's door
   private signature: Point | null = null
   private barnDoor: Point | null = null
   private resumeAt: { area: string; at: Point } | null = null
@@ -1833,6 +1835,18 @@ export class AreaViewport {
       this.herbs.add(g)
       if (this.dayEffect().reveal) this.herbs.add(this.glowAt(h.x, h.z))
     }
+    // S22: the river stones in the cleared culvert, once the true dream has taught the ward
+    const rs = riverStonesReady(st.done, st.items) ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
+    if (rs) {
+      const pale = new THREE.MeshStandardNodeMaterial({ color: 0xe6e1d3, roughness: 0.6 })
+      for (let i = 0; i < 5; i++) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), pale)
+        m.scale.y = 0.55
+        m.position.set(rs.x - 0.5 + i * 0.25, 0.06, rs.z + ((i * 7) % 3) * 0.12 - 0.12)
+        this.herbs.add(m)
+      }
+      if (this.dayEffect().reveal) this.herbs.add(this.glowAt(rs.x, rs.z))
+    }
     // S10: the willow bough in the culvert and the water backed up into the wheat, until cleared
     const ditch = st.done.reading && !st.done.ditch ? ditchSpot(this.area.pieces, this.set.cell, this.fieldSize()) : null
     if (ditch) {
@@ -1933,6 +1947,16 @@ export class AreaViewport {
         }
       }
     }
+    // S22: the river stones, taken by walking up to the culvert
+    if (this.area.id === st.area && riverStonesReady(st.done, st.items)) {
+      const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
+      if (d && Math.hypot(p.x - d.x, p.z - d.z) < STONES_REACH) {
+        st.items.riverstones = 1
+        this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p.x), z: round1(p.z), item: 'riverstones', spot: 'culvert-stones' })
+        this.drawHerbs()
+        this.say(STONES_LINE)
+      }
+    }
     // S10: the willow bough the cards showed, hauled out by walking up to it
     if (this.area.id === st.area && st.done.reading && !st.done.ditch) {
       const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
@@ -1994,6 +2018,20 @@ export class AreaViewport {
         this.herbs.add(m)
       }
     }
+    // S22: the ward laid on the threshold: a line of sage and five stones
+    const th = st.done.ward ? thresholdSpot(pieces, this.set.cell) : null
+    if (th) {
+      const sage = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.04, 0.08), new THREE.MeshStandardNodeMaterial({ color: 0x8fa38a, roughness: 1 }))
+      sage.position.set(th.x, 0.03, th.z + 0.6)
+      this.herbs.add(sage)
+      const pale = new THREE.MeshStandardNodeMaterial({ color: 0xe6e1d3, roughness: 0.6 })
+      for (const dx of [-0.7, -0.3, 0, 0.3, 0.7]) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), pale)
+        m.scale.y = 0.6
+        m.position.set(th.x + dx, 0.05, th.z + 0.75)
+        this.herbs.add(m)
+      }
+    }
     if (!st.done.cache) return
     const string = new THREE.MeshBasicNodeMaterial({ color: 0x6b5236 })
     for (const b of bundleSpots(pieces, this.set.cell)) {
@@ -2019,6 +2057,20 @@ export class AreaViewport {
     const near = !!sill && Math.hypot(p.x - sill.x, p.z - sill.z) < SILL_REACH
     if (near && !this.atSill) this.say(sillLine(nightOf(st.clock)))
     this.atSill = near
+    // S22: the threshold: lay the ward when the stones and a sage are in hand
+    const th = st.done.truedream && !st.done.ward ? thresholdSpot(pieces, this.set.cell) : null
+    const atTh = !!th && Math.hypot(p.x - th.x, p.z - th.z) < WARD_REACH
+    if (atTh && !this.atThreshold) {
+      if (wardReady(st.done, st.items)) {
+        st.items.sage--
+        st.items.riverstones = 0
+        st.items.ward = 1
+        this.reach('ward')
+        this.drawHerbs()
+        this.say(WARD_LINE)
+      } else this.say(wardMissing(st.items))
+    }
+    this.atThreshold = atTh
     if (!bundlesReady(st.done)) return
     const spots = bundleSpots(pieces, this.set.cell)
     for (const b of spots) {
@@ -2136,6 +2188,10 @@ export class AreaViewport {
     }
     if (this.ringHeart && this.stonesAwake && !st.done.stones) {
       out.push({ id: 'stones', ...this.ringHeart, sense: 'sound', text: 'A low hum, like a held note', from: 'from the stones by the signpost', range: 45 })
+    }
+    if (riverStonesReady(st.done, st.items)) {
+      const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
+      if (d) out.push({ id: 'riverstones', x: d.x, z: d.z, sense: 'sound', text: 'Clean water running over stones', from: 'at the culvert by the east field', range: 35 })
     }
     if (st.done.reading && !st.done.ditch) {
       const d = ditchSpot(this.area.pieces, this.set.cell, this.fieldSize())
@@ -2259,6 +2315,17 @@ export class AreaViewport {
     if (st.done.dream && !st.done.companion && this.blessed()) this.knock()
     showCard(this.container, card)
     this.drawMarks() // S11: the new day's card may light what is hidden
+    // S22: a warded place's night is dreamless and healing
+    if (st.done.ward && this.blessed()) {
+      st.body = wardedNight(st.body)
+      const healed = !!st.items.wound
+      st.items.wound = 0
+      const p = this.player()
+      if (healed) this.opts.onStory?.({ step: '', area: this.area.id, x: round1(p?.x ?? 0), z: round1(p?.z ?? 0), use: 'wound', ...this.stateToSave() })
+      else this.savePlace(true)
+      this.say(`A dreamless, healing night behind the ward: you wake warm through${healed ? ', and the ache in your side is gone' : ''}. ${morning}`)
+      return
+    }
     if (st.items.wound && warm) {
       st.items.wound = 0
       const p = this.player()
