@@ -155,6 +155,7 @@ import (
 	indeximpl "github.com/SgtFlame/foundation/backend/features/index/services/indexservice/impl"
 	indexsource "github.com/SgtFlame/foundation/backend/features/index/source"
 	"github.com/SgtFlame/foundation/backend/features/index/store/lancestore"
+	"github.com/SgtFlame/foundation/backend/features/infra"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	kblive "github.com/SgtFlame/foundation/backend/features/kb/live"
@@ -615,6 +616,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var madeDeps made.Deps
 		var workspaceDeps workspace.Deps
 		var gameDeps game.Deps
+		var infraDeps infra.Deps
 		var configLive configservice.Service
 		var chatLive chatservice.Service
 		var conversationLive conversationservice.Service
@@ -750,6 +752,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		made.Contribute(registry, func() made.Deps { return madeDeps })                // chat.mode.*, chat.modes.made, chat.mode.create|options (forge 15h)
 		workspace.Contribute(registry, func() workspace.Deps { return workspaceDeps }) // workspace.*, workspace.list (forge 16a)
 		game.Contribute(registry, func() game.Deps { return gameDeps })                // game.* worlds, game.editTerrain, game.describeWorld (forge 360 V1)
+		infra.Contribute(registry, func() infra.Deps { return infraDeps })             // infra.config.* configurations and versions (forge 22a)
 		livetools.Contribute(registry, func() livetools.Deps { return liveToolDeps })
 		uihandlers.ContributeLive(registry, func() uiservice.Service { return uiService })
 		confighandlers.ContributeLive(registry, func() configservice.Service { return configLive })
@@ -1139,6 +1142,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Modes people made are listed after the chat.modes settings (forge 15h)
 		workspaceDeps = workspace.Deps{Store: projections, Bus: liveBus}
 		gameDeps = game.Deps{Store: projections}
+		infraDeps = infra.Deps{}
 		workbenchcontext.SetWorkspaceNames(func(args features.ServiceArgs, id string) (string, bool) {
 			return workspace.Name(args, projections, id)
 		})
