@@ -1,0 +1,75 @@
+{
+  "id": "farmer-ashby",
+  "title": "Wenlan Harrow, when you come back from Ashby",
+  "description": "The Sheaflands farmer after the player has seen what is left of Ashby (375 S30: word of Ashby). Placeholder lines following the user's lore: the Hollowed come from villages other Hollowed raided, whose people were taken, not killed; old Brannock, taken the night the player came, was one of them.",
+  "speaker": "Wenlan Harrow",
+  "start": "greet",
+  "nodes": {
+    "greet": {
+      "text": "You've been down the east road. I can see it on you. Is it as bad as the market folk say? Nobody from Ashby since the first snow.",
+      "choices": [
+        {
+          "text": "Ashby is empty. Not burned. Emptied.",
+          "next": "empty"
+        },
+        {
+          "text": "There's no one left there, Wenlan.",
+          "next": "empty"
+        }
+      ]
+    },
+    "empty": {
+      "text": "Empty. Not dead? No graves, no... Then where are they? Two hundred souls don't walk off into the snow on their own.",
+      "choices": [
+        {
+          "text": "They didn't go on their own. They were walked out, north, all of them.",
+          "next": "walked"
+        },
+        {
+          "text": "The same way old Brannock went.",
+          "next": "brannock"
+        }
+      ]
+    },
+    "walked": {
+      "text": "Walked. Like cattle to a fair. And the things that come scratching at my door: they walk too, don't they? On two legs, in what's left of a coat.",
+      "choices": [
+        {
+          "text": "I think they were people once. Maybe Ashby's.",
+          "next": "brannock"
+        }
+      ]
+    },
+    "brannock": {
+      "text": "Old Brannock. We never found him. I told his boy to stop looking, that the wolves... Gods. If he's out there, if one night he's at my door with frost in his beard and nothing in his eyes... What do I tell the boy?",
+      "choices": [
+        {
+          "text": "Tell him the truth. Then bar the door.",
+          "next": "word"
+        },
+        {
+          "text": "Nothing yet. Not until we know more.",
+          "next": "word"
+        }
+      ]
+    },
+    "word": {
+      "text": "Hawk's Rest has to hear this before the next dark moon, and the hearth-watch with it. I'll send the Brannocks' boy up the road at first light; he runs faster than any of us. You've done more than your share. But I think they'll want you there when the watch sits down to talk.",
+      "choices": [
+        {
+          "text": "Send him. I'll follow.",
+          "next": "farewell"
+        }
+      ]
+    },
+    "farewell": {
+      "text": "Go carefully. And Wenlan Harrow will keep his hearth high, every night, moon or no moon.",
+      "choices": [
+        {
+          "text": "Goodbye, Wenlan.",
+          "end": true
+        }
+      ]
+    }
+  }
+}

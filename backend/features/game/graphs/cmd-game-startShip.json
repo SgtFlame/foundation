@@ -7,7 +7,7 @@
   "spec": {
     "command": "game.startShip",
     "title": "Start a ship",
-    "description": "Starts a ship from a premade design (game.shipDesigns: skiff, prospector, hauler, freighter, barge (V25, at Trade 4), and the cabin, a building only built on the planet with air) at a point in a world, its outline showing every block still to place; the target is the new ship's id, made by the sender. Place its blocks with game.placeBlock, then sit in its cockpit and fly it with game.flyShip. Refused when the ship exists, the world does not, the design is unknown or not yet unlocked for the sender (the hauler needs the cobalt-shipyard contract done; V31: the cutter, a chip design whose blocks cost components, needs the cutter-chip contract) or the point is far from the world's bodies. V32: the hauler, freighter and barge are chip designs too: their outlines carry types and each block costs components. V33: the landing pad (pad), a static chip design of concrete anyone may lay out on the moon or the planet.",
+    "description": "Starts a ship from a premade design (game.shipDesigns: skiff, prospector, hauler, freighter, barge (V25, at Trade 4), and the cabin, a building only built on the planet with air) at a point in a world, its outline showing every block still to place; the target is the new ship's id, made by the sender. Place its blocks with game.placeBlock, then sit in its cockpit and fly it with game.flyShip. V34: a chip ship (cutter, hauler, freighter, barge) names the finished bay floor it is laid out on as bay. Refused when the ship exists, the world does not, the design is unknown or not yet unlocked for the sender (the hauler needs the cobalt-shipyard contract done; V31: the cutter, a chip design whose blocks cost components, needs the cutter-chip contract) or the point is far from the world's bodies. V32: the hauler, freighter and barge are chip designs too: their outlines carry types and each block costs components. V33: the landing pad (pad), a static chip design of concrete anyone may lay out on the moon or the planet.",
     "args": {
       "type": "object",
       "properties": {
@@ -95,6 +95,11 @@
             "id": "q",
             "type": "json",
             "description": "The orientation quaternion"
+          },
+          {
+            "id": "bay",
+            "type": "string",
+            "description": "V34: the finished bay floor a chip ship is laid out on (its ship id); the cutter, hauler, freighter and barge need one within 12 m"
           }
         ]
       }
@@ -191,7 +196,7 @@
         "y": 150
       },
       "config": {
-        "expr": "taken ? \"there is already a ship \" + target : !found || w?.deleted == true ? \"there is no world \" + world : !(design in [\"skiff\", \"prospector\", \"hauler\", \"freighter\", \"barge\", \"cabin\", \"cutter\", \"pad\"]) ? \"there is no ship design \" + design + \"; game.shipDesigns lists them\" : design == \"hauler\" && !(known && (me?.unlocked?.hauler ?? false)) ? \"the shipyard builds a hauler's frame once you have brought it ore from the asteroids (the cobalt-shipyard contract)\" : design == \"freighter\" && !(known && (me?.unlocked?.freighter ?? false)) ? \"the shipyard builds a freighter's frame for a pilot whose Trade has reached level 3: take jobs from the job board\" : design == \"barge\" && !(known && (me?.unlocked?.barge ?? false)) ? \"the shipyard builds an ore barge's frame for a pilot whose Trade has reached level 4: take jobs from the job board\" : design == \"cutter\" && !(known && (me?.unlocked?.cutter ?? false)) ? \"a cutter is laid out from its design chip: hand in the cutter-chip contract at the outpost first\" : design == \"cabin\" && ((x - 1600) ** 2 + y * y + z * z < 120 ** 2 || (x - 1600) ** 2 + y * y + z * z > 160 ** 2) ? \"a cabin is built on the ground of the planet with air\" : type(q) != \"array\" || len(q) != 4 ? \"q is a quaternion [x, y, z, w]\" : (x * x + y * y + z * z > (w.generator.radius + w.generator.amplitude + 150) ** 2 && (x - 1600) ** 2 + y * y + z * z > 300 ** 2) ? \"the point is too far from the world's moon, asteroids and planet\" : \"\"",
+        "expr": "taken ? \"there is already a ship \" + target : !found || w?.deleted == true ? \"there is no world \" + world : !(design in [\"skiff\", \"prospector\", \"hauler\", \"freighter\", \"barge\", \"cabin\", \"cutter\", \"pad\", \"bay\", \"refinehouse\", \"depot\"]) ? \"there is no ship design \" + design + \"; game.shipDesigns lists them\" : design == \"hauler\" && !(known && (me?.unlocked?.hauler ?? false)) ? \"the shipyard builds a hauler's frame once you have brought it ore from the asteroids (the cobalt-shipyard contract)\" : design == \"freighter\" && !(known && (me?.unlocked?.freighter ?? false)) ? \"the shipyard builds a freighter's frame for a pilot whose Trade has reached level 3: take jobs from the job board\" : design == \"barge\" && !(known && (me?.unlocked?.barge ?? false)) ? \"the shipyard builds an ore barge's frame for a pilot whose Trade has reached level 4: take jobs from the job board\" : design == \"cutter\" && !(known && (me?.unlocked?.cutter ?? false)) ? \"a cutter is laid out from its design chip: hand in the cutter-chip contract at the outpost first\" : design == \"depot\" && !(known && ((me?.unlocked?.refinehouse ?? false) || (me?.levels?.trade ?? 1) >= 2)) ? \"storage's blueprint comes with the refinery's chip (the refinery-chip contract) or Trade level 2\" : design == \"refinehouse\" && !(known && (me?.unlocked?.refinehouse ?? false)) ? \"a refinery is laid out from its blueprint chip: hand in the refinery-chip contract at the outpost first\" : design in [\"cutter\", \"hauler\", \"freighter\", \"barge\"] && !(hasBay && b?.design == \"bay\" && b?.world == world && len(b?.placed ?? []) >= (b?.blocks ?? 1) && (x - b.x) ** 2 + (y - b.y) ** 2 + (z - b.z) ** 2 <= 12 ** 2) ? \"a ship is hand-built on a finished bay floor: name one within 12 m as bay (lay a bay floor out from its blueprint first; game.shipDesigns has it)\" : design == \"cabin\" && ((x - 1600) ** 2 + y * y + z * z < 120 ** 2 || (x - 1600) ** 2 + y * y + z * z > 160 ** 2) ? \"a cabin is built on the ground of the planet with air\" : type(q) != \"array\" || len(q) != 4 ? \"q is a quaternion [x, y, z, w]\" : (x * x + y * y + z * z > (w.generator.radius + w.generator.amplitude + 150) ** 2 && (x - 1600) ** 2 + y * y + z * z > 300 ** 2) ? \"the point is too far from the world's moon, asteroids and planet\" : \"\"",
         "type": "string"
       }
     },
@@ -225,7 +230,7 @@
         "y": 350
       },
       "config": {
-        "expr": "let s = {world: world, design: design, x: x, y: y, z: z, q: q, blocks: {skiff: 27, prospector: 32, hauler: 58, freighter: 82, barge: 112, cabin: 76, cutter: 20, pad: 29}[design]}; let chips = {pad: [\"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"light\", \"light\", \"light\", \"light\"], cutter: [\"cockpit\", \"light\", \"light\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"gyro\", \"battery\", \"solar\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\"], hauler: [\"cockpit\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"gyro\", \"armor\", \"armor\", \"armor\", \"light\", \"light\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"battery\", \"cargo\", \"refinery\", \"solar\", \"solar\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"armor\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"battery\", \"gyro\", \"solar\", \"solar\"], freighter: [\"cockpit\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"gyro\", \"armor\", \"armor\", \"armor\", \"light\", \"light\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"battery\", \"cargo\", \"refinery\", \"solar\", \"solar\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"armor\", \"armor\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"battery\", \"gyro\", \"solar\", \"solar\", \"solar\", \"solar\", \"armor\", \"armor\", \"armor\", \"armor\"], barge: [\"cockpit\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"gyro\", \"armor\", \"armor\", \"armor\", \"light\", \"light\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"battery\", \"cargo\", \"refinery\", \"solar\", \"solar\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"armor\", \"armor\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"battery\", \"gyro\", \"solar\", \"solar\", \"solar\", \"solar\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\"]}; design in chips ? {world: s.world, design: s.design, x: s.x, y: s.y, z: s.z, q: s.q, blocks: s.blocks, types: chips[design]} : s",
+        "expr": "let s = {world: world, design: design, x: x, y: y, z: z, q: q, blocks: {skiff: 27, prospector: 32, hauler: 58, freighter: 82, barge: 112, cabin: 76, cutter: 20, pad: 29, bay: 39, refinehouse: 21, depot: 18}[design]}; let chips = {depot: [\"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"rack\", \"rack\", \"rack\", \"rack\", \"light\", \"light\"], refinehouse: [\"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"armor\", \"armor\", \"armor\", \"armor\", \"kiln\", \"kiln\", \"control\", \"light\", \"light\"], bay: [\"clamp\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"deck\", \"light\", \"light\", \"light\", \"light\"], pad: [\"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"concrete\", \"light\", \"light\", \"light\", \"light\"], cutter: [\"cockpit\", \"light\", \"light\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"gyro\", \"battery\", \"solar\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\"], hauler: [\"cockpit\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"gyro\", \"armor\", \"armor\", \"armor\", \"light\", \"light\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"battery\", \"cargo\", \"refinery\", \"solar\", \"solar\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"armor\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"battery\", \"gyro\", \"solar\", \"solar\"], freighter: [\"cockpit\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"gyro\", \"armor\", \"armor\", \"armor\", \"light\", \"light\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"battery\", \"cargo\", \"refinery\", \"solar\", \"solar\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"armor\", \"armor\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"battery\", \"gyro\", \"solar\", \"solar\", \"solar\", \"solar\", \"armor\", \"armor\", \"armor\", \"armor\"], barge: [\"cockpit\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"gyro\", \"armor\", \"armor\", \"armor\", \"light\", \"light\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"battery\", \"cargo\", \"refinery\", \"solar\", \"solar\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"armor\", \"armor\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"thruster\", \"battery\", \"gyro\", \"solar\", \"solar\", \"solar\", \"solar\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"cargo\", \"armor\", \"armor\", \"armor\", \"armor\", \"armor\"]}; design in chips ? {world: s.world, design: s.design, x: s.x, y: s.y, z: s.z, q: s.q, blocks: s.blocks, types: chips[design]} : s",
         "type": "json"
       }
     },
@@ -250,6 +255,31 @@
       "config": {
         "path": "args",
         "fix": "start a skiff or a prospector (or a hauler or freighter, once unlocked) near where you stand in an existing world, with a new ship id; a cutter needs its design chip (the cutter-chip contract)"
+      }
+    },
+    {
+      "id": "bayKey",
+      "type": "data.expression",
+      "title": "The bay floor's key",
+      "position": {
+        "x": 200,
+        "y": 600
+      },
+      "config": {
+        "expr": "\"gameShip.\" + ((bay ?? \"\") == \"\" ? \"none\" : bay)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "bayShip",
+      "type": "live.readProjection",
+      "title": "The bay floor",
+      "position": {
+        "x": 450,
+        "y": 600
+      },
+      "config": {
+        "projector": "game.ships"
       }
     }
   ],
@@ -572,6 +602,46 @@
       "to": {
         "node": "emit",
         "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "bay"
+      },
+      "to": {
+        "node": "bayKey",
+        "pin": "bay"
+      }
+    },
+    {
+      "from": {
+        "node": "bayKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "bayShip",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "bayShip",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "b"
+      }
+    },
+    {
+      "from": {
+        "node": "bayShip",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "hasBay"
       }
     }
   ]

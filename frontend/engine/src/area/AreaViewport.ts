@@ -20,7 +20,8 @@ import { dayCard, NO_EFFECT, spendWith, cookWith, type CardEffect } from '../sto
 import { aching, dreams, FORD_DREAM, remembered, showDream } from '../story/Remember.ts'
 import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
-import { ASHBY_LINE, ASHBY_SENSE, ashbyReady, isAshby, remnantAt, remnantSpots, TRACK_LINE, TRACK_REACH, TRACK_SENSE, trackPrints, trackReady } from '../story/Ashby.ts'
+import { COUNCIL_LINE, COUNCIL_LINES, councilReady, isHawksRest } from '../story/Council.ts'
+import { TOLD_LINE, ASHBY_LINE, ASHBY_SENSE, ashbyReady, isAshby, remnantAt, remnantSpots, TRACK_LINE, TRACK_REACH, TRACK_SENSE, trackPrints, trackReady } from '../story/Ashby.ts'
 import { WELL_LINE, WELL_REACH, WELL_SENSE, WELL_WARD_LINE, wellReady, wellSpot } from '../story/Well.ts'
 import { bankSageReady, bankSageSpot, FARM_WARD_LINE, FARM_WARDED_NIGHT, HEARTH_REACH, HEARTH_WARD_LINE, hearthStonesReady, hearthWarded, hearthWardMissing, hearthWardReady, nextHearthWard, SAGE_LINE, SAGE_REACH, wardSpots } from '../story/HearthWard.ts'
 import { TRIED_DOOR_LINE, TRIED_LINE, TRIED_LOST, TRIED_NIGHT, triedReady } from '../story/Tried.ts'
@@ -449,7 +450,9 @@ export class AreaViewport {
   talkTo(id: string): boolean {
     const n = this.area.npcs?.[id]
     // S15: after the foretold night Wenlan has his thanks to give
-    const after = n?.dialogue === 'farmer' && this.story?.done.defended ? this.dialogues['farmer-thanks'] : undefined
+    // S30: back from Ashby, he hears what is left of it
+    const ashby = n?.dialogue === 'farmer' && this.story?.done.ashby && !this.story.done.told ? this.dialogues['farmer-ashby'] : undefined
+    const after = ashby ?? (n?.dialogue === 'farmer' && this.story?.done.defended ? this.dialogues['farmer-thanks'] : undefined)
     const d = after ?? (n?.dialogue ? this.dialogues[n.dialogue] : undefined)
     if (!n || !d) return false
     if (d.id === 'farmer' && this.story?.done.sleep && !this.story.done.reading) return this.openReading('Wenlan Harrow')
@@ -1780,6 +1783,12 @@ export class AreaViewport {
       this.say(`${VETERAN.name}, ${VETERAN.title}, picks up his pike and falls in a step behind you. In a fight he takes the flank. On the road he nods at the rise by the signpost: "Nine stones up there. The old folk say they wake when the little moon is full."`)
       return
     }
+    // S30: word of Ashby goes up the road to Hawk's Rest
+    if (this.story && was === 'farmer-ashby' && !this.story.done.told) {
+      this.reach('told')
+      this.say(TOLD_LINE)
+      return
+    }
     // S15: the knot of the last sheaf, Wenlan's thanks
     if (this.story && was === 'farmer-thanks' && !this.story.done.thanked) {
       this.story.items.knot = 1
@@ -2493,6 +2502,8 @@ export class AreaViewport {
   // R by Hawk's Rest's hearth: rest, and draw the first card
   private rest(): void {
     const st = this.story
+    // S31: after word of Ashby, the hearth-watch meets at Hawk's Rest's hearth
+    if (st && councilReady(st.done) && isHawksRest(this.area.name) && this.nearHearth()) return this.council()
     if (st?.done.foretold && !st.done.defended) return this.waitForDark()
     // S23: once the ward is laid, R at Hawk's Rest waits for the night it is tried
     if (st && triedReady(st.done) && this.blessed()) return this.wardNight()
@@ -2510,6 +2521,19 @@ export class AreaViewport {
     setTimeout(() => {
       if (this.story === st) st.clock = sleep(st.clock)
     }, 4000)
+  }
+
+  // S31: the hearth-watch's meeting, a caption at a time, then the step
+  private council(): void {
+    const st = this.story!
+    COUNCIL_LINES.forEach((line, i) => setTimeout(() => {
+      if (this.story === st) this.say(line)
+    }, i * 7000))
+    setTimeout(() => {
+      if (this.story !== st || st.done.council) return
+      this.reach('council')
+      this.say(COUNCIL_LINE)
+    }, COUNCIL_LINES.length * 7000)
   }
 
   // S14: R by a hearth once the notes foretold the night: the days pass
