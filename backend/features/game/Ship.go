@@ -74,6 +74,7 @@ var BlockCosts = map[string]map[string]float64{
 	"solar":    {"solarCell": 2, "wire": 1},
 	"light":    {"wire": 1},
 	"cargo":    {"plate": 4},
+	"refinery": {"plate": 6, "wire": 4}, // V32
 }
 
 // DesignBlock is one block of a design: armor, cockpit, gyro, light,

@@ -1,7 +1,9 @@
 package game_test
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -591,6 +593,7 @@ func TestBarge(t *testing.T) {
 		t.Fatalf("refinery ore from a prospector: %q", r.Common.Message)
 	}
 	st.ok("game.startShip", "b1", map[string]any{"world": world, "design": "barge", "x": 0, "y": 104, "z": -8, "q": q})
+	refineParts(t, st, world, map[string]int{"plate": 12}) // V32: three holds' plates
 	// two holds placed: 12 m³, of which the stock thrusters lift 6
 	st.ok("game.placeBlock", "b1", map[string]any{"index": 27})
 	st.ok("game.placeBlock", "b1", map[string]any{"index": 97})
@@ -791,4 +794,83 @@ func TestCutter(t *testing.T) {
 	}
 	// the stock skiff's blocks stay free
 	st.ok("game.placeBlock", "s1", map[string]any{"index": 1})
+}
+
+// V32: every chip design's block types in cmd-game-startShip match its file,
+// and every block type it uses has a cost
+func TestChipDesigns(t *testing.T) {
+	raw, err := os.ReadFile("graphs/cmd-game-startShip.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var g struct {
+		Nodes []struct {
+			ID     string `json:"id"`
+			Config struct {
+				Expr string `json:"expr"`
+			} `json:"config"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(raw, &g); err != nil {
+		t.Fatal(err)
+	}
+	expr := ""
+	for _, n := range g.Nodes {
+		if n.ID == "started" {
+			expr = n.Config.Expr
+		}
+	}
+	for _, id := range []string{"cutter", "hauler", "freighter", "barge"} {
+		d, ok := game.DesignOf(id)
+		if !ok || !d.Chip {
+			t.Fatalf("%s is not a chip design", id)
+		}
+		want := []string{}
+		for _, b := range d.Blocks {
+			if _, ok := game.BlockCosts[b.Type]; !ok {
+				t.Fatalf("%s: no cost for a %s", id, b.Type)
+			}
+			want = append(want, b.Type)
+		}
+		list, _ := json.Marshal(want)
+		if !strings.Contains(strings.ReplaceAll(expr, " ", ""), id+":"+string(list)) {
+			t.Fatalf("%s: the blueprint's types differ from designs/%s.json", id, id)
+		}
+	}
+}
+
+// refineParts refines components into user 1's pack in a world, one in each
+// of as many cabins at once (V32: chip designs' blocks cost them)
+func refineParts(t *testing.T, st *stack, world string, parts map[string]int) {
+	t.Helper()
+	ore := map[string]struct {
+		mineral string
+		amount  float64
+	}{"plate": {"ferrite", 0.125}, "wire": {"malachite", 0.1}, "solarCell": {"silica", 0.25}, "nozzle": {"wolframite", 0.334}, "cell": {"spodumene", 0.25}}
+	ids := []string{}
+	for part, n := range parts {
+		for i := 0; i < n; i++ {
+			m := ore[part]
+			id := fmt.Sprintf("rf%d", st.n)
+			st.n++
+			st.ok("game.startShip", id, map[string]any{"world": world, "design": "cabin", "x": 1600, "y": 142, "z": float64(len(ids) * 6), "q": []float64{0, 0, 0, 1}})
+			st.ok("game.placeBlock", id, map[string]any{"index": 75})
+			st.ok("game.editTerrain", world, map[string]any{"kind": "dig", "x": float64(len(ids)%20) * 3, "y": 100, "z": 30, "radius": 1, "took": map[string]any{"dust": 0, "rock": 0, "minerals": map[string]any{m.mineral: m.amount}}})
+			st.ok("game.smelt", id, map[string]any{"what": m.mineral})
+			ids = append(ids, id)
+		}
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for _, id := range ids {
+		for {
+			r := st.send(1, "game.takeIngots", id, map[string]any{})
+			if r.Common.Code < 300 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("refining in %s: %q", id, r.Common.Message)
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
 }

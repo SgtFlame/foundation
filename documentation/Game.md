@@ -594,6 +594,10 @@ Blueprints from design chips: the third step of *Ships from blocks*, as the user
 - Engine: `ship/Blueprint.ts` (`BLOCK_COSTS`, `blockCost`, `shortOf`, `costLine`, `pay`, `billFor`); the viewport's outline hint names a chip block's cost, a click on one the pack cannot pay is refused in place, and `handInProblem` checks a contract's parts in the pack.
 - Tests: `TestCutter`, `Blueprint.test.ts`.
 
+## Built in V32 (forge 360)
+
+The hauler, freighter and barge become design chips: their outlines carry `types` (`cmd-game-startShip`'s `chips` table) and each block costs components like the cutter's; the contract and Trade levels that unlocked them now give the chip. A refinery block costs 6 plates and 4 wire. Ships started before V32 keep free outlines. `TestChipDesigns` checks every chip's list against its file; the test helper `refineParts` refines components in parallel cabins. The editor's *Start* tooltip gives a chip ship's whole bill (`billFor`).
+
 ## Decisions to review after seeing it
 
 - A terrain edit is a command graph of the existing `command` kind, not a new `game.command` kind; a game kind comes with the Node runner (346), when rules run per tick.

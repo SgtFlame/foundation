@@ -1,8 +1,9 @@
 {
   "id": "barge",
   "title": "Ore barge",
-  "description": "The refinery's ship (forge 360 V25): the freighter lengthened by five more rows, with 21 cargo holds (126 m\u00b3) and no more thrusters than the freighter had. Its stock thrusters lift a hold only half full: fit ion thruster kits from the cabin's fabricator (two lift it full). The shipyard builds its frame for a pilot whose Trade has reached level 4.",
+  "description": "V32: now an earned design chip, each block costing components. The refinery's ship (forge 360 V25): the freighter lengthened by five more rows, with 21 cargo holds (126 m\u00b3) and no more thrusters than the freighter had. Its stock thrusters lift a hold only half full: fit ion thruster kits from the cabin's fabricator (two lift it full). The shipyard builds its frame for a pilot whose Trade has reached level 4.",
   "blockSize": 1,
+  "chip": true,
   "lift": 0.5,
   "blocks": [
     {"type": "cockpit", "at": [0, 1, -1]},

@@ -1,8 +1,9 @@
 {
   "id": "freighter",
   "title": "Freighter",
-  "description": "The ship the job board's biggest work needs (forge 360 V11): the hauler lengthened by three more rows, with ten cargo holds (60 m\u00b3), more thrusters to lift them and a third gyroscope. The shipyard builds its frame for a pilot whose Trade, a skill learned only from jobs, has reached level 3.",
+  "description": "V32: now an earned design chip, each block costing components. The ship the job board's biggest work needs (forge 360 V11): the hauler lengthened by three more rows, with ten cargo holds (60 m\u00b3), more thrusters to lift them and a third gyroscope. The shipyard builds its frame for a pilot whose Trade, a skill learned only from jobs, has reached level 3.",
   "blockSize": 1,
+  "chip": true,
   "blocks": [
     {"type": "cockpit", "at": [0, 1, -1]},
     {"type": "armor", "at": [-1, 0, -1]},
