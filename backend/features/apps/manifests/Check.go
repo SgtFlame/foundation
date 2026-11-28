@@ -11,6 +11,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/cognition/drafts"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
+	livenodes "github.com/SgtFlame/foundation/backend/features/live/nodes"
 	"github.com/SgtFlame/foundation/backend/features/records"
 	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
 	"github.com/SgtFlame/foundation/backend/features/records/entities"
@@ -78,6 +79,13 @@ func DraftDocument(ctx context.Context, store live.Store, tenant uint64, reg *ex
 			}
 			for _, graph := range p.Graphs {
 				add("graph", graph)
+			}
+			// A query a page reads may be a required app's (crm.timeline,
+			// forge 40e): its data.query graph goes with it
+			for _, q := range p.Queries {
+				if !slices.ContainsFunc(live.Queries.All(reg), func(lq live.Query) bool { return lq.ID == q.Query }) {
+					add("graph", livenodes.QueryGraphID(q.Query))
+				}
 			}
 			for _, pr := range p.Props {
 				add("entity", pr.Entity)

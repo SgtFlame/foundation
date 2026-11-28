@@ -330,7 +330,7 @@ func (c *docCheck) prefab(path string, p ui.Prefab, other bool) {
 			if slices.ContainsFunc(c.d.Manifest.Queries, func(q Query) bool { return q.Name == name }) || (c.env.Query != nil && c.env.Query(name)) {
 				return true
 			}
-			_, ok := c.graphOf("qry-" + name)
+			_, ok := c.graphOf("qry-" + strings.ReplaceAll(name, ".", "-")) // an app's query by <app>.<name> (forge 40e)
 			return ok
 		},
 		Graph: func(id string) (string, bool) {
