@@ -525,3 +525,6 @@ Verification:
   - a drop with no server change went back after 5 s;
   - scrolling a column ran at about 50 frames a second on the headless development build.
 - The two-session browser walk comes with forge 30d's Board view.
+
+## Changed in forge 30d
+`mui.table` columns take `type: "editor"` with a `recordField`: the cell shows the value with `record.fieldValue`'s display and, on a click or Enter, edits it in place with the field's own editor (`FieldInput` of `renderers/record/FieldEditor.tsx`; computed fields stay read-only). Text-like fields commit on Enter or blur, the rest at once, Escape cancels. The cell sends `edit {key, field, value, expect}`, `expect` being the row's `_seq` when editing began, for a handler to pass to `record.update`; when the row changes while the cell is open it says *Changed by <name>*. Forge's starter *Record table* uses it in its `editable` variant (forge `StarterLibrary.md` › *Built in part 30d*).
