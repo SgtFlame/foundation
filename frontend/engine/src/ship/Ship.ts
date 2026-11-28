@@ -46,6 +46,8 @@ export interface ShipState {
   forge?: { ore: number; at: number; kind?: 'ore' | 'rock' | 'ferrite' | 'malachite' | 'silica' | 'wolframite' | 'spodumene' } // V20: the ore smelting in a cabin's forge (V30: kind, a mineral or rock refining)
   stock?: Record<string, number> // V36: what a storage building holds, by name
   port?: string[] // V39: an open spaceport tower's landing pads
+  bay?: string // V40: the bay floor whose docking clamp holds this ship until it is launched
+  holds?: string // V40: the ship a bay floor holds
   fab?: { item: string; at: number } // V23: the circuit board a cabin's fabricator is making
   boost?: number // V24: what ion thruster kits add to its thrust
   jump?: boolean // V27: a jump drive is fitted

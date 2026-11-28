@@ -16,10 +16,14 @@ const (
 	CodeRateLimited  = "rateLimited"
 	CodeUnavailable  = "unavailable"
 	CodeNotSupported = "notSupported"
+	// CodeRefused is the service declining on its own policy, such as an
+	// image model's safety refusal (forge 35f-7); trying again with the
+	// same request does not help.
+	CodeRefused = "refused"
 )
 
 // Codes are every error code, in the order they are documented.
-var Codes = []string{CodeAuth, CodeNotFound, CodeConflict, CodeInvalid, CodeRateLimited, CodeUnavailable, CodeNotSupported}
+var Codes = []string{CodeAuth, CodeNotFound, CodeConflict, CodeInvalid, CodeRateLimited, CodeUnavailable, CodeNotSupported, CodeRefused}
 
 // Error is a typed connector error, as a reply carries it. Its
 // Retryable and RetryAfter methods are what the job runner reads
@@ -31,6 +35,18 @@ type Error struct {
 	// RetryAfterMs is how long to wait before retrying, when the service
 	// says (rateLimited's Retry-After).
 	RetryAfterMs int64 `json:"retryAfter,omitempty"`
+	// Detail narrows the code: DetailLocked.
+	Detail string `json:"detail,omitempty"`
+}
+
+// DetailLocked is an auth error from a connection whose key waits to be
+// unlocked (git.ssh, forge 24f): nothing is wrong with the connection, so
+// it is not marked failed.
+const DetailLocked = "locked"
+
+// Locked makes the error of a call on a locked connection.
+func Locked(message string) *Error {
+	return &Error{Code: CodeAuth, Message: message, Detail: DetailLocked}
 }
 
 func (e *Error) Error() string { return e.Code + ": " + e.Message }

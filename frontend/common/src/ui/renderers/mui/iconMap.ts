@@ -1,5 +1,16 @@
 // The Material icons server-described trees may name, by name
 import AddIcon from '@mui/icons-material/Add'
+// Block mode's slash menu (forge 35c-2)
+import NotesIcon from '@mui/icons-material/Notes'
+import TitleIcon from '@mui/icons-material/Title'
+import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
+import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered'
+import ArrowRightIcon from '@mui/icons-material/ArrowRight'
+import LightbulbIcon from '@mui/icons-material/Lightbulb'
+import ViewColumnIcon from '@mui/icons-material/ViewColumn'
+import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule'
+import CodeIcon from '@mui/icons-material/Code'
+import TableChartIcon from '@mui/icons-material/TableChart'
 // Calendar (forge 28g)
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import EventIcon from '@mui/icons-material/Event'
@@ -198,6 +209,16 @@ export const icons: Record<string, ComponentType<SvgIconProps>> = {
   calendar_month: CalendarMonthIcon,
   event: EventIcon,
   event_note: EventNoteIcon,
+  notes: NotesIcon,
+  title: TitleIcon,
+  format_list_bulleted: FormatListBulletedIcon,
+  format_list_numbered: FormatListNumberedIcon,
+  arrow_right: ArrowRightIcon,
+  lightbulb: LightbulbIcon,
+  view_column: ViewColumnIcon,
+  horizontal_rule: HorizontalRuleIcon,
+  code: CodeIcon,
+  table_chart: TableChartIcon,
 }
 
 // An icon by name, as a component for places that take one (the Editors view)

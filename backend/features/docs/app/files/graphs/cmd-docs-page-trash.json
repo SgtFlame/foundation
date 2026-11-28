@@ -1,0 +1,536 @@
+{
+  "id": "cmd-docs-page-trash",
+  "name": "docs.page.trash",
+  "description": "Puts a page and its subpages (those not already in the trash) in the trash as one batch, each marked as trashed with this page, and takes it off its parent's count. Nothing is deleted: page.restore brings them back, and the purge deletes them for good after the app's trashDays.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:docs",
+  "spec": {
+    "command": "page.trash",
+    "title": "Put a page in the trash",
+    "description": "Puts the target page and its subpages in the trash; page.restore brings them back",
+    "args": {
+      "type": "object",
+      "properties": {}
+    },
+    "area": "rec",
+    "targetType": "docsPage",
+    "projection": "records.record",
+    "action": "record.update",
+    "events": [
+      "updated"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "volumeId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "string(state?.volume ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "write",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"write\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "may",
+      "type": "docs.mayUseVolume",
+      "position": {
+        "x": 680,
+        "y": 0
+      }
+    },
+    {
+      "id": "parentId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "string(state?.parent ?? \"\") == \"\" ? \"none\" : string(state.parent)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "parent",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "descQ",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "expr": "{filter: {\"and\": [{field: \"ancestors\", op: \"contains\", value: target}, {field: \"trashedAt\", value: nil}]}, fields: [\"ancestors\"]}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "desc",
+      "type": "records.query",
+      "title": "Its subpages not yet in the trash",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "clock",
+      "type": "data.now",
+      "position": {
+        "x": 0,
+        "y": 400
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "let mark = {trashedAt: clock, trashedWith: target};\nlet p = string(state?.parent ?? \"\");\n{problem: state == nil ? \"there is no page \" + target\n  : state.trashedAt != nil ? \"the page is already in the trash\"\n  : !may ? \"you may not change the pages of Volume \" + string(state.volume ?? \"\") : \"\",\n updates: concat([{id: target, set: mark}], map(desc ?? [], ({id: string(#._id), set: mark})),\n   p != \"\" \u0026\u0026 parent != nil \u0026\u0026 parent.trashedAt == nil ? [{id: p, set: {childCount: max(int(parent.childCount ?? 0) - 1, 0)}, expect: parent._seq}] : [])}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1700,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "w0list",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.updates ?? []",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0",
+      "type": "flow.forEach",
+      "title": "the page, its subpages and its parent's count",
+      "position": {
+        "x": 2040,
+        "y": 200
+      }
+    },
+    {
+      "id": "w0id",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w0w",
+      "type": "records.update",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "w0s",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0x",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.expect",
+        "type": "number"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "volumeId",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "volumeId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "may",
+        "pin": "volume"
+      }
+    },
+    {
+      "from": {
+        "node": "write",
+        "pin": "value"
+      },
+      "to": {
+        "node": "may",
+        "pin": "access"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "parentId",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "parentId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "parent",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "descQ",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "descQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "desc",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "may",
+        "pin": "allowed"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "may"
+      }
+    },
+    {
+      "from": {
+        "node": "parent",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "parent"
+      }
+    },
+    {
+      "from": {
+        "node": "desc",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "desc"
+      }
+    },
+    {
+      "from": {
+        "node": "clock",
+        "pin": "time"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "clock"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0s",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0s",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0x",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0x",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "expect"
+      }
+    }
+  ]
+}

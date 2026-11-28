@@ -1,0 +1,1 @@
+**Chat primitives** (forge 26d-2, `documentation/ServerUI.md` › *Built in forge 26d-2*): `mui.virtualList` with `reverse` is a message list (newest at the bottom, measured rows, following new records at the bottom), and `chat.composer` a message box emitting `send {text, mentions, files}` and a throttled `typing`; keep its text logic in `composerText.ts`, tested by `yarn test`.

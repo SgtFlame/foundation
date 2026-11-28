@@ -1,0 +1,444 @@
+{
+  "id": "nexus-onMember",
+  "name": "A membership changed",
+  "description": "Keeps private channels' access in step with their memberships, as the app: a new member of a private channel gets the member role on it when whoever added them is its owner or holds that role there; a member who leaves loses it.",
+  "kind": "app.trigger",
+  "version": 1,
+  "owner": "app:nexus",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "records.onChanged",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusMember",
+        "events": [
+          "created",
+          "deleted"
+        ]
+      }
+    },
+    {
+      "id": "rec",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "record ?? old ?? {}"
+      }
+    },
+    {
+      "id": "cid",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "type": "string",
+        "expr": "string(rec.channel ?? \"\")"
+      }
+    },
+    {
+      "id": "chan",
+      "type": "records.get",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusChannel"
+      }
+    },
+    {
+      "id": "held",
+      "type": "authz.grants",
+      "position": {
+        "x": 1020,
+        "y": 200
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "let creator = string(rec._createdBy ?? \"\");\nlet user = string(rec.user ?? \"\");\nlet holders = map(filter(grants ?? [], #.role == \"member\"), string(#.user ?? \"\"));\n{grant: kind == \"created\" \u0026\u0026 (rec.private ?? false) \u0026\u0026 chan != nil \u0026\u0026 user != \"\" \u0026\u0026 (creator == string(chan.owner ?? \"\") || creator in holders),\n revoke: kind == \"deleted\" \u0026\u0026 (rec.private ?? false) \u0026\u0026 user in holders, user: user}"
+      }
+    },
+    {
+      "id": "grant?",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "type": "bool",
+        "expr": "plan.grant"
+      }
+    },
+    {
+      "id": "revoke?",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "type": "bool",
+        "expr": "plan.revoke"
+      }
+    },
+    {
+      "id": "user",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 400
+      },
+      "config": {
+        "type": "string",
+        "expr": "plan.user"
+      }
+    },
+    {
+      "id": "entity",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "type": "string",
+        "expr": "\"nexusChannel\""
+      }
+    },
+    {
+      "id": "role",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "type": "string",
+        "expr": "\"member\""
+      }
+    },
+    {
+      "id": "if1",
+      "type": "flow.branch",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "if2",
+      "type": "flow.branch",
+      "position": {
+        "x": 2380,
+        "y": 0
+      }
+    },
+    {
+      "id": "give",
+      "type": "authz.grantRole",
+      "position": {
+        "x": 2380,
+        "y": 200
+      }
+    },
+    {
+      "id": "take",
+      "type": "authz.revokeRole",
+      "position": {
+        "x": 2720,
+        "y": 0
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "rec",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "old"
+      },
+      "to": {
+        "node": "rec",
+        "pin": "old"
+      }
+    },
+    {
+      "from": {
+        "node": "rec",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cid",
+        "pin": "rec"
+      }
+    },
+    {
+      "from": {
+        "node": "cid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "chan",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "entity",
+        "pin": "value"
+      },
+      "to": {
+        "node": "held",
+        "pin": "entity"
+      }
+    },
+    {
+      "from": {
+        "node": "cid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "held",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "rec",
+        "pin": "value"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "rec"
+      }
+    },
+    {
+      "from": {
+        "node": "chan",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "chan"
+      }
+    },
+    {
+      "from": {
+        "node": "held",
+        "pin": "grants"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "grants"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "event"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "grant?",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "revoke?",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "user",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if1",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "grant?",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if1",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "if1",
+        "pin": "true"
+      },
+      "to": {
+        "node": "give",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "value"
+      },
+      "to": {
+        "node": "give",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "role",
+        "pin": "value"
+      },
+      "to": {
+        "node": "give",
+        "pin": "role"
+      }
+    },
+    {
+      "from": {
+        "node": "entity",
+        "pin": "value"
+      },
+      "to": {
+        "node": "give",
+        "pin": "entity"
+      }
+    },
+    {
+      "from": {
+        "node": "cid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "give",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "if1",
+        "pin": "false"
+      },
+      "to": {
+        "node": "if2",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "revoke?",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if2",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "if2",
+        "pin": "true"
+      },
+      "to": {
+        "node": "take",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "value"
+      },
+      "to": {
+        "node": "take",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "role",
+        "pin": "value"
+      },
+      "to": {
+        "node": "take",
+        "pin": "role"
+      }
+    },
+    {
+      "from": {
+        "node": "entity",
+        "pin": "value"
+      },
+      "to": {
+        "node": "take",
+        "pin": "entity"
+      }
+    },
+    {
+      "from": {
+        "node": "cid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "take",
+        "pin": "record"
+      }
+    }
+  ]
+}

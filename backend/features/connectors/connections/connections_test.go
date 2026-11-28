@@ -1,12 +1,16 @@
 package connections_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,6 +23,8 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connectorstest"
+	"github.com/SgtFlame/foundation/backend/features/connectors/hooks"
+	"github.com/SgtFlame/foundation/backend/features/connectors/hooks/verify"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/db"
 	"github.com/SgtFlame/foundation/backend/features/live"
@@ -501,3 +507,184 @@ var (
 	_ = adapter.Options{}
 	_ = jetstream.KeyValueConfig{}
 )
+
+// A callback pushed to a connection's hook reaches its trigger once
+// (forge 26b-1): the hook is made when a trigger listens to a callback
+// event, a delivery repeated ten times or sent to two adapter processes at
+// once is one event, a bad signature is refused, and deleting the
+// connection drops the hook.
+func TestCallbacks(t *testing.T) {
+	f := setup(t)
+	f.keep()
+	f.runJobs()
+	f.installWatcher("")
+	f.serve(connectorstest.Options("a", nil))
+	f.serve(connectorstest.Options("b", nil))
+	f.online("test.secure")
+	c := f.create(map[string]any{"type": "test.secure", "name": "Pushed", "owner": "tenant", "settings": map[string]any{"user": "u"},
+		"secrets": map[string]any{"password": "p"}})
+	var h hooks.Hook
+	eventually(t, "the hook made", 5*time.Second, func() bool {
+		var ok bool
+		h, ok, _ = hooks.Of(context.Background(), f.srv.JS(), 1, c.ID)
+		return ok
+	})
+	desc := f.query(args(), "connections.describe", map[string]any{"id": c.ID})
+	eventually(t, "the hook described", 3*time.Second, func() bool { return strings.Contains(desc.json(), hooks.Path+h.ID) })
+	hs := &hooks.Server{NC: f.srv.Conn(), JS: f.srv.JS()}
+	post := func(secret string, body []byte) int {
+		r := httptest.NewRequest(http.MethodPost, hooks.Path+h.ID, bytes.NewReader(body))
+		for k, v := range verify.Sign("hmac-sha256", secret, body, time.Now()) {
+			r.Header[k] = v
+		}
+		w := httptest.NewRecorder()
+		hs.ServeHTTP(w, r)
+		return w.Code
+	}
+	one := []byte(`{"id":"cb_1","jobId":"j-cb1"}`)
+	for i := 0; i < 10; i++ {
+		if code := post("p", one); code != 200 {
+			t.Fatalf("delivery %d: %d", i, code)
+		}
+	}
+	two := []byte(`{"id":"cb_2","jobId":"j-cb2"}`)
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if code := post("p", two); code != 200 {
+				t.Errorf("concurrent delivery: %d", code)
+			}
+		}()
+	}
+	wg.Wait()
+	if code := post("wrong", []byte(`{"id":"cb_3","jobId":"j-cb3"}`)); code != 400 {
+		t.Fatalf("a bad signature: %d", code)
+	}
+	eventually(t, "two hits", 5*time.Second, func() bool { return len(f.hits.all()) >= 2 })
+	time.Sleep(time.Second)
+	if got := f.hits.all(); len(got) != 2 || !slices.Contains(got, any("j-cb1")) || !slices.Contains(got, any("j-cb2")) {
+		t.Fatalf("hits %v, want j-cb1 and j-cb2 once each", got)
+	}
+	f.ok("connection.delete", c.ID, map[string]any{})
+	eventually(t, "the hook dropped", 5*time.Second, func() bool {
+		_, ok, _ := hooks.Of(context.Background(), f.srv.JS(), 1, c.ID)
+		return !ok
+	})
+	if code := post("p", []byte(`{"id":"cb_4","jobId":"j-cb4"}`)); code != 404 {
+		t.Fatalf("a dropped hook: %d", code)
+	}
+}
+
+// A connection's hook is registered with its service for the callback
+// events triggers listen to, once however many processes reconcile at
+// once; the signing secret the service gave verifies callbacks; it is
+// removed when no trigger listens (forge 26b-2).
+func TestHookRegistration(t *testing.T) {
+	f := setup(t)
+	f.live.PublicBase = "https://axiom.test/"
+	f.deps = *f.live
+	connectorstest.Hooks.Reset()
+	f.installWatcher("")
+	f.serve(connectorstest.Options("a", nil))
+	f.online("test.secure")
+	c := f.create(map[string]any{"type": "test.secure", "name": "Pushed", "owner": "tenant", "settings": map[string]any{"user": "u"},
+		"secrets": map[string]any{"password": "p"}})
+	var wg sync.WaitGroup
+	for range 3 { // three processes' passes at once
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := connections.Reconcile(context.Background(), f.deps, 1); err != nil {
+				t.Errorf("reconcile: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	var h *connections.HookState
+	eventually(t, "the hook registered", 5*time.Second, func() bool {
+		now, _, _ := connections.Get(context.Background(), f.p, 1, c.ID)
+		h = now.Hook
+		return h != nil && h.Registered
+	})
+	if !strings.HasPrefix(h.URL, "https://axiom.test"+hooks.Path) || !slices.Equal(h.Events, []string{"job.finished"}) {
+		t.Fatalf("hook: %+v", h)
+	}
+	if err := connections.Reconcile(context.Background(), f.deps, 1); err != nil {
+		t.Fatal(err)
+	}
+	calls := connectorstest.Hooks.Calls()
+	if len(calls) != 1 || calls[0] != "register "+c.ID+" "+h.URL+" job.finished" {
+		t.Fatalf("calls: %v", calls)
+	}
+	conn, err := adapter.ResolveOverBus(context.Background(), f.srv.Conn(), 1, "test.secure", c.ID)
+	if err != nil || !strings.Contains(string(conn.Settings), `"hookSecret":"signing-`+c.ID+`"`) {
+		t.Fatalf("resolved: %s %v", conn.Settings, err)
+	}
+	desc := f.query(args(), "connections.describe", map[string]any{"id": c.ID})
+	eventually(t, "the registration described", 3*time.Second, func() bool { return strings.Contains(desc.json(), `"registered":true`) })
+	if strings.Contains(desc.json(), "signing-") {
+		t.Fatalf("the signing secret was shown: %s", desc.json())
+	}
+	// A callback signed with the service's secret is taken
+	hk, _, _ := hooks.Of(context.Background(), f.srv.JS(), 1, c.ID)
+	body := []byte(`{"id":"cb_r1","jobId":"j-r1"}`)
+	r := httptest.NewRequest(http.MethodPost, hooks.Path+hk.ID, bytes.NewReader(body))
+	for k, v := range verify.Sign("hmac-sha256", "signing-"+c.ID, body, time.Now()) {
+		r.Header[k] = v
+	}
+	w := httptest.NewRecorder()
+	(&hooks.Server{NC: f.srv.Conn(), JS: f.srv.JS()}).ServeHTTP(w, r)
+	if w.Code != 200 {
+		t.Fatalf("a callback signed by the service: %d", w.Code)
+	}
+	// No trigger listens any more: the registration is removed
+	f.ok("app.uninstall", "watcher", map[string]any{})
+	eventually(t, "the hook removed", 5*time.Second, func() bool {
+		_ = connections.Reconcile(context.Background(), f.deps, 1)
+		now, _, _ := connections.Get(context.Background(), f.p, 1, c.ID)
+		return now.Hook == nil && now.Secrets[connections.HookSecret] == ""
+	})
+	if calls := connectorstest.Hooks.Calls(); len(calls) != 2 || calls[1] != "unregister "+c.ID+" reg-"+c.ID {
+		t.Fatalf("calls: %v", calls)
+	}
+}
+
+// Events a source's Watch backfilled while callbacks did not arrive
+// reach the trigger once; their late callbacks are dropped as duplicates
+// (forge 26b-2).
+func TestBackfillThenLateCallbacks(t *testing.T) {
+	f := setup(t)
+	f.keep()
+	f.runJobs()
+	f.installWatcher("")
+	f.serve(connectorstest.Options("a", nil))
+	f.online("test.secure")
+	c := f.create(map[string]any{"type": "test.secure", "name": "Feed", "owner": "tenant", "settings": map[string]any{"user": "u", "events": 3},
+		"secrets": map[string]any{"password": "p"}, "options": map[string]any{"pollInterval": "1s"}})
+	eventually(t, "three hits", 5*time.Second, func() bool { return len(f.hits.all()) >= 3 })
+	var hk hooks.Hook
+	eventually(t, "the hook made", 5*time.Second, func() bool {
+		var ok bool
+		hk, ok, _ = hooks.Of(context.Background(), f.srv.JS(), 1, c.ID)
+		return ok
+	})
+	hs := &hooks.Server{NC: f.srv.Conn(), JS: f.srv.JS()}
+	for i := 1; i <= 3; i++ {
+		body := []byte(fmt.Sprintf(`{"id":"evt_%d","jobId":"j-%d","at":"2026-11-11T10:00:00Z"}`, i, i))
+		r := httptest.NewRequest(http.MethodPost, hooks.Path+hk.ID, bytes.NewReader(body))
+		for k, v := range verify.Sign("hmac-sha256", "p", body, time.Now()) {
+			r.Header[k] = v
+		}
+		w := httptest.NewRecorder()
+		hs.ServeHTTP(w, r)
+		if w.Code != 200 {
+			t.Fatalf("late callback %d: %d", i, w.Code)
+		}
+	}
+	time.Sleep(1500 * time.Millisecond)
+	if got := f.hits.all(); len(got) != 3 {
+		t.Fatalf("hits %v, want j-1, j-2, j-3 once each", got)
+	}
+}

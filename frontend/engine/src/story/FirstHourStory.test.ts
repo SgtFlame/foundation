@@ -49,7 +49,10 @@ test('a later step done counts the earlier ones, and the next is the first left'
   assert.equal(nextStep({ council: true }), 'northroad')
   assert.equal(nextStep({ northroad: true }), 'reeve')
   assert.equal(nextStep({ reeve: true }), 'aldermere')
-  assert.equal(nextStep({ aldermere: true }), null)
+  assert.equal(nextStep({ aldermere: true }), 'steward')
+  assert.equal(nextStep({ steward: true }), 'waited')
+  assert.equal(nextStep({ waited: true }), 'kingscouncil')
+  assert.equal(nextStep({ kingscouncil: true }), null)
 })
 
 test('three herbs grow by the farmstead trees, one per tree, the same each time (S7)', () => {

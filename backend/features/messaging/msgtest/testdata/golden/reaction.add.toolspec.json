@@ -1,0 +1,29 @@
+{
+  "name": "chat.messaging.reaction.add",
+  "title": "Add a reaction",
+  "description": "Reacts to a message with an emoji as the connection's account. Adding one already there succeeds.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "The channel's id"
+      },
+      "id": {
+        "type": "string",
+        "description": "The message's id"
+      },
+      "emoji": {
+        "type": "string",
+        "description": "The emoji's name, e.g. thumbsup"
+      }
+    },
+    "required": [
+      "channel",
+      "id",
+      "emoji"
+    ]
+  },
+  "effect": "external",
+  "source": "connector"
+}

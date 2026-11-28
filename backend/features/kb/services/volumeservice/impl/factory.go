@@ -51,3 +51,13 @@ func defaultRoot() string {
 	}
 	return filepath.Join(base, ".foundation", "kb")
 }
+
+// New makes a service that is not the singleton, for tests that need one
+// per knowledge base root (forge 35a-2).
+func New(opts ...Option) volumeservice.Service {
+	s := &service{root: defaultRoot()}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}

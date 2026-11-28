@@ -5,6 +5,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/chronicle"
+	"github.com/SgtFlame/foundation/backend/features/live"
 )
 
 // Service keeps the principal's Chronicle entries (Chronicle.md): a tree of
@@ -23,6 +24,12 @@ type Service interface {
 	Delete(args DeleteArgs) DeleteResponse
 	Link(args LinkArgs) LinkResponse
 	Types(args TypesArgs) TypesResponse
+	// SaveType makes or changes an entry type of the tenant or of a
+	// project (forge 35f-6); DeleteType removes one no entry uses, and
+	// CopyStarter copies a starter set's types into a scope.
+	SaveType(args SaveTypeArgs) SaveTypeResponse
+	DeleteType(args DeleteTypeArgs) DeleteTypeResponse
+	CopyStarter(args CopyStarterArgs) TypesResponse
 	Reindex(args ReindexArgs) ReindexResponse
 	// Share shares one of the principal's entries with Target: "tenant" at
 	// once, "global" as a request for moderators, "" to stop sharing (which
@@ -176,6 +183,9 @@ type EntryInput struct {
 	FullContext  string
 	Fields       json.RawMessage // a JSON object matching the type's Fields schema; empty is {}
 	ParentID     uint64          // 0 at the top of its type
+	// Scope is "" for the owner's own memory or "project:<page>" for a
+	// project's story bible (forge 35f-6), which its readers find too.
+	Scope string
 }
 
 type CreateArgs struct {
@@ -221,6 +231,9 @@ type LinkArgs struct {
 	FromID uint64
 	ToID   uint64
 	Remove bool
+	// Kind is "related" (the default, without direction) or a typed link
+	// read from FromID to ToID, such as "sister of" (forge 35f-6).
+	Kind string
 }
 
 type LinkResponse struct {
@@ -228,13 +241,47 @@ type LinkResponse struct {
 	Links  []chronicle.EntryLink // to and from FromID, after the change
 }
 
+// TypesArgs lists the built-in types, the tenant's and those of the
+// projects the principal reads (forge 35f-6), with the starter sets.
 type TypesArgs struct {
 	features.ServiceArgs
 }
 
 type TypesResponse struct {
+	Common   features.ServiceResponse
+	Types    []chronicle.EntryType
+	Starters []chronicle.Starter
+}
+
+// SaveTypeArgs makes or replaces the type Type.ID in Type.Scope: its
+// title, icon, description, RecordFields and ParentTypes.
+type SaveTypeArgs struct {
+	features.ServiceArgs
+	Type chronicle.EntryType
+}
+
+type SaveTypeResponse struct {
+	Common   features.ServiceResponse
+	Type     chronicle.EntryType
+	Problems []live.Problem // why it was refused (400 invalid_type)
+}
+
+type DeleteTypeArgs struct {
+	features.ServiceArgs
+	ID    string
+	Scope string
+}
+
+type DeleteTypeResponse struct {
 	Common features.ServiceResponse
-	Types  []chronicle.EntryType
+}
+
+// CopyStarterArgs copies a starter set's types into Scope, leaving types
+// the scope already has.
+type CopyStarterArgs struct {
+	features.ServiceArgs
+	Starter string
+	Scope   string
 }
 
 // ReindexArgs brings the entries table up to date: the entries named, or

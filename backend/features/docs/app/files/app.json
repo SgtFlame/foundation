@@ -1,0 +1,119 @@
+{
+  "id": "docs",
+  "name": "Docs",
+  "icon": "description",
+  "description": "The docs library app (forge 35a-2): pages, each a document file in a Volume, in a tree per Volume held in the page records, with icons, covers, templates, favourites and a trash purged after trashDays. A Volume's grants are the floor of who may read and change its pages. Forge's Docs app requires it for its pages.",
+  "entities": [
+    "docsPage",
+    "docsFavourite"
+  ],
+  "commands": [
+    {
+      "type": "page.add",
+      "graph": "cmd-docs-page-add",
+      "action": "entity:docsPage.create",
+      "title": "Add a page",
+      "description": "Adds the record of a page whose document file createPage has just made: args {volume, file, parent?, title?, template?}; use the createPage tool, which makes the file first"
+    },
+    {
+      "type": "page.move",
+      "graph": "cmd-docs-page-move",
+      "action": "entity:docsPage.update",
+      "title": "Move a page",
+      "description": "Moves the target page with its subpages under parent (the top level when left out), between the siblings after and before; never into its own subtree"
+    },
+    {
+      "type": "page.trash",
+      "graph": "cmd-docs-page-trash",
+      "action": "entity:docsPage.update",
+      "title": "Put a page in the trash",
+      "description": "Puts the target page and its subpages in the trash, as one batch"
+    },
+    {
+      "type": "page.restore",
+      "graph": "cmd-docs-page-restore",
+      "action": "entity:docsPage.update",
+      "title": "Restore a page",
+      "description": "Brings the target page back from the trash with the subpages trashed with it; to the top of its Volume when its parent is gone"
+    }
+  ],
+  "queries": [
+    {
+      "name": "tree",
+      "graph": "qry-docs-tree",
+      "description": "The subpages of one page, or a Volume's top level, in order, outside the trash: params {volume, parent?}"
+    },
+    {
+      "name": "favourites",
+      "graph": "qry-docs-favourites",
+      "description": "The caller's favourite pages in their order"
+    },
+    {
+      "name": "trash",
+      "graph": "qry-docs-trash",
+      "description": "A Volume's trash, newest first: params {volume}"
+    }
+  ],
+  "tools": [
+    {
+      "name": "createPage",
+      "graph": "fn-docs-createPage",
+      "title": "Create a page",
+      "effect": "write",
+      "description": "Makes a page in a Volume, under parent or at the top, empty or from a template page: its document file and its record, in one request; gives the page's id"
+    },
+    {
+      "name": "purgePage",
+      "graph": "fn-docs-purgePage",
+      "title": "Delete a page forever",
+      "effect": "write",
+      "description": "Deletes a page in the trash for good, with the subpages trashed with it: their document files and records"
+    }
+  ],
+  "roles": [
+    {
+      "id": "admin",
+      "title": "Docs admin",
+      "installer": true,
+      "description": "Uses Docs and manages every page of the Volumes they may change",
+      "actions": [
+        "entity:docsPage.*",
+        "entity:docsFavourite.*"
+      ]
+    },
+    {
+      "id": "user",
+      "title": "Docs user",
+      "description": "Uses Docs: reads the pages of the Volumes they may read and changes those of the Volumes they may change, and keeps their own favourites",
+      "actions": [
+        "entity:docsPage.*",
+        "entity:docsFavourite.*"
+      ]
+    }
+  ],
+  "settings": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "trashDays": {
+          "type": "integer",
+          "title": "Days in the trash",
+          "description": "How many days a page stays in the trash before it is deleted for good",
+          "minimum": 1
+        }
+      }
+    },
+    "defaults": {
+      "trashDays": 30
+    }
+  },
+  "triggers": [
+    {
+      "id": "onPurge",
+      "title": "Old trash is purged",
+      "description": "Every day, deletes for good the pages in the trash longer than trashDays",
+      "graph": "docs-onPurge"
+    }
+  ],
+  "requires": {}
+}

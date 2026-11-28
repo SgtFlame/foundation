@@ -23,6 +23,7 @@ func TestStore(t *testing.T) {
 		{EntryID: 4, TenantID: 1, OwnerID: 2, Hash: "h4", Title: "Not mine", Text: "zebra", Vector: []float32{1, 0, 0}},
 		{EntryID: 5, TenantID: 1, OwnerID: 2, Shared: true, Hash: "h5", Title: "Shared with the tenant", Text: "okapi", Vector: []float32{0, 0, 1}},
 		{EntryID: 6, TenantID: 2, OwnerID: 1, Shared: true, Hash: "h6", Title: "Another tenant's", Text: "okapi"},
+		{EntryID: 7, TenantID: 1, OwnerID: 2, Scope: "project:bible", Hash: "h7", Title: "A project's", Text: "griffin"},
 	}
 	for _, r := range rows {
 		if err := s.Put(ctx, r); err != nil {
@@ -51,6 +52,14 @@ func TestStore(t *testing.T) {
 	// OthersOnly leaves out the user's own shared rows
 	if got, _ := s.KeywordSearch(ctx, chronicle.Owner{TenantID: 1, UserID: 2, OthersOnly: true}, "okapi", 5); len(got) != 0 {
 		t.Fatalf("others-only search found the user's own: %+v", got)
+	}
+
+	// A project's entry is found by those who read the project (forge 35f-6)
+	if got, _ := s.KeywordSearch(ctx, me, "griffin", 5); len(got) != 0 {
+		t.Fatalf("a project's entry found outside it: %+v", got)
+	}
+	if got, _ := s.KeywordSearch(ctx, chronicle.Owner{TenantID: 1, UserID: 1, Projects: []string{"project:bible"}}, "griffin", 5); len(got) != 1 || got[0].EntryID != 7 {
+		t.Fatalf("a project's reader: %+v", got)
 	}
 
 	// Put replaces; Delete removes

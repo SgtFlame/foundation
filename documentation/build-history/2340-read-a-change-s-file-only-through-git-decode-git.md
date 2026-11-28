@@ -1,0 +1,1 @@
+- read a change's file only through `git.Decode`/`git.ReadFile` (the caller's files, or vouched ones), and store a large read as the caller through `git.FileResult`;

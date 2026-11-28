@@ -1,0 +1,422 @@
+{
+  "id": "cmd-nexus-channel-join",
+  "name": "nexus.channel.join",
+  "description": "Joins the target channel as a member, so its messages count as unread and posting is allowed. Only a channel that is not private or archived; joining again changes nothing.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:nexus",
+  "spec": {
+    "command": "channel.join",
+    "title": "Join a channel",
+    "description": "Joins the target channel as a member, so its messages count as unread and posting is allowed. Only a channel that is not private or archived; joining again changes nothing.",
+    "args": {
+      "type": "object",
+      "properties": {}
+    },
+    "area": "rec",
+    "targetType": "nexusChannel",
+    "projection": "records.record",
+    "action": "record.read",
+    "events": [
+      "created",
+      "updated",
+      "deleted"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "seen",
+      "type": "records.get",
+      "title": "The channel as the caller may see it",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusChannel"
+      }
+    },
+    {
+      "id": "mineId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "type": "string",
+        "expr": "target + \"-\" + me"
+      }
+    },
+    {
+      "id": "mine",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusMember"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "{problem: state == nil || seen == nil ? \"there is no channel \" + target : me == \"\" ? \"only a person joins a channel\" : state.private ?? false ? \"a private channel is joined only when a member adds you\" : state.archived ?? false ? \"the channel is archived\" : \"\",\n members: mine != nil ? [] : [{id: target + \"-\" + me, values: {channel: target, user: me, role: \"member\", private: false, owner: state?.owner, seen: 0}}]}\n",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1700,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "w0list",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.members ?? []",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0",
+      "type": "flow.forEach",
+      "title": "create nexusMember (members)",
+      "position": {
+        "x": 2040,
+        "y": 200
+      }
+    },
+    {
+      "id": "w0id",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w0w",
+      "type": "records.create",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusMember"
+      }
+    },
+    {
+      "id": "w0v",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.values",
+        "type": "json"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "me"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "seen",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "seen",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "seen"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "mineId",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "mineId",
+        "pin": "me"
+      }
+    },
+    {
+      "from": {
+        "node": "mineId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mine",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "mine",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "mine"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0v",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0v",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "values"
+      }
+    }
+  ]
+}
