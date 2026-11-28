@@ -1,0 +1,398 @@
+{
+  "id": "fn-calendar-release",
+  "name": "Release held times",
+  "description": "Gives back the time a proposal held: deletes every tentative event of the Hold and marks it released. A Hold already settled is left as it is, and a retry finishes what an interrupted one began. Args {hold}.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "hold",
+            "type": "string",
+            "description": "The Hold's id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "get",
+      "type": "records.get",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "entity": "calHold"
+      }
+    },
+    {
+      "id": "isOpen",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "exists \u0026\u0026 record.status == \"open\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "open",
+      "type": "flow.branch",
+      "position": {
+        "x": 1020,
+        "y": 0
+      }
+    },
+    {
+      "id": "slots",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "map(record.slots ?? [], #.event)",
+        "type": "json"
+      }
+    },
+    {
+      "id": "each",
+      "type": "flow.forEach",
+      "position": {
+        "x": 1360,
+        "y": 0
+      }
+    },
+    {
+      "id": "deleteArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"calEvent\"}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "remove",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "command": "record.delete"
+      }
+    },
+    {
+      "id": "doneArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "expr": "{entity: \"calHold\", set: {status: \"released\"}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "done",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "released",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "id": "yes",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 600
+      },
+      "config": {
+        "expr": "true",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "no",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 800
+      },
+      "config": {
+        "expr": "false",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "already",
+      "type": "flow.return",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "released",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "id": "failed",
+      "type": "flow.return",
+      "position": {
+        "x": 2040,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "hold"
+      },
+      "to": {
+        "node": "get",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "get",
+        "pin": "record"
+      },
+      "to": {
+        "node": "isOpen",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "get",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "isOpen",
+        "pin": "exists"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "open",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "isOpen",
+        "pin": "value"
+      },
+      "to": {
+        "node": "open",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "get",
+        "pin": "record"
+      },
+      "to": {
+        "node": "slots",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "open",
+        "pin": "true"
+      },
+      "to": {
+        "node": "each",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "slots",
+        "pin": "value"
+      },
+      "to": {
+        "node": "each",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "body"
+      },
+      "to": {
+        "node": "remove",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "remove",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "deleteArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "remove",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "done",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "hold"
+      },
+      "to": {
+        "node": "done",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "doneArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "done",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "done",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "yes",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "released"
+      }
+    },
+    {
+      "from": {
+        "node": "done",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "failed",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "done",
+        "pin": "message"
+      },
+      "to": {
+        "node": "failed",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "open",
+        "pin": "false"
+      },
+      "to": {
+        "node": "already",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "no",
+        "pin": "value"
+      },
+      "to": {
+        "node": "already",
+        "pin": "released"
+      }
+    }
+  ]
+}

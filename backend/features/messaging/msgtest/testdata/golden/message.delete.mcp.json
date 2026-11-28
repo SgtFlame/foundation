@@ -1,0 +1,41 @@
+{
+  "name": "chat_messaging_message_delete",
+  "title": "Delete a message",
+  "description": "Deletes a message the connection's account posted. Deleting one that is gone succeeds, with deleted false.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "The channel's id"
+      },
+      "id": {
+        "type": "string",
+        "description": "The message's id"
+      }
+    },
+    "required": [
+      "channel",
+      "id"
+    ]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "deleted": {
+        "type": "boolean",
+        "description": "Whether there was a message to delete"
+      }
+    },
+    "required": [
+      "deleted"
+    ]
+  },
+  "annotations": {
+    "title": "Delete a message",
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true
+  }
+}

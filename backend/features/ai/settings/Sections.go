@@ -113,7 +113,7 @@ var modelsSchema = `{
           "title": {"type": "string", "title": "Title"},
           "provider": {"type": "enum", "title": "Provider", "options": [{"value": "gemini", "label": "Google Gemini"}]},
           "model": {"type": "string", "title": "Provider model", "description": "The provider's own model ID"},
-          "kind": {"type": "enum", "title": "Kind", "options": [{"value": "chat", "label": "Chat"}, {"value": "embed", "label": "Embedding"}]},
+          "kind": {"type": "enum", "title": "Kind", "options": [{"value": "chat", "label": "Chat"}, {"value": "embed", "label": "Embedding"}, {"value": "image", "label": "Image"}]},
           "contextWindow": {"type": "integer", "title": "Context window", "min": 0, "unit": "tokens"},
           "pricing": {
             "type": "object",
@@ -161,7 +161,9 @@ const modelsDefaults = `{
      "pricing": {"currency": "USD", "inputPerMTok": 1.25, "cachedInputPerMTok": 0.125, "outputPerMTok": 10.00,
        "tiers": [{"aboveInputTokens": 200000, "inputPerMTok": 2.50, "cachedInputPerMTok": 0.25, "outputPerMTok": 15.00}]}},
     {"id": "gemini-embedding-001", "title": "Gemini Embedding", "provider": "gemini", "model": "gemini-embedding-001", "kind": "embed", "contextWindow": 2048,
-     "pricing": {"currency": "USD", "embedPerMTok": 0.15}}
+     "pricing": {"currency": "USD", "embedPerMTok": 0.15}},
+    {"id": "gemini-2.5-flash-image", "title": "Gemini 2.5 Flash Image", "provider": "gemini", "model": "gemini-2.5-flash-image", "kind": "image", "contextWindow": 32768,
+     "pricing": {"currency": "USD", "inputPerMTok": 0.30, "outputPerMTok": 30.00}}
   ]
 }`
 

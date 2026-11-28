@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
@@ -51,6 +52,7 @@ func Contribute(reg *extensions.Registry, deps func() data.Deps) {
 	contributeWrites(reg, deps)
 	contributeReads(reg, deps)
 	contributeFiles(reg, deps)
+	contributeDefinitions(reg, deps)
 	node(reg, 690, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "records.rankBetween"}, Title: "Rank between",
 		Description: "A position (rank) between two others, for a record made in place: a new card at the top of a column has after empty and before the top card's rank. Leave after empty for the start and before empty for the end; both empty give a first rank. Moving an existing record is record.move, which computes its rank itself (forge 30a).",
@@ -143,6 +145,26 @@ func contributeWrites(reg *extensions.Registry, deps func() data.Deps) {
 			args: func(c map[string]any, in cognition.Values) map[string]any {
 				return withExpect(map[string]any{"field": c["field"], "items": in["items"]}, in)
 			}},
+		{id: "records.move", command: "record.move", title: "Move record",
+			description: "Moves a record to a new place in an order (forge 30c, 35a-2): sets its rank field between the record it goes after and the one it goes before, with other values in set changed in the same event (a page's new parent, a board column's status). Its event commits with the command's.",
+			example:     "Move record docsPage at the target after the page it was dropped below, with set {parent}",
+			config:      `,"field":{"type":"string","title":"Field","description":"The rank field's id"}`,
+			in: []cognition.Pin{idPin("The record's id"),
+				{ID: "after", Name: "After", Type: "string", Optional: true, Description: "The id of the record it goes after; empty for the start"},
+				{ID: "before", Name: "Before", Type: "string", Optional: true, Description: "The id of the record it goes before; empty for the end"},
+				{ID: "set", Name: "Set", Type: cognition.Any, Optional: true, Description: "Other field id → new value, changed with the move"}, expectPin},
+			args: func(c map[string]any, in cognition.Values) map[string]any {
+				a := map[string]any{"field": c["field"]}
+				for _, k := range []string{"after", "before"} {
+					if s, _ := in[k].(string); s != "" {
+						a[k] = s
+					}
+				}
+				if s, ok := in["set"].(map[string]any); ok && len(s) > 0 {
+					a["set"] = s
+				}
+				return withExpect(a, in)
+			}},
 	}
 	for i, w := range writes {
 		w := w
@@ -150,8 +172,15 @@ func contributeWrites(reg *extensions.Registry, deps func() data.Deps) {
 		if w.config != "" {
 			required += `,"field"`
 			example = `{"entity":"task","field":"tags"}`
+			if w.command == "record.move" {
+				example = `{"entity":"task","field":"position"}`
+			}
 		}
-		node(reg, 600+i*10, cognition.NodeType{
+		order := 600 + i*10
+		if order >= 650 { // Get record is 650
+			order = 645
+		}
+		node(reg, order, cognition.NodeType{
 			Descriptor: extensions.Descriptor{ID: w.id}, Title: w.title, Kinds: []string{livenodes.KindCommand},
 			Description: w.description + " Checked as " + w.command + " is, and refused with the command's problems.",
 			Example:     w.example,
@@ -263,6 +292,19 @@ func request[T any](x *cognition.Exec, in cognition.Values, pin string) (T, erro
 const queryProps = `"where":{"type":"object","title":"Where","description":"Field id → value the records must have"},
   "filter":{"type":"object","title":"Filter","description":"{field, op, value}, or {and: [filters]} or {or: [filters]}"}`
 
+// mayRead checks record.read on an entity type for the run's principal, as
+// the records.get, records.find and records.aggregate queries do when they
+// are subscribed: data.Get, Find and Summarize apply the row rules but not
+// the type's own grant, so without it a person with no role on an app's
+// type (or whose role was revoked) still read its records through a graph.
+func mayRead(x *cognition.Exec, entity string) error {
+	if entity == "" {
+		return nil // the read itself names the missing entity type
+	}
+	resource := records.Resource(x.Principal, entity)
+	return authz.Check(x.Context(), x.Principal, "record.read", resource).Err("record.read", resource)
+}
+
 func contributeReads(reg *extensions.Registry, deps func() data.Deps) {
 	node(reg, 650, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "records.get"}, Title: "Get record", Volatile: true,
@@ -288,6 +330,9 @@ func contributeReads(reg *extensions.Registry, deps func() data.Deps) {
 				return nil, "", fmt.Errorf("Get record names no entity type: set it in the config or join Entity")
 			}
 			id, _ := cognition.Get[string](in, "id")
+			if err := mayRead(x, c.Entity); err != nil {
+				return nil, "", err
+			}
 			d := deps().For(x.ServiceArgs)
 			if q, ok := x.Host.(*livenodes.QueryHost); ok {
 				q.Reads = append(q.Reads, livenodes.Read{Projector: data.Projector, Key: data.Key(c.Entity, id)},
@@ -324,6 +369,9 @@ func contributeReads(reg *extensions.Registry, deps func() data.Deps) {
 			if err != nil {
 				return nil, "", err
 			}
+			if err := mayRead(x, q.Entity); err != nil {
+				return nil, "", err
+			}
 			d := deps().For(x.ServiceArgs)
 			watch(x, d, related(x, d, q.Entity, q.Expand)...)
 			res, err := data.Find(x.ServiceArgs, d, q)
@@ -356,6 +404,9 @@ func contributeReads(reg *extensions.Registry, deps func() data.Deps) {
 			}
 			if len(a.Aggregates) == 0 {
 				a.Aggregates = []data.Aggregate{{Op: "count"}}
+			}
+			if err := mayRead(x, a.Entity); err != nil {
+				return nil, "", err
 			}
 			d := deps().For(x.ServiceArgs)
 			watch(x, d, a.Entity)

@@ -28,6 +28,9 @@ type Memory interface {
 	// Flag marks for review the principal's entries a round made or
 	// changed.
 	Flag(args features.ServiceArgs, round uint64) error
+	// Types is the entry types the principal's memory has: the built-in
+	// ones, the tenant's and its projects' (forge 35f-6).
+	Types(args features.ServiceArgs) ([]EntryType, error)
 }
 
 // MemoryUpdate is what a round's memory update changes.
@@ -39,10 +42,12 @@ type MemoryUpdate struct {
 	Proposals []Entry
 }
 
-// SummaryUpdate rewrites an entry's summaries.
+// SummaryUpdate rewrites an entry's summaries and, with Fields (forge
+// 35f-6), its field values: the whole object, already merged and checked.
 type SummaryUpdate struct {
 	ID                        uint64
 	ShortSummary, FullSummary string
+	Fields                    json.RawMessage `json:",omitempty"`
 }
 
 // MemoryIn is the Memory over a tenant database.
@@ -53,7 +58,7 @@ type dbMemory struct{ db *gorm.DB }
 func (m dbMemory) Entries(args features.ServiceArgs, visible bool, statuses []string) ([]Entry, error) {
 	q := Owned(m.db.WithContext(args.Context()), args.Principal)
 	if visible {
-		q = Visible(m.db.WithContext(args.Context()), args.Principal)
+		q = VisibleTo(m.db.WithContext(args.Context()), args.Principal, ReadableProjects(args.Context(), args.Principal))
 	}
 	if len(statuses) > 0 {
 		q = q.Where("status IN ?", statuses)
@@ -95,9 +100,19 @@ func (m dbMemory) Apply(args features.ServiceArgs, u MemoryUpdate) (updated, pro
 			if e.ID == 0 {
 				continue
 			}
-			previous, _ := jsonOf(map[string]string{"shortSummary": e.ShortSummary, "fullSummary": e.FullSummary})
+			before := map[string]string{"shortSummary": e.ShortSummary, "fullSummary": e.FullSummary}
+			set := map[string]any{"short_summary": up.ShortSummary, "full_summary": up.FullSummary}
 			e.ShortSummary, e.FullSummary = up.ShortSummary, up.FullSummary
-			if err := tx.Model(&e).Updates(map[string]any{"short_summary": up.ShortSummary, "full_summary": up.FullSummary}).Error; err != nil {
+			if len(up.Fields) > 0 && json.Valid(up.Fields) {
+				before["fields"] = e.Fields
+				e.Fields = string(up.Fields)
+				set["fields"] = e.Fields
+			}
+			previous, _ := jsonOf(before)
+			if err := tx.Model(&e).Updates(set).Error; err != nil {
+				return err
+			}
+			if _, err := RefreshFacts(tx, &e); err != nil {
 				return err
 			}
 			if err := tx.Create(&EntryRound{Tenanted: e.Tenanted, EntryID: e.ID, RoundID: u.RoundID, ConversationID: u.ConversationID,
@@ -113,6 +128,9 @@ func (m dbMemory) Apply(args features.ServiceArgs, u MemoryUpdate) (updated, pro
 				e.Fields = "{}"
 			}
 			if err := tx.Create(&e).Error; err != nil {
+				return err
+			}
+			if _, err := RefreshFacts(tx, &e); err != nil {
 				return err
 			}
 			if err := tx.Create(&EntryRound{Tenanted: e.Tenanted, EntryID: e.ID, RoundID: u.RoundID, ConversationID: u.ConversationID,
@@ -133,6 +151,10 @@ func (m dbMemory) Flag(args features.ServiceArgs, round uint64) error {
 	gdb := m.db.WithContext(args.Context())
 	ids := gdb.Model(&EntryRound{}).Select("entry_id").Where("tenant_id = ? AND round_id = ?", args.Principal.TenantID, round)
 	return Owned(m.db.WithContext(args.Context()), args.Principal).Model(&Entry{}).Where("id IN (?)", ids).UpdateColumn("review", true).Error
+}
+
+func (m dbMemory) Types(args features.ServiceArgs) ([]EntryType, error) {
+	return TypesIn(m.db.WithContext(args.Context()), args.Principal.TenantID, ReadableProjects(args.Context(), args.Principal))
 }
 
 func jsonOf(v any) (string, error) {

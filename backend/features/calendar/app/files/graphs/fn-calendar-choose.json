@@ -1,0 +1,597 @@
+{
+  "id": "fn-calendar-choose",
+  "name": "Choose a held time",
+  "description": "Settles a proposal: the chosen slot's tentative event becomes a confirmed one and the hold's other events are deleted, then the Hold is marked chosen. A Hold already settled is left as it is, and a retry finishes what an interrupted one began. Args {hold, slot: the chosen event's id (as hold gave it)}.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "hold",
+            "type": "string",
+            "description": "The Hold's id"
+          },
+          {
+            "id": "slot",
+            "type": "string",
+            "description": "The chosen slot's event id, from the Hold's slots"
+          }
+        ]
+      }
+    },
+    {
+      "id": "get",
+      "type": "records.get",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "entity": "calHold"
+      }
+    },
+    {
+      "id": "state",
+      "type": "data.expression",
+      "title": "open, settled, or why not",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "!exists ? \"no such hold\" : (record.status != \"open\" ? \"settled\" : (any(record.slots ?? [], #.event == slot) ? \"open\" : \"that slot is not one of the hold's\"))",
+        "type": "string"
+      }
+    },
+    {
+      "id": "isOpen",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "state == \"open\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "open",
+      "type": "flow.branch",
+      "position": {
+        "x": 1360,
+        "y": 0
+      }
+    },
+    {
+      "id": "confirmArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"calEvent\", set: {status: \"confirmed\", hold: \"\"}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "confirm",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "others",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "map(filter(record.slots ?? [], #.event != slot), #.event)",
+        "type": "json"
+      }
+    },
+    {
+      "id": "each",
+      "type": "flow.forEach",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "deleteArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "expr": "{entity: \"calEvent\"}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "remove",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "command": "record.delete"
+      }
+    },
+    {
+      "id": "doneArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 600
+      },
+      "config": {
+        "expr": "{entity: \"calHold\", set: {status: \"chosen\"}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "done",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "produced",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"calEvent\", id: slot}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "event",
+            "type": "string"
+          },
+          {
+            "id": "produced",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "isSettled",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "expr": "state == \"settled\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "settled",
+      "type": "flow.branch",
+      "position": {
+        "x": 1700,
+        "y": 200
+      }
+    },
+    {
+      "id": "already",
+      "type": "flow.return",
+      "position": {
+        "x": 2040,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "event",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "refused",
+      "type": "flow.return",
+      "position": {
+        "x": 2040,
+        "y": 400
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "failed",
+      "type": "flow.return",
+      "position": {
+        "x": 2040,
+        "y": 600
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "hold"
+      },
+      "to": {
+        "node": "get",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "get",
+        "pin": "record"
+      },
+      "to": {
+        "node": "state",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "get",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "state",
+        "pin": "exists"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "slot"
+      },
+      "to": {
+        "node": "state",
+        "pin": "slot"
+      }
+    },
+    {
+      "from": {
+        "node": "state",
+        "pin": "value"
+      },
+      "to": {
+        "node": "isOpen",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "open",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "isOpen",
+        "pin": "value"
+      },
+      "to": {
+        "node": "open",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "open",
+        "pin": "true"
+      },
+      "to": {
+        "node": "confirm",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "slot"
+      },
+      "to": {
+        "node": "confirm",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "confirmArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "confirm",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "get",
+        "pin": "record"
+      },
+      "to": {
+        "node": "others",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "slot"
+      },
+      "to": {
+        "node": "others",
+        "pin": "slot"
+      }
+    },
+    {
+      "from": {
+        "node": "confirm",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "each",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "others",
+        "pin": "value"
+      },
+      "to": {
+        "node": "each",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "body"
+      },
+      "to": {
+        "node": "remove",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "remove",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "deleteArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "remove",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "done",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "hold"
+      },
+      "to": {
+        "node": "done",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "doneArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "done",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "done",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "slot"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "event"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "slot"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "slot"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "produced"
+      }
+    },
+    {
+      "from": {
+        "node": "confirm",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "failed",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "confirm",
+        "pin": "message"
+      },
+      "to": {
+        "node": "failed",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "state",
+        "pin": "value"
+      },
+      "to": {
+        "node": "isSettled",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "open",
+        "pin": "false"
+      },
+      "to": {
+        "node": "settled",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "isSettled",
+        "pin": "value"
+      },
+      "to": {
+        "node": "settled",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "settled",
+        "pin": "true"
+      },
+      "to": {
+        "node": "already",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "slot"
+      },
+      "to": {
+        "node": "already",
+        "pin": "event"
+      }
+    },
+    {
+      "from": {
+        "node": "settled",
+        "pin": "false"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "state",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "error"
+      }
+    }
+  ]
+}

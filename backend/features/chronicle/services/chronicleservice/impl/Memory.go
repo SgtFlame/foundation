@@ -54,6 +54,9 @@ func (s *service) MemoryApply(args chronicleservice.MemoryApplyArgs) chroniclese
 	if err != nil {
 		return chronicleservice.MemoryApplyResponse{Common: *args.Fail(http.StatusInternalServerError, log.Wrap(err))}
 	}
+	for _, e := range updated {
+		s.refresh(args.ServiceArgs, e.ID)
+	}
 	return chronicleservice.MemoryApplyResponse{Common: features.OK(), Updated: updated, Proposed: proposed}
 }
 

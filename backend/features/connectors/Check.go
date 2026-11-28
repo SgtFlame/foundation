@@ -113,6 +113,9 @@ func CheckContract(ct Contract) []Problem {
 		if len(op.Examples) == 0 {
 			c.add(path+".examples", "needs an example, args and their result")
 		}
+		if op.Secret && (op.Key != "" || len(op.Callbacks) > 0) {
+			c.add(path+".secret", "a secret operation has no key and no callbacks: its args are never kept")
+		}
 		for i, ex := range op.Examples {
 			if err := tools.CheckArgs(op.Args, ex.Args); err != nil {
 				c.add(fmt.Sprintf("%s.examples[%d].args", path, i), "does not fit args: %v", err)

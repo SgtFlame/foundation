@@ -1,0 +1,19 @@
+{"format":1,"doc":{"type":"doc","content":[
+ {"type":"heading","attrs":{"level":1,"id":"b1"},"content":[{"type":"text","text":"Refund SOP"}]},
+ {"type":"paragraph","attrs":{"id":"b2"},"content":[{"type":"text","text":"Refunds are "},{"type":"text","marks":[{"type":"bold"}],"text":"always "},{"type":"text","text":"approved by a "},{"type":"text","marks":[{"type":"link","attrs":{"href":"workbench:page/42"}}],"text":"lead"},{"type":"text","text":" within 2*3 days"},{"type":"footnote","content":[{"type":"text","text":"Business days only."}]},{"type":"text","text":"."}]},
+ {"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"Steps"}]},
+ {"type":"orderedList","attrs":{"start":3},"content":[
+  {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"Check the order"}]},
+   {"type":"bulletList","content":[{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","marks":[{"type":"code"}],"text":"order_id"},{"type":"text","text":" matches"}]}]}]}]},
+  {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","marks":[{"type":"underline"}],"text":"Refund"},{"type":"text","text":" it"}]}]}]},
+ {"type":"taskList","content":[{"type":"taskItem","attrs":{"checked":true},"content":[{"type":"paragraph","content":[{"type":"text","text":"Done"}]}]},{"type":"taskItem","attrs":{"checked":false},"content":[{"type":"paragraph","content":[{"type":"text","text":"Open"}]}]}]},
+ {"type":"table","content":[
+  {"type":"tableRow","content":[{"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"Amount"}]}]},{"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"Approver"}]}]}]},
+  {"type":"tableRow","content":[{"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"< 100 | small"}]}]},{"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"mention","attrs":{"id":"7","label":"Ana"}}]}]}]}]},
+ {"type":"image","attrs":{"src":"files/flow chart.png","alt":"Flow","title":"The flow"}},
+ {"type":"codeBlock","attrs":{"language":"sh"},"content":[{"type":"text","text":"refund --id 42\necho ```"}]},
+ {"type":"blockquote","content":[{"type":"paragraph","content":[{"type":"text","text":"Ask first."}]},{"type":"paragraph","content":[{"type":"text","text":"Then act."},{"type":"hardBreak"},{"type":"text","text":"Always."}]}]},
+ {"type":"horizontalRule"},
+ {"type":"paragraph","content":[{"type":"text","text":"Area "},{"type":"mathInline","attrs":{"latex":"\\pi r^2"}}]},
+ {"type":"paragraph"}
+]}}

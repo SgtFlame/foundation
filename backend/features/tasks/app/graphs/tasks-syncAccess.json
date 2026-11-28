@@ -1,0 +1,634 @@
+{
+  "id": "tasks-syncAccess",
+  "name": "Sync a project's grants",
+  "description": "The job keeping a Tasks project's grants in step with its people, as the app, one at a time per project: Project admin for its admins, Member for its members and Guest for its guests, each granted on the project; grants it no longer gives are revoked, and every grant goes when the project is deleted. Idempotent: it reads the project and its grants afresh each time.",
+  "kind": "server.action",
+  "version": 1,
+  "owner": "app:tasks",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "project",
+            "name": "project",
+            "type": "string"
+          },
+          {
+            "id": "deleted",
+            "name": "deleted",
+            "type": "bool",
+            "optional": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "pid",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "(project ?? \"\") == \"\" ? \"none\" : project",
+        "type": "string"
+      }
+    },
+    {
+      "id": "pr",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "tasksProject"
+      }
+    },
+    {
+      "id": "projectType",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"tasksProject\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "onProject",
+      "type": "authz.grants",
+      "title": "Grants on the project",
+      "position": {
+        "x": 680,
+        "y": 200
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "let roles = [\"projectAdmin\", \"member\", \"guest\"];\nlet gone = deleted ?? false;\nlet wanted = gone || pr == nil ? [] : concat(\n  map(map(pr.admins ?? [], string(#)), ({user: #, role: \"projectAdmin\"})),\n  map(map(pr.members ?? [], string(#)), ({user: #, role: \"member\"})),\n  map(map(pr.guests ?? [], string(#)), ({user: #, role: \"guest\"})));\nlet wantKeys = map(wanted, #.user + \"|\" + #.role);\nlet have = map(filter(grants ?? [], #.role in roles \u0026\u0026 string(#.user ?? \"\") != \"\"), ({user: string(#.user), role: #.role}));\nlet haveKeys = map(have, #.user + \"|\" + #.role);\n{problem: error != \"\" ? error : \"\", missing: !gone \u0026\u0026 pr == nil,\n add: filter(wanted, !((#.user + \"|\" + #.role) in haveKeys)),\n remove: filter(have, !((#.user + \"|\" + #.role) in wantKeys))}"
+      }
+    },
+    {
+      "id": "failed",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\" || plan.missing",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "ifFailed",
+      "type": "flow.branch",
+      "position": {
+        "x": 1700,
+        "y": 0
+      }
+    },
+    {
+      "id": "readFail",
+      "type": "jobs.fail",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "retryable": true
+      }
+    },
+    {
+      "id": "readWhy",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem != \"\" ? \"the grants could not be read: \" + plan.problem : \"the project is not readable yet\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "addList",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.add",
+        "type": "json"
+      }
+    },
+    {
+      "id": "adds",
+      "type": "flow.forEach",
+      "title": "Each grant to give",
+      "position": {
+        "x": 2040,
+        "y": 200
+      }
+    },
+    {
+      "id": "addUser",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.user",
+        "type": "string"
+      }
+    },
+    {
+      "id": "addRole",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.role",
+        "type": "string"
+      }
+    },
+    {
+      "id": "grant",
+      "type": "authz.grantRole",
+      "title": "Grant the role",
+      "position": {
+        "x": 2720,
+        "y": 0
+      }
+    },
+    {
+      "id": "grantFail",
+      "type": "jobs.fail",
+      "position": {
+        "x": 3060,
+        "y": 0
+      },
+      "config": {
+        "retryable": true
+      }
+    },
+    {
+      "id": "removeList",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 600
+      },
+      "config": {
+        "expr": "plan.remove",
+        "type": "json"
+      }
+    },
+    {
+      "id": "removes",
+      "type": "flow.forEach",
+      "title": "Each grant to revoke",
+      "position": {
+        "x": 2380,
+        "y": 400
+      }
+    },
+    {
+      "id": "rmUser",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.user",
+        "type": "string"
+      }
+    },
+    {
+      "id": "rmRole",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.role",
+        "type": "string"
+      }
+    },
+    {
+      "id": "revoke",
+      "type": "authz.revokeRole",
+      "title": "Revoke the role",
+      "position": {
+        "x": 3060,
+        "y": 200
+      }
+    },
+    {
+      "id": "done",
+      "type": "flow.return",
+      "position": {
+        "x": 2720,
+        "y": 600
+      },
+      "config": {
+        "outputs": []
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "project"
+      },
+      "to": {
+        "node": "pid",
+        "pin": "project"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pr",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "projectType",
+        "pin": "value"
+      },
+      "to": {
+        "node": "onProject",
+        "pin": "entity"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "onProject",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "pr",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "pr"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "deleted"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "deleted"
+      }
+    },
+    {
+      "from": {
+        "node": "onProject",
+        "pin": "grants"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "grants"
+      }
+    },
+    {
+      "from": {
+        "node": "onProject",
+        "pin": "error"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "failed",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ifFailed",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "failed",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ifFailed",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "ifFailed",
+        "pin": "true"
+      },
+      "to": {
+        "node": "readFail",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "readWhy",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "readWhy",
+        "pin": "value"
+      },
+      "to": {
+        "node": "readFail",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "addList",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "ifFailed",
+        "pin": "false"
+      },
+      "to": {
+        "node": "adds",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "addList",
+        "pin": "value"
+      },
+      "to": {
+        "node": "adds",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "adds",
+        "pin": "item"
+      },
+      "to": {
+        "node": "addUser",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "adds",
+        "pin": "item"
+      },
+      "to": {
+        "node": "addRole",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "adds",
+        "pin": "body"
+      },
+      "to": {
+        "node": "grant",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "addUser",
+        "pin": "value"
+      },
+      "to": {
+        "node": "grant",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "addRole",
+        "pin": "value"
+      },
+      "to": {
+        "node": "grant",
+        "pin": "role"
+      }
+    },
+    {
+      "from": {
+        "node": "projectType",
+        "pin": "value"
+      },
+      "to": {
+        "node": "grant",
+        "pin": "entity"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "grant",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "grant",
+        "pin": "failed"
+      },
+      "to": {
+        "node": "grantFail",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "grant",
+        "pin": "error"
+      },
+      "to": {
+        "node": "grantFail",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "removeList",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "adds",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "removes",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "removeList",
+        "pin": "value"
+      },
+      "to": {
+        "node": "removes",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "removes",
+        "pin": "item"
+      },
+      "to": {
+        "node": "rmUser",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "removes",
+        "pin": "item"
+      },
+      "to": {
+        "node": "rmRole",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "removes",
+        "pin": "body"
+      },
+      "to": {
+        "node": "revoke",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "rmUser",
+        "pin": "value"
+      },
+      "to": {
+        "node": "revoke",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "rmRole",
+        "pin": "value"
+      },
+      "to": {
+        "node": "revoke",
+        "pin": "role"
+      }
+    },
+    {
+      "from": {
+        "node": "projectType",
+        "pin": "value"
+      },
+      "to": {
+        "node": "revoke",
+        "pin": "entity"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "revoke",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "removes",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "done",
+        "pin": "then"
+      }
+    }
+  ]
+}

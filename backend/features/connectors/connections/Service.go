@@ -47,10 +47,11 @@ func (s Connections) TypeOf(args features.ServiceArgs, connection string) (strin
 // which stops the connection's event source until it is updated; an
 // unavailable error is kept as its last error.
 func (s Connections) Failed(args features.ServiceArgs, connection string, e *connectors.Error) {
-	switch e.Code {
-	case connectors.CodeAuth:
+	switch {
+	case e.Detail == connectors.DetailLocked:
+	case e.Code == connectors.CodeAuth:
 		SetStatus(args.Context(), s.Deps(), args.Principal.TenantID, connection, StatusError, e.Message)
-	case connectors.CodeUnavailable, connectors.CodeRateLimited:
+	case e.Code == connectors.CodeUnavailable, e.Code == connectors.CodeRateLimited:
 		SetStatus(args.Context(), s.Deps(), args.Principal.TenantID, connection, StatusOK, e.Code+": "+e.Message)
 	}
 }
@@ -133,6 +134,9 @@ func resolveReply(ctx context.Context, d Deps, m *nats.Msg) connectors.ResolveRe
 		return connectors.ResolveReply{Error: connectors.Errorf(connectors.CodeNotFound, "connection %s is not a %s", connection, req.Type)}
 	}
 	settings, err := Settings(ctx, d, tenant, c)
+	if ce, ok := err.(*connectors.Error); ok {
+		return connectors.ResolveReply{Error: ce} // a sign-in to do again (forge 26a-1)
+	}
 	if err != nil {
 		log.With("connection", connection).Error(ctx, err, "the settings of connection %s cannot be resolved", connection)
 		return connectors.ResolveReply{Error: connectors.Errorf(connectors.CodeUnavailable, "the settings of connection %s cannot be read now", connection)}
@@ -176,6 +180,37 @@ func Test(args features.ServiceArgs, d Deps, id string) (TestResult, error) {
 	}
 	SetStatus(args.Context(), d, args.Principal.TenantID, id, StatusOK, "")
 	return TestResult{OK: true}, nil
+}
+
+// SecretCall sends a Secret operation (git.ssh's unlock, forge 24f) on a
+// connection the caller may use: the one way one is sent, by the
+// connection.secretCall live call, whose frame is never recorded. Its args
+// are passed on and kept nowhere; a refusal never echoes them.
+func SecretCall(args features.ServiceArgs, d Deps, connection, contract, operation string, in json.RawMessage) (json.RawMessage, error) {
+	c, ok, err := Get(args.Context(), d.Projections, args.Principal.TenantID, connection)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, log.Code("connection_not_found").Errorf("there is no connection %s", connection)
+	}
+	if err := d.CheckUse(args, c); err != nil {
+		return nil, err
+	}
+	info, ok, err := d.Registry.Contract(args.Context(), args.Principal.TenantID, contract)
+	if err != nil || !ok {
+		return nil, connectors.Errorf(connectors.CodeNotSupported, "there is no contract %s", contract)
+	}
+	if op, ok := info.Contract.Operation(operation); !ok || !op.Secret {
+		return nil, connectors.Errorf(connectors.CodeInvalid, "%s %s is not an operation that takes a secret: call it as any other", info.Ref, operation)
+	}
+	call := args
+	call.Ctx = connectors.WithSecretCall(args.Context())
+	res, e := d.Dispatcher.Call(call, connectors.Call{Contract: info.Ref, Operation: operation, Connection: connection, Args: in})
+	if e != nil {
+		return nil, e
+	}
+	return res, nil
 }
 
 // checkContract is the contract of typ that declares the check operation.

@@ -1,0 +1,11 @@
+{
+ "_comment": "A generateContent reply whose prompt was blocked for safety, as the API reference documents it.",
+ "promptFeedback": {
+  "blockReason": "SAFETY",
+  "blockReasonMessage": "The prompt was blocked."
+ },
+ "usageMetadata": {
+  "promptTokenCount": 9,
+  "totalTokenCount": 9
+ }
+}

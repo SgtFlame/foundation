@@ -1,0 +1,478 @@
+{
+  "id": "fn-docs-purgePage",
+  "name": "Delete a page forever",
+  "description": "Deletes a page in the trash for good, as the caller, with the subpages that went to the trash with it: each one's document file, then its record. The caller needs volume.write on the Volume. Refused for a page not in the trash.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:docs",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "id",
+            "type": "string",
+            "description": "The page's id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page",
+      "type": "records.get",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "groupQ",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "{where: {trashedWith: string(page?.trashedWith ?? \"-\")}, fields: [\"file\", \"ancestors\"]}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "group",
+      "type": "records.query",
+      "title": "The pages trashed with it",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "{problem: page == nil ? \"there is no page \" + id : page.trashedAt == nil ? \"the page is not in the trash: put it there first\" : \"\",\n pages: concat([page], filter(group ?? [], string(#._id) != id \u0026\u0026 id in map(#.ancestors ?? [], string(#))))}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "flow.return",
+      "title": "Refused",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "list",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.pages",
+        "type": "json"
+      }
+    },
+    {
+      "id": "each",
+      "type": "flow.forEach",
+      "position": {
+        "x": 2380,
+        "y": 200
+      }
+    },
+    {
+      "id": "file",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.file",
+        "type": "json"
+      }
+    },
+    {
+      "id": "rm",
+      "type": "docs.removePageFile",
+      "position": {
+        "x": 3060,
+        "y": 0
+      }
+    },
+    {
+      "id": "pid",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 200
+      },
+      "config": {
+        "expr": "string(item._id)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "delArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"docsPage\"}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "del",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 3400,
+        "y": 0
+      },
+      "config": {
+        "command": "record.delete"
+      }
+    },
+    {
+      "id": "count",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 600
+      },
+      "config": {
+        "expr": "len(plan.pages)",
+        "type": "number"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 2720,
+        "y": 400
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "deleted",
+            "type": "number"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "id"
+      },
+      "to": {
+        "node": "page",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "page",
+        "pin": "record"
+      },
+      "to": {
+        "node": "groupQ",
+        "pin": "page"
+      }
+    },
+    {
+      "from": {
+        "node": "groupQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "group",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "page",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "page"
+      }
+    },
+    {
+      "from": {
+        "node": "group",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "group"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "id"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "each",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "each",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "file",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "body"
+      },
+      "to": {
+        "node": "rm",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "file",
+        "pin": "value"
+      },
+      "to": {
+        "node": "rm",
+        "pin": "file"
+      }
+    },
+    {
+      "from": {
+        "node": "rm",
+        "pin": "then"
+      },
+      "to": {
+        "node": "del",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "pid",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "del",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "delArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "del",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "count",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "count",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "deleted"
+      }
+    }
+  ]
+}

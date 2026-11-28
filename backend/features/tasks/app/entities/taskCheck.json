@@ -1,0 +1,58 @@
+{
+  "id": "taskCheck",
+  "owner": "app:tasks",
+  "name": "Checklist item",
+  "description": "One item of a task's checklist",
+  "titleField": "text",
+  "fields": [
+    {
+      "id": "task",
+      "name": "Task",
+      "type": "relation",
+      "description": "The task it belongs to",
+      "relation": {
+        "entity": "taskItem"
+      },
+      "required": true
+    },
+    {
+      "id": "project",
+      "name": "Project",
+      "type": "relation",
+      "description": "The task's project, which decides who sees it",
+      "relation": {
+        "entity": "tasksProject"
+      },
+      "required": true
+    },
+    {
+      "id": "text",
+      "name": "Text",
+      "type": "text",
+      "description": "What is to be checked",
+      "required": true
+    },
+    {
+      "id": "done",
+      "name": "Done",
+      "type": "bool",
+      "description": "Whether it is done"
+    },
+    {
+      "id": "rank",
+      "name": "Position",
+      "type": "rank",
+      "description": "Its place in the checklist",
+      "scope": "task"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "byTask",
+      "fields": [
+        "task",
+        "rank"
+      ]
+    }
+  ]
+}

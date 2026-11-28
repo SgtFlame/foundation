@@ -80,6 +80,12 @@ export const STORY_STEPS: readonly StoryStepDef[] = [
   { id: 'reeve', title: 'Two villages, not one', how: "Go back to Hawk's Rest and press R by its hearth: tell the reeve what you found at the ford." },
   // S34: the road to Aldermere
   { id: 'aldermere', title: 'The road to Aldermere', how: "Carry the reeve's letter to the capital: travel from Hawk's Rest to the area named Aldermere, days on foot through the towns on the way." },
+  // S35: the letter is read
+  { id: 'steward', title: 'The letter is read', how: "In Aldermere, walk up to the palace gate at the north edge of the city with the reeve's letter." },
+  // S36: the new moon
+  { id: 'waited', title: 'Waiting for the new moon', how: "In Aldermere, go to the Lantern inn by the city's south edge and press R at its door to take a room and wait there for the greater moon's dark." },
+  // S36: the king's council
+  { id: 'kingscouncil', title: "The king's council", how: 'On the new-moon night, walk up to the palace gate again: the clerk takes you to the council.' },
 ]
 
 // S7: the herbs a character gathers for the herbal (placeholders in the

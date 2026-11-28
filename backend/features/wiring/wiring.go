@@ -29,15 +29,23 @@
 package wiring
 
 import (
+	"context"
 	"os"
 	"slices"
 	"strings"
 	"sync"
 
+	"github.com/SgtFlame/foundation/backend/features/ai/providers"
+	"github.com/SgtFlame/foundation/backend/features/apps/services/appservice"
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
+	kbtools "github.com/SgtFlame/foundation/backend/features/kb/tools"
+	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/SgtFlame/foundation/backend/features/live/bus"
+	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
 	recordsfiles "github.com/SgtFlame/foundation/backend/features/records/files"
 )
 
@@ -53,6 +61,23 @@ type Feature struct {
 	// Adapter adds the connector types, contracts and implementations that
 	// the server's in-process adapter serves for the feature (optional).
 	Adapter func(o *adapter.Options)
+	// Start starts the feature's background work once the server's
+	// services are made (optional; forge 35a-2): serve calls StartAll. It
+	// must not block, and stops when ctx ends.
+	Start func(ctx context.Context, env *Env) error
+	// Seed runs once the server's live core and services are up, before
+	// it serves requests (optional): seeding a library app, for one. It
+	// must be idempotent, since every process runs it at every start
+	// (forge 30c; serve calls SeedAll).
+	Seed func(ctx context.Context, s Started) error
+}
+
+// Started is what a feature's Seed may use.
+type Started struct {
+	Store   live.Store
+	Apps    appservice.Service
+	Bus     *bus.Bus
+	Tenants func() ([]uint64, error)
 }
 
 // Env is what a feature's contributions may read from the server. Its fields
@@ -64,6 +89,44 @@ type Env struct {
 	// Files is the record files store, set once it is made (files a node
 	// reads, such as an uploaded .ics or transcript).
 	Files *recordsfiles.Files
+	// Records is the records' deps, set once the projections and bus are
+	// made (features that read or write records as the service principal).
+	Records *recordsdata.Deps
+	// Images is the AI image provider, usage-recorded (forge 35f-7), set
+	// once the AI provider is made.
+	Images *providers.Images
+	// KB is the knowledge base's root and services (forge 35a-2), set once
+	// they are made.
+	KB *kbtools.Deps
+	// FileEvents is the Volumes' file events (forge 35a-2), set once made.
+	FileEvents *volumeservice.FileEvents
+	// Mirrors writes the mirrored Volumes (forge 24e), set once the file
+	// events exist; nil without a knowledge base.
+	Mirrors *volumeservice.Mirrors
+}
+
+// Knowledge is the knowledge base's root and services, or empty ones.
+func (e *Env) Knowledge() kbtools.Deps {
+	if e == nil || e.KB == nil {
+		return kbtools.Deps{}
+	}
+	return *e.KB
+}
+
+// VolumeFiles is the Volumes' file events, or nil before they are made.
+func (e *Env) VolumeFiles() volumeservice.FileEvents {
+	if e == nil || e.FileEvents == nil {
+		return nil
+	}
+	return *e.FileEvents
+}
+
+// VolumeMirrors is the mirrored Volumes' writer, or nil before it is made.
+func (e *Env) VolumeMirrors() *volumeservice.Mirrors {
+	if e == nil || e.Mirrors == nil || e.Mirrors.Root == "" {
+		return nil
+	}
+	return e.Mirrors
 }
 
 // Connectors is the connectors' deps, or empty ones.
@@ -88,6 +151,22 @@ func (e *Env) RecordFiles() recordsfiles.Files {
 		return nil
 	}
 	return *e.Files
+}
+
+// RecordDeps is the records' deps, or empty ones.
+func (e *Env) RecordDeps() recordsdata.Deps {
+	if e == nil || e.Records == nil {
+		return recordsdata.Deps{}
+	}
+	return *e.Records
+}
+
+// ImageProvider is the AI image provider, or nil before it is made.
+func (e *Env) ImageProvider() providers.Images {
+	if e == nil || e.Images == nil {
+		return nil
+	}
+	return *e.Images
 }
 
 // Executable is this binary's path, for features that parse in a child
@@ -146,6 +225,23 @@ func ContributeAll(reg *extensions.Registry, env *Env) error {
 	return nil
 }
 
+// StartAll starts every registered feature's background work, in name
+// order, once serve has made its services.
+func StartAll(ctx context.Context, env *Env) error {
+	if env == nil {
+		env = &Env{}
+	}
+	for _, f := range Features() {
+		if f.Start == nil {
+			continue
+		}
+		if err := f.Start(ctx, env); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Adapters adds every registered feature's in-process adapter types to o.
 func Adapters(o *adapter.Options) {
 	for _, f := range Features() {
@@ -153,4 +249,17 @@ func Adapters(o *adapter.Options) {
 			f.Adapter(o)
 		}
 	}
+}
+
+// SeedAll runs every registered feature's Seed, in name order.
+func SeedAll(ctx context.Context, s Started) error {
+	for _, f := range Features() {
+		if f.Seed == nil {
+			continue
+		}
+		if err := f.Seed(ctx, s); err != nil {
+			return err
+		}
+	}
+	return nil
 }

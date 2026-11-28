@@ -6,8 +6,6 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
@@ -19,7 +17,7 @@ import (
 // IndexFile indexes the volume file at args.Path now, re-embedding only the
 // chunks that changed since it was last indexed.
 func (s *service) IndexFile(args indexservice.IndexFileArgs) indexservice.IndexFileResponse {
-	if args.Type != "markdown" {
+	if !volumeservice.IsText(args.Type) {
 		return indexservice.IndexFileResponse{Common: *args.Fail(http.StatusBadRequest, log.Code("unsupported_file_type").Errorf("cannot index file type %q", args.Type))}
 	}
 	path := args.Path
@@ -69,8 +67,13 @@ func (s *service) indexFile(args features.ServiceArgs, file string, force bool) 
 		return 0, 0, args.Fail(http.StatusInternalServerError, log.Code("dimension_mismatch").Errorf("the embedding model makes %d dimensions but the vector store holds %d", desc.Dimensions, s.store.Dimensions()))
 	}
 
-	text := string(content)
-	fileHash := hashText(text)
+	// A document is chunked by its derived Markdown (forge 35a-1), whose
+	// lines its citations name; the sidecar's hash is of the file itself
+	fileHash := hashText(string(content))
+	text, err := volumeservice.TextOf(fileType(file), content)
+	if err != nil {
+		return 0, 0, args.Fail(http.StatusUnprocessableEntity, log.Code("invalid_document").Wrapf(err, "%q is not a document", s.rel(file)))
+	}
 	meta, metaErr := indexservice.ReadMeta(file)
 	sameModel := metaErr == nil && meta.Version == indexservice.MetaVersion && meta.Model == desc.Model && meta.Dimensions == desc.Dimensions
 	if !force && sameModel && meta.FileHash == fileHash {
@@ -99,7 +102,7 @@ func (s *service) indexFile(args features.ServiceArgs, file string, force bool) 
 			ServiceArgs: embedArgs,
 			Texts:       missing,
 			Purpose:     embedservice.PurposeDocument,
-			Title:       strings.TrimSuffix(filepath.Base(file), filepath.Ext(file)),
+			Title:       title(file),
 		})
 		if f := failed(resp.Common); f != nil {
 			return 0, 0, f
