@@ -136,6 +136,38 @@ func (r *renderer) block(n Node) string {
 		return image(n)
 	case "mathBlock", "math_display", "blockMath":
 		return "$$\n" + latex(n) + "\n$$"
+	case "toggle":
+		// Block mode's blocks (forge 35c-2): a toggle is a details element,
+		// or in its heading form an open section under its heading
+		title, body := toggleParts(n)
+		t := strings.ReplaceAll(r.inline(title), "\n", " ")
+		b := r.blocks(body, "\n\n")
+		if level := n.intAttr("level", 0); level > 0 {
+			return strings.TrimSpace(strings.Repeat("#", min(level, 6)) + " " + t + "\n\n" + b)
+		}
+		return strings.TrimSpace("<details>\n<summary>" + t + "</summary>\n\n" + b + "\n\n</details>")
+	case "toggleTitle":
+		return r.inline(n.Content)
+	case "callout":
+		body := r.blocks(n.Content, "\n\n")
+		if icon := n.attr("icon"); icon != "" {
+			body = icon + " " + body
+		}
+		return prefixLines(body, "> ", ">")
+	case "columns":
+		var cols []string
+		for _, c := range n.Content {
+			if s := r.blocks(c.Content, "\n\n"); s != "" {
+				cols = append(cols, s)
+			}
+		}
+		return strings.Join(cols, "\n\n")
+	case "pageLink":
+		return "[" + linkText(n.attr("title"), "Untitled") + "](workbench:docsPage/" + n.attr("page") + ")"
+	case "fileBlock":
+		return "[" + linkText(n.attr("name"), "File") + "](" + n.attr("url") + ")"
+	case "embed":
+		return "[" + linkText(n.attr("title"), n.attr("href")) + "](" + n.attr("href") + ")"
 	case "text":
 		return r.inline([]Node{n})
 	}
@@ -337,4 +369,21 @@ func repeat(s string, n int) []string {
 		out[i] = s
 	}
 	return out
+}
+
+// toggleParts splits a toggle into its title's inline content and its
+// body's blocks.
+func toggleParts(n Node) ([]Node, []Node) {
+	if len(n.Content) > 0 && n.Content[0].Type == "toggleTitle" {
+		return n.Content[0].Content, n.Content[1:]
+	}
+	return nil, n.Content
+}
+
+// linkText is a link's text with its brackets escaped, or fallback.
+func linkText(s, fallback string) string {
+	if s == "" {
+		s = fallback
+	}
+	return strings.NewReplacer("[", "\\[", "]", "\\]").Replace(s)
 }

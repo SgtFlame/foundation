@@ -23,6 +23,7 @@ export interface PageSetup {
   color: string // the page colour; '' is the theme's paper
   differentFirst: boolean // the first page has its own header and footer
   pageless: boolean
+  blocks: boolean // the document opens in block mode (forge 35c-2)
 }
 
 export const pageSizes: Record<Exclude<PageSize, 'custom'>, { name: string; width: number; height: number }> = {
@@ -40,6 +41,7 @@ export const defaultSetup: PageSetup = {
   color: '',
   differentFirst: false,
   pageless: false,
+  blocks: false,
 }
 
 const num = (v: unknown, fallback: number, min = 0, max = 5000) => {
@@ -63,7 +65,7 @@ export function setupOf(raw: unknown): PageSetup {
     left: num(m.left, 72, 0, width / 3),
   }
   const color = typeof r.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(r.color) ? r.color : ''
-  return { size, width, height, landscape: r.landscape === true, margins, color, differentFirst: r.differentFirst === true, pageless: r.pageless === true }
+  return { size, width, height, landscape: r.landscape === true, margins, color, differentFirst: r.differentFirst === true, pageless: r.pageless === true, blocks: r.blocks === true }
 }
 
 // Only what differs from the defaults, as the document keeps it
@@ -77,6 +79,7 @@ export function storedSetup(s: PageSetup): Record<string, unknown> {
   if (s.color) out.color = s.color
   if (s.differentFirst) out.differentFirst = true
   if (s.pageless) out.pageless = true
+  if (s.blocks) out.blocks = true
   return out
 }
 

@@ -133,3 +133,26 @@ func TestPageViewNodes(t *testing.T) {
 		t.Errorf("plain text %q", got)
 	}
 }
+
+// Block mode's blocks (forge 35c-2) have Markdown of their own.
+func TestBlockModeNodes(t *testing.T) {
+	doc, err := Parse([]byte(`{"type":"doc","content":[
+		{"type":"toggle","attrs":{"open":false},"content":[{"type":"toggleTitle","content":[{"type":"text","text":"More"}]},{"type":"paragraph","content":[{"type":"text","text":"Hidden"}]}]},
+		{"type":"toggle","attrs":{"level":2},"content":[{"type":"toggleTitle","content":[{"type":"text","text":"Steps"}]},{"type":"paragraph","content":[{"type":"text","text":"One"}]}]},
+		{"type":"callout","attrs":{"icon":"💡"},"content":[{"type":"paragraph","content":[{"type":"text","text":"Note"}]}]},
+		{"type":"columns","content":[{"type":"column","content":[{"type":"paragraph","content":[{"type":"text","text":"Left"}]}]},{"type":"column","content":[{"type":"paragraph","content":[{"type":"text","text":"Right"}]}]}]},
+		{"type":"pageLink","attrs":{"page":"123","title":"Week [1]"}},
+		{"type":"fileBlock","attrs":{"name":"plan.pdf","url":"/api/v1/records/files/x"}},
+		{"type":"embed","attrs":{"href":"workbench:task/9","title":"Task 9"}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "<details>\n<summary>More</summary>\n\nHidden\n\n</details>\n\n## Steps\n\nOne\n\n> 💡 Note\n\nLeft\n\nRight\n\n" +
+		"[Week \\[1\\]](workbench:docsPage/123)\n\n[plan.pdf](/api/v1/records/files/x)\n\n[Task 9](workbench:task/9)\n"
+	if got := Markdown(doc); got != want {
+		t.Errorf("markdown %q, want %q", got, want)
+	}
+	if got := PlainText(doc); !strings.Contains(got, "Hidden") || !strings.Contains(got, "Week [1]") || !strings.Contains(got, "Task 9") {
+		t.Errorf("plain text %q", got)
+	}
+}

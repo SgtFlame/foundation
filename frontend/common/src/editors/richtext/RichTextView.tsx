@@ -48,6 +48,7 @@ import PrintIcon from '@mui/icons-material/Print'
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined'
 import ListAltIcon from '@mui/icons-material/ListAlt'
 import WebAssetIcon from '@mui/icons-material/WebAsset'
+import ViewAgendaOutlinedIcon from '@mui/icons-material/ViewAgendaOutlined'
 import { yXmlFragmentToProsemirrorJSON } from 'y-prosemirror'
 import type { CollabSession, CollabState } from '../markdown/collab/CollabSession.ts'
 import { localUser } from '../markdown/collab/localUser.ts'
@@ -55,13 +56,18 @@ import { baseExtensions } from './extensions.ts'
 import { fragmentOf, headerFooterOf, headerFooters, type HeaderFooter } from './content.ts'
 import { Pagination, type PaginationStorage } from './pagination.ts'
 import { pageBox, type Layout } from './pages.ts'
+import { BlockChrome, blockCss, type BlockCommand } from './BlockChrome.tsx'
+import { slashItems, type SlashItem } from './blockOps.ts'
+import { hrefOfBlock } from './blockNodes.ts'
 import { HeaderFooterDialog, PageSetupDialog, Ruler, printDocument, usePageSetup } from './PageView.tsx'
 import { FindHighlight, findKey } from './findHighlight.ts'
 import { findInBlocks, nextMatch, replacements, type FindOptions, type Range } from './find.ts'
 import { describeSelection, headings, textBlocks, type Heading } from './blocks.ts'
 import { paragraphStyles, styleOf, stylesCss, type ParagraphStyle } from './styles.ts'
 
-export type RichTextMode = 'pageless' | 'page' | 'compact'
+// blocks (forge 35c-2) is block mode: the slash menu, drag handles and
+// collapsible toggles, without page view
+export type RichTextMode = 'pageless' | 'page' | 'compact' | 'blocks'
 
 export interface RichTextSelection {
   text: string
@@ -84,6 +90,12 @@ export interface RichTextViewProps {
   onLink?(href: string, text: string): boolean | Promise<boolean>
   // The selection settled
   onSelection?(s: RichTextSelection): void
+  // Block mode: an app's slash menu items, after the built-in ones (an item
+  // with a built-in id replaces it), and what a command item raises
+  items?: SlashItem[]
+  onCommand?(c: BlockCommand): void
+  // Shows the page/block mode switch in the toolbar
+  onMode?(mode: 'page' | 'blocks'): void
 }
 
 function useCollabState(session: CollabSession): CollabState {
@@ -130,6 +142,15 @@ export function RichTextView(p: RichTextViewProps) {
     editable: false,
     editorProps: {
       attributes: { spellcheck: 'true', 'aria-label': p.label ?? 'Document' },
+      // A page link, file or embed opens what it names
+      handleClickOn(view, _pos, node, _nodePos, event, direct) {
+        const href = direct ? hrefOfBlock(node.type.name, node.attrs) : undefined
+        if (!href || (view.editable && event.detail > 1)) return false
+        void Promise.resolve(onLink.current?.(href, String(node.attrs.title ?? node.attrs.name ?? '')) ?? false).then((handled) => {
+          if (!handled && /^https?:/i.test(href)) window.open(href, '_blank', 'noopener,noreferrer')
+        })
+        return true
+      },
       handleClick(view, pos, event) {
         const link = view.state.schema.marks.link
         const mark = view.state.doc.resolve(pos).marks().find((m) => m.type === link)
@@ -193,6 +214,8 @@ export function RichTextView(p: RichTextViewProps) {
   const [finding, setFinding] = useState(false)
   const [showOutline, setShowOutline] = useState(!!p.outline)
   const compact = p.mode === 'compact'
+  const blockMode = p.mode === 'blocks'
+  const items = useMemo(() => slashItems(p.items), [p.items])
   const toolbar = p.toolbar !== false && !p.readOnly
   const minHeight = p.minHeight ?? (compact ? 120 : 160)
 
@@ -204,14 +227,15 @@ export function RichTextView(p: RichTextViewProps) {
   }
 
   return (
-    <Box onKeyDown={onKeyDown} sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: p.mode === 'page' || p.mode === 'pageless' ? '100%' : undefined }}>
+    <Box onKeyDown={onKeyDown} sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: p.mode === 'page' || p.mode === 'pageless' || blockMode ? '100%' : undefined }}>
       {p.label && <Typography variant="caption" color="text.secondary">{p.label}</Typography>}
       <Box sx={{ border: compact ? 1 : 0, borderColor: 'divider', borderRadius: compact ? 1 : 0, bgcolor: 'background.paper', color: 'text.primary', display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}
         data-doc-richtext={session.fileId}>
         {toolbar && editor && (
           <Toolbar editor={editor} disabled={locked} compact={compact} styles={styles}
             outline={showOutline} onOutline={() => setShowOutline((o) => !o)} onFind={() => setFinding(true)}
-            page={p.mode === 'page' ? { paged, onSetup: () => setSetupOpen(true), onHeaders: () => setHeadersOpen('header'), onPrint: print } : undefined} />
+            page={p.mode === 'page' ? { paged, onSetup: () => setSetupOpen(true), onHeaders: () => setHeadersOpen('header'), onPrint: print } : undefined}
+            mode={p.onMode && (p.mode === 'page' || blockMode) ? { blocks: blockMode, onToggle: () => p.onMode?.(blockMode ? 'page' : 'blocks') } : undefined} />
         )}
         {finding && editor && <FindPanel editor={editor} readOnly={locked} onClose={() => setFinding(false)} />}
         <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
@@ -224,14 +248,15 @@ export function RichTextView(p: RichTextViewProps) {
                 <Ruler editor={editor} setup={setup} disabled={locked} />
               </Box>
             )}
-            <Box ref={pageRef} data-page-view={paged ? '' : undefined} data-pages={paged ? layout?.pages : undefined} sx={{
-              mx: 'auto', my: paged ? 3 : 0, width: paged ? box.width : undefined, maxWidth: !paged && p.mode === 'pageless' ? 900 : undefined,
+            <Box ref={pageRef} data-page-view={paged ? '' : undefined} data-pages={paged ? layout?.pages : undefined} data-block-mode={blockMode ? '' : undefined} sx={{
+              mx: 'auto', my: paged ? 3 : 0, width: paged ? box.width : undefined, maxWidth: !paged && (p.mode === 'pageless' || blockMode) ? 900 : undefined,
               minHeight: paged ? (layout ? undefined : box.height) : '100%', boxSizing: 'border-box',
               pt: paged ? `${box.margins.top}px` : 1, pb: paged ? `${box.margins.bottom}px` : 1,
-              px: paged ? undefined : compact ? 1.5 : 3, pl: paged ? `${box.margins.left}px` : undefined, pr: paged ? `${box.margins.right}px` : undefined,
+              px: paged ? undefined : compact ? 1.5 : 3, pl: paged ? `${box.margins.left}px` : blockMode ? 8 : undefined, pr: paged ? `${box.margins.right}px` : undefined,
               bgcolor: paged && setup.color ? setup.color : 'background.paper', color: paged && setup.color ? '#202124' : undefined,
               boxShadow: paged ? 2 : undefined, '--rt-page-bg': paged && setup.color ? setup.color : theme.palette.background.paper,
               ...pageCss,
+              ...blockCss,
               '& .ProseMirror': { outline: 'none', minHeight: minHeight - 16, lineHeight: 1.6, ...stylesCss(styles) },
               '& .ProseMirror > *:first-of-type': { mt: 0 },
               '& .ProseMirror a': { color: 'primary.main' },
@@ -267,7 +292,9 @@ export function RichTextView(p: RichTextViewProps) {
                 color: '#fff', px: 0.5, borderRadius: '3px 3px 3px 0', userSelect: 'none',
               },
             }}>
-              <EditorContent editor={editor} />
+              {blockMode && editor ? (
+                <BlockChrome editor={editor} items={items} locked={locked} onCommand={p.onCommand}><EditorContent editor={editor} /></BlockChrome>
+              ) : <EditorContent editor={editor} />}
               {p.placeholder && editor?.isEmpty && !locked && (
                 <Typography color="text.disabled" sx={{ mt: -3.5, pointerEvents: 'none' }}>{p.placeholder}</Typography>
               )}
@@ -392,8 +419,9 @@ interface PageActions {
   onPrint(): void
 }
 
-function Toolbar({ editor, disabled, compact, styles, outline, onOutline, onFind, page }: {
+function Toolbar({ editor, disabled, compact, styles, outline, onOutline, onFind, page, mode }: {
   editor: Editor; disabled: boolean; compact: boolean; styles: ParagraphStyle[]; outline: boolean; onOutline(): void; onFind(): void; page?: PageActions
+  mode?: { blocks: boolean; onToggle(): void }
 }) {
   useEditorTick(editor)
   const chain = () => editor.chain().focus()
@@ -475,6 +503,11 @@ function Toolbar({ editor, disabled, compact, styles, outline, onOutline, onFind
       )}
       <ToolButton title="Clear formatting" disabled={disabled} onClick={() => chain().unsetAllMarks().clearNodes().run()}><FormatClearIcon fontSize="small" /></ToolButton>
       <Box sx={{ flex: 1 }} />
+      {mode && (
+        <ToolButton title={mode.blocks ? 'Block mode: switch to page mode' : 'Switch to block mode'} active={mode.blocks} disabled={disabled} onClick={mode.onToggle}>
+          <ViewAgendaOutlinedIcon fontSize="small" />
+        </ToolButton>
+      )}
       {page && <ToolButton title="Print" disabled={!page.paged} onClick={page.onPrint}><PrintIcon fontSize="small" /></ToolButton>}
       <ToolButton title="Find and replace (Ctrl+F)" onClick={onFind}><SearchIcon fontSize="small" /></ToolButton>
       {!compact && <ToolButton title="Outline" active={outline} onClick={onOutline}><TocIcon fontSize="small" /></ToolButton>}

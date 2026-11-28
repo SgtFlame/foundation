@@ -48,6 +48,13 @@ func (p *plainer) block(n Node) []string {
 		return nil
 	case "mathBlock", "math_display", "blockMath":
 		return []string{latex(n)}
+	case "pageLink", "embed", "fileBlock":
+		for _, a := range []string{"title", "name", "href"} {
+			if v := n.attr(a); v != "" {
+				return []string{v}
+			}
+		}
+		return nil
 	}
 	if len(n.Content) == 0 {
 		if n.Type == "paragraph" {

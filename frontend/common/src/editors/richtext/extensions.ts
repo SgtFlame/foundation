@@ -24,6 +24,7 @@ import CharacterCount from '@tiptap/extension-character-count'
 import type { Schema } from '@tiptap/pm/model'
 import { Footnote, MathBlock, MathInline, Mention } from './nodes.ts'
 import { Indent, PageBreak, PageNumber, SectionBreak, TableOfContents } from './pageNodes.ts'
+import { blockNodes } from './blockNodes.ts'
 
 // Every extension but collaboration's, which needs the room
 export function baseExtensions(): AnyExtension[] {
@@ -55,6 +56,7 @@ export function baseExtensions(): AnyExtension[] {
     TableOfContents,
     PageNumber,
     Indent,
+    ...blockNodes,
   ]
 }
 
