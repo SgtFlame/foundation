@@ -133,6 +133,9 @@ func resolveReply(ctx context.Context, d Deps, m *nats.Msg) connectors.ResolveRe
 		return connectors.ResolveReply{Error: connectors.Errorf(connectors.CodeNotFound, "connection %s is not a %s", connection, req.Type)}
 	}
 	settings, err := Settings(ctx, d, tenant, c)
+	if ce, ok := err.(*connectors.Error); ok {
+		return connectors.ResolveReply{Error: ce} // a sign-in to do again (forge 26a-1)
+	}
 	if err != nil {
 		log.With("connection", connection).Error(ctx, err, "the settings of connection %s cannot be resolved", connection)
 		return connectors.ResolveReply{Error: connectors.Errorf(connectors.CodeUnavailable, "the settings of connection %s cannot be read now", connection)}

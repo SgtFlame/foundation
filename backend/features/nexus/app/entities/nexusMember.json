@@ -1,0 +1,91 @@
+{
+  "name": "Channel member",
+  "description": "One person's membership of a channel (forge 26d-3): their role there and how many of its messages they have read, which with the channel's count in the unread projection gives their unread count. Its id is <channel>-<user>",
+  "owner": "app:nexus",
+  "titleField": "user",
+  "fields": [
+    {
+      "id": "channel",
+      "name": "Channel",
+      "type": "relation",
+      "required": true,
+      "description": "The channel's id",
+      "relation": {
+        "entity": "nexusChannel"
+      }
+    },
+    {
+      "id": "user",
+      "name": "User",
+      "type": "relation",
+      "relation": {
+        "entity": "user"
+      },
+      "required": true
+    },
+    {
+      "id": "role",
+      "name": "Role",
+      "type": "enum",
+      "options": [
+        {
+          "id": "member",
+          "name": "Member"
+        },
+        {
+          "id": "admin",
+          "name": "Admin"
+        }
+      ],
+      "default": "member"
+    },
+    {
+      "id": "private",
+      "name": "Private",
+      "type": "bool",
+      "default": false,
+      "description": "Its channel's, copied so the row rule needs no lookup"
+    },
+    {
+      "id": "owner",
+      "name": "Channel owner",
+      "type": "relation",
+      "relation": {
+        "entity": "user"
+      },
+      "description": "Its channel's owner, copied so the row rule lets the owner add people to a private channel before the app has given them its access; the app gives access only when whoever made the membership is the channel's owner or a member"
+    },
+    {
+      "id": "seen",
+      "name": "Seen",
+      "type": "number",
+      "default": 0,
+      "description": "How many of the channel's messages they had when they last read it (channel.markRead)"
+    },
+    {
+      "id": "createdAt",
+      "name": "Joined",
+      "type": "createdAt"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "by_channel",
+      "fields": [
+        "channel",
+        "createdAt"
+      ]
+    },
+    {
+      "id": "by_user",
+      "fields": [
+        "user",
+        "createdAt"
+      ]
+    }
+  ],
+  "access": {
+    "update": "principal.kind != 'user' || string(record.user) == principal.user",
+    "delete": "principal.kind != 'user' || string(record.user) == principal.user"
+  }
+}

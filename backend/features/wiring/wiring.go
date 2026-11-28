@@ -39,6 +39,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
 	recordsfiles "github.com/SgtFlame/foundation/backend/features/records/files"
 )
 
@@ -65,6 +66,9 @@ type Env struct {
 	// Files is the record files store, set once it is made (files a node
 	// reads, such as an uploaded .ics or transcript).
 	Files *recordsfiles.Files
+	// Records is the records' deps, set once the projections and bus are
+	// made (features that read or write records as the service principal).
+	Records *recordsdata.Deps
 	// Images is the AI image provider, usage-recorded (forge 35f-7), set
 	// once the AI provider is made.
 	Images *providers.Images
@@ -92,6 +96,14 @@ func (e *Env) RecordFiles() recordsfiles.Files {
 		return nil
 	}
 	return *e.Files
+}
+
+// RecordDeps is the records' deps, or empty ones.
+func (e *Env) RecordDeps() recordsdata.Deps {
+	if e == nil || e.Records == nil {
+		return recordsdata.Deps{}
+	}
+	return *e.Records
 }
 
 // ImageProvider is the AI image provider, or nil before it is made.

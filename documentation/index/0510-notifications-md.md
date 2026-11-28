@@ -1,0 +1,1 @@
+| [Notifications.md](Notifications.md) | Notifications every app sends a person (forge 26e-1): the tenant's `notification` records only their recipient touches, *Notify* with keys that notify once, and `notifications.mine`, `notifications.count` and `notifications.readAll` |

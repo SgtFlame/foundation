@@ -238,7 +238,31 @@ func Settings(ctx context.Context, d Deps, tenant uint64, c Connection) (json.Ra
 	for k, v := range c.Settings {
 		out[k] = v
 	}
+	if _, ok := c.Secrets[OAuthSecret]; ok {
+		var t Tokens
+		var err error
+		if d.Tokens != nil {
+			t, err = d.Tokens.Access(ctx, d, tenant, c)
+		} else {
+			t, _, _, err = ReadTokens(ctx, d, tenant, c)
+		}
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range accessSettings(t) {
+			out[k] = v
+		}
+	}
 	for field, version := range c.Secrets {
+		if field == OAuthSecret {
+			continue // never the refresh token (forge 26a-1)
+		}
+		if field == HookSecret { // only the service's signing secret (forge 26b-2)
+			if k := readHook(ctx, d, tenant, c); k.Secret != "" {
+				out["hookSecret"] = k.Secret
+			}
+			continue
+		}
 		v, err := secretValue(ctx, d, tenant, c.ID, field, version)
 		if err != nil {
 			return nil, log.Wrapf(err, "the secret %s of connection %s cannot be read", field, c.ID)

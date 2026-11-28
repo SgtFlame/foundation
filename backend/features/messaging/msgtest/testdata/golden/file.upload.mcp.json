@@ -1,0 +1,68 @@
+{
+  "name": "chat_messaging_file_upload",
+  "title": "Upload a file",
+  "description": "Uploads a file to attach to a message posted after (message.post's files), its content base64 encoded. Gives the file with its id.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "The channel it is for"
+      },
+      "name": {
+        "type": "string",
+        "description": "The file's name"
+      },
+      "contentType": {
+        "type": "string",
+        "description": "Its media type"
+      },
+      "data": {
+        "type": "string",
+        "description": "Its content, base64 encoded"
+      }
+    },
+    "required": [
+      "channel",
+      "name",
+      "data"
+    ]
+  },
+  "outputSchema": {
+    "type": "object",
+    "description": "A file attached to a message",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "The file's id at the service"
+      },
+      "name": {
+        "type": "string",
+        "description": "Its name"
+      },
+      "size": {
+        "type": "integer",
+        "description": "Its size in bytes"
+      },
+      "contentType": {
+        "type": "string",
+        "description": "Its media type"
+      },
+      "url": {
+        "type": "string",
+        "description": "Where the service serves it to the connection"
+      }
+    },
+    "required": [
+      "id",
+      "name"
+    ]
+  },
+  "annotations": {
+    "title": "Upload a file",
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false
+  }
+}
