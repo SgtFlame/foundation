@@ -93,7 +93,6 @@ func Contribute(reg *extensions.Registry, deps func() data.Deps) {
 type write struct {
 	id, command, title, description, example string
 	config                                   string // more config properties
-	order                                    int    // palette order; 600+i*10 when 0
 	in                                       []cognition.Pin
 	args                                     func(c map[string]any, in cognition.Values) map[string]any
 }
@@ -147,23 +146,22 @@ func contributeWrites(reg *extensions.Registry, deps func() data.Deps) {
 			args: func(c map[string]any, in cognition.Values) map[string]any {
 				return withExpect(map[string]any{"field": c["field"], "items": in["items"]}, in)
 			}},
-		{id: "records.move", command: "record.move", title: "Move record", order: 645,
-			description: "Moves a record to a new place in an order: sets its rank field between the record it goes after and the one it goes before (after empty for the start, before empty for the end), with other values in set, such as a deal's stage, in the same change. Its event commits with the command's, so a move and the activity that logs it commit together (forge 40d).",
-			example:     "Move record deal by position after the card it was dropped below, with set {stage: the column's stage}",
-			config:      `,"field":{"type":"string","title":"Field","description":"The rank field's id"}`,
+		{id: "records.move", command: "record.move", title: "Move record",
+			description: "Moves a record to a new place in an order (forge 30a): its rank field gets a rank between the record it goes after and the one it goes before (after left out: first; before left out: last), with other values in set changed with it, such as a board column's status. Its event commits with the command's.",
+			example:     "Move record task by position after the card above the drop, setting status to the column's", config: `,"field":{"type":"string","title":"Field","description":"The rank field's id"}`,
 			in: []cognition.Pin{idPin("The record's id"),
-				{ID: "after", Name: "After", Type: "string", Optional: true, Description: "The id of the record it goes after; empty, it goes first"},
-				{ID: "before", Name: "Before", Type: "string", Optional: true, Description: "The id of the record it goes before; empty, it goes last"},
+				{ID: "after", Name: "After", Type: "string", Optional: true, Description: "The id of the record it goes after; empty for the start"},
+				{ID: "before", Name: "Before", Type: "string", Optional: true, Description: "The id of the record it goes before; empty for the end"},
 				{ID: "set", Name: "Set", Type: cognition.Any, Optional: true, Description: "Other field id → new value, changed with the move"}, expectPin},
 			args: func(c map[string]any, in cognition.Values) map[string]any {
 				a := map[string]any{"field": c["field"]}
 				for _, k := range []string{"after", "before"} {
-					if v, _ := cognition.Get[string](in, k); v != "" {
+					if v, _ := in[k].(string); v != "" {
 						a[k] = v
 					}
 				}
-				if s, ok := in["set"].(map[string]any); ok && len(s) > 0 {
-					a["set"] = s
+				if set, ok := in["set"]; ok && set != nil {
+					a["set"] = set
 				}
 				return withExpect(a, in)
 			}},
@@ -178,9 +176,9 @@ func contributeWrites(reg *extensions.Registry, deps func() data.Deps) {
 				example = `{"entity":"task","field":"position"}`
 			}
 		}
-		order := w.order
-		if order == 0 {
-			order = 600 + i*10
+		order := 600 + i*10
+		if w.command == "record.move" {
+			order = 645 // Get record is 650
 		}
 		node(reg, order, cognition.NodeType{
 			Descriptor: extensions.Descriptor{ID: w.id}, Title: w.title, Kinds: []string{livenodes.KindCommand},
