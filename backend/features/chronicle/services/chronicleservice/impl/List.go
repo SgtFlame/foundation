@@ -19,7 +19,7 @@ func (s *service) List(args chronicleservice.ListArgs) chronicleservice.ListResp
 		return chronicleservice.ListResponse{Common: *args.Fail(http.StatusInternalServerError, log.Wrap(err))}
 	}
 	var shared []chronicle.Entry
-	err := chronicle.Visible(s.db.WithContext(args.Context()), args.Principal).
+	err := chronicle.VisibleTo(s.db.WithContext(args.Context()), args.Principal, chronicle.ReadableProjects(args.Context(), args.Principal)).
 		Where("NOT (tenant_id = ? AND owner_id = ?) AND status = ?", args.Principal.TenantID, args.Principal.UserID, chronicle.StatusActive).
 		Order("type, title, id").Find(&shared).Error
 	if err != nil {

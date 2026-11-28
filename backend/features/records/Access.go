@@ -34,6 +34,9 @@ func ContributeRecordAccess(reg *extensions.Registry) {
 			{Name: "create", Title: "Create records", Class: authz.ClassCreate},
 			{Name: "update", Title: "Change records", Class: authz.ClassWrite},
 			{Name: "delete", Title: "Delete records", Class: authz.ClassDelete},
+			// forge 35c-1: who may change the entity types a record holds
+			// (a Docs database's properties), checked on that record
+			{Name: "define", Title: "Define the entity types records hold, such as a database's properties", Class: authz.ClassWrite},
 		},
 	})
 }
@@ -64,4 +67,10 @@ func SetPlacement(fn Placement) {
 		return
 	}
 	placement.Store(&fn)
+}
+
+// ParentResource is the authz resource of a user-defined type's parent
+// record, where record.define is checked (forge 35c-1).
+func ParentResource(p features.Principal, parent Parent) string {
+	return authz.RecordResource(Resource(p, parent.Entity), parent.ID)
 }

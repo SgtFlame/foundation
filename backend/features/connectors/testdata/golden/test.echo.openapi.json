@@ -261,7 +261,8 @@
           "invalid",
           "rateLimited",
           "unavailable",
-          "notSupported"
+          "notSupported",
+          "refused"
         ]
       }
     },

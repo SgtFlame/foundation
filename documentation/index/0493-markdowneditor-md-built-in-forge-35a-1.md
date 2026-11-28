@@ -1,0 +1,1 @@
+| [MarkdownEditor.md](MarkdownEditor.md) › *Built in forge 35a-1* | Document files in Volumes (forge 35a-1): the `document` type (`.doc.json`, ProseMirror JSON), plain text and Markdown derived for the index, `kb.read` and citations, document rooms that check what the writer saves |

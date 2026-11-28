@@ -14,8 +14,10 @@ type Service interface {
 	CreateFile(args CreateFileArgs) CreateFileResponse
 }
 
-// FileTypes are the content types CreateFile accepts.
-var FileTypes = []string{"markdown"}
+// FileTypes are the content types CreateFile accepts: markdown (.md)
+// and, since forge 35a-1, document (.doc.json, a ProseMirror doc;
+// Documents.go).
+var FileTypes = []string{"markdown", "document"}
 
 type ListFolderArgs struct {
 	features.ServiceArgs
@@ -71,7 +73,9 @@ type CreateFileArgs struct {
 	features.ServiceArgs
 	Path kbservice.VolumePath // the folders down to the file's name, without its extension
 	Type string               // one of FileTypes
-	// Content is the new file's text; empty makes an empty file.
+	// Content is the new file's text; empty makes an empty file (an empty
+	// document for a document, whose Content is a document file or a bare
+	// ProseMirror doc).
 	Content string
 }
 

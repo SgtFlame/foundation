@@ -10,6 +10,7 @@ import (
 // typeExtensions maps a content type to its file extension.
 var typeExtensions = map[string]string{
 	"markdown": ".md",
+	"document": ".doc.json", // forge 35a-1: {format: 1, doc: <ProseMirror doc>}
 	"json":     ".json",
 	"yaml":     ".yml",
 }
@@ -133,15 +134,17 @@ func (vp *VolumePath) setErr(err error) bool {
 
 // SplitFile splits a file name into its base name and content type; ok is false
 // for an unknown extension or a base name that is not a valid path segment.
+// A longer extension wins (notes.doc.json is a document, not json).
 func SplitFile(name string) (base, fileType string, ok bool) {
-	ext := filepath.Ext(name)
-	base = strings.TrimSuffix(name, ext)
+	best := ""
 	for t, e := range typeExtensions {
-		if e == ext && validateSegment("file", base) == nil {
-			return base, t, true
+		if len(e) > len(typeExtensions[best]) && strings.HasSuffix(name, e) {
+			if b := strings.TrimSuffix(name, e); validateSegment("file", b) == nil {
+				best, base = t, b
+			}
 		}
 	}
-	return "", "", false
+	return base, best, best != ""
 }
 
 // ValidateFolder reports whether name can be used as a volume path folder.

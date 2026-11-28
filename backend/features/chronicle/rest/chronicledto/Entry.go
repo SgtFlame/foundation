@@ -27,6 +27,8 @@ type Entry struct {
 	OwnerID      uint64          `json:"ownerId,string"`
 	Shared       string          `json:"shared,omitempty"`          // tenant, or global on the global tenant's copy
 	SourceID     uint64          `json:"sourceId,string,omitempty"` // the entry a global copy was made from
+	Scope        string          `json:"scope,omitempty"`           // project:<page> for a project's entry
+	Facts        string          `json:"facts,omitempty"`           // its fields and typed links as text
 }
 
 // EntryFrom converts an entry; full includes its full summary and context.
@@ -34,7 +36,7 @@ func EntryFrom(e chronicle.Entry, full bool) Entry {
 	out := Entry{
 		ID: e.ID, Created: e.CreatedAt, Updated: e.UpdatedAt, Type: e.Type, Title: e.Title, ShortSummary: e.ShortSummary,
 		Fields: json.RawMessage(e.Fields), ParentID: e.ParentID, Status: e.Status, Review: e.Review, Indexed: e.IndexedHash != "" && e.IndexedHash == e.Hash(),
-		TenantID: e.TenantID, OwnerID: e.OwnerID, Shared: e.Shared, SourceID: e.SourceID,
+		TenantID: e.TenantID, OwnerID: e.OwnerID, Shared: e.Shared, SourceID: e.SourceID, Scope: e.Scope, Facts: e.Facts,
 	}
 	if !json.Valid(out.Fields) {
 		out.Fields = json.RawMessage(`{}`)
@@ -54,4 +56,5 @@ type EntryInput struct {
 	FullContext  string          `json:"fullContext"`
 	Fields       json.RawMessage `json:"fields,omitempty"`
 	ParentID     uint64          `json:"parentId,string,omitempty"`
+	Scope        string          `json:"scope,omitempty"`
 }

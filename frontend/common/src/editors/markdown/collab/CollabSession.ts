@@ -38,6 +38,35 @@ const logger = log.In('collab').Tags('session')
 
 type Listener = () => void
 
+// What a room's shared document holds and how it becomes the file's text
+// and back: a markdown file's Y.Text by default, a document file's
+// Y.XmlFragment for the rich-text editor (forge 35b-1, editors/richtext)
+export interface CollabContent {
+  // Loads a fresh room from the file's text; false when it cannot, so the
+  // room is never seeded (nor saved) with less than the file holds
+  seed(text: string): boolean | void
+  // The text the writer saves
+  text(): string
+  // Whether a tool's find and replace edits apply to it (kb.edit)
+  edits?: boolean
+  // Whether views publish cursors y-codemirror and y-monaco both read
+  bridgeCursors?: boolean
+}
+
+export type ContentFactory = (doc: Y.Doc) => CollabContent
+
+export const markdownContent: ContentFactory = (doc) => {
+  const ytext = doc.getText('markdown')
+  return {
+    seed: (text) => {
+      if (text) ytext.insert(0, text)
+    },
+    text: () => ytext.toString(),
+    edits: true,
+    bridgeCursors: true,
+  }
+}
+
 export class CollabSession {
   readonly fileId: string
   readonly doc = new Y.Doc()
@@ -54,9 +83,11 @@ export class CollabSession {
   private saveWhenSynced = false
   private saveTimer?: ReturnType<typeof setTimeout>
   private untrackCursor?: () => void
+  readonly content: CollabContent
 
-  constructor(fileId: string, readOnly = false) {
+  constructor(fileId: string, readOnly = false, content: ContentFactory = markdownContent) {
     this.fileId = fileId
+    this.content = content(this.doc)
     this.state = { status: 'connecting', readOnly, loaded: false, writer: false, saving: false, peers: [] }
   }
 
@@ -65,7 +96,7 @@ export class CollabSession {
     // setLocalState, not setLocalStateField: stop() cleared the state, and a field cannot be set on none
     this.awareness.setLocalState({ user: localUser() })
     this.awareness.on('change', this.onAwarenessChange)
-    this.untrackCursor = trackCursorSource(this.awareness)
+    if (this.content.bridgeCursors) this.untrackCursor = trackCursorSource(this.awareness)
     this.doc.on('update', this.onDocUpdate)
     window.addEventListener('pagehide', this.flush)
     this.provider = new CollabProvider(this.fileId, this.doc, this.awareness, {
@@ -80,7 +111,7 @@ export class CollabSession {
       },
       onControl: this.onControl,
       onClosed: (_code, reason) => this.update({ status: 'closed', closedReason: reason }),
-      mapAwarenessState: bridgeCursor,
+      mapAwarenessState: this.content.bridgeCursors ? bridgeCursor : undefined,
     })
   }
 
@@ -110,8 +141,11 @@ export class CollabSession {
         this.update({ writer: !!control.writer })
         if (control.seed !== undefined) {
           // A fresh room: load the file, then let everyone else edit
-          if (control.seed) this.ytext.insert(0, control.seed)
-          this.lastSavedText = control.seed
+          if (control.seed && this.content.seed(control.seed) === false) {
+            this.update({ readOnly: true, saveError: 'This document holds something this editor cannot show yet, so it is not opened' })
+            break
+          }
+          this.lastSavedText = this.content.text()
           this.provider?.sendControl({ op: 'seeded' })
           this.ready = true
         } else {
@@ -125,7 +159,7 @@ export class CollabSession {
         this.updateStatus()
         break
       case 'saved':
-        if (control.code === 200) this.lastSavedText = this.ytext.toString()
+        if (control.code === 200) this.lastSavedText = this.content.text()
         this.update({
           saving: false,
           lastSavedAt: control.code === 200 ? control.at : this.state.lastSavedAt,
@@ -145,6 +179,10 @@ export class CollabSession {
   // every view and peer sees them, and answers whether they applied
   private applyEdits(control: Control) {
     if (!this.state.writer || !control.id) return
+    if (!this.content.edits) {
+      this.provider?.sendControl({ op: 'edited', id: control.id, code: 409, message: 'this document is not edited by find and replace' })
+      return
+    }
     const placed = placeEdits(this.ytext.toString(), control.edits ?? [])
     if (typeof placed === 'string') {
       this.provider?.sendControl({ op: 'edited', id: control.id, code: 409, message: placed })
@@ -176,7 +214,7 @@ export class CollabSession {
   private save() {
     clearTimeout(this.saveTimer)
     this.saveTimer = undefined
-    const markdown = this.ytext.toString()
+    const markdown = this.content.text()
     if (!this.state.writer || this.state.readOnly || markdown === this.lastSavedText) {
       if (this.state.pending) this.update({ pending: false })
       return // the room ignores a read-only save
