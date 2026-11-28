@@ -101,6 +101,7 @@ func (x *exporter) document(seed bool) (apps.Document, error) {
 		}
 		x.group(g.Owner).Graphs = append(x.group(g.Owner).Graphs, apps.GraphPart{ID: id, Version: g.Version, PublishedAt: v.PublishedAt, Graph: g})
 	}
+	x.requiredQueries()
 	for _, id := range slices.Sorted(maps.Keys(v.Entities)) {
 		if err := x.entity(id, v.Entities[id]); err != nil {
 			return x.doc, err
@@ -127,6 +128,51 @@ func (x *exporter) document(seed bool) (apps.Document, error) {
 		}
 	}
 	return x.doc, nil
+}
+
+// requiredQueries adds the data.query graphs of the required apps' queries
+// the prefabs read (crm.timeline, forge 40e), at their last published
+// version, so the check finds them as the draft's check does.
+func (x *exporter) requiredQueries() {
+	have := map[string]bool{}
+	for _, p := range []apps.Parts{x.doc.Parts, x.doc.TenantParts, x.doc.AppParts} {
+		for _, g := range p.Graphs {
+			have[g.ID] = true
+		}
+	}
+	registered := live.Queries.All(x.d.Registry)
+	for _, p := range slices.Concat(x.doc.Parts.Prefabs, x.doc.TenantParts.Prefabs) {
+		for _, k := range slices.Sorted(maps.Keys(p.Prefab.Queries)) {
+			name := p.Prefab.Queries[k].Query
+			app, _, ok := strings.Cut(name, ".")
+			if !ok || !slices.Contains(x.v.Manifest.Requires.Apps, app) || slices.ContainsFunc(registered, func(q live.Query) bool { return q.ID == name }) {
+				continue
+			}
+			id := "qry-" + strings.ReplaceAll(name, ".", "-")
+			if have[id] {
+				continue
+			}
+			raw, ok := published(x.args, x.d, apps.PartGraph, id)
+			var pub struct {
+				Graph   json.RawMessage `json:"graph"`
+				Version int             `json:"version"`
+			}
+			if !ok || json.Unmarshal(raw, &pub) != nil {
+				continue
+			}
+			var part apps.GraphPart
+			src := raw
+			if len(pub.Graph) > 0 {
+				src = pub.Graph
+			}
+			if json.Unmarshal(src, &part.Graph) != nil || part.Graph.ID != id {
+				continue
+			}
+			have[id] = true
+			part.ID, part.Version, part.PublishedAt = id, pub.Version, x.v.PublishedAt
+			x.doc.AppParts.Graphs = append(x.doc.AppParts.Graphs, part)
+		}
+	}
 }
 
 // group is the document's group for a part's owner.

@@ -741,6 +741,14 @@ The app's queries read it with *Read projection* as **`app.<appId>.<name>`** (`a
 
 Tests: `apps/installs` `TestAppProjector` (counts per key, an update folding, a second process sharing the consumer, a restart resuming, an upgrade rebuilding a new generation) and `TestEphemeral` (a reader sees a signal and loses it after its time, a non-reader can neither follow nor publish, an undeclared topic is refused); `apps/ops` `TestEveryOpUndoes` covers the six new list commands.
 
+## Changed in forge 40e
+A page may read a query of an app it requires by `<app>.<query>` (Forge's CRM sample reads `crm.timeline` and `crm.pipelineTotals` of the `crm` library app). The checks find such queries by their data.query graph, `qry-<app>-<query>`:
+- `manifests.DraftDocument` adds the graph of every query a prefab reads that is not a registered query, so `forge.check` and `CheckDraft` see it.
+- `appservice` export (`requiredQueries`) adds the required apps' query graphs the prefabs read to `appParts`, at their last published version, so an export passes the blueprints-only check and imports where the required app is installed.
+- `apps.CheckDocument` looks up `qry-<app>-<query>` with the dots as dashes, as `livenodes.QueryGraphID` names it.
+
+Test: Forge `go test ./features/starter/crm -run TestPages` (`TestPagesCheck`, `TestPagesExportImport`).
+
 ## Changed in forge 30e
 Forge's Tasks app (`taskboard`, part 30e) shows another app's records: it requires the Tasks library app (`tasks`) and its pages read and change `taskItem` and `tasksProject` records through `tasks.*` commands and queries.
 
