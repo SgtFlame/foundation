@@ -47,7 +47,7 @@ func (s *service) indexNow(args features.ServiceArgs, id uint64) (bool, error) {
 		return false, nil
 	}
 	vector := s.embed(args, e)
-	if err := s.store.Put(ctx, chronicle.Row{EntryID: e.ID, TenantID: e.TenantID, OwnerID: e.OwnerID, Shared: e.Shared != "", Hash: hash, Title: e.Title, Text: e.Text(), Vector: vector}); err != nil {
+	if err := s.store.Put(ctx, chronicle.Row{EntryID: e.ID, TenantID: e.TenantID, OwnerID: e.OwnerID, Shared: e.Shared != "", Scope: e.Scope, Hash: hash, Title: e.Title, Text: e.Text(), Vector: vector}); err != nil {
 		return false, err
 	}
 	if vector == nil {

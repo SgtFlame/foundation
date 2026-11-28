@@ -15,6 +15,7 @@ func ContributeAccess(reg *extensions.Registry) {
 			{Name: "read", Title: "Read your Chronicles and those shared with you", Class: authz.ClassSelf},
 			{Name: "write", Title: "Change your Chronicles", Class: authz.ClassSelf},
 			{Name: "share", Title: "Share your Chronicles", Class: authz.ClassSelf},
+			{Name: "defineTypes", Title: "Define the tenant's and projects' entry types", Class: authz.ClassWrite},
 			{Name: "moderate", Title: "Approve shares out of the tenant", Class: authz.ClassModerate},
 			{Name: "moderateGlobal", Title: "Approve shares to the global tenant", Class: authz.ClassModerate, On: authz.OnApp},
 		},

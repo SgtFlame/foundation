@@ -59,3 +59,39 @@ func TestAgentMemory(t *testing.T) {
 		t.Errorf("Ana found %v, want her own, the tenant's and the global shared ones", got)
 	}
 }
+
+// A project's entries (forge 35f-6) are found by its readers, by their
+// facts too ("Home: Greyhaven"), and by nobody else.
+func TestProjectMemory(t *testing.T) {
+	reg := extensions.NewRegistry()
+	reg.Declare(retrieval.Sources)
+	stores := retrievaltest.Contribute(reg, t.TempDir())
+	ctx := context.Background()
+	stores.Memory.Put(ctx, chronicle.Row{EntryID: 1, TenantID: 1, OwnerID: 2, Scope: "project:bible", Title: "Wenlan", Text: "# Wenlan\n\nHome: Greyhaven\nStatus: Alive"})
+	stores.Memory.Put(ctx, chronicle.Row{EntryID: 2, TenantID: 1, OwnerID: 2, Scope: "project:other", Title: "Tarn", Text: "# Tarn\n\nHome: Greyhaven"})
+	chronicle.SetProjectAccess(func(_ context.Context, p features.Principal) []string {
+		if p.UserID == 3 {
+			return []string{"project:bible"}
+		}
+		return nil
+	})
+	defer chronicle.SetProjectAccess(nil)
+	service := retrievaltest.Service(reg, nil)
+	found := func(user uint64) []string {
+		t.Helper()
+		resp := service.Retrieve(retrievalservice.RetrieveArgs{ServiceArgs: features.ServiceArgs{Ctx: ctx, Principal: features.Principal{Kind: features.PrincipalUser, UserID: user, TenantID: 1}},
+			Query: "Greyhaven", Sources: []string{"chronicle"}, LexicalSemantic: -5, TopK: 10})
+		var out []string
+		for _, s := range resp.Segments {
+			out = append(out, s.Key)
+		}
+		slices.Sort(out)
+		return out
+	}
+	if got := found(3); !slices.Equal(got, []string{"1"}) {
+		t.Errorf("a reader of the project found %v", got)
+	}
+	if got := found(4); len(got) != 0 {
+		t.Errorf("someone else found %v", got)
+	}
+}

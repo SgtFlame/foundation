@@ -63,6 +63,18 @@ func (p *Proxy) Types(args chronicleservice.TypesArgs) chronicleservice.TypesRes
 	return services.Call[chronicleservice.TypesResponse](p.C, Service, "Types", args)
 }
 
+func (p *Proxy) SaveType(args chronicleservice.SaveTypeArgs) chronicleservice.SaveTypeResponse {
+	return services.Call[chronicleservice.SaveTypeResponse](p.C, Service, "SaveType", args)
+}
+
+func (p *Proxy) DeleteType(args chronicleservice.DeleteTypeArgs) chronicleservice.DeleteTypeResponse {
+	return services.Call[chronicleservice.DeleteTypeResponse](p.C, Service, "DeleteType", args)
+}
+
+func (p *Proxy) CopyStarter(args chronicleservice.CopyStarterArgs) chronicleservice.TypesResponse {
+	return services.Call[chronicleservice.TypesResponse](p.C, Service, "CopyStarter", args)
+}
+
 func (p *Proxy) Reindex(args chronicleservice.ReindexArgs) chronicleservice.ReindexResponse {
 	return services.Call[chronicleservice.ReindexResponse](p.C, Service, "Reindex", args)
 }

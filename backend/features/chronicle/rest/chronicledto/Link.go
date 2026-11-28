@@ -2,7 +2,8 @@ package chronicledto
 
 import "github.com/SgtFlame/foundation/backend/features/chronicle"
 
-// Link relates two entries; it has no direction.
+// Link relates two entries: related, without direction, or a typed link
+// read from fromId to toId.
 type Link struct {
 	ID     uint64 `json:"id,string"`
 	FromID uint64 `json:"fromId,string"`

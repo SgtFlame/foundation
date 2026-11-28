@@ -202,4 +202,10 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "aldermere" {
 		t.Fatalf("aldermere %+v", p)
 	}
+	// S35: the letter is read
+	res = st.ok("game.reachStory", farm, map[string]any{"step": "steward", "area": farm, "x": 9, "z": 3})
+	p = game.StoryPlace{}
+	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "steward" {
+		t.Fatalf("steward %+v", p)
+	}
 }

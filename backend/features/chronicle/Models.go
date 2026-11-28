@@ -45,6 +45,13 @@ type Entry struct {
 	Shared string `gorm:"index"`
 	// SourceID is the entry a global copy was made from.
 	SourceID uint64 `gorm:"index"`
+	// Scope is "" for the owner's own memory, or "project:<page>" for an
+	// entry of a writing project, read by those who may read the page's
+	// subtree too (forge 35f-6, ProjectAccess).
+	Scope string `gorm:"index"`
+	// Facts is its typed fields and links as text (forge 35f-6, Facts),
+	// kept up to date by RefreshFacts, so the entries table finds them.
+	Facts string
 }
 
 // Sharing (MultiTenant.md › Sharing Chronicles).
@@ -54,15 +61,15 @@ const (
 )
 
 // Text is what the entries table indexes and the reply reads: the title,
-// the short summary and the full summary, or the full context when there
-// is no full summary.
+// the short summary, the typed fields and links (Facts), and the full
+// summary, or the full context when there is no full summary.
 func (e Entry) Text() string {
 	body := e.FullSummary
 	if strings.TrimSpace(body) == "" {
 		body = e.FullContext
 	}
 	parts := []string{"# " + strings.TrimSpace(e.Title)}
-	for _, p := range []string{e.ShortSummary, body} {
+	for _, p := range []string{e.ShortSummary, e.Facts, body} {
 		if p = strings.TrimSpace(p); p != "" {
 			parts = append(parts, p)
 		}
@@ -149,7 +156,7 @@ type ChronicleShare struct {
 
 // Models are the chronicle feature's tables, for db.Migrate.
 func Models() []any {
-	return []any{&Entry{}, &EntryLink{}, &EntryRound{}, &ChronicleShare{}}
+	return []any{&Entry{}, &EntryLink{}, &EntryRound{}, &ChronicleShare{}, &TypeDef{}}
 }
 
 // Owned is the principal's own entries, links or rounds of entries.
@@ -159,7 +166,18 @@ func Owned(gdb *gorm.DB, p features.Principal) *gorm.DB {
 
 // Visible is the entries the principal may use: their own, those shared
 // with their tenant, and the global tenant's but the copies of their own.
+// A project's entries (forge 35f-6) are VisibleTo those who may read it.
 func Visible(gdb *gorm.DB, p features.Principal) *gorm.DB {
+	return VisibleTo(gdb, p, nil)
+}
+
+// VisibleTo is Visible with the entries of projects, the scopes
+// ReadableProjects gave for the principal.
+func VisibleTo(gdb *gorm.DB, p features.Principal, projects []string) *gorm.DB {
+	if len(projects) > 0 {
+		return gdb.Where("(tenant_id = ? AND (owner_id = ? OR shared = ? OR scope IN ?)) OR (tenant_id = ? AND shared = ? AND owner_id <> ?)",
+			p.TenantID, p.UserID, SharedTenant, projects, features.GlobalTenantID, SharedGlobal, p.UserID)
+	}
 	return gdb.Where("(tenant_id = ? AND (owner_id = ? OR shared = ?)) OR (tenant_id = ? AND shared = ? AND owner_id <> ?)",
 		p.TenantID, p.UserID, SharedTenant, features.GlobalTenantID, SharedGlobal, p.UserID)
 }

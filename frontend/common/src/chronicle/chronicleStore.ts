@@ -75,6 +75,6 @@ export function ancestorsOf(entries: readonly Entry[], id: string): string[] {
 export function inputOf(e: Entry): EntryInput {
   return {
     type: e.type, title: e.title, shortSummary: e.shortSummary, fullSummary: e.fullSummary ?? '', fullContext: e.fullContext ?? '',
-    fields: e.fields, parentId: e.parentId,
+    fields: e.fields, parentId: e.parentId, scope: e.scope,
   }
 }

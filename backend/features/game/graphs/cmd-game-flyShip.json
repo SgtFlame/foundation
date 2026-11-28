@@ -7,7 +7,7 @@
   "spec": {
     "command": "game.flyShip",
     "title": "Fly a ship",
-    "description": "Sets where a ship is and how it moves, and whether the sender is piloting it; the target is the ship's id. The pilot's window sends it a few times a second while flying, with pilot true; sitting down sends it with pilot true and leaving with pilot false. Refused when the ship does not exist, its cockpit is not placed, or someone else is flying it.",
+    "description": "Sets where a ship is and how it moves, and whether the sender is piloting it; the target is the ship's id. The pilot's window sends it a few times a second while flying, with pilot true; sitting down sends it with pilot true and leaving with pilot false. Refused when the ship does not exist, its cockpit is not placed, or someone else is flying it. V40: refused while a docking clamp holds the ship (launch it with game.launchShip).",
     "args": {
       "type": "object",
       "properties": {
@@ -154,7 +154,7 @@
         "y": 150
       },
       "config": {
-        "expr": "!found ? \"there is no ship \" + target : !(0 in ship.placed) ? \"place the cockpit (block 0) before flying\" : ship.pilot != \"\" \u0026\u0026 ship.pilot != user ? \"someone else is flying this ship\" : type(q) != \"array\" || len(q) != 4 ? \"q is a quaternion [x, y, z, w]\" : \"\"",
+        "expr": "!found ? \"there is no ship \" + target : !(0 in ship.placed) ? \"place the cockpit (block 0) before flying\" : (ship.bay ?? \"\") != \"\" && pilot ? \"the docking clamp still holds this ship: launch it first (game.launchShip)\" : ship.pilot != \"\" && ship.pilot != user ? \"someone else is flying this ship\" : type(q) != \"array\" || len(q) != 4 ? \"q is a quaternion [x, y, z, w]\" : \"\"",
         "type": "string"
       }
     },
@@ -445,6 +445,16 @@
       "to": {
         "node": "emit",
         "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "pilot"
+      },
+      "to": {
+        "node": "check",
+        "pin": "pilot"
       }
     }
   ]

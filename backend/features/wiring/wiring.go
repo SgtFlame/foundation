@@ -35,6 +35,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/SgtFlame/foundation/backend/features/ai/providers"
 	"github.com/SgtFlame/foundation/backend/features/apps/services/appservice"
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
@@ -80,6 +81,9 @@ type Env struct {
 	// Files is the record files store, set once it is made (files a node
 	// reads, such as an uploaded .ics or transcript).
 	Files *recordsfiles.Files
+	// Images is the AI image provider, usage-recorded (forge 35f-7), set
+	// once the AI provider is made.
+	Images *providers.Images
 }
 
 // Connectors is the connectors' deps, or empty ones.
@@ -104,6 +108,14 @@ func (e *Env) RecordFiles() recordsfiles.Files {
 		return nil
 	}
 	return *e.Files
+}
+
+// ImageProvider is the AI image provider, or nil before it is made.
+func (e *Env) ImageProvider() providers.Images {
+	if e == nil || e.Images == nil {
+		return nil
+	}
+	return *e.Images
 }
 
 // Executable is this binary's path, for features that parse in a child

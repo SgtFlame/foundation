@@ -1,0 +1,1 @@
+| [Connectors.md](Connectors.md) › *Built in forge 35f-7* | AI image generation (forge 35f-7): `image.generate@1`, the `image.google` type with chat's key and usage pricing, *Generate image*, the `image.generate` tool and the `refused` error code |

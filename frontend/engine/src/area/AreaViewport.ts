@@ -22,6 +22,7 @@ import { companionStep, VETERAN } from '../story/Companion.ts'
 import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE } from '../story/Cache.ts'
 import { COUNCIL_LINE, COUNCIL_LINES, councilReady, isHawksRest, REEVE_LINE, REEVE_LINES, reeveReady } from '../story/Council.ts'
 import { afterJourney, ARRIVE_LINE, isAldermere, journeyReady, LEGS } from '../story/Journey.ts'
+import { atGate, gateSpot, PALACE_LINE, PALACE_LINES, palaceReady } from '../story/Palace.ts'
 import { NORTH_LINE, NORTH_SENSE, northRoadReady, waymarkAt, waymarkSpots } from '../story/NorthRoad.ts'
 import { TOLD_LINE, ASHBY_LINE, ASHBY_SENSE, ashbyReady, isAshby, remnantAt, remnantSpots, TRACK_LINE, TRACK_REACH, TRACK_SENSE, trackPrints, trackReady } from '../story/Ashby.ts'
 import { WELL_LINE, WELL_REACH, WELL_SENSE, WELL_WARD_LINE, wellReady, wellSpot } from '../story/Well.ts'
@@ -2055,6 +2056,7 @@ export class AreaViewport {
     this.stepWell(p)
     this.stepRoad(p)
     this.stepJourney()
+    this.stepPalace(p)
     this.stepSenses(p)
     this.savePlace()
   }
@@ -2266,6 +2268,8 @@ export class AreaViewport {
       }
       if (st.done.council) this.drawNorthRoad()
     }
+    // S35: the palace gate stands in Aldermere
+    if (st && !this.set.interior && isAldermere(this.area.name)) this.drawPalaceGate()
   }
 
   // S32: the north road's waymarks, from the end of Ashby's furrows to the
@@ -2342,6 +2346,45 @@ export class AreaViewport {
       this.reach('aldermere')
       this.say(ARRIVE_LINE)
     }, LEGS.length * 7000)
+  }
+
+  // S35: the palace gate in Aldermere; walking up to it with the letter
+  // plays the Steward's reading, a caption at a time
+  private palaceOn = false
+  private stepPalace(p: { x: number; z: number }): void {
+    const st = this.story
+    if (!st || this.palaceOn || this.set.interior || !palaceReady(st.done) || !isAldermere(this.area.name)) return
+    if (!atGate(gateSpot(this.area.width, this.set.cell), p)) return
+    this.palaceOn = true
+    const here = () => (this.story && isAldermere(this.area.name) ? this.story : null)
+    PALACE_LINES.forEach((line, i) => setTimeout(() => {
+      if (here()) this.say(line)
+    }, i * 7000))
+    setTimeout(() => {
+      const s = here()
+      this.palaceOn = false
+      if (!s || s.done.steward) return
+      this.reach('steward')
+      this.say(PALACE_LINE)
+    }, PALACE_LINES.length * 7000)
+  }
+  private drawPalaceGate(): void {
+    const stone = new THREE.MeshStandardNodeMaterial({ color: 0xb8b0a0, roughness: 0.9 })
+    const banner = new THREE.MeshStandardNodeMaterial({ color: 0x7a1f2b, roughness: 1 })
+    const g = gateSpot(this.area.width, this.set.cell)
+    const gate = new THREE.Group()
+    for (const side of [-1, 1]) {
+      const tower = new THREE.Mesh(new THREE.BoxGeometry(1.6, 5, 1.6), stone)
+      tower.position.set(side * 2.4, 2.5, -1)
+      const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.6), banner)
+      flag.position.set(side * 2.4, 3.4, -0.18)
+      gate.add(tower, flag)
+    }
+    const arch = new THREE.Mesh(new THREE.BoxGeometry(6.4, 1, 1.6), stone)
+    arch.position.set(0, 4.2, -1)
+    gate.add(arch)
+    gate.position.set(g.x, 0, g.z)
+    this.marks.add(gate)
   }
 
   private atSign = false
