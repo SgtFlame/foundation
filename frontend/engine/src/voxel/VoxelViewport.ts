@@ -1,3 +1,4 @@
+import { docked, launchPlan } from '../ship/Dock.ts'
 import { padCharge, padUnder, portOf, portPads, PORT_ICE, PORT_RATE } from '../ship/Pad.ts'
 import { BAY_TOP, bayNear, clamped, needsBay } from '../ship/Bay.ts'
 import { blockCost, costLine, pay, shortOf, type Cost } from '../ship/Blueprint.ts'
@@ -97,6 +98,7 @@ export type ShipIntent =
   | { kind: 'assemble'; id: string; block: string; count: number; from: string } // V37: finished blocks made at the block works from storage
   | { kind: 'armBuild'; id: string; ship: string; from: string } // V38: the shipyard's arms place a ship's blocks from storage
   | { kind: 'openPort'; id: string; pad: string; pad2?: string; from: string } // V39: a spaceport opened over its landing pads
+  | { kind: 'launch'; id: string; tower?: string } // V40: a ship's docking clamp lets it go (a freighter or barge through an open spaceport)
   | { kind: 'fabricate'; id: string; item: FabItem } // V23: a circuit board (V24: or an ion thruster kit) started at a cabin's fabricator
   | { kind: 'fitKit'; id: string } // V24: an ion thruster kit fitted to a ship
   | { kind: 'fitDrive'; id: string } // V27: a jump drive fitted to a ship
@@ -653,7 +655,7 @@ export class VoxelViewport {
     }
     if (this.mode === 'walk') {
       this.hint.textContent = this.input.locked
-        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHint()}${this.nearSeat ? 'F: sit in the cockpit · ' : ''}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.forgeHint()}${this.depotHint()}${this.worksHint()}${this.yardHint()}${this.towerHint()}${this.fabHint()}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.progress?.tools?.scanner ? 'K: scan for ore · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
+        ? `${this.nearGiver ? `T: talk to ${this.contractList?.giver.name ?? 'the quartermaster'} · ` : ''}${this.ghostHint()}${this.seatHint()}${this.nearBed ? 'F: sleep in the bed · ' : ''}${this.forgeHint()}${this.depotHint()}${this.worksHint()}${this.yardHint()}${this.towerHint()}${this.fabHint()}${this.benchHint()}${this.nearWreck ? 'Hold Z: cut scrap from the wreck · ' : ''}${this.swarm.some((x) => x.at && !x.gone) ? 'Q: shoot a drone · ' : ''}${this.progress?.tools?.turret && this.onMoon() ? 'Y: set your turret down here · ' : ''}${this.progress?.tools?.scanner ? 'K: scan for ore · ' : ''}${this.nearShipHint()}${this.farmHint()}${(this.carried?.food ?? 0) >= 1 && hungry(this.needs) ? 'E: eat · ' : ''}Hold left: ${this.dig().name} · Right: fill · Wheel: brush ${this.brushRadius.toFixed(2)} m · WASD walk · Space jump · Shift run · X thrust pack${this.walker?.thrustPack ? ' (on: Space up, C down)' : ''} · G fly · Esc: release`
         : 'Click to walk · G to fly the camera instead'
       return
     }
@@ -2156,6 +2158,16 @@ export class VoxelViewport {
   sit(id: string): boolean {
     const st = this.shipLayer.ships().find((s) => s.id === id)
     if (!st || (st.pilot && st.pilot !== (this.opts.userId ?? ''))) return false
+    // V40: a ship still on its bay floor is launched first; the clamp lets go
+    if (docked(st)) {
+      const plan = launchPlan(st, this.shipLayer.ships())
+      if (!plan.ok) {
+        this.flashHint(`The docking clamp holds the ${st.design}: ${plan.why}`)
+        return false
+      }
+      this.opts.onShipIntent?.({ kind: 'launch', id, ...(plan.tower ? { tower: plan.tower } : {}) })
+      this.flashHint(plan.tower ? `The spaceport clears the ${st.design}: the clamp lets go` : `The docking clamp lets the ${st.design} go`)
+    }
     const body = this.shipLayer.sit(id, this.terrain())
     if (!body) return false
     body.thrustScale = this.thrustOf(id)
@@ -2166,6 +2178,15 @@ export class VoxelViewport {
     this.sendFly(true)
     this.updateHint()
     return true
+  }
+
+  // V40: F at a clamped ship's cockpit launches it from its bay floor
+  private seatHint(): string {
+    if (!this.nearSeat) return ''
+    const st = this.shipLayer.ships().find((s) => s.id === this.nearSeat)
+    if (!st || !docked(st)) return 'F: sit in the cockpit · '
+    const plan = launchPlan(st, this.shipLayer.ships())
+    return plan.ok ? `F: launch the ${st.design} from its bay${plan.tower ? ' through the spaceport' : ''} and fly · ` : `The docking clamp holds the ${st.design}: ${plan.why} · `
   }
 
   // Leaves the seat, standing beside the cockpit

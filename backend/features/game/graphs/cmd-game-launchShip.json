@@ -1,0 +1,464 @@
+{
+  "id": "cmd-game-launchShip",
+  "name": "game.launchShip",
+  "description": "Decides a ship's docking clamp letting it go, so its bay floor is empty again.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.launchShip",
+    "title": "Launch a ship",
+    "description": "Launches a finished ship from the bay floor whose docking clamp holds it (forge 360 V40); the target is the ship's id. The bay floor is empty again, so another ship can be started on it, and the ship flies free (game.flyShip refuses a ship still clamped). A cutter or hauler launches from its bay anywhere; a freighter or barge launches only through an open spaceport: name a spaceport tower within 40 m whose port is open (game.openPort) as tower. Refused for a ship not held by a clamp, an unfinished ship, or a freighter or barge with no open port near.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "tower": {
+          "type": "string",
+          "description": "For a freighter or barge: a spaceport tower within 40 m whose port is open"
+        }
+      }
+    },
+    "area": "game",
+    "targetType": "gameShip",
+    "projection": "game.ships",
+    "action": "game.play",
+    "events": [
+      "launched",
+      "undocked"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "title": "On game.launchShip",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "tower",
+            "type": "string",
+            "description": "The spaceport tower, for a freighter or barge"
+          }
+        ]
+      }
+    },
+    {
+      "id": "shipKey",
+      "type": "data.expression",
+      "title": "The ship's key",
+      "position": {
+        "x": 250,
+        "y": 0
+      },
+      "config": {
+        "expr": "\"gameShip.\" + target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ship",
+      "type": "live.readProjection",
+      "title": "Read the ship",
+      "position": {
+        "x": 500,
+        "y": 0
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "towerKey",
+      "type": "data.expression",
+      "title": "The tower's key",
+      "position": {
+        "x": 250,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"gameShip.\" + ((tower ?? \"\") == \"\" ? \"none\" : tower)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "towerShip",
+      "type": "live.readProjection",
+      "title": "Read the tower",
+      "position": {
+        "x": 500,
+        "y": 200
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why it is refused",
+      "position": {
+        "x": 800,
+        "y": 0
+      },
+      "config": {
+        "expr": "let d2 = (!found || !hasTower) ? 0 : (shipVal.x - tw.x) ** 2 + (shipVal.y - tw.y) ** 2 + (shipVal.z - tw.z) ** 2; !found ? \"there is no ship \" + target : (shipVal.bay ?? \"\") == \"\" ? \"that ship is not held by a docking clamp: only a ship started on a bay floor is launched\" : shipVal.design in [\"freighter\", \"barge\"] && (tower ?? \"\") == \"\" ? \"a freighter or barge launches only through an open spaceport: name a spaceport tower within 40 m whose port is open as tower\" : shipVal.design in [\"freighter\", \"barge\"] && (!hasTower || tw.design != \"tower\" || tw.world != shipVal.world) ? \"there is no spaceport tower \" + (tower ?? \"\") : shipVal.design in [\"freighter\", \"barge\"] && len(tw.port ?? []) == 0 ? \"that tower's port is not open: open it first (game.openPort)\" : shipVal.design in [\"freighter\", \"barge\"] && d2 > 1600 ? \"that tower is more than 40 m from the ship\" : len(shipVal.placed) < shipVal.blocks ? \"finish the ship before launching it\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Allowed?",
+      "position": {
+        "x": 1050,
+        "y": 0
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "title": "Can it launch?",
+      "position": {
+        "x": 1300,
+        "y": 0
+      },
+      "config": {}
+    },
+    {
+      "id": "launchedEvt",
+      "type": "data.expression",
+      "title": "The launch",
+      "position": {
+        "x": 1300,
+        "y": -250
+      },
+      "config": {
+        "expr": "{world: shipVal.world, tower: tower ?? \"\"}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "title": "The clamp lets go",
+      "position": {
+        "x": 1550,
+        "y": -200
+      },
+      "config": {
+        "event": "launched"
+      }
+    },
+    {
+      "id": "undockedEvt",
+      "type": "data.expression",
+      "title": "The bay is empty",
+      "position": {
+        "x": 1550,
+        "y": -400
+      },
+      "config": {
+        "expr": "{world: shipVal.world, ship: target}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "bayId",
+      "type": "data.expression",
+      "title": "The bay floor",
+      "position": {
+        "x": 1550,
+        "y": -550
+      },
+      "config": {
+        "expr": "shipVal.bay",
+        "type": "string"
+      }
+    },
+    {
+      "id": "emitBay",
+      "type": "live.emit",
+      "title": "Empty the bay floor",
+      "position": {
+        "x": 1800,
+        "y": -200
+      },
+      "config": {
+        "event": "undocked",
+        "projection": "game.ships"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "title": "Refuse",
+      "position": {
+        "x": 1550,
+        "y": 150
+      },
+      "config": {
+        "path": "args",
+        "fix": "finish a ship started on a bay floor and launch it; a freighter or barge needs an open spaceport tower within 40 m (game.openPort), named as tower"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "shipKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "shipKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ship",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "tower"
+      },
+      "to": {
+        "node": "towerKey",
+        "pin": "tower"
+      }
+    },
+    {
+      "from": {
+        "node": "towerKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "towerShip",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "shipVal"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "towerShip",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "tw"
+      }
+    },
+    {
+      "from": {
+        "node": "towerShip",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "hasTower"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "check",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "tower"
+      },
+      "to": {
+        "node": "check",
+        "pin": "tower"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "launchedEvt",
+        "pin": "shipVal"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "tower"
+      },
+      "to": {
+        "node": "launchedEvt",
+        "pin": "tower"
+      }
+    },
+    {
+      "from": {
+        "node": "launchedEvt",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "emit",
+        "pin": "then"
+      },
+      "to": {
+        "node": "emitBay",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "bayId",
+        "pin": "shipVal"
+      }
+    },
+    {
+      "from": {
+        "node": "bayId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emitBay",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "undockedEvt",
+        "pin": "shipVal"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "undockedEvt",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "undockedEvt",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emitBay",
+        "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    }
+  ]
+}

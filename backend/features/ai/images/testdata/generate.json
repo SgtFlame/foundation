@@ -1,0 +1,29 @@
+{
+ "_comment": "A generateContent reply with an image, shaped as the Gemini API reference documents it (forge 35f-7 question 3: a real recording waits for a key with image access).",
+ "candidates": [
+  {
+   "content": {
+    "role": "model",
+    "parts": [
+     {
+      "text": "Here is a lighthouse at dusk."
+     },
+     {
+      "inlineData": {
+       "mimeType": "image/png",
+       "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgAAACAAEA4iG8MwAAAABJRU5ErkJggg=="
+      }
+     }
+    ]
+   },
+   "finishReason": "STOP",
+   "index": 0
+  }
+ ],
+ "usageMetadata": {
+  "promptTokenCount": 12,
+  "candidatesTokenCount": 1290,
+  "totalTokenCount": 1302
+ },
+ "modelVersion": "gemini-2.5-flash-image"
+}

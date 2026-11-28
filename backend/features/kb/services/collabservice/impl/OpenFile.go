@@ -45,7 +45,7 @@ func (s *service) OpenFile(args collabservice.OpenFileArgs) collabservice.OpenFi
 	r, ok := s.byPath[file]
 	if !ok {
 		dir := filepath.Dir(file)
-		r = newRoom(s, features.NewTSID(), fileDoc{svc: s, file: file}, func(args features.ServiceArgs) (bool, *features.ServiceResponse) {
+		r = newRoom(s, features.NewTSID(), fileDoc{svc: s, file: file, typ: args.Type}, func(args features.ServiceArgs) (bool, *features.ServiceResponse) {
 			if !kbservice.InTenant(args.Principal) {
 				return false, args.Fail(authz.Status, kbservice.ErrOtherTenant())
 			}

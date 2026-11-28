@@ -34,6 +34,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/SgtFlame/foundation/backend/features/ai/providers"
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
@@ -68,6 +69,9 @@ type Env struct {
 	// Records is the records' deps, set once the projections and bus are
 	// made (features that read or write records as the service principal).
 	Records *recordsdata.Deps
+	// Images is the AI image provider, usage-recorded (forge 35f-7), set
+	// once the AI provider is made.
+	Images *providers.Images
 }
 
 // Connectors is the connectors' deps, or empty ones.
@@ -100,6 +104,14 @@ func (e *Env) RecordDeps() recordsdata.Deps {
 		return recordsdata.Deps{}
 	}
 	return *e.Records
+}
+
+// ImageProvider is the AI image provider, or nil before it is made.
+func (e *Env) ImageProvider() providers.Images {
+	if e == nil || e.Images == nil {
+		return nil
+	}
+	return *e.Images
 }
 
 // Executable is this binary's path, for features that parse in a child

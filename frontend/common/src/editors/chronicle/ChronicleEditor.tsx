@@ -24,7 +24,7 @@ import ShareChronicleDialog from '../../chronicle/ShareChronicleDialog.tsx'
 import { userIdOf } from '../../session/permissions.ts'
 import { useSession } from '../../session/session.ts'
 import { log } from '../../logging/index.ts'
-import { Chronicle, type Entry, type EntryInput, type Link, type LinkedRound } from '../../services/Chronicle.ts'
+import { Chronicle, type Entry, type EntryInput, type EntryType, type Link, type LinkedRound } from '../../services/Chronicle.ts'
 import { useWorkbenchSubject } from '../../workbench/context/WorkbenchContext.ts'
 import type { EditorProps } from '../../workbench/points.ts'
 import { ChronicleObject } from './ChronicleObject.ts'
@@ -38,9 +38,17 @@ interface FieldSchema {
   title?: string
   description?: string
   options?: { value: string; label?: string }[]
+  entry?: boolean // a relation to another entry (forge 35f-6): its id, or ids with many
+  many?: boolean
 }
 
-function TypeFields({ schema, value, onChange }: { schema: unknown; value: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void }) {
+function TypeFields({ schema, value, onChange, entries, types }: {
+  schema: unknown
+  value: Record<string, unknown>
+  onChange: (v: Record<string, unknown>) => void
+  entries: readonly Entry[]
+  types: readonly EntryType[]
+}) {
   const properties = Object.entries((schema as { properties?: Record<string, FieldSchema> } | undefined)?.properties ?? {})
   if (properties.length === 0) return null
   return (
@@ -53,6 +61,37 @@ function TypeFields({ schema, value, onChange }: { schema: unknown; value: Recor
           onChange(next)
         }
         const common = { size: 'small' as const, label: f.title ?? key, helperText: f.description, sx: { minWidth: 200 } }
+        if (f.entry) {
+          const label = (e: Entry) => `${typeOf(types, e.type)?.icon ?? ''} ${e.title}`
+          const ids = f.many ? ((value[key] as string[] | undefined) ?? []) : value[key] ? [value[key] as string] : []
+          const chosen = ids.map((id) => entries.find((e) => e.id === id)).filter((e): e is Entry => !!e)
+          return f.many ? (
+            <Autocomplete
+              key={key}
+              multiple
+              size="small"
+              sx={{ minWidth: 240 }}
+              options={entries}
+              value={chosen}
+              getOptionLabel={label}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              onChange={(_, list) => set(list.length ? list.map((e) => e.id) : undefined)}
+              renderInput={(params) => <TextField {...params} label={common.label} helperText={f.description?.replace(" (an entry's id)", '')} />}
+            />
+          ) : (
+            <Autocomplete
+              key={key}
+              size="small"
+              sx={{ minWidth: 240 }}
+              options={entries}
+              value={chosen[0] ?? null}
+              getOptionLabel={label}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              onChange={(_, e) => set(e?.id)}
+              renderInput={(params) => <TextField {...params} label={common.label} helperText={f.description?.replace(" (an entry's id)", '')} />}
+            />
+          )
+        }
         if (f.type === 'enum') {
           return (
             <TextField key={key} {...common} select value={(value[key] as string) ?? ''} onChange={(e) => set(e.target.value)}>
@@ -173,7 +212,9 @@ function ChronicleEditor({ object, registry, tabId }: EditorProps<ChronicleObjec
     () => active.filter((e) => e.id !== entry?.id && !(entry && ancestorsOf(active, e.id).includes(entry.id))),
     [active, entry],
   )
-  const related = links.map((l) => (l.fromId === entry?.id ? l.toId : l.fromId))
+  // Related links, and typed ones (forge 35f-6) read from fromId to toId
+  const related = links.map((l) => ({ id: l.fromId === entry?.id ? l.toId : l.fromId, link: l }))
+  const [linkKind, setLinkKind] = useState('')
   const byId = new Map(entries.map((e) => [e.id, e]))
 
   const set = (patch: Partial<EntryInput>) => setForm((f) => ({ ...f, ...patch }))
@@ -219,10 +260,14 @@ function ChronicleEditor({ object, registry, tabId }: EditorProps<ChronicleObjec
     }
   }
 
-  const link = async (toId: string, remove = false) => {
+  const link = async (toId: string, remove = false, existing?: Link) => {
     if (!entry) return
     try {
-      const resp = await Chronicle.link({ fromId: entry.id, toId, remove })
+      const typed = existing && existing.kind && existing.kind !== 'related'
+      const request = typed
+        ? { fromId: existing.fromId, toId: existing.toId, remove, kind: existing.kind }
+        : { fromId: entry.id, toId, remove, kind: remove ? undefined : linkKind.trim() || undefined }
+      const resp = await Chronicle.link(request)
       setLinks(resp.links ?? [])
       await refreshChronicles()
     } catch (err) {
@@ -303,7 +348,7 @@ function ChronicleEditor({ object, registry, tabId }: EditorProps<ChronicleObjec
                 renderInput={(params) => <TextField {...params} label="Parent" helperText="Checking this entry in a conversation includes its parents" />}
               />
             </Stack>
-            {type && <TypeFields schema={type.fields} value={form.fields ?? {}} onChange={(fields) => set({ fields })} />}
+            {type && <TypeFields schema={type.fields} value={form.fields ?? {}} onChange={(fields) => set({ fields })} entries={active} types={types} />}
             <TextField
               size="small"
               label="Short summary"
@@ -346,22 +391,33 @@ function ChronicleEditor({ object, registry, tabId }: EditorProps<ChronicleObjec
           <Stack spacing={1}>
             <Typography variant="subtitle2">Related</Typography>
             <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
-              {related.map((id) => {
+              {related.map(({ id, link: l }) => {
                 const other = byId.get(id)
+                const name = `${typeOf(types, other?.type ?? '')?.icon ?? ''} ${other?.title ?? id}`
+                const typed = l.kind && l.kind !== 'related'
+                const label = !typed ? name : l.fromId === entry.id ? `${l.kind} ${name}` : `${name} is ${l.kind} this`
                 return (
                   <Chip
-                    key={id}
+                    key={l.id}
                     size="small"
-                    label={`${typeOf(types, other?.type ?? '')?.icon ?? ''} ${other?.title ?? id}`}
+                    label={label}
                     onClick={other ? () => registry.edit(new ChronicleObject(other)) : undefined}
-                    onDelete={() => void link(id, true)}
+                    onDelete={() => void link(id, true, l)}
                   />
                 )
               })}
+              <TextField
+                size="small"
+                sx={{ width: 140 }}
+                placeholder="related"
+                value={linkKind}
+                onChange={(e) => setLinkKind(e.target.value)}
+                slotProps={{ htmlInput: { 'aria-label': 'Link as', title: 'Link as: empty for related, or a typed link such as sister of' } }}
+              />
               <Autocomplete
                 size="small"
                 sx={{ minWidth: 240 }}
-                options={active.filter((e) => e.id !== entry.id && !related.includes(e.id))}
+                options={active.filter((e) => e.id !== entry.id && !related.some((r) => r.id === e.id && (r.link.kind || 'related') === (linkKind.trim() || 'related')))}
                 value={null}
                 getOptionLabel={(e) => `${typeOf(types, e.type)?.icon ?? ''} ${e.title}`}
                 onChange={(_, e) => e && void link(e.id)}

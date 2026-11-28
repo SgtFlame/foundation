@@ -19,6 +19,7 @@ for (const [id, component] of Object.entries({ ...muiRenderers, ...starterRender
 }
 extensions.contribute(renderers, { id: 'layout.flex', source: 'ui', component: lazy(() => import('./renderers/flexlayout/FlexLayout.tsx')) })
 extensions.contribute(renderers, { id: 'doc.markdown', source: 'ui', component: lazy(() => import('./renderers/doc/DocMarkdown.tsx')) })
+extensions.contribute(renderers, { id: 'doc.richText', source: 'ui', component: lazy(() => import('./renderers/doc/DocRichText.tsx')) })
 extensions.contribute(renderers, { id: 'graph.canvas', source: 'ui', component: lazy(() => import('./renderers/graph/GraphCanvas.tsx')) })
 
 // The apps' editor kinds, followed once there is a session

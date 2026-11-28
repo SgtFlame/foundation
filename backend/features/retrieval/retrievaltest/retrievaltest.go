@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -245,7 +246,8 @@ func (m *Memory) KeywordSearch(_ context.Context, o chronicle.Owner, query strin
 	var hits []hit
 	for _, r := range m.rows {
 		mine := r.OwnerID == o.UserID
-		if r.TenantID != o.TenantID || (o.OthersOnly && (mine || !r.Shared)) || (!o.OthersOnly && !mine && !r.Shared) {
+		visible := r.Shared || (r.Scope != "" && slices.Contains(o.Projects, r.Scope))
+		if r.TenantID != o.TenantID || (o.OthersOnly && (mine || !visible)) || (!o.OthersOnly && !mine && !visible) {
 			continue
 		}
 		if n := score(query, r.Title+" "+r.Text); n > 0 {

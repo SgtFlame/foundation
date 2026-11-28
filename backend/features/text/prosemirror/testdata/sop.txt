@@ -1,0 +1,19 @@
+Refund SOP
+Refunds are always approved by a lead within 2*3 days.
+Steps
+Check the order
+order_id matches
+Refund it
+Done
+Open
+Amount	Approver
+< 100 | small	@Ana
+Flow
+refund --id 42
+echo ```
+Ask first.
+Then act.
+Always.
+Area \pi r^2
+
+Business days only.

@@ -34,6 +34,21 @@ type EntityType struct {
 	// Hidden is a deleted entity type: its records are kept, and
 	// entity.restore brings it back with them.
 	Hidden bool `json:"hidden,omitempty"`
+	// UserDefined is a type a running app made after install (forge
+	// 35c-1, entity.createUserDefined): a Docs database's properties. It
+	// is owned by the app but part of no app version, so an upgrade leaves
+	// it alone and app.describe and app.export do not list it; Parent is
+	// the record that holds it, on whose path record.define decides who
+	// may change it.
+	UserDefined bool    `json:"userDefined,omitempty"`
+	Parent      *Parent `json:"parent,omitempty"`
+}
+
+// Parent is the record holding a user-defined entity type (forge 35c-1),
+// such as a Docs Database record.
+type Parent struct {
+	Entity string `json:"entity"`
+	ID     string `json:"id"`
 }
 
 // Field is one field of an entity type. Which of the type-specific parts
