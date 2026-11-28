@@ -1010,7 +1010,21 @@ Built 2026-11-27 ([Calendar.md](Calendar.md) › *Built in forge 28h*). The `cal
 
 Built 2026-11-27 ([MarkdownEditor.md](MarkdownEditor.md) › *Built in forge 35a-1*). Volumes gained the `document` file type (`.doc.json`, ProseMirror JSON in a `{format: 1, doc}` envelope) and `features/text/prosemirror`, which derives plain text and Markdown (with each top-level block's lines) from a document. Later parts: read a Volume file's text only through `volumeservice.TextOf`, never `os.ReadFile` alone, so documents are indexed, cited and read as their derived Markdown; store a document only through `volumeservice.DocumentFile`; 35b-1's editor binds a document room with `y-prosemirror` and sends the ProseMirror JSON as the room's `save`.
 
+## Forge 28i (first step): proposals for an agent's maker, open holds
+
+Built 2026-11-28 (`Calendar.md` › *Changed in forge 28i*). An agent naming nobody proposes for its maker, on that person's calendar it may write. *Calendar writer* now holds `calHold.*` on its calendar. The new `calendar.holds` tool lists a subject's open Holds. Later parts: the person must grant an agent `calWriter` on their calendar before it can hold time. A tool an agent calls that writes another app's records must be a graph the calling app reaches through `requires.apps` and *Call graph*, because `tools.call` refuses write tools to people. Its second step added `calendar.answerInvitation` and `calendar.applyReply` over *iTIP reply*, *iTIP apply* and `calendar.event.mirror`. Fixtures that seed the calendar app need `calendarnodes.ContributeIcal`, even with no dependencies.
+
 Built 2026-11-27 ([Records.md](Records.md) › *Built in forge 35c-1*). Entity types made at runtime: `EntityType.UserDefined` and `Parent`, `entity.createUserDefined`, the `record.define` action (`entity:<type>.define` in manifests), and the definition nodes in `records/nodes`. Later parts: 35c-3's *Database* records hold their rows' type through these nodes; a new code path listing an app's own parts skips user-defined types (`manifests.partOf`); send commands from a node through `livenodes.Send`.
+
+## Forge 28l: CalDAV and ICS feeds
+
+Built 2026-11-28 (`Calendar.md` › *Built in forge 28l*). The connector types `calendar.caldav` and `calendar.ics` implement `calendar.events@1`. The `calendar/providers` package holds what they share, and `caldav/caldavtest` is an in-memory CalDAV server written from the RFCs. `ical.ComposeOptions.Resource` composes without `METHOD`. `calCalendar.readOnly` marks a calendar listed as `reader` or `freeBusy`, which `calendar-push` skips.
+
+What later parts must do:
+- A type reads every `.ics` a service returns through `providers.Reader`, which is the child in a server.
+- A type's settings carry its polling, because adapters never read configuration.
+- A connection with a `secret` setting sends it under `secrets`, and a test fixture that makes one needs a `config.SecretStore` in its connections' deps.
+- Google and Microsoft (28j, 28k) reuse `calendar/providers` and pass the same suite.
 
 Built 2026-11-27 ([Chronicle.md](Chronicle.md) › *Built in forge 35f-6*). Typed Chronicle entries: tenant and project entry types with record-catalog fields and starter sets, typed links, facts in the entries' text, project scope in the tenant database and the entries table, `SaveType`/`DeleteType`/`CopyStarter`, and the memory update reading and setting fields. Later parts: 35a-3 calls `chronicle.SetProjectAccess` with the page subtree's readers; the writer modes (35f-1) copy a starter into `project:<page>` and set `EntryInput.Scope`; 35c-3 projects a project's typed entries into records for its views.
 
