@@ -186,3 +186,13 @@ func Type(contract string) connectors.Type {
 		OAuth:    &connectors.OAuth{Provider: ProviderID, Scopes: []string{"read"}, Extra: map[string]string{"access_type": "offline"}},
 		Meta:     connectors.Meta{Title: "Test OAuth", Description: "Signs in with the test OAuth provider. For tests only.", Tags: []string{"test"}}}
 }
+
+// ChoosingType is a type whose connections choose in their signIn setting
+// whether to sign in with the test provider (forge 26a-2): empty signs in
+// with a password.
+func ChoosingType(contract string) connectors.Type {
+	return connectors.Type{ID: "test.oauthChoice", Contracts: []string{contract}, Source: connectors.SourceBuiltin,
+		Settings: json.RawMessage(`{"type":"object","properties":{"signIn":{"type":"string","title":"Sign in with","enum":["","test"]},"password":{"type":"secret","title":"Password"}}}`),
+		OAuth:    &connectors.OAuth{Field: "signIn", Choices: []connectors.OAuthChoice{{Provider: ProviderID, Scopes: []string{"write"}}}},
+		Meta:     connectors.Meta{Title: "Test OAuth choice", Description: "Signs in with a password or the test OAuth provider, as each connection chooses. For tests only.", Tags: []string{"test"}}}
+}

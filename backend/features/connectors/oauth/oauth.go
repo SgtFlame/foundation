@@ -111,7 +111,7 @@ func challenge(verifier string) string {
 // signInOf is a connection with its type's sign-in and provider.
 type signInOf struct {
 	c        connections.Connection
-	oauth    connectors.OAuth
+	choice   connectors.OAuthChoice
 	provider connectors.OAuthProvider
 }
 
@@ -134,11 +134,16 @@ func lookup(args features.ServiceArgs, cd connections.Deps, id string) (signInOf
 	if !ok || t.Type.OAuth == nil {
 		return signInOf{}, log.Code("oauth_not_supported").Errorf("connection %s's type signs in without OAuth", c.Name)
 	}
-	p, ok := connectors.OAuthProviderOf(cd.Extensions, t.Type.OAuth.Provider)
+	settings, _ := json.Marshal(c.Settings)
+	choice, ok := t.Type.OAuth.For(settings)
 	if !ok {
-		return signInOf{}, log.Code("oauth_provider_unknown").Errorf("there is no OAuth provider %s", t.Type.OAuth.Provider)
+		return signInOf{}, log.Code("oauth_not_chosen").Errorf("connection %s signs in without OAuth: choose a provider in its %s setting", c.Name, t.Type.OAuth.Field)
 	}
-	return signInOf{c: c, oauth: *t.Type.OAuth, provider: p}, nil
+	p, ok := connectors.OAuthProviderOf(cd.Extensions, choice.Provider)
+	if !ok {
+		return signInOf{}, log.Code("oauth_provider_unknown").Errorf("there is no OAuth provider %s", choice.Provider)
+	}
+	return signInOf{c: c, choice: choice, provider: p}, nil
 }
 
 // registration is the provider's app registration the tenant uses (its
@@ -198,24 +203,36 @@ func Start(args features.ServiceArgs, d Deps, id, returnTo string) (string, erro
 	if _, err := kv.Create(args.Context(), key, raw); err != nil {
 		return "", log.Wrap(err)
 	}
+	return AuthorizeURL(s.provider, s.choice, reg, st.Redirect, key, st.Verifier), nil
+}
+
+// AuthorizeURL is where a sign-in sends the person: the provider's
+// authorize endpoint with the registration's client, the redirect, the
+// scopes (the provider's defaults, then the choice's), the state, the PKCE
+// challenge and the provider's and choice's extra parameters.
+func AuthorizeURL(p connectors.OAuthProvider, c connectors.OAuthChoice, reg Registration, redirect, state, verifier string) string {
 	q := url.Values{}
 	q.Set("response_type", "code")
 	q.Set("client_id", reg.ClientID)
-	q.Set("redirect_uri", st.Redirect)
-	q.Set("scope", strings.Join(s.oauth.Scopes, s.provider.Separator()))
-	q.Set("state", key)
-	if s.provider.PKCE {
-		q.Set("code_challenge", challenge(st.Verifier))
+	q.Set("redirect_uri", redirect)
+	q.Set("scope", strings.Join(p.ScopesFor(c), p.Separator()))
+	q.Set("state", state)
+	if p.PKCE {
+		q.Set("code_challenge", challenge(verifier))
 		q.Set("code_challenge_method", "S256")
 	}
-	for k, v := range s.oauth.Extra {
+	for k, v := range p.Extra {
 		q.Set(k, v)
 	}
+	for k, v := range c.Extra {
+		q.Set(k, v)
+	}
+	u := p.Endpoint(p.AuthorizeURL, reg.Tenant)
 	sep := "?"
-	if strings.Contains(s.provider.AuthorizeURL, "?") {
+	if strings.Contains(u, "?") {
 		sep = "&"
 	}
-	return s.provider.AuthorizeURL + sep + q.Encode(), nil
+	return u + sep + q.Encode()
 }
 
 // Done is a finished sign-in.
@@ -295,13 +312,7 @@ type tokenError struct {
 // token posts to the provider's token endpoint with the registration's
 // client credentials.
 func (d Deps) token(ctx context.Context, p connectors.OAuthProvider, reg Registration, form url.Values) (connections.Tokens, map[string]any, *tokenError) {
-	form.Set("client_id", reg.ClientID)
-	if reg.ClientSecret != "" {
-		form.Set("client_secret", reg.ClientSecret)
-	}
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, p.TokenURL, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
+	req := TokenRequest(ctx, p, reg, form)
 	res, err := d.client().Do(req)
 	if err != nil {
 		return connections.Tokens{}, nil, &tokenError{Code: "unreachable"}
@@ -334,6 +345,37 @@ func (d Deps) token(ctx context.Context, p connectors.OAuthProvider, reg Registr
 	return t, body, nil
 }
 
+// Exchange posts a grant to the provider's token endpoint: the tokens, or
+// the provider's error code (invalid_grant, …, http_<status>,
+// unreachable, no_access_token).
+func (d Deps) Exchange(ctx context.Context, p connectors.OAuthProvider, reg Registration, form url.Values) (connections.Tokens, string) {
+	t, _, err := d.token(ctx, p, reg, form)
+	if err != nil {
+		return connections.Tokens{}, err.Code
+	}
+	return t, ""
+}
+
+// TokenRequest is a request to the provider's token endpoint with the
+// registration's client credentials, in the form or as HTTP Basic
+// (OAuthProvider.TokenAuth).
+func TokenRequest(ctx context.Context, p connectors.OAuthProvider, reg Registration, form url.Values) *http.Request {
+	basic := p.TokenAuth == "basic" && reg.ClientSecret != ""
+	if !basic {
+		form.Set("client_id", reg.ClientID)
+		if reg.ClientSecret != "" {
+			form.Set("client_secret", reg.ClientSecret)
+		}
+	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, p.Endpoint(p.TokenURL, reg.Tenant), strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	if basic {
+		req.SetBasicAuth(url.QueryEscape(reg.ClientID), url.QueryEscape(reg.ClientSecret))
+	}
+	return req
+}
+
 // account reads who signed in.
 func (d Deps) account(ctx context.Context, p connectors.OAuthProvider, t connections.Tokens, token map[string]any) (string, error) {
 	from := token
@@ -354,11 +396,87 @@ func (d Deps) account(ctx context.Context, p connectors.OAuthProvider, t connect
 			return "", err
 		}
 	}
-	v, _ := from[p.AccountField].(string)
-	if v == "" {
-		return "", fmt.Errorf("no %s", p.AccountField)
+	if p.UserInfoURL != "" {
+		// id_token claims still come from the token response
+		if idt, ok := token["id_token"]; ok {
+			from["id_token"] = idt
+		}
 	}
-	return v, nil
+	return ReadAccount(p.AccountField, from)
+}
+
+// ReadAccount reads an AccountField from a token response or userinfo
+// answer: a dotted path (team.id), a claim of its id_token
+// (id_token.email; the token came straight from the provider over TLS, so
+// its signature is not checked), or a template of those in braces
+// ({team.id}/{authed_user.id}).
+func ReadAccount(field string, from map[string]any) (string, error) {
+	if strings.Contains(field, "{") {
+		var out strings.Builder
+		rest := field
+		for {
+			i := strings.Index(rest, "{")
+			if i < 0 {
+				out.WriteString(rest)
+				break
+			}
+			j := strings.Index(rest[i:], "}")
+			if j < 0 {
+				return "", fmt.Errorf("unclosed { in %s", field)
+			}
+			out.WriteString(rest[:i])
+			v, err := ReadAccount(rest[i+1:i+j], from)
+			if err != nil {
+				return "", err
+			}
+			out.WriteString(v)
+			rest = rest[i+j+1:]
+		}
+		return out.String(), nil
+	}
+	cur := any(from)
+	parts := strings.Split(field, ".")
+	for i, part := range parts {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return "", fmt.Errorf("no %s", field)
+		}
+		cur = m[part]
+		if part == "id_token" && i == 0 && len(parts) > 1 {
+			raw, _ := cur.(string)
+			claims, err := jwtClaims(raw)
+			if err != nil {
+				return "", err
+			}
+			cur = claims
+		}
+	}
+	switch v := cur.(type) {
+	case string:
+		if v != "" {
+			return v, nil
+		}
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64), nil
+	}
+	return "", fmt.Errorf("no %s", field)
+}
+
+// jwtClaims are a JWT's payload, unverified.
+func jwtClaims(raw string) (map[string]any, error) {
+	parts := strings.Split(raw, ".")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("the id_token is not a JWT")
+	}
+	b, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[1], "="))
+	if err != nil {
+		return nil, err
+	}
+	var claims map[string]any
+	if err := json.Unmarshal(b, &claims); err != nil {
+		return nil, err
+	}
+	return claims, nil
 }
 
 // keep commits tokens to a connection as args' principal, and waits until

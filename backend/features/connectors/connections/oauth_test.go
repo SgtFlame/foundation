@@ -37,7 +37,7 @@ func oauthSetup(t *testing.T) (*fixture, *oauthtest.Server, oauth.Deps) {
 	f := setup(t)
 	prov := oauthtest.New(t)
 	connectors.ContributeOAuthProvider(f.reg, "test", prov.Provider())
-	connectors.ContributeBuiltins(f.reg, "test", nil, []connectors.Type{oauthtest.Type(connectorstest.ContractRef)})
+	connectors.ContributeBuiltins(f.reg, "test", nil, []connectors.Type{oauthtest.Type(connectorstest.ContractRef), oauthtest.ChoosingType(connectorstest.ContractRef)})
 	oauth.ContributeSettings(f.reg)
 	od := oauth.Deps{Connections: func() connections.Deps { return *f.live }, PublicBase: "http://axiom.test/"}
 	f.live.Config, f.live.Extensions = registrations{}, f.reg
@@ -131,6 +131,34 @@ func TestOAuthSignIn(t *testing.T) {
 	if _, err := oauth.Start(user(2), od, c.ID, ""); err == nil {
 		t.Fatal("another person started a sign-in on Ann's connection")
 	}
+}
+
+// A type whose connections choose their sign-in: one that chose none
+// signs in with its password and cannot start OAuth; one that chose the
+// provider asks for its choice's scopes, and describe names the provider
+// only then (forge 26a-2).
+func TestOAuthChoice(t *testing.T) {
+	f, prov, od := oauthSetup(t)
+	pw := f.create(map[string]any{"type": "test.oauthChoice", "name": "Password", "settings": map[string]any{"signIn": ""}})
+	if _, err := oauth.Start(args(), od, pw.ID, ""); codeOf(err) != "oauth_not_chosen" {
+		t.Fatalf("a password connection started OAuth: %v", err)
+	}
+	if j := f.query(args(), "connections.describe", map[string]any{"id": pw.ID}).json(); strings.Contains(j, `"title":"Test provider"`) {
+		t.Fatalf("describe names a provider the connection did not choose: %s", j)
+	}
+	c := f.create(map[string]any{"type": "test.oauthChoice", "name": "OAuth", "settings": map[string]any{"signIn": "test"}})
+	u, err := oauth.Start(args(), od, c.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(u, "scope=write") {
+		t.Fatalf("authorize URL: %s", u)
+	}
+	if done := signIn(t, prov, od, c.ID); done.Account != "ann@example.com" {
+		t.Fatalf("done: %+v", done)
+	}
+	desc := f.query(args(), "connections.describe", map[string]any{"id": c.ID})
+	eventually(t, "the provider shown", 3*time.Second, func() bool { return strings.Contains(desc.json(), `"title":"Test provider"`) })
 }
 
 // Two processes resolving an expiring token refresh it once and both get

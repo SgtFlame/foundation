@@ -571,3 +571,23 @@ Record commands do not take `heldBy` yet: setting a file someone else uploaded o
   - `go test ./features/messaging/...`: the suite against the test server, the checks, the golden tool shapes of every operation (`msgtest/testdata/golden`, `-update` after a deliberate change), and faults and private channels.
   - `TestWatchBothWays`: two connections in one workspace each get every notice in order, and a dropped notice is still listed.
 - **Not yet**: the two-way fixture through *Call connector* and *On connector event* comes with 26f-2's bridges, whose blueprints it tests.
+
+## Built in forge 26a-2
+
+The first OAuth providers (forge's plan `026a-2-OAuthProviders.md`).
+
+- **`connectors/oauth/providers`** (wired in `features/wiring/oauthproviders.go`, before serve registers the `connectors.oauth` section): **Google** (PKCE, `access_type=offline`, `prompt=consent`, default scopes `openid email`, account `id_token.email`, Gmail's `https://mail.google.com/` and the calendar scopes), **Microsoft** (the identity platform v2.0 under `login.microsoftonline.com/{tenant}/…`, PKCE, default scopes `openid profile offline_access`, account `id_token.preferred_username`, the outlook.office.com IMAP, POP and SMTP scopes and Graph's calendar, mail and Teams scopes; one token is for one resource, so a type asks for Outlook or Graph scopes, never both) and **Slack** (OAuth v2 bot tokens, no PKCE, scopes joined by `,`, account `{team.id}/{authed_user.id}`, the chat scopes).
+- **`OAuthProvider`** gained `Extra` (authorize parameters every sign-in sends), `DefaultScopes` (asked before the type's, each declared), `TenantSegment` (the URLs hold `{tenant}`, filled from the registration's `tenant`, `common` when empty; the section shows a *Directory* field for such a provider) and `TokenAuth` (`post`, the default, or `basic`). `AccountField` is a dotted path (`team.id`), a claim of the token response's `id_token` (`id_token.email`, read without checking the signature: it came straight from the provider over TLS) or a template of those (`{team.id}/{authed_user.id}`), read by `oauth.ReadAccount`.
+- **A connection may choose its sign-in**: `OAuth.Field` names a settings field holding one of `OAuth.Choices` (`{provider, scopes, extra}`), and `OAuth.For(settings)` is the choice a connection made; a connection that chose none signs in another way (a password), `connection.signIn` refuses it with `oauth_not_chosen`, and `connections.describe` names a provider only for a connection that chose one. `CheckOAuth` checks every choice and that the field is a settings property.
+- `oauth.AuthorizeURL`, `oauth.TokenRequest` and `Deps.Exchange` are the pure pieces of the flow, for golden tests.
+
+### Decisions to review after seeing it
+
+- Slack signs in for a bot token (`scope`), not a user token (`user_scope`): the bridge of 26g posts as the app. A type wanting a user token would add `user_scope` through `Extra`.
+- Revoking at the provider when a connection is deleted is still not done (the providers' `revokeURL`s are declared for it).
+
+### Verification
+
+- `go test ./features/connectors/oauth/providers`: the providers pass `CheckOAuthProvider`; golden authorize URLs and token requests per provider (`testdata/golden`, `-update`); token, refresh and error answers per provider from cassettes written from the providers' documentation (`testdata/cassettes`), Slack's error coming with 200; each account read from its token answer.
+- `go test ./features/connectors/connections -run OAuth`: `TestOAuthChoice` (a password connection cannot start OAuth; a choosing one asks for its choice's scopes and signs in).
+- Signing in to the real providers waits for app registrations (deferred until Dec 15).

@@ -1,0 +1,12 @@
+{
+  "endpoint": "https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize",
+  "query": {
+    "client_id": "m-client",
+    "code_challenge": "xTYRBLTDt1gS3-rw_3FBVafZ0iNg9bZYBbG8fRPvkEs",
+    "code_challenge_method": "S256",
+    "redirect_uri": "https://axiom.example.com/api/v1/connectors/oauth/callback",
+    "response_type": "code",
+    "scope": "openid profile offline_access https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send",
+    "state": "state-1"
+  }
+}

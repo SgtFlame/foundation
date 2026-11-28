@@ -265,8 +265,11 @@ func contributeQueries(reg *extensions.Registry, deps func() Deps) {
 				if t, ok, _ := d.Registry.Type(ctx, args.Principal.TenantID, c.Type); ok {
 					out["type"] = t
 					if t.Type.OAuth != nil && d.Extensions != nil { // Sign in with … (forge 26a-1)
-						if p, ok := connectors.OAuthProviderOf(d.Extensions, t.Type.OAuth.Provider); ok {
-							out["oauth"] = map[string]any{"provider": p.ID, "title": p.Title}
+						settings, _ := json.Marshal(c.Settings)
+						if ch, ok := t.Type.OAuth.For(settings); ok { // the connection's choice (forge 26a-2)
+							if p, ok := connectors.OAuthProviderOf(d.Extensions, ch.Provider); ok {
+								out["oauth"] = map[string]any{"provider": p.ID, "title": p.Title}
+							}
 						}
 					}
 				}

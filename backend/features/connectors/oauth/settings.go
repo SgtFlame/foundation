@@ -19,6 +19,10 @@ type Registration struct {
 	// RedirectBase is the public URL the provider sends people back to
 	// (the server's when empty); the redirect URL is it + CallbackPath.
 	RedirectBase string `json:"redirectBase"`
+	// Tenant fills the provider's {tenant} (Microsoft's directory:
+	// common, organizations, consumers or a directory id; common when
+	// empty), for a provider with TenantSegment (forge 26a-2).
+	Tenant string `json:"tenant,omitempty"`
 }
 
 // ContributeSettings registers the connectors.oauth section, with an
@@ -32,15 +36,17 @@ func ContributeSettings(reg *extensions.Registry) {
 		if p.Register != "" {
 			about += " Register it at " + p.Register + "."
 		}
-		props[p.ID] = map[string]any{
-			"type": "object", "title": p.Title, "description": about,
-			"properties": map[string]any{
-				"clientId":     map[string]any{"type": "string", "title": "Client id"},
-				"clientSecret": map[string]any{"type": "secret", "title": "Client secret"},
-				"redirectBase": map[string]any{"type": "string", "title": "Redirect base", "format": "url",
-					"description": "The public URL people come back to, such as https://axiom.example.com; the server's when empty. Register <base>" + CallbackPath + " with the provider."},
-			},
+		fields := map[string]any{
+			"clientId":     map[string]any{"type": "string", "title": "Client id"},
+			"clientSecret": map[string]any{"type": "secret", "title": "Client secret"},
+			"redirectBase": map[string]any{"type": "string", "title": "Redirect base", "format": "url",
+				"description": "The public URL people come back to, such as https://axiom.example.com; the server's when empty. Register <base>" + CallbackPath + " with the provider."},
 		}
+		if p.TenantSegment {
+			fields["tenant"] = map[string]any{"type": "string", "title": "Directory",
+				"description": "Which accounts may sign in: common (any), organizations (work and school), consumers (personal) or a directory id; common when empty."}
+		}
+		props[p.ID] = map[string]any{"type": "object", "title": p.Title, "description": about, "properties": fields}
 	}
 	schema, _ := json.Marshal(map[string]any{"type": "object", "properties": props})
 	config.Sections.Register(reg, config.Section{
