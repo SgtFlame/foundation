@@ -155,9 +155,15 @@
           "id": "kind",
           "name": "Kind",
           "type": "text",
-          "description": "mail, message, event\u2026"
+          "description": "mail, message, event…"
         }
       ]
+    },
+    {
+      "id": "sourceLink",
+      "name": "Source link",
+      "type": "text",
+      "description": "The source's workbench: link, kept by tasks.task.create so an agent proposes one task per source"
     },
     {
       "id": "state",
@@ -246,6 +252,12 @@
       "fields": [
         "state",
         "assignees"
+      ]
+    },
+    {
+      "id": "bySource",
+      "fields": [
+        "sourceLink"
       ]
     }
   ],
