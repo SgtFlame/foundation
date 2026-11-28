@@ -113,8 +113,11 @@ func (r *renderer) block(n Node) string {
 			fence += "`"
 		}
 		return fence + n.attr("language") + "\n" + code + "\n" + fence
-	case "horizontalRule", "horizontal_rule", "pageBreak":
+	case "horizontalRule", "horizontal_rule", "pageBreak", "sectionBreak":
 		return "---"
+	case "tableOfContents":
+		// Rebuilt from the headings where it is shown (forge 35b-2)
+		return ""
 	case "bulletList", "bullet_list":
 		return r.list(n, func(int, Node) string { return "- " })
 	case "orderedList", "ordered_list":
@@ -199,6 +202,8 @@ func (r *renderer) inline(nodes []Node) string {
 			b.WriteString(image(n))
 		case "mathInline", "math_inline", "inlineMath":
 			b.WriteString("$" + latex(n) + "$")
+		case "pageNumber":
+			// A header's or footer's field, never body text (forge 35b-2)
 		case "footnote", "footnoteReference":
 			text := r.inline(n.Content)
 			if text == "" {
@@ -302,7 +307,7 @@ func atomText(n Node) string {
 
 func isInline(n Node) bool {
 	switch n.Type {
-	case "text", "hardBreak", "hard_break", "mathInline", "math_inline", "inlineMath", "footnote", "footnoteReference", "mention":
+	case "text", "hardBreak", "hard_break", "mathInline", "math_inline", "inlineMath", "footnote", "footnoteReference", "mention", "pageNumber":
 		return true
 	}
 	return false
