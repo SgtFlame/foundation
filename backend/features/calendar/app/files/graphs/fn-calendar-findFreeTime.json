@@ -1,0 +1,576 @@
+{
+  "id": "fn-calendar-findFreeTime",
+  "name": "Find free time",
+  "description": "Times when several people are free for a meeting: each person's busy time from the occurrences of the calendars they own that the caller may see (a free/busy share is enough, and gives no titles), inside their working hours (their own Availability, else the calendar section's defaults) and buffers, ranked and spread over days, each slot with its time in every person's zone. Args {people: user ids (the calling person is always included), durationMinutes, from, to, count?}. People with no calendar the caller can see are listed in unknown and treated as free.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "people",
+            "type": "json",
+            "optional": true,
+            "description": "The people's user ids, as text; the caller (a person) is always included"
+          },
+          {
+            "id": "durationMinutes",
+            "type": "number",
+            "description": "The meeting's length in minutes"
+          },
+          {
+            "id": "from",
+            "type": "string",
+            "description": "The window's start, RFC 3339"
+          },
+          {
+            "id": "to",
+            "type": "string",
+            "description": "The window's end (exclusive), RFC 3339"
+          },
+          {
+            "id": "count",
+            "type": "number",
+            "optional": true,
+            "description": "How many slots, 3 when left out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "ids",
+      "type": "data.expression",
+      "title": "The caller and the people named",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "kind == \"agent\" || user == \"\" ? map(people ?? [], string(#)) : uniq(concat([user], map(people ?? [], string(#))))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "calQuery",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "{filter: {field: \"owner\", op: \"in\", value: ids}, limit: 500}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "cals",
+      "type": "records.query",
+      "title": "The calendars the people own that the caller sees",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "calIds",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "map(records ?? [], string(#._id))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "occQuery",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "{filter: {\"and\": [{field: \"calendar\", op: \"in\", value: len(calIds) \u003e 0 ? calIds : [\"none\"]}, {field: \"start\", op: \"lt\", value: to}, {field: \"end\", op: \"gt\", value: from}]}, limit: 5000}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "occ",
+      "type": "records.query",
+      "title": "Their occurrences in the window",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "entity": "calOccurrence"
+      }
+    },
+    {
+      "id": "availQuery",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "{filter: {field: \"user\", op: \"in\", value: ids}, limit: 500}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "avail",
+      "type": "records.query",
+      "title": "Their working hours",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "entity": "calAvailability"
+      }
+    },
+    {
+      "id": "defaults",
+      "type": "data.setting",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "section": "calendar",
+        "path": "workingHours",
+        "type": "json"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "title": "Each person's busy time and working hours",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "expr": "let owners = fromPairs(map(cals ?? [], [string(#._id), string(#.owner ?? \"\")])); let busy = filter(occ ?? [], (#.status ?? \"confirmed\") != \"cancelled\" \u0026\u0026 (#.transparency ?? \"opaque\") != \"transparent\"); let hoursOf = fromPairs(map(avail ?? [], [string(#.user), ({zone: #.zone ?? \"UTC\", days: #.workingHours ?? {}})])); map(ids, let p = #; ({id: p, busy: map(filter(busy, owners[string(#.calendar)] == p), ({start: #.start, end: #.end})), hours: hoursOf[p] ?? defaults}))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "buffer",
+      "type": "data.expression",
+      "title": "The largest buffer any of them asks for",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "max(concat([0], map(avail ?? [], #.bufferMinutes ?? 0)))",
+        "type": "number"
+      }
+    },
+    {
+      "id": "unknown",
+      "type": "data.expression",
+      "title": "People with no calendar the caller can see",
+      "position": {
+        "x": 1360,
+        "y": 400
+      },
+      "config": {
+        "expr": "let owners = map(cals ?? [], string(#.owner ?? \"\")); filter(ids, let p = #; p not in owners)",
+        "type": "json"
+      }
+    },
+    {
+      "id": "window",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "{from: from, to: to}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "free",
+      "type": "time.freeSlots",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "count": 3,
+        "spread": true
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 3060,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "slots",
+            "type": "json"
+          },
+          {
+            "id": "count",
+            "type": "number"
+          },
+          {
+            "id": "unknown",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "people"
+      },
+      "to": {
+        "node": "ids",
+        "pin": "people"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "ids",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "kind"
+      },
+      "to": {
+        "node": "ids",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "ids",
+        "pin": "value"
+      },
+      "to": {
+        "node": "calQuery",
+        "pin": "ids"
+      }
+    },
+    {
+      "from": {
+        "node": "calQuery",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cals",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "cals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "calIds",
+        "pin": "records"
+      }
+    },
+    {
+      "from": {
+        "node": "calIds",
+        "pin": "value"
+      },
+      "to": {
+        "node": "occQuery",
+        "pin": "calIds"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "from"
+      },
+      "to": {
+        "node": "occQuery",
+        "pin": "from"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "to"
+      },
+      "to": {
+        "node": "occQuery",
+        "pin": "to"
+      }
+    },
+    {
+      "from": {
+        "node": "occQuery",
+        "pin": "value"
+      },
+      "to": {
+        "node": "occ",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "ids",
+        "pin": "value"
+      },
+      "to": {
+        "node": "availQuery",
+        "pin": "ids"
+      }
+    },
+    {
+      "from": {
+        "node": "availQuery",
+        "pin": "value"
+      },
+      "to": {
+        "node": "avail",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "ids",
+        "pin": "value"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "ids"
+      }
+    },
+    {
+      "from": {
+        "node": "cals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "cals"
+      }
+    },
+    {
+      "from": {
+        "node": "occ",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "occ"
+      }
+    },
+    {
+      "from": {
+        "node": "avail",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "avail"
+      }
+    },
+    {
+      "from": {
+        "node": "defaults",
+        "pin": "value"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "defaults"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "free",
+        "pin": "people"
+      }
+    },
+    {
+      "from": {
+        "node": "avail",
+        "pin": "records"
+      },
+      "to": {
+        "node": "buffer",
+        "pin": "avail"
+      }
+    },
+    {
+      "from": {
+        "node": "buffer",
+        "pin": "value"
+      },
+      "to": {
+        "node": "free",
+        "pin": "bufferBefore"
+      }
+    },
+    {
+      "from": {
+        "node": "buffer",
+        "pin": "value"
+      },
+      "to": {
+        "node": "free",
+        "pin": "bufferAfter"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "from"
+      },
+      "to": {
+        "node": "window",
+        "pin": "from"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "to"
+      },
+      "to": {
+        "node": "window",
+        "pin": "to"
+      }
+    },
+    {
+      "from": {
+        "node": "window",
+        "pin": "value"
+      },
+      "to": {
+        "node": "free",
+        "pin": "window"
+      }
+    },
+    {
+      "from": {
+        "node": "ids",
+        "pin": "value"
+      },
+      "to": {
+        "node": "unknown",
+        "pin": "ids"
+      }
+    },
+    {
+      "from": {
+        "node": "cals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "unknown",
+        "pin": "cals"
+      }
+    },
+    {
+      "from": {
+        "node": "unknown",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "unknown"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "durationMinutes"
+      },
+      "to": {
+        "node": "free",
+        "pin": "durationMinutes"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "count"
+      },
+      "to": {
+        "node": "free",
+        "pin": "count"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "free",
+        "pin": "slots"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "slots"
+      }
+    },
+    {
+      "from": {
+        "node": "free",
+        "pin": "count"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "count"
+      }
+    }
+  ]
+}
