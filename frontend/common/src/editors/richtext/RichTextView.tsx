@@ -2,7 +2,10 @@
 // room's Y.XmlFragment, everyone's cursor and selection in their presence
 // colour, with a toolbar, find and replace, the outline and a word count.
 // The workbench's document editor and the doc.richText primitive both
-// draw it over a CollabSession made with richTextContent.
+// draw it over a CollabSession made with richTextContent. In page mode
+// (forge 35b-2) it lays the document out on pages of the room's page setup
+// (pagination.ts), with a ruler, headers and footers, footnotes at the foot
+// of their page, page and section breaks, a table of contents, and print.
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { EditorContent, useEditor, type Editor } from '@tiptap/react'
@@ -10,7 +13,7 @@ import Collaboration from '@tiptap/extension-collaboration'
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
 import {
   Box, Button, Checkbox, Divider, FormControlLabel, IconButton, InputBase, List, ListItemButton, ListItemText, MenuItem, Popover, Select,
-  Stack, TextField, Tooltip, Typography,
+  Stack, TextField, Tooltip, Typography, useTheme,
 } from '@mui/material'
 import FormatBoldIcon from '@mui/icons-material/FormatBold'
 import FormatItalicIcon from '@mui/icons-material/FormatItalic'
@@ -40,10 +43,19 @@ import TocIcon from '@mui/icons-material/Toc'
 import CloseIcon from '@mui/icons-material/Close'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
+import InsertPageBreakIcon from '@mui/icons-material/InsertPageBreak'
+import PrintIcon from '@mui/icons-material/Print'
+import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined'
+import ListAltIcon from '@mui/icons-material/ListAlt'
+import WebAssetIcon from '@mui/icons-material/WebAsset'
+import { yXmlFragmentToProsemirrorJSON } from 'y-prosemirror'
 import type { CollabSession, CollabState } from '../markdown/collab/CollabSession.ts'
 import { localUser } from '../markdown/collab/localUser.ts'
 import { baseExtensions } from './extensions.ts'
-import { fragmentOf } from './content.ts'
+import { fragmentOf, headerFooterOf, headerFooters, type HeaderFooter } from './content.ts'
+import { Pagination, type PaginationStorage } from './pagination.ts'
+import { pageBox, type Layout } from './pages.ts'
+import { HeaderFooterDialog, PageSetupDialog, Ruler, printDocument, usePageSetup } from './PageView.tsx'
 import { FindHighlight, findKey } from './findHighlight.ts'
 import { findInBlocks, nextMatch, replacements, type FindOptions, type Range } from './find.ts'
 import { describeSelection, headings, textBlocks, type Heading } from './blocks.ts'
@@ -87,11 +99,31 @@ export function RichTextView(p: RichTextViewProps) {
   const onSelection = useRef(p.onSelection)
   onSelection.current = p.onSelection
   const styles = useMemo(() => paragraphStyles(), [])
+  const setup = usePageSetup(session.doc)
+  const theme = useTheme()
+  // Page mode lays the document out on pages unless its setup is pageless
+  const paged = p.mode === 'page' && !setup.pageless
+  const pagedRef = useRef(paged)
+  pagedRef.current = paged
+  const setupRef = useRef(setup)
+  setupRef.current = setup
+  const [layout, setLayout] = useState<Layout>()
+  const box = pageBox(setup)
 
   const editor = useEditor({
     extensions: [
       ...baseExtensions(),
       FindHighlight,
+      Pagination.configure({
+        enabled: () => pagedRef.current,
+        setup: () => setupRef.current,
+        headerFooter: (name) => {
+          const f = headerFooterOf(session.doc, name)
+          return f.length > 0 ? (yXmlFragmentToProsemirrorJSON(f) as Record<string, unknown>) : undefined
+        },
+        bandHeight: 24,
+        onLayout: setLayout,
+      }),
       Collaboration.configure({ fragment: fragmentOf(session.doc) }),
       CollaborationCursor.configure({ provider: { awareness: session.awareness }, user: localUser() }),
     ],
@@ -114,6 +146,31 @@ export function RichTextView(p: RichTextViewProps) {
   useEffect(() => {
     editor?.setEditable(!locked)
   }, [editor, locked])
+
+  // Lays out again when the page setup, page mode or a header or footer changes
+  const relayout = () => (editor?.storage.pagination as PaginationStorage | undefined)?.relayout()
+  useEffect(relayout, [editor, paged, setup])
+  useEffect(() => {
+    if (!editor) return
+    const fragments = headerFooters.map((name) => headerFooterOf(session.doc, name))
+    const changed = () => (editor.storage.pagination as PaginationStorage | undefined)?.relayout()
+    fragments.forEach((f) => f.observeDeep(changed))
+    return () => fragments.forEach((f) => f.unobserveDeep(changed))
+  }, [editor, session])
+  const [setupOpen, setSetupOpen] = useState(false)
+  const [headersOpen, setHeadersOpen] = useState<HeaderFooter | false>(false)
+  const pageRef = useRef<HTMLDivElement>(null)
+  const print = () => pageRef.current && printDocument(pageRef.current, setup, p.label ?? 'Document')
+  // A double click on a page's header or footer opens them
+  const onDoubleClick = (e: React.MouseEvent) => {
+    const t = e.target as HTMLElement
+    const header = t.closest('.rt-page-header')
+    const footer = t.closest('.rt-page-footer')
+    if (!header && !footer) return
+    const gap = t.closest('.rt-page-gap') as HTMLElement | null
+    const first = !!gap?.classList.contains('rt-page-top')
+    setHeadersOpen(header ? (first && setup.differentFirst ? 'firstHeader' : 'header') : 'footer')
+  }
 
   // The selection, once it has settled for a moment
   useEffect(() => {
@@ -153,18 +210,28 @@ export function RichTextView(p: RichTextViewProps) {
         data-doc-richtext={session.fileId}>
         {toolbar && editor && (
           <Toolbar editor={editor} disabled={locked} compact={compact} styles={styles}
-            outline={showOutline} onOutline={() => setShowOutline((o) => !o)} onFind={() => setFinding(true)} />
+            outline={showOutline} onOutline={() => setShowOutline((o) => !o)} onFind={() => setFinding(true)}
+            page={p.mode === 'page' ? { paged, onSetup: () => setSetupOpen(true), onHeaders: () => setHeadersOpen('header'), onPrint: print } : undefined} />
         )}
         {finding && editor && <FindPanel editor={editor} readOnly={locked} onClose={() => setFinding(false)} />}
         <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
           {showOutline && editor && !compact && <Outline editor={editor} />}
           <Box sx={{
-            flex: 1, minHeight, maxHeight: p.maxHeight, overflow: 'auto', bgcolor: p.mode === 'page' ? 'action.hover' : undefined,
-          }}>
-            <Box sx={{
-              mx: 'auto', my: p.mode === 'page' ? 3 : 0, maxWidth: p.mode === 'page' ? 816 : undefined, minHeight: p.mode === 'page' ? 1056 : '100%',
-              px: p.mode === 'page' ? 9 : compact ? 1.5 : 3, py: p.mode === 'page' ? 6 : 1, bgcolor: 'background.paper',
-              boxShadow: p.mode === 'page' ? 2 : undefined,
+            flex: 1, minHeight, maxHeight: p.maxHeight, overflow: 'auto', bgcolor: paged ? 'background.default' : undefined,
+          }} onDoubleClick={paged ? onDoubleClick : undefined}>
+            {paged && editor && toolbar && (
+              <Box sx={{ position: 'sticky', top: 0, zIndex: 2, pt: 1, bgcolor: 'background.default' }}>
+                <Ruler editor={editor} setup={setup} disabled={locked} />
+              </Box>
+            )}
+            <Box ref={pageRef} data-page-view={paged ? '' : undefined} data-pages={paged ? layout?.pages : undefined} sx={{
+              mx: 'auto', my: paged ? 3 : 0, width: paged ? box.width : undefined, maxWidth: !paged && p.mode === 'pageless' ? 900 : undefined,
+              minHeight: paged ? (layout ? undefined : box.height) : '100%', boxSizing: 'border-box',
+              pt: paged ? `${box.margins.top}px` : 1, pb: paged ? `${box.margins.bottom}px` : 1,
+              px: paged ? undefined : compact ? 1.5 : 3, pl: paged ? `${box.margins.left}px` : undefined, pr: paged ? `${box.margins.right}px` : undefined,
+              bgcolor: paged && setup.color ? setup.color : 'background.paper', color: paged && setup.color ? '#202124' : undefined,
+              boxShadow: paged ? 2 : undefined, '--rt-page-bg': paged && setup.color ? setup.color : theme.palette.background.paper,
+              ...pageCss,
               '& .ProseMirror': { outline: 'none', minHeight: minHeight - 16, lineHeight: 1.6, ...stylesCss(styles) },
               '& .ProseMirror > *:first-of-type': { mt: 0 },
               '& .ProseMirror a': { color: 'primary.main' },
@@ -184,7 +251,11 @@ export function RichTextView(p: RichTextViewProps) {
               '& .ProseMirror ul[data-type="taskList"] li > div': { flex: 1 },
               '& .ProseMirror hr': { border: 0, borderTop: 1, borderColor: 'divider', my: 2 },
               '& .ProseMirror mark': { borderRadius: 0.5, px: 0.25 },
-              '& .rt-footnote': { fontSize: '0.75em', verticalAlign: 'super', color: 'text.secondary', '&::before': { content: '"["' }, '&::after': { content: '"]"' } },
+              '& .rt-footnote': { fontSize: 0, verticalAlign: 'super', color: 'text.secondary', cursor: 'pointer', '&::before': { content: 'attr(data-n)', fontSize: '0.75rem', color: 'primary.main', fontWeight: 600 } },
+              '& .rt-footnote.rt-footnote-open': {
+                fontSize: '0.8rem', bgcolor: 'action.selected', borderRadius: 0.5, px: 0.5, cursor: 'text',
+                '&::before': { content: 'attr(data-n) ". "' },
+              },
               '& .rt-math': { fontFamily: 'monospace', bgcolor: 'action.hover', borderRadius: 0.5, px: 0.5 },
               '& .rt-mention': { color: 'primary.main', fontWeight: 500 },
               '& .rt-find': { bgcolor: 'warning.light', color: 'common.black' },
@@ -203,11 +274,58 @@ export function RichTextView(p: RichTextViewProps) {
             </Box>
           </Box>
         </Box>
-        <StatusBar editor={editor} state={state} readOnly={p.readOnly} />
+        <StatusBar editor={editor} state={state} readOnly={p.readOnly} pages={paged ? layout?.pages : undefined} />
       </Box>
+      {p.mode === 'page' && <PageSetupDialog doc={session.doc} open={setupOpen} onClose={() => setSetupOpen(false)} />}
+      {p.mode === 'page' && (
+        <HeaderFooterDialog doc={session.doc} open={!!headersOpen} start={headersOpen || undefined} readOnly={locked} onClose={() => setHeadersOpen(false)} />
+      )}
     </Box>
   )
 }
+
+// Page view's parts: breaks, the table of contents, the page gaps the
+// pagination plugin draws, and print, which hides the bands between pages
+// and starts each page's header on a printed page
+const pageCss = {
+  '& .rt-page-break, & .rt-section-break': {
+    position: 'relative', height: 0, my: 1.5, borderTop: '1px dashed', borderColor: 'divider',
+    '&::after': { position: 'absolute', top: -9, left: '50%', transform: 'translateX(-50%)', px: 1, fontSize: 11, color: 'text.secondary', bgcolor: 'background.paper' },
+  },
+  '& .rt-page-break::after': { content: '"Page break"' },
+  '& .rt-section-break::after': { content: '"Section break"' },
+  '& .rt-page-break.ProseMirror-selectednode, & .rt-section-break.ProseMirror-selectednode, & .rt-toc.ProseMirror-selectednode': { outline: 2, outlineColor: 'primary.main' },
+  '& .rt-toc': { border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, my: 1 },
+  '& .rt-toc-title': { fontWeight: 600, mb: 0.5 },
+  '& .rt-toc-empty': { color: 'text.secondary', fontSize: 13 },
+  '& .rt-toc-entry': { display: 'flex', gap: 1, color: 'primary.main', textDecoration: 'none', py: 0.25, '&:hover': { textDecoration: 'underline' } },
+  '& .rt-toc-entry > span:first-of-type': { flex: 1 },
+  '& .rt-toc-page': { color: 'text.secondary' },
+  '& .rt-page-number': { bgcolor: 'action.selected', borderRadius: 0.5, px: 0.5 },
+  '& .rt-page-gap': { boxSizing: 'border-box', userSelect: 'none', cursor: 'default', position: 'relative' },
+  '& .rt-page-gap > div': { boxSizing: 'border-box', overflow: 'hidden' },
+  '& .rt-page-band': { bgcolor: 'background.default', boxShadow: 'inset 0 6px 6px -6px rgba(0,0,0,.35), inset 0 -6px 6px -6px rgba(0,0,0,.35)', mx: '-1px' },
+  '& .rt-page-header, & .rt-page-footer': { color: 'text.secondary', fontSize: 13, display: 'flex', flexDirection: 'column' },
+  '& .rt-page-header': { justifyContent: 'flex-end', pb: 2 },
+  '& .rt-page-footer': { justifyContent: 'flex-start', pt: 2 },
+  '& .rt-page-header p, & .rt-page-footer p': { m: 0 },
+  '& .rt-page-notes': { fontSize: 12, lineHeight: '17px', color: 'text.secondary' },
+  '& .rt-page-notes:not(:empty)': { borderTop: 1, borderColor: 'divider', pt: '8px', backgroundClip: 'content-box' },
+  '& .rt-endnotes': { borderTop: 1, borderColor: 'divider', mt: 3, pt: 1, fontSize: 13, color: 'text.secondary' },
+  '& .rt-split > td, & .rt-split > th': { paddingTop: 'calc(var(--rt-pad) + 6px)' },
+  '& .rt-page-split': { position: 'absolute', top: 0, zIndex: 1 },
+  '& .rt-page-split > .rt-page-gap': { bgcolor: 'var(--rt-page-bg)' },
+  '& .rt-repeat-header': { borderCollapse: 'collapse', tableLayout: 'fixed', pointerEvents: 'none' },
+  '& .rt-repeat-header td, & .rt-repeat-header th': { border: 1, borderColor: 'divider', p: 0.75, textAlign: 'left', bgcolor: 'action.hover', fontWeight: 600 },
+  '@media print': {
+    boxShadow: 'none !important', m: '0 !important',
+    '& .rt-page-band': { display: 'none' },
+    '& .rt-page-gap:not(.rt-page-top) .rt-page-header': { breakBefore: 'page' },
+    '& .rt-page-break, & .rt-section-break': { borderTop: 0, '&::after': { display: 'none' } },
+    '& .collaboration-cursor__caret, & .rt-find, & .rt-find-current': { all: 'unset' },
+    '& .ProseMirror-selectednode': { outline: 'none !important' },
+  },
+} as const
 
 function statusText(state: CollabState, readOnly: boolean): string {
   if (state.status === 'offline') return 'Offline: changes are kept and sent when the connection returns'
@@ -232,7 +350,7 @@ function useEditorTick(editor: Editor | null) {
   }, [editor])
 }
 
-function StatusBar({ editor, state, readOnly }: { editor: Editor | null; state: CollabState; readOnly: boolean }) {
+function StatusBar({ editor, state, readOnly, pages }: { editor: Editor | null; state: CollabState; readOnly: boolean; pages?: number }) {
   useEditorTick(editor)
   const words = (editor?.storage.characterCount?.words?.() as number | undefined) ?? 0
   return (
@@ -240,6 +358,7 @@ function StatusBar({ editor, state, readOnly }: { editor: Editor | null; state: 
       <Typography variant="caption" color={state.saveError ? 'error' : 'text.secondary'} sx={{ flex: 1 }} data-doc-status>
         {statusText(state, readOnly)}
       </Typography>
+      {pages !== undefined && <Typography variant="caption" color="text.secondary" data-page-count>{pages === 1 ? '1 page' : `${pages} pages`}</Typography>}
       <Typography variant="caption" color="text.secondary" data-word-count>{words === 1 ? '1 word' : `${words} words`}</Typography>
       {state.peers.map((peer) => (
         <Tooltip key={peer.clientId} title={peer.name}>
@@ -266,8 +385,15 @@ function ToolButton({ title, active, disabled, onClick, children }: { title: str
 const colours = ['#000000', '#5f6368', '#d93025', '#e37400', '#f9ab00', '#188038', '#1a73e8', '#9334e6']
 const highlights = ['#fef08a', '#bbf7d0', '#bfdbfe', '#fbcfe8', '#fed7aa']
 
-function Toolbar({ editor, disabled, compact, styles, outline, onOutline, onFind }: {
-  editor: Editor; disabled: boolean; compact: boolean; styles: ParagraphStyle[]; outline: boolean; onOutline(): void; onFind(): void
+interface PageActions {
+  paged: boolean
+  onSetup(): void
+  onHeaders(): void
+  onPrint(): void
+}
+
+function Toolbar({ editor, disabled, compact, styles, outline, onOutline, onFind, page }: {
+  editor: Editor; disabled: boolean; compact: boolean; styles: ParagraphStyle[]; outline: boolean; onOutline(): void; onFind(): void; page?: PageActions
 }) {
   useEditorTick(editor)
   const chain = () => editor.chain().focus()
@@ -335,8 +461,21 @@ function Toolbar({ editor, disabled, compact, styles, outline, onOutline, onFind
       )}
       <ToolButton title="Code block" active={editor.isActive('codeBlock')} disabled={disabled} onClick={() => chain().toggleCodeBlock().run()}><DataObjectIcon fontSize="small" /></ToolButton>
       {!compact && <ToolButton title="Horizontal rule" disabled={disabled} onClick={() => chain().setHorizontalRule().run()}><HorizontalRuleIcon fontSize="small" /></ToolButton>}
+      {!compact && <ToolButton title="Footnote" disabled={disabled}
+        onClick={() => chain().insertContent({ type: 'footnote', content: [{ type: 'text', text: 'Footnote' }] }).run()}><sup style={{ fontWeight: 700, fontSize: 12 }}>1</sup></ToolButton>}
+      {page && (
+        <>
+          {sep}
+          <ToolButton title="Page break (Ctrl+Enter)" disabled={disabled} onClick={() => chain().setPageBreak().run()}><InsertPageBreakIcon fontSize="small" /></ToolButton>
+          <Button size="small" disabled={disabled} onMouseDown={(e) => e.preventDefault()} onClick={() => chain().setSectionBreak().run()}>Section break</Button>
+          <ToolButton title="Table of contents" disabled={disabled} onClick={() => chain().insertTableOfContents().run()}><ListAltIcon fontSize="small" /></ToolButton>
+          <ToolButton title="Headers and footers" disabled={!page.paged} onClick={page.onHeaders}><WebAssetIcon fontSize="small" /></ToolButton>
+          <ToolButton title="Page setup" onClick={page.onSetup}><ArticleOutlinedIcon fontSize="small" /></ToolButton>
+        </>
+      )}
       <ToolButton title="Clear formatting" disabled={disabled} onClick={() => chain().unsetAllMarks().clearNodes().run()}><FormatClearIcon fontSize="small" /></ToolButton>
       <Box sx={{ flex: 1 }} />
+      {page && <ToolButton title="Print" disabled={!page.paged} onClick={page.onPrint}><PrintIcon fontSize="small" /></ToolButton>}
       <ToolButton title="Find and replace (Ctrl+F)" onClick={onFind}><SearchIcon fontSize="small" /></ToolButton>
       {!compact && <ToolButton title="Outline" active={outline} onClick={onOutline}><TocIcon fontSize="small" /></ToolButton>}
 
