@@ -1,0 +1,211 @@
+{
+  "id": "calEvent",
+  "name": "Event",
+  "owner": "app:calendar",
+  "description": "An event on a calendar (forge 28e), the calendar.events contract's shape as fields: a one-off, a recurring series' master (with its rule), or an exception of a series (series and recurrenceId set). Views and tools read its occurrences (calOccurrence); edits go to events.",
+  "titleField": "title",
+  "fields": [
+    {
+      "id": "calendar",
+      "name": "Calendar",
+      "type": "relation",
+      "description": "The calendar it is on",
+      "relation": {
+        "entity": "calCalendar"
+      },
+      "required": true
+    },
+    {
+      "id": "title",
+      "name": "Title",
+      "type": "text",
+      "description": "The event's title"
+    },
+    {
+      "id": "start",
+      "name": "Start",
+      "type": "dateTime",
+      "description": "When it starts (for an all-day event, midnight UTC of its first day)",
+      "required": true
+    },
+    {
+      "id": "end",
+      "name": "End",
+      "type": "dateTime",
+      "description": "When it ends, exclusive (for an all-day event, midnight UTC after its last day)",
+      "required": true
+    },
+    {
+      "id": "zone",
+      "name": "Time zone",
+      "type": "text",
+      "description": "The IANA zone it is planned in; a recurring series repeats in it"
+    },
+    {
+      "id": "allDay",
+      "name": "All day",
+      "type": "bool",
+      "description": "Whole days"
+    },
+    {
+      "id": "rrule",
+      "name": "Rule",
+      "type": "text",
+      "description": "A series' RFC 5545 RRULE, e.g. FREQ=WEEKLY;BYDAY=MO; empty for a one-off"
+    },
+    {
+      "id": "rdate",
+      "name": "Extra dates",
+      "type": "json",
+      "description": "RDATE: extra starts of the series"
+    },
+    {
+      "id": "exdate",
+      "name": "Excluded dates",
+      "type": "json",
+      "description": "EXDATE: starts left out of the series (recurrence ids)"
+    },
+    {
+      "id": "series",
+      "name": "Series",
+      "type": "relation",
+      "description": "For an exception: the series' master",
+      "relation": {
+        "entity": "calEvent"
+      }
+    },
+    {
+      "id": "recurrenceId",
+      "name": "Recurrence id",
+      "type": "text",
+      "description": "For an exception: the occurrence it replaces (its original start as an instant in UTC, or a date for all-day)"
+    },
+    {
+      "id": "status",
+      "name": "Status",
+      "type": "enum",
+      "description": "confirmed, tentative or cancelled (a cancelled exception removes its occurrence)",
+      "options": [
+        {
+          "id": "confirmed",
+          "name": "Confirmed"
+        },
+        {
+          "id": "tentative",
+          "name": "Tentative"
+        },
+        {
+          "id": "cancelled",
+          "name": "Cancelled"
+        }
+      ],
+      "default": "confirmed"
+    },
+    {
+      "id": "transparency",
+      "name": "Shows as",
+      "type": "enum",
+      "description": "opaque (busy) or transparent (free)",
+      "options": [
+        {
+          "id": "opaque",
+          "name": "Opaque"
+        },
+        {
+          "id": "transparent",
+          "name": "Transparent"
+        }
+      ],
+      "default": "opaque"
+    },
+    {
+      "id": "location",
+      "name": "Location",
+      "type": "text",
+      "description": "Where"
+    },
+    {
+      "id": "videoLink",
+      "name": "Video link",
+      "type": "text",
+      "description": "The meeting's video link"
+    },
+    {
+      "id": "organizer",
+      "name": "Organizer",
+      "type": "json",
+      "description": "{email, name, user}"
+    },
+    {
+      "id": "attendees",
+      "name": "Attendees",
+      "type": "json",
+      "description": "[{email, name, user, response, optional}], response needsAction, accepted, tentative or declined"
+    },
+    {
+      "id": "description",
+      "name": "Description",
+      "type": "longText",
+      "description": "Notes"
+    },
+    {
+      "id": "outsideId",
+      "name": "Outside id",
+      "type": "text",
+      "description": "The event's id at the outside service"
+    },
+    {
+      "id": "etag",
+      "name": "Etag",
+      "type": "text",
+      "description": "The outside version it was last read at"
+    },
+    {
+      "id": "iCalUID",
+      "name": "iCalendar UID",
+      "type": "text",
+      "description": "The UID invitations carry"
+    },
+    {
+      "id": "hold",
+      "name": "Hold",
+      "type": "text",
+      "description": "The scheduling hold it belongs to (28h)"
+    },
+    {
+      "id": "refusedChange",
+      "name": "Refused change",
+      "type": "json",
+      "description": "An edit made here that the outside calendar refused because the event had changed there first: {set, at, reason}; the outside version was kept (28f)"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "by_calendar_start",
+      "fields": [
+        "calendar",
+        "start"
+      ]
+    },
+    {
+      "id": "by_series",
+      "fields": [
+        "series",
+        "recurrenceId"
+      ]
+    },
+    {
+      "id": "by_outside",
+      "fields": [
+        "calendar",
+        "outsideId"
+      ]
+    }
+  ],
+  "access": {
+    "read": "principal.kind == 'app' || principal.owner || principal.hasRole('calWriter', record.calendar) || principal.hasRole('calReader', record.calendar)",
+    "create": "principal.kind == 'app' || principal.hasRole('calWriter', record.calendar)",
+    "update": "principal.kind == 'app' || principal.hasRole('calWriter', record.calendar)",
+    "delete": "principal.kind == 'app' || principal.hasRole('calWriter', record.calendar)"
+  }
+}

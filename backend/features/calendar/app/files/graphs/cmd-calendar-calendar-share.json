@@ -1,0 +1,370 @@
+{
+  "id": "cmd-calendar-calendar-share",
+  "name": "calendar.calendar.share",
+  "description": "Shares the target calendar with a person at a level (freeBusy: when they are busy, no titles; read: its events; write: change them too), or stops sharing with none. A trigger then grants the matching role on the calendar. Only someone who may change the calendar may share it.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:calendar",
+  "spec": {
+    "command": "calendar.share",
+    "title": "Share a calendar",
+    "description": "Shares the target calendar with a person (user, a user id) at a level: freeBusy (when they are busy, never what), read (its events) or write (change them too); none stops sharing. A trigger grants the matching role on the calendar.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "user": {
+          "type": "string",
+          "description": "The person's user id"
+        },
+        "level": {
+          "type": "string",
+          "enum": [
+            "freeBusy",
+            "read",
+            "write",
+            "none"
+          ],
+          "description": "freeBusy, read, write, or none to stop sharing"
+        }
+      },
+      "required": [
+        "user",
+        "level"
+      ]
+    },
+    "area": "rec",
+    "targetType": "calCalendar",
+    "projection": "records.record",
+    "action": "record.update",
+    "events": [
+      "created",
+      "updated",
+      "deleted"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "let u = trim(args.user ?? \"\");\nlet lvl = args.level ?? \"\";\nlet rest = filter(cal?.sharedWith ?? [], string(#.user ?? \"\") != u);\nlet next = lvl == \"none\" ? rest : concat(rest, [{user: u, level: lvl}]);\n{problem: cal == nil ? \"there is no calendar \" + target\n  : u == \"\" ? \"give the person's user id\"\n  : !(lvl in [\"freeBusy\", \"read\", \"write\", \"none\"]) ? \"the level is freeBusy, read, write or none\"\n  : string(cal._createdBy ?? \"\") == u ? \"it is their own calendar\" : \"\",\n calendarUpdate: [{id: target, set: {sharedWith: next}, expect: cal?._seq}]}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1020,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 1360,
+        "y": 0
+      }
+    },
+    {
+      "id": "w0list",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.calendarUpdate ?? []",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0",
+      "type": "flow.forEach",
+      "title": "update calCalendar (calendarUpdate)",
+      "position": {
+        "x": 1360,
+        "y": 200
+      }
+    },
+    {
+      "id": "w0id",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w0w",
+      "type": "records.update",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "w0s",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0x",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.expect",
+        "type": "number"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0s",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0s",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0x",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0x",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "expect"
+      }
+    }
+  ]
+}

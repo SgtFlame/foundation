@@ -274,6 +274,9 @@ func (c *decision) pin(m apps.Manifest) (apps.Version, []live.Problem) {
 	for _, g := range m.ToolGraphs() {
 		v.Graphs[g], _ = c.publishedGraph(g)
 	}
+	for _, g := range m.ProjectorGraphs() {
+		v.Graphs[g], _ = c.publishedGraph(g)
+	}
 	// The app's own graphs those name in a node's config (a job's graph,
 	// Call graph's), so a trigger or command runs its version's copies too
 	// (forge 07a)

@@ -201,8 +201,10 @@ func manifestKeys(path string) func(any) string {
 		return by("kind")
 	case "commands":
 		return by("type")
-	case "queries", "tools", "connectors":
+	case "queries", "tools", "connectors", "projectors":
 		return by("name")
+	case "ephemeral":
+		return by("topic")
 	case "roles", "triggers", "items", "rules":
 		return by("id", "name")
 	case "entities":

@@ -1,0 +1,512 @@
+{
+  "id": "fn-calendar-updateEvent",
+  "name": "Change an event",
+  "description": "Changes an event as the caller: a one-off by record.update; one occurrence of a series, this and the following, or all of it by calendar.event.updateOccurrence (give recurrenceId and scope, and the series' id or the occurrence's event). set holds the fields to change: title, start, end, location, description, status, attendees.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "id",
+            "type": "string",
+            "description": "The event's id (for a series, its master's or an exception's)"
+          },
+          {
+            "id": "set",
+            "type": "json",
+            "description": "The fields to change, e.g. {\"start\":\"2026-12-08T10:00:00Z\",\"end\":\"2026-12-08T11:00:00Z\"}"
+          },
+          {
+            "id": "recurrenceId",
+            "type": "string",
+            "optional": true,
+            "description": "For a series, the occurrence's recurrence id"
+          },
+          {
+            "id": "scope",
+            "type": "string",
+            "optional": true,
+            "description": "For a series, this, following or all (this when left out)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ev",
+      "type": "records.get",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "entity": "calEvent"
+      }
+    },
+    {
+      "id": "master",
+      "type": "data.expression",
+      "title": "The series' master, if it repeats",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "string(ev?.series ?? ((ev?.rrule ?? \"\") != \"\" ? id : \"\"))",
+        "type": "string"
+      }
+    },
+    {
+      "id": "isSeries",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "master != \"\" \u0026\u0026 (recurrenceId ?? \"\") != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "position": {
+        "x": 1360,
+        "y": 0
+      }
+    },
+    {
+      "id": "occArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "{recurrenceId: recurrenceId, scope: (scope ?? \"\") == \"\" ? \"this\" : scope, set: set}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "sendOcc",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "command": "calendar.event.updateOccurrence"
+      }
+    },
+    {
+      "id": "oneArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "expr": "{entity: \"calEvent\", set: set}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "sendOne",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "produced",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 600
+      },
+      "config": {
+        "expr": "{entity: \"calEvent\", id: id}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "yes",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "true",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "okOcc",
+      "type": "flow.return",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "changed",
+            "type": "bool"
+          },
+          {
+            "id": "produced",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "okOne",
+      "type": "flow.return",
+      "position": {
+        "x": 2040,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "changed",
+            "type": "bool"
+          },
+          {
+            "id": "produced",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "failOcc",
+      "type": "flow.return",
+      "position": {
+        "x": 2040,
+        "y": 400
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "failOne",
+      "type": "flow.return",
+      "position": {
+        "x": 2040,
+        "y": 600
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "id"
+      },
+      "to": {
+        "node": "ev",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "ev",
+        "pin": "record"
+      },
+      "to": {
+        "node": "master",
+        "pin": "ev"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "id"
+      },
+      "to": {
+        "node": "master",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "master",
+        "pin": "value"
+      },
+      "to": {
+        "node": "isSeries",
+        "pin": "master"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "recurrenceId"
+      },
+      "to": {
+        "node": "isSeries",
+        "pin": "recurrenceId"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "isSeries",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "recurrenceId"
+      },
+      "to": {
+        "node": "occArgs",
+        "pin": "recurrenceId"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "scope"
+      },
+      "to": {
+        "node": "occArgs",
+        "pin": "scope"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "set"
+      },
+      "to": {
+        "node": "occArgs",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "sendOcc",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "master",
+        "pin": "value"
+      },
+      "to": {
+        "node": "sendOcc",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "occArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "sendOcc",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "set"
+      },
+      "to": {
+        "node": "oneArgs",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "sendOne",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "id"
+      },
+      "to": {
+        "node": "sendOne",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "oneArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "sendOne",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "id"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "sendOcc",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "okOcc",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "yes",
+        "pin": "value"
+      },
+      "to": {
+        "node": "okOcc",
+        "pin": "changed"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
+        "pin": "value"
+      },
+      "to": {
+        "node": "okOcc",
+        "pin": "produced"
+      }
+    },
+    {
+      "from": {
+        "node": "sendOne",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "okOne",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "yes",
+        "pin": "value"
+      },
+      "to": {
+        "node": "okOne",
+        "pin": "changed"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
+        "pin": "value"
+      },
+      "to": {
+        "node": "okOne",
+        "pin": "produced"
+      }
+    },
+    {
+      "from": {
+        "node": "sendOcc",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "failOcc",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "sendOcc",
+        "pin": "message"
+      },
+      "to": {
+        "node": "failOcc",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "sendOne",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "failOne",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "sendOne",
+        "pin": "message"
+      },
+      "to": {
+        "node": "failOne",
+        "pin": "error"
+      }
+    }
+  ]
+}

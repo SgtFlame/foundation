@@ -1053,6 +1053,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Commands decide on the projections; queries are subscriptions
 		projections := project.New(nats.JS(), registry)
 		projections.SetAccounts(natsAccounts)
+		// Installed apps' projectors are read as app.<appId>.<name> (forge 26d-1)
+		projections.SetResolver(installs.ProjectorResolver(func() installs.Deps { return installDeps }))
 		defer projections.Close()
 		liveBus := bus.New(projections)
 		subscriptions := subscribe.New(projections, registry)
