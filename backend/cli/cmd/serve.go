@@ -772,7 +772,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// tasks, …): a new feature adds a file there, not lines here
 		var gitMirrors volumeservice.Mirrors // the mirrored Volumes (forge 24e), set once the file events exist
 		var imageProvider providers.Images   // set once the AI provider is made (forge 35f-7)
-		if err := wiring.ContributeAll(registry, &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Records: &recordDeps, Images: &imageProvider, Mirrors: &gitMirrors}); err != nil {
+		wiringEnv := &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Records: &recordDeps, Images: &imageProvider, Mirrors: &gitMirrors, KB: &kbToolDeps}
+		if err := wiring.ContributeAll(registry, wiringEnv); err != nil {
 			return err
 		}
 		// OAuth for connections (forge 26a-1): its settings list the OAuth
@@ -931,6 +932,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		})
 
 		fileEvents := volumeservice.NewFileEvents()
+		wiringEnv.FileEvents = &fileEvents
 		gitMirrors = volumeservice.Mirrors{Root: kbRoot, Events: fileEvents} // forge 24e
 		if loc.Client != nil {
 			// The index must not miss a file: a durable bus, followed only
@@ -1115,6 +1117,10 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Adapters' settings on cx.resolve and their sources' status on
 		// cx.status, in a queue group in every process
 		if err := connections.Serve(ctx, nats.Conn(), func() connections.Deps { return connectionDeps }); err != nil {
+			return err
+		}
+		// Features' background work (features/wiring: docs' page.saved)
+		if err := wiring.StartAll(ctx, wiringEnv); err != nil {
 			return err
 		}
 		// This process's adapter serves the builtin types implemented here
