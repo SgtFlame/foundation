@@ -262,6 +262,16 @@ func (x *exporter) missingEntities() []string {
 			}
 		}
 	}
+	// A required app's type the app lists names its own app's types in
+	// its relations (forge 40f: mailMessage's account), which the check
+	// needs beside it
+	for _, e := range x.doc.AppParts.Entities {
+		for _, f := range e.Entity.Fields {
+			if f.Relation != nil {
+				add(f.Relation.Entity)
+			}
+		}
+	}
 	return out
 }
 
