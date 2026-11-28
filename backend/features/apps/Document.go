@@ -333,7 +333,7 @@ func (c *docCheck) prefab(path string, p ui.Prefab, other bool) {
 			if _, ok := c.graphOf("qry-" + name); ok {
 				return true
 			}
-			// A required app's query, <appId>.<name> (forge 30e: todos.myDay),
+			// A required app's query, <appId>.<name> (forge 30e: tasks.myDay),
 			// whose graph is that app's and checked when it was published
 			app, _, scoped := strings.Cut(name, ".")
 			return scoped && slices.Contains(c.d.Manifest.Requires.Apps, app)
