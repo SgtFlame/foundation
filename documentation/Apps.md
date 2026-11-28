@@ -741,6 +741,23 @@ The app's queries read it with *Read projection* as **`app.<appId>.<name>`** (`a
 
 Tests: `apps/installs` `TestAppProjector` (counts per key, an update folding, a second process sharing the consumer, a restart resuming, an upgrade rebuilding a new generation) and `TestEphemeral` (a reader sees a signal and loses it after its time, a non-reader can neither follow nor publish, an undeclared topic is refused); `apps/ops` `TestEveryOpUndoes` covers the six new list commands.
 
+## Changed in forge 40f
+**An app's roles may name a required app's entity types** (Tony's decision, 2026-11-28). Forge's CRM sample (`sales`) requires `mail`, and its `matcher` role names `entity:mailMessage.read`, so its matching job, which runs as the app, can read Mail's messages.
+- `apps.CheckManifest` accepts an action on a type of an app in `requires.apps`.
+- At publish, `Version.Required` records each such type's owning app.
+- `apps.AppRoles` scopes the action under that app's path (`app:mail/entity:mailMessage/record.read`).
+- The `app` fence lets such a permission through: `authz.Role.NamesOn(action, path, seg)` is true when a scoped permission of the role names that app segment and covers the path. The browser's `permissions.ts` mirrors this (`namesOn`).
+- The required app's own rules still decide by row (Mail's types allow `principal.kind == 'app'`).
+
+**`ui.openEditor` opens another app's kind.** A kind that starts with `app:` (`app:mail:thread`) is passed through unchanged, so a page can open a required app's tab.
+
+**Export** adds the related types of a required app's types to the document's check (`missingEntities`), so a role naming `mailMessage` does not fail on `mailAccount`.
+
+Tests:
+- `go test ./features/authz -run TestAppRoleReachesRequiredApp`
+- `go test ./features/apps -run TestRoleNamesRequiredType`
+- Forge `go test ./features/starter/crm -run 'TestMailMatching|TestPagesExportImport'`
+
 ## Changed in forge 40e
 A page may read a query of an app it requires by `<app>.<query>` (Forge's CRM sample reads `crm.timeline` and `crm.pipelineTotals` of the `crm` library app). The checks find such queries by their data.query graph, `qry-<app>-<query>`:
 - `manifests.DraftDocument` adds the graph of every query a prefab reads that is not a registered query, so `forge.check` and `CheckDraft` see it.

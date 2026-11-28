@@ -562,8 +562,8 @@ func Contribute(reg *extensions.Registry) {
 			h.Do(a)
 			return nil
 		})
-	effect(310, "ui.openEditor", "Open editor", "Opens one of the app's pages as its own top-level tab, of an editor kind", "Open editor item with the list item's id",
-		`{"type":"object","properties":{"kind":{"type":"string","title":"Editor kind","description":"The app's kind, e.g. item"},"helpText":{"type":"string","title":"Help text"}},"required":["kind"]}`,
+	effect(310, "ui.openEditor", "Open editor", "Opens one of the app's pages as its own top-level tab, of an editor kind; a kind app:<appId>:<kind> opens another app's (forge 40f: the CRM opening a Mail thread)", "Open editor item with the list item's id",
+		`{"type":"object","properties":{"kind":{"type":"string","title":"Editor kind","description":"The app's kind, e.g. item, or app:<appId>:<kind> for another app's"},"helpText":{"type":"string","title":"Help text"}},"required":["kind"]}`,
 		[]cognition.Pin{cognition.DataPin("id", "ID", "string", "The object's id"), {ID: "name", Name: "Name", Type: "string", Optional: true, Description: "The tab's name"},
 			{ID: "params", Name: "Params", Type: cognition.Any, Optional: true, Description: "The page's params; {id} when unconnected"}},
 		func(h Host, x *cognition.Exec, in cognition.Values) error {

@@ -75,7 +75,17 @@ export function can(p: MeResponse | undefined, userId: string | undefined, actio
     if (h.grant.expiresAt && Date.parse(h.grant.expiresAt) <= Date.now()) return false
     const g = segments(h.grant.resource)
     if (!(g.every((s, i) => path[i] === s) && g.length <= path.length && holdsOn(h.permissions, action, path))) return false
-    return !fence || h.crossesFences || path.slice(g.length).every((s) => !s.startsWith(`${fence}:`) || s === `${fence}:${h.app}`)
+    return !fence || h.crossesFences || path.slice(g.length).every((s) => !s.startsWith(`${fence}:`) || s === `${fence}:${h.app}` || namesOn(h.permissions, action, path, s))
+  })
+}
+
+// namesOn mirrors authz.Role.NamesOn: a scoped permission holding action on
+// path whose scope names seg crosses the fence at seg (forge 40f: an app's
+// role on a required app's type)
+function namesOn(perms: string[], action: string, path: string[], seg: string): boolean {
+  return perms.some((p) => {
+    const i = p.lastIndexOf('/')
+    return i > 0 && p.slice(i + 1) === action && p.slice(0, i).split('/').includes(seg) && holdsOn([p], action, path)
   })
 }
 

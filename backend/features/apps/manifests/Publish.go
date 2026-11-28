@@ -298,6 +298,11 @@ func (c *decision) pin(m apps.Manifest) (apps.Version, []live.Problem) {
 		v.Entities[e] = et.Version
 		if et.Owner == apps.Owner(m.ID) {
 			v.Owned = append(v.Owned, e)
+		} else if app, ok := strings.CutPrefix(et.Owner, "app:"); ok && slices.Contains(m.Requires.Apps, app) {
+			if v.Required == nil {
+				v.Required = map[string]string{}
+			}
+			v.Required[e] = app
 		}
 	}
 	slices.SortFunc(problems, func(a, b live.Problem) int { return strings.Compare(a.Path, b.Path) })

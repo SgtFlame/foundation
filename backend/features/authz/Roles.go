@@ -70,6 +70,22 @@ func (r Role) HoldsOn(action string, path []string) bool {
 	return false
 }
 
+// NamesOn tells whether the role holds action on the resource at path
+// through a scoped permission whose scope names seg ("app:mail"), so a
+// fence at seg does not stop it (forge 40f).
+func (r Role) NamesOn(action string, path []string, seg string) bool {
+	if len(path) > 0 && strings.HasPrefix(path[0], "tenant:") {
+		path = path[1:]
+	}
+	for _, p := range r.Permissions {
+		scope, perm, ok := ScopedPermission(p)
+		if ok && perm == action && slices.Contains(scope, seg) && Covers(scope, path) {
+			return true
+		}
+	}
+	return false
+}
+
 // ScopedPermission splits an app role's permission into its scope below
 // the tenant and the permission: "app:tasks/entity:task/record.read" is
 // [app:tasks entity:task] and record.read.

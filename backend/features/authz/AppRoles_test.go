@@ -153,3 +153,46 @@ func TestAppPrincipal(t *testing.T) {
 		t.Errorf("rules: %v %v", rules, restricted)
 	}
 }
+
+// An app's role naming a type of an app it requires (forge 40f) crosses
+// that app's fence for that type alone; the required app's other types
+// and other apps stay fenced, and a user granted the role is held the
+// same way.
+func TestAppRoleReachesRequiredApp(t *testing.T) {
+	ctx := context.Background()
+	pol := testPolicy(t)
+	ResourceTypes.Register(pol.registry, ResourceType{
+		Descriptor: extensions.Descriptor{ID: "record"}, Parent: "tenant", Fence: "app",
+		Actions: []Action{{Name: "read", Class: ClassRead}, {Name: "create", Class: ClassCreate}},
+	})
+	Install(pol)
+	t.Cleanup(func() { Install(nil) })
+	ids, err := pol.SyncAppRoles(ctx, 1, "sales", []AppRole{
+		{ID: "matcher", Name: "Matcher", Permissions: []string{"app:mail/entity:mailMessage/record.read", "app:crm/entity:crmActivity/record.create"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pol.Grant(ctx, nil, GrantArgs{UserID: 2, RoleID: ids["matcher"], Resource: "tenant:1"}); err != nil {
+		t.Fatal(err)
+	}
+	sales := features.AppPrincipal(1, "sales")
+	user := features.Principal{Kind: features.PrincipalUser, UserID: 2, TenantID: 1}
+	for _, p := range []features.Principal{sales, user} {
+		for _, c := range []struct {
+			action, res string
+			want        bool
+		}{
+			{"record.read", "tenant:1/app:mail/entity:mailMessage", true},
+			{"record.read", "tenant:1/app:mail/entity:mailMessage/record:7", true},
+			{"record.create", "tenant:1/app:mail/entity:mailMessage", false}, // not named
+			{"record.read", "tenant:1/app:mail/entity:mailAccount", false},   // another type of the app
+			{"record.create", "tenant:1/app:crm/entity:crmActivity", true},
+			{"record.read", "tenant:1/app:other/entity:mailMessage", false}, // another app
+		} {
+			if d := Check(ctx, p, c.action, c.res); d.Allowed != c.want {
+				t.Errorf("%s %s on %s: %v (%s)", p, c.action, c.res, d.Allowed, d.Reason)
+			}
+		}
+	}
+}

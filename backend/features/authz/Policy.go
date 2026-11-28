@@ -271,7 +271,7 @@ func (pol *Policy) allowing(ctx context.Context, p features.Principal, typ Resou
 			}
 			grant, held.Record, held.RecordEntity = scope, id, entity
 		}
-		if !role.HoldsOn(action, path) || !crosses(typ, role, grant, path) {
+		if !role.HoldsOn(action, path) || !crosses(typ, role, action, grant, path) {
 			continue
 		}
 		out = append(out, held)
@@ -334,14 +334,17 @@ func AppGrants(roles map[uint64]Role, tenant uint64, app string) []RoleGrant {
 // crosses tells whether a grant on grant may reach path past the type's
 // fence: a segment of the fence's kind below the grant ("app:tasks" under a
 // grant on the tenant) is crossed only by the Super Administrator, the
-// tenant's Owner and Administrator, and that app's own roles.
-func crosses(typ ResourceType, role Role, grant, path []string) bool {
+// tenant's Owner and Administrator, that app's own roles, and a role
+// holding action through a scoped permission that names the segment
+// (forge 40f: an app's role given an action on a type of an app it
+// requires, app:mail/entity:mailMessage/record.read).
+func crosses(typ ResourceType, role Role, action string, grant, path []string) bool {
 	if typ.Fence == "" {
 		return true
 	}
 	for _, seg := range path[len(grant):] {
 		kind, id, _ := strings.Cut(seg, ":")
-		if kind == typ.Fence && !role.CrossesFences() && role.App != id {
+		if kind == typ.Fence && !role.CrossesFences() && role.App != id && !role.NamesOn(action, path, seg) {
 			return false
 		}
 	}

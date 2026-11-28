@@ -309,7 +309,11 @@ func (c *check) action(path, a string) {
 	}
 	if c.env.Entity != nil {
 		if e, ok := c.env.Entity(entity); ok && e.Owner != Owner(c.m.ID) {
-			c.add(path, fmt.Sprintf("the entity type %s is not the app's own, so the app's roles cannot reach it", entity), "use one of the app's own entity types; the tenant's roles give access to the others")
+			// A required app's type may be named (forge 40f); the tenant's
+			// may not
+			if app, ok := strings.CutPrefix(e.Owner, "app:"); !ok || !slices.Contains(c.m.Requires.Apps, app) {
+				c.add(path, fmt.Sprintf("the entity type %s is neither the app's own nor a required app's, so the app's roles cannot reach it", entity), "use one of the app's own entity types or a type of an app in requires.apps; the tenant's roles give access to the others")
+			}
 		}
 	}
 }
