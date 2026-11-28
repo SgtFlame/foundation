@@ -73,3 +73,11 @@ Finding times that suit several people and holding them while a proposal is open
 - **Proposals** (`calendar.proposeMeeting {people, durationMinutes, from, to, purpose, subject?, count?}`): finds slots and holds them, returning each slot with its held `event`, the `hold` and `expires`; an agent whose `agentRecord.autonomy` is `suggest` gets the slots only.
 - **Answers** (`calendar.respond {event, answer, comment?}`): the caller's own answer through `calendar.event.respond`.
 - Tested end to end in Forge's `features/starter/calendar` (`freetime_test.go`): three people in three zones, a hold seen busy by a colleague's free/busy, choosing twice, releasing, expiry by the trigger, a suggesting agent, and a hold on a Calendar test server calendar reaching it as tentative events.
+
+## Changed in forge 28i: proposals for an agent's maker, and open holds
+
+Part 28i's first step (Forge's Mail app proposes times by mail; Forge `MailApp.md` › *Built in part 28i*).
+
+- **An agent proposes for the person who made it**: `calendar.findFreeTime` and `calendar.proposeMeeting` called by an agent that names nobody take `agentRecord._createdBy` as the people. `proposeMeeting` holds on the given `calendar`, else for an agent on the first calendar that person owns (not a room) that the agent can see, in that calendar's zone unless `zone` is given. The person gives the agent *Calendar writer* (`calWriter`) on that calendar. That role now also holds `entity:calHold.*`, with the row rule `principal.hasRole('calWriter', record.calendar)`.
+- **`calendar.hold`** for a caller who is not a user (an agent) no longer queries calendars owned by `""`. `proposeMeeting`'s slots-only answer carries `error` when the hold failed.
+- **Open holds** (`calendar.holds {subject}`, `fn-calendar-holds`, read): the open Holds of a proposal's subject (`{entity, id}`, a mail thread) that the caller may see, each with its slots and their event ids. An agent reads them to tell which time a reply picks before `calendar.choose`.
