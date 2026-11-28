@@ -1,0 +1,26 @@
+{
+  "name": "chat_messaging_reaction_add",
+  "description": "Reacts to a message with an emoji as the connection's account. Adding one already there succeeds.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "The channel's id"
+      },
+      "id": {
+        "type": "string",
+        "description": "The message's id"
+      },
+      "emoji": {
+        "type": "string",
+        "description": "The emoji's name, e.g. thumbsup"
+      }
+    },
+    "required": [
+      "channel",
+      "id",
+      "emoji"
+    ]
+  }
+}

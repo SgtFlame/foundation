@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "access_token": "xoxb-slack-bot",
+  "token_type": "bot",
+  "scope": "channels:read,channels:history,chat:write",
+  "bot_user_id": "U0BOT",
+  "app_id": "A0APP",
+  "team": {"name": "Acme", "id": "T0123"},
+  "enterprise": null,
+  "authed_user": {"id": "U0456"}
+}

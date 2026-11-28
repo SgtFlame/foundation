@@ -1,0 +1,10 @@
+{
+  "endpoint": "https://slack.com/oauth/v2/authorize",
+  "query": {
+    "client_id": "s-client",
+    "redirect_uri": "https://axiom.example.com/api/v1/connectors/oauth/callback",
+    "response_type": "code",
+    "scope": "channels:read,channels:history,chat:write",
+    "state": "state-1"
+  }
+}

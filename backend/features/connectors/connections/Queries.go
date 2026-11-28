@@ -14,6 +14,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features"
 	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/SgtFlame/foundation/backend/features/connectors"
+	"github.com/SgtFlame/foundation/backend/features/connectors/hooks"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/tools"
@@ -239,7 +240,7 @@ func contributeQueries(reg *extensions.Registry, deps func() Deps) {
 	})
 	live.Queries.Register(reg, live.Query{
 		Descriptor: extensions.Descriptor{ID: "connections.describe", Source: "connectors"}, Title: "Describe a connection",
-		Description: "One connection: {connection: {id, name, type, owner, settings, secrets {<field>: {set}}, status, lastError, checkedAt, options}} (null once deleted), with its type's metadata as type. Secrets are never shown.",
+		Description: "One connection: {connection: {id, name, type, owner, settings, secrets {<field>: {set}}, status, lastError, checkedAt, options}} (null once deleted), with its type's metadata as type and, to those who manage it, its OAuth provider as oauth {provider, title} when its type signs in with one, and its callback hook as hook {id, path} once a trigger listens to its callback events. Secrets are never shown.",
 		Params:      json.RawMessage(`{"type":"object","properties":{"id":{"type":"string","description":"The connection's id"}},"required":["id"]}`),
 		Examples:    []json.RawMessage{json.RawMessage(`{"id":"123"}`)},
 		Action:      "connection.read",
@@ -263,6 +264,19 @@ func contributeQueries(reg *extensions.Registry, deps func() Deps) {
 				out := map[string]any{"connection": ViewOf(c)}
 				if t, ok, _ := d.Registry.Type(ctx, args.Principal.TenantID, c.Type); ok {
 					out["type"] = t
+					if t.Type.OAuth != nil && d.Extensions != nil { // Sign in with … (forge 26a-1)
+						settings, _ := json.Marshal(c.Settings)
+						if ch, ok := t.Type.OAuth.For(settings); ok { // the connection's choice (forge 26a-2)
+							if p, ok := connectors.OAuthProviderOf(d.Extensions, ch.Provider); ok {
+								out["oauth"] = map[string]any{"provider": p.ID, "title": p.Title}
+							}
+						}
+					}
+				}
+				if CheckAccess(args, c, "manage") == nil { // its hook, to those who manage it (forge 26b-1)
+					if h, ok, _ := hooks.Of(ctx, d.Projections.JetStream(), args.Principal.TenantID, c.ID); ok {
+						out["hook"] = map[string]any{"id": h.ID, "path": hooks.Path + h.ID}
+					}
 				}
 				return out, nil
 			})

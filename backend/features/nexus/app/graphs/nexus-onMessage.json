@@ -1,0 +1,406 @@
+{
+  "id": "nexus-onMessage",
+  "name": "A message was posted",
+  "description": "Notifies the people a new message mentions, as the app, once per message and person (key nexus:\u003cmessage\u003e:mention): in a private channel only its members, and never its author. The notification links to the message.",
+  "kind": "app.trigger",
+  "version": 1,
+  "owner": "app:nexus",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "records.onChanged",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusMessage",
+        "events": [
+          "created"
+        ]
+      }
+    },
+    {
+      "id": "cid",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "type": "string",
+        "expr": "string(record?.channel ?? \"\")"
+      }
+    },
+    {
+      "id": "chan",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusChannel"
+      }
+    },
+    {
+      "id": "mq",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "type": "json",
+        "expr": "{where: {channel: cid}, limit: 2000}"
+      }
+    },
+    {
+      "id": "members",
+      "type": "records.query",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusMember"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "let author = string(record?.author ?? \"\");\nlet ids = map(members ?? [], string(#.user ?? \"\"));\nlet priv = chan?.private ?? false;\nlet to = filter(record?.mentions ?? [], # != author \u0026\u0026 (!priv || # in ids));\nlet where = chan == nil ? \"a channel\" : (chan.kind ?? \"\") == \"direct\" ? \"a direct message\" : \"#\" + (chan.name ?? \"\");\nlet text = record?.text ?? \"\";\n{to: to, title: \"You were mentioned in \" + where, body: len(text) \u003e 140 ? text[:140] + \"…\" : text,\n link: \"workbench:nexusChannel/\" + cid + \"?message=\" + id, key: \"nexus:\" + id + \":mention\"}"
+      }
+    },
+    {
+      "id": "any",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "type": "bool",
+        "expr": "len(plan.to) \u003e 0"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "to",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "type": "json",
+        "expr": "plan.to"
+      }
+    },
+    {
+      "id": "title",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 400
+      },
+      "config": {
+        "type": "string",
+        "expr": "plan.title"
+      }
+    },
+    {
+      "id": "body",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 600
+      },
+      "config": {
+        "type": "string",
+        "expr": "plan.body"
+      }
+    },
+    {
+      "id": "link",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 800
+      },
+      "config": {
+        "type": "string",
+        "expr": "plan.link"
+      }
+    },
+    {
+      "id": "key",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 1000
+      },
+      "config": {
+        "type": "string",
+        "expr": "plan.key"
+      }
+    },
+    {
+      "id": "notify",
+      "type": "notify.send",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "kind": "mention",
+        "app": "nexus"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "cid",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "cid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "chan",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "cid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mq",
+        "pin": "cid"
+      }
+    },
+    {
+      "from": {
+        "node": "mq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "members",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "members",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "members"
+      }
+    },
+    {
+      "from": {
+        "node": "chan",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "chan"
+      }
+    },
+    {
+      "from": {
+        "node": "cid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "cid"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "any",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "to",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "title",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "body",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "link",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "key",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "any",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "notify",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "to",
+        "pin": "value"
+      },
+      "to": {
+        "node": "notify",
+        "pin": "recipients"
+      }
+    },
+    {
+      "from": {
+        "node": "title",
+        "pin": "value"
+      },
+      "to": {
+        "node": "notify",
+        "pin": "title"
+      }
+    },
+    {
+      "from": {
+        "node": "body",
+        "pin": "value"
+      },
+      "to": {
+        "node": "notify",
+        "pin": "body"
+      }
+    },
+    {
+      "from": {
+        "node": "link",
+        "pin": "value"
+      },
+      "to": {
+        "node": "notify",
+        "pin": "link"
+      }
+    },
+    {
+      "from": {
+        "node": "key",
+        "pin": "value"
+      },
+      "to": {
+        "node": "notify",
+        "pin": "key"
+      }
+    }
+  ]
+}
