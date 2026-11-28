@@ -1,7 +1,7 @@
 {
   "id": "tasks-syncPush",
   "name": "Push a task to its tracker",
-  "description": "The job sending a task's change to its project's tracker board (part 30h), as the app, one at a time per task. Skipped when the project has no board, or when the task's last change was the sync's own (unless force, from a pull that kept our change). A task with no card yet gets one (card.create keyed by the task's id, so a retry makes one) in its status's list; else its title, description and due date go to its card with the version last seen (card.update) and, when its status's list differs, the card moves (card.move). The card's new version is kept on the task, so the tracker's echo of the change is dropped. A conflict (the card changed since) enqueues the card's pull, which keeps the later change; any other refusal is logged.",
+  "description": "The job sending a task's change to its project's tracker board (part 30h), as the app, one at a time per task. Skipped when the project has no board, or when the task holds what the sync last wrote (outside.synced) (unless force, from a pull that kept our change). A task with no card yet gets one (card.create keyed by the task's id, so a retry makes one) in its status's list; else its title, description and due date go to its card with the version last seen (card.update) and, when its status's list differs, the card moves (card.move). The card's new version is kept on the task, so the tracker's echo of the change is dropped. A conflict (the card changed since) enqueues the card's pull, which keeps the later change; any other refusal is logged.",
   "kind": "server.action",
   "version": 1,
   "owner": "app:tasks",
@@ -107,7 +107,7 @@
       },
       "config": {
         "type": "json",
-        "expr": "let linked = tk != nil \u0026\u0026 pr != nil \u0026\u0026 string(pr.connection ?? \"\") != \"\" \u0026\u0026 string(pr.board ?? \"\") != \"\";\nlet mine = tk != nil \u0026\u0026 int(tk._updatedBy ?? 0) == 0 \u0026\u0026 !(force ?? false);\nlet list = string((st ?? {}).outsideList ?? \"\");\nlet card = tk == nil ? \"\" : string(tk.outsideId ?? \"\");\nlet doc = tk?.description;\nlet text = doc == nil ? \"\" : join(map(doc.content ?? [], join(map(#.content ?? [], string(#.text ?? \"\")), \"\")), \"\\n\\n\");\n{mode: !linked || mine || tk.state == \"proposed\" ? \"skip\" : (card == \"\" ? (list == \"\" ? \"skip\" : \"create\") : \"update\"),\n card: card, list: list, version: string(tk?.outside?.version ?? \"\"), moved: card != \"\" \u0026\u0026 list != \"\" \u0026\u0026 list != string(tk?.outside?.list ?? \"\"),\n board: string(pr?.board ?? \"\"), connection: string(pr?.connection ?? \"\"),\n fields: {title: tk?.title ?? \"\", description: text, due: string(tk?.due ?? \"\")}}"
+        "expr": "let linked = tk != nil && pr != nil && string(pr.connection ?? \"\") != \"\" && string(pr.board ?? \"\") != \"\";\nlet list = string((st ?? {}).outsideList ?? \"\");\nlet card = tk == nil ? \"\" : string(tk.outsideId ?? \"\");\nlet doc = tk?.description;\nlet text = doc == nil ? \"\" : join(map(doc.content ?? [], join(map(#.content ?? [], string(#.text ?? \"\")), \"\")), \"\\n\\n\");\nlet fields = {title: tk?.title ?? \"\", description: text, due: string(tk?.due ?? \"\")};\nlet snap = tk?.outside?.synced;\nlet same = snap != nil && string(snap.title ?? \"\") == fields.title && string(snap.description ?? \"\") == fields.description && string(snap.due ?? \"\") == fields.due && string(snap.list ?? \"\") == list;\nlet mine = tk != nil && !(force ?? false) && (snap != nil ? same : int(tk._updatedBy ?? 0) == 0);\n{mode: !linked || mine || tk.state == \"proposed\" ? \"skip\" : (card == \"\" ? (list == \"\" ? \"skip\" : \"create\") : \"update\"),\n card: card, list: list, version: string(tk?.outside?.version ?? \"\"), moved: card != \"\" && list != \"\" && list != string(tk?.outside?.list ?? \"\"),\n board: string(pr?.board ?? \"\"), connection: string(pr?.connection ?? \"\"),\n fields: fields}"
       }
     },
     {
@@ -311,7 +311,7 @@
         "y": 0
       },
       "config": {
-        "expr": "{entity: \"taskItem\", set: {outsideId: id, outside: {id: id, version: version, updatedAt: updatedAt, list: list}}}",
+        "expr": "{entity: \"taskItem\", set: {outsideId: id, outside: {id: id, version: version, updatedAt: updatedAt, list: list, synced: {title: plan.fields.title, description: plan.fields.description, due: plan.fields.due, list: list}}}}",
         "type": "json"
       }
     },
@@ -499,7 +499,7 @@
         "y": 0
       },
       "config": {
-        "expr": "{entity: \"taskItem\", set: {outside: {id: id, version: version, updatedAt: updatedAt, list: list}}}",
+        "expr": "{entity: \"taskItem\", set: {outside: {id: id, version: version, updatedAt: updatedAt, list: list, synced: {title: plan.fields.title, description: plan.fields.description, due: plan.fields.due, list: list}}}}",
         "type": "json"
       }
     },
@@ -523,7 +523,7 @@
         "y": 400
       },
       "config": {
-        "expr": "{entity: \"taskItem\", set: {outside: {id: id, version: version, updatedAt: updatedAt, list: list}}}",
+        "expr": "{entity: \"taskItem\", set: {outside: {id: id, version: version, updatedAt: updatedAt, list: list, synced: {title: plan.fields.title, description: plan.fields.description, due: plan.fields.due, list: list}}}}",
         "type": "json"
       }
     },
@@ -1562,6 +1562,36 @@
       "to": {
         "node": "done",
         "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "createdArgs",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "updatedArgs",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "movedArgs",
+        "pin": "plan"
       }
     }
   ]

@@ -1,7 +1,7 @@
 {
   "id": "tasks-syncPull",
   "name": "Pull a card from its tracker",
-  "description": "The job taking a card's change from a project's tracker board (part 30h), as the app, one at a time per card. An event whose version the task already holds is the echo of our own push and is dropped. A card with no task, on a board a project is connected to, becomes a task. Otherwise the card's title, description, due date, list and archiving are taken. When the task also changed here since the sync last wrote it, the later change wins field by field: the losing values are kept in a sync log entry, and when ours wins the task is pushed back.",
+  "description": "The job taking a card's change from a project's tracker board (part 30h), as the app, one at a time per card. An event whose version the task already holds is the echo of our own push and is dropped. A card with no task, on a board a project is connected to, becomes a task. Otherwise the card's title, description, due date, list and archiving are taken. When the task also changed here since the sync last wrote it (it no longer holds outside.synced), the later change wins field by field: the losing values are kept in a sync log entry, and when ours wins the task is pushed back.",
   "kind": "server.action",
   "version": 1,
   "owner": "app:tasks",
@@ -77,7 +77,7 @@
         "y": 0
       },
       "config": {
-        "expr": "tk != nil \u0026\u0026 (version ?? \"\") != \"\" \u0026\u0026 string(tk.outside?.version ?? \"\") == version",
+        "expr": "tk != nil && (version ?? \"\") != \"\" && string(tk.outside?.version ?? \"\") == version",
         "type": "bool"
       }
     },
@@ -246,7 +246,7 @@
       },
       "config": {
         "type": "json",
-        "expr": "let s = find(statuses ?? [], string(#.outsideList ?? \"\") == list);\nlet theirDue = len(due ?? \"\") \u003e= 10 ? due[:10] : \"\";\nlet out = {id: id, version: version, updatedAt: updatedAt, list: list};\nlet doc = tk?.description;\nlet ourText = doc == nil ? \"\" : join(map(doc.content ?? [], join(map(#.content ?? [], string(#.text ?? \"\")), \"\")), \"\\n\\n\");\nlet theirs = {title: title, description: description ?? \"\", due: theirDue, status: s == nil ? string(tk?.status ?? \"\") : s._id, state: archived ? \"archived\" : string(tk?.state ?? \"active\")};\nlet ours = tk == nil ? {} : {title: tk.title ?? \"\", description: ourText, due: string(tk.due ?? \"\"), status: string(tk.status ?? \"\"), state: string(tk.state ?? \"active\")};\nlet diff = tk == nil ? [] : filter([\"title\", \"description\", \"due\", \"status\", \"state\"], string(ours[#]) != string(theirs[#]));\nlet changedHere = tk != nil \u0026\u0026 int(tk._updatedBy ?? 0) != 0;\nlet theirsLater = !changedHere || updatedAt == \"\" || date(updatedAt) \u003e= date(string(tk._updatedAt));\nlet taken = theirsLater ? diff : [];\nlet asField = {title: theirs.title, due: theirs.due == \"\" ? nil : theirs.due, status: theirs.status, state: theirs.state,\n  description: theirs.description == \"\" ? nil : {type: \"doc\", content: map(split(theirs.description, \"\\n\\n\"), ({type: \"paragraph\", content: [{type: \"text\", text: #}]}))}};\n{mode: tk == nil ? (pid == \"none\" ? \"skip\" : \"create\") : \"merge\",\n create: {project: pid, title: title == \"\" ? \"(untitled)\" : title, description: description ?? \"\", due: theirDue, status: s == nil ? \"\" : s._id, outside: out},\n set: fromPairs(concat([[\"outside\", out]], map(taken, [#, asField[#]]))), expect: tk?._seq,\n conflict: changedHere \u0026\u0026 len(diff) \u003e 0, keptOurs: changedHere \u0026\u0026 len(diff) \u003e 0 \u0026\u0026 !theirsLater,\n log: {project: pid, task: tk?._id, kind: \"conflict\", fields: join(diff, \", \"), kept: theirsLater ? \"theirs\" : \"ours\",\n   lost: toJSON(fromPairs(map(diff, [#, theirsLater ? ours[#] : theirs[#]]))),\n   oursAt: tk?._updatedAt, theirsAt: updatedAt == \"\" ? nil : updatedAt,\n   summary: \"Both sides changed \" + (tk?.title ?? title) + \" (\" + join(diff, \", \") + \"): \" + (theirsLater ? \"the tracker's change\" : \"ours\") + \" was later and kept\"}}"
+        "expr": "let s = find(statuses ?? [], string(#.outsideList ?? \"\") == list);\nlet theirDue = len(due ?? \"\") >= 10 ? due[:10] : \"\";\nlet out = {id: id, version: version, updatedAt: updatedAt, list: list, synced: {title: title, description: description ?? \"\", due: theirDue, list: list}};\nlet doc = tk?.description;\nlet ourText = doc == nil ? \"\" : join(map(doc.content ?? [], join(map(#.content ?? [], string(#.text ?? \"\")), \"\")), \"\\n\\n\");\nlet theirs = {title: title, description: description ?? \"\", due: theirDue, status: s == nil ? string(tk?.status ?? \"\") : s._id, state: archived ? \"archived\" : string(tk?.state ?? \"active\")};\nlet ours = tk == nil ? {} : {title: tk.title ?? \"\", description: ourText, due: string(tk.due ?? \"\"), status: string(tk.status ?? \"\"), state: string(tk.state ?? \"active\")};\nlet diff = tk == nil ? [] : filter([\"title\", \"description\", \"due\", \"status\", \"state\"], string(ours[#]) != string(theirs[#]));\nlet snap = tk?.outside?.synced;\nlet ourList = string((find(statuses ?? [], string(#._id) == string(tk?.status ?? \"\")) ?? {}).outsideList ?? \"\");\nlet changedHere = tk != nil && (snap != nil ? string(snap.title ?? \"\") != ours.title || string(snap.description ?? \"\") != ours.description || string(snap.due ?? \"\") != ours.due || string(snap.list ?? \"\") != ourList : int(tk._updatedBy ?? 0) != 0);\nlet theirsLater = !changedHere || updatedAt == \"\" || date(updatedAt) >= date(string(tk._updatedAt));\nlet taken = theirsLater ? diff : [];\nlet asField = {title: theirs.title, due: theirs.due == \"\" ? nil : theirs.due, status: theirs.status, state: theirs.state,\n  description: theirs.description == \"\" ? nil : {type: \"doc\", content: map(split(theirs.description, \"\\n\\n\"), ({type: \"paragraph\", content: [{type: \"text\", text: #}]}))}};\n{mode: tk == nil ? (pid == \"none\" ? \"skip\" : \"create\") : \"merge\",\n create: {project: pid, title: title == \"\" ? \"(untitled)\" : title, description: description ?? \"\", due: theirDue, status: s == nil ? \"\" : s._id, outside: out},\n set: fromPairs(concat([[\"outside\", out]], map(taken, [#, asField[#]]))), expect: tk?._seq,\n conflict: changedHere && len(diff) > 0, keptOurs: changedHere && len(diff) > 0 && !theirsLater,\n log: {project: pid, task: tk?._id, kind: \"conflict\", fields: join(diff, \", \"), kept: theirsLater ? \"theirs\" : \"ours\",\n   lost: toJSON(fromPairs(map(diff, [#, theirsLater ? ours[#] : theirs[#]]))),\n   oursAt: tk?._updatedAt, theirsAt: updatedAt == \"\" ? nil : updatedAt,\n   summary: \"Both sides changed \" + (tk?.title ?? title) + \" (\" + join(diff, \", \") + \"): \" + (theirsLater ? \"the tracker's change\" : \"ours\") + \" was later and kept\"}}"
       }
     },
     {
@@ -308,7 +308,7 @@
         "y": 400
       },
       "config": {
-        "expr": "fromPairs(filter(toPairs(plan.create), #[1] != nil \u0026\u0026 #[1] != \"\"))",
+        "expr": "fromPairs(filter(toPairs(plan.create), #[1] != nil && #[1] != \"\"))",
         "type": "json"
       }
     },
@@ -429,7 +429,7 @@
         "y": 1000
       },
       "config": {
-        "expr": "{entity: \"taskSyncLog\", values: fromPairs(filter(toPairs(plan.log), #[1] != nil \u0026\u0026 #[1] != \"\"))}",
+        "expr": "{entity: \"taskSyncLog\", values: fromPairs(filter(toPairs(plan.log), #[1] != nil && #[1] != \"\"))}",
         "type": "json"
       }
     },

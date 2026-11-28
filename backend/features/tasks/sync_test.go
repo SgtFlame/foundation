@@ -212,6 +212,21 @@ func TestTwoWaySync(t *testing.T) {
 	if c["title"] != "Made here" || c["list"] != lists["To do"] || c["key"] != made {
 		t.Errorf("the new card: %v", c)
 	}
+
+	// Renamed, then moved before the rename's push wrote back: the sync's
+	// own write does not hide the move
+	doing := ""
+	for _, s := range sts {
+		if s["name"] == "Doing" {
+			doing = fmt.Sprint(s["_id"])
+		}
+	}
+	f.okOn(owner, "record.update", tasks.EntityTask, made, map[string]any{"entity": tasks.EntityTask, "set": map[string]any{"title": "Made here, renamed"}})
+	f.okOn(owner, "tasks.task.move", tasks.EntityTask, made, map[string]any{"status": doing})
+	eventually(t, "the rename and the move on the card", 20*time.Second, func() bool {
+		c := f.mustTracker(conn, tracker.Ref, "card.get", map[string]any{"id": f.get(tasks.EntityTask, made)["outsideId"]})
+		return c["title"] == "Made here, renamed" && c["list"] == lists["Doing"]
+	})
 }
 
 func str(v any) string {
