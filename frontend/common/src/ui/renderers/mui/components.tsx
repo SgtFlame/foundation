@@ -60,6 +60,9 @@ import { ErrorBox } from '../../UiRenderer.tsx'
 import { NamedIcon } from './icons.tsx'
 import type { Field } from '../record/fields.ts'
 import { FieldDisplay } from '../record/FieldValue.tsx'
+import { FieldInput } from '../record/FieldEditor.tsx'
+import { isComputed, same } from '../record/fields.ts'
+import { useUserNames } from '../../../components/undo/UndoButtons.tsx'
 
 type P = RendererProps
 const str = (v: unknown) => (v === undefined || v === null ? '' : String(v))
@@ -411,7 +414,7 @@ export interface Column {
   width?: number
   sortable?: boolean
   sortField?: string
-  type?: 'text' | 'number' | 'bool' | 'date' | 'dateTime' | 'enum' | 'actions'
+  type?: 'text' | 'number' | 'bool' | 'date' | 'dateTime' | 'enum' | 'actions' | 'editor'
   editable?: boolean
   recordField?: Field
   actions?: { id: string; label?: string; icon?: string }[]
@@ -449,6 +452,9 @@ export function TableCellValue({ column, row, rowKey, emit }: { column: Column; 
       </Stack>
     )
   }
+  if (column.type === 'editor' && column.recordField && !isComputed(column.recordField)) {
+    return <EditorCell column={column} field={column.recordField} row={row} rowKey={rowKey} emit={emit} />
+  }
   if (column.recordField) {
     const expanded = at(row, `_expanded.${column.recordField.id}`)
     return <FieldDisplay field={column.recordField} value={v} expanded={expanded} entity={str(row._entity) || undefined} record={rowKey} />
@@ -467,6 +473,47 @@ export function TableCellValue({ column, row, rowKey, emit }: { column: Column; 
   }
   if (column.type === 'dateTime' && typeof v === 'string') return <>{new Date(v).toLocaleString()}</>
   return <>{str(v)}</>
+}
+
+// An editor column's cell (forge 30d): the value as record.fieldValue
+// shows it until clicked, then record.fieldEditor's input; leaving it or
+// pressing Enter (at once for choices) sends edit {key, field, value,
+// expect}, expect being the row's _seq when editing began, so a blueprint
+// can send record.update with it and someone else's change in between is
+// refused rather than overwritten. While editing, a change by someone
+// else is named under the input.
+function EditorCell({ column, field, row, rowKey, emit }: { column: Column; field: Field; row: Record<string, unknown>; rowKey: string; emit: P['emit'] }) {
+  const server = at(row, column.field)
+  const seq = row._seq
+  const [editing, setEditing] = useState<{ value: unknown; seq: unknown } | null>(null)
+  const names = useUserNames()
+  const changedBy = editing && editing.seq !== seq ? names.get(str(row._updatedBy)) || 'someone else' : ''
+  const send = (value: unknown) => {
+    const was = editing
+    setEditing(null)
+    if (!was || same(value, server)) return
+    emit('edit', { key: rowKey, field: field.id, value, expect: was.seq })
+  }
+  if (!editing) {
+    const expanded = at(row, `_expanded.${field.id}`)
+    return (
+      <Box role="button" tabIndex={0} aria-label={`Edit ${column.title ?? field.name ?? field.id}`} sx={{ minHeight: 20, cursor: 'text' }}
+        onClick={(e) => { e.stopPropagation(); setEditing({ value: server, seq }) }}
+        onKeyDown={(e) => { if (e.key === 'Enter') setEditing({ value: server, seq }) }}>
+        <FieldDisplay field={field} value={server} expanded={expanded} entity={str(row._entity) || undefined} record={rowKey} />
+      </Box>
+    )
+  }
+  const textual = ['text', 'longText', 'number', 'decimal', 'money', 'duration', 'json'].includes(field.type)
+  return (
+    <Box onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null) }}>
+      <FieldInput field={field} value={editing.value} label={column.title ?? field.name} entity={str(row._entity) || undefined} record={rowKey}
+        problem={changedBy ? `Changed by ${changedBy}` : undefined}
+        onChange={(v) => (textual ? setEditing({ ...editing, value: v }) : send(v))}
+        onCommit={() => send(editing.value)} />
+    </Box>
+  )
 }
 
 export function MuiTable(p: P) {
