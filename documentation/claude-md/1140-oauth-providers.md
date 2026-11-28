@@ -1,0 +1,1 @@
+**OAuth providers** (forge 26a-2, `documentation/Connectors.md` › *Built in forge 26a-2*): `connectors/oauth/providers` holds Google, Microsoft (`{tenant}` from the registration) and Slack; a type may let each connection choose its provider in a settings field (`OAuth.Field`, `Choices`, read with `OAuth.For`), and a connection that chose none signs in with a password.

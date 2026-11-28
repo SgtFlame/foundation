@@ -73,6 +73,8 @@ export interface ConnectorType {
   discovers?: boolean
   receives?: string
   exclusive?: boolean
+  // oauth: the provider it signs in with and the scopes it asks for (forge 26a-1)
+  oauth?: { provider: string; scopes: string[]; extra?: Record<string, string> }
 }
 
 export interface TypeInfo {
@@ -119,6 +121,10 @@ export interface Connection {
   lastError?: string
   checkedAt?: string
   options: ConnectionOptions
+  // account: who signed it in, for a type with OAuth (forge 26a-1)
+  account?: string
+  // hook: its hook's registration with the service (forge 26b-2)
+  hook?: { url?: string; events?: string[]; registered?: boolean; manual?: boolean; error?: string; at: string }
   createdAt: string
   updatedAt: string
 }
@@ -130,6 +136,20 @@ export interface ConnectionList {
 export interface ConnectionDescription {
   connection: Connection | null
   type?: TypeInfo
+  // oauth: its type's provider, for Sign in with … (forge 26a-1)
+  oauth?: { provider: string; title: string }
+  // hook: where its service pushes callbacks, to those who manage it (forge 26b-1)
+  hook?: { id: string; path: string }
+}
+
+// The message the OAuth callback's popup posts to the window that opened
+// it (forge 26a-1)
+export interface OAuthResult {
+  type: 'connector.oauth'
+  connection: string
+  account?: string
+  error?: string
+  message?: string
 }
 
 export interface ConnectionTestResult {

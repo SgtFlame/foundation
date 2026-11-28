@@ -107,6 +107,12 @@
       "name": "Sync error",
       "type": "text",
       "description": "Why the last sync failed, from the connector's error"
+    },
+    {
+      "id": "readOnly",
+      "name": "Read only",
+      "type": "bool",
+      "description": "The outside calendar refuses changes (a subscribed ICS feed, or a calendar the connection may only read): its events are kept as the service has them and edits here are never pushed"
     }
   ],
   "indexes": [

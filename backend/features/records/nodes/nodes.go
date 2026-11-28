@@ -145,8 +145,9 @@ func contributeWrites(reg *extensions.Registry, deps func() data.Deps) {
 				return withExpect(map[string]any{"field": c["field"], "items": in["items"]}, in)
 			}},
 		{id: "records.move", command: "record.move", title: "Move record",
-			description: "Moves a record to a new place in an order (forge 30a): its rank field gets a rank between the record it goes after and the one it goes before (after left out: first; before left out: last), with other values in set changed with it, such as a board column's status. Its event commits with the command's.",
-			example:     "Move record task by position after the card above the drop, setting status to the column's", config: `,"field":{"type":"string","title":"Field","description":"The rank field's id"}`,
+			description: "Moves a record to a new place in an order (forge 30c, 35a-2): sets its rank field between the record it goes after and the one it goes before, with other values in set changed in the same event (a page's new parent, a board column's status). Its event commits with the command's.",
+			example:     "Move record docsPage at the target after the page it was dropped below, with set {parent}",
+			config:      `,"field":{"type":"string","title":"Field","description":"The rank field's id"}`,
 			in: []cognition.Pin{idPin("The record's id"),
 				{ID: "after", Name: "After", Type: "string", Optional: true, Description: "The id of the record it goes after; empty for the start"},
 				{ID: "before", Name: "Before", Type: "string", Optional: true, Description: "The id of the record it goes before; empty for the end"},
@@ -154,12 +155,12 @@ func contributeWrites(reg *extensions.Registry, deps func() data.Deps) {
 			args: func(c map[string]any, in cognition.Values) map[string]any {
 				a := map[string]any{"field": c["field"]}
 				for _, k := range []string{"after", "before"} {
-					if v, _ := in[k].(string); v != "" {
-						a[k] = v
+					if s, _ := in[k].(string); s != "" {
+						a[k] = s
 					}
 				}
-				if set, ok := in["set"]; ok && set != nil {
-					a["set"] = set
+				if s, ok := in["set"].(map[string]any); ok && len(s) > 0 {
+					a["set"] = s
 				}
 				return withExpect(a, in)
 			}},
@@ -175,8 +176,8 @@ func contributeWrites(reg *extensions.Registry, deps func() data.Deps) {
 			}
 		}
 		order := 600 + i*10
-		if w.command == "record.move" {
-			order = 645 // Get record is 650
+		if order >= 650 { // Get record is 650
+			order = 645
 		}
 		node(reg, order, cognition.NodeType{
 			Descriptor: extensions.Descriptor{ID: w.id}, Title: w.title, Kinds: []string{livenodes.KindCommand},

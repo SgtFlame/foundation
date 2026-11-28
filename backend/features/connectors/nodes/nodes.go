@@ -198,6 +198,9 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			if !ok {
 				return nil, fmt.Errorf("contract %s has no operation %q", info.Ref, c.Operation)
 			}
+			if op.Secret {
+				return nil, fmt.Errorf("%s %s takes a secret, which a graph never holds: its connection's form sends it", info.Ref, op.ID)
+			}
 			args, err := Fields(op.Args)
 			if err != nil {
 				return nil, fmt.Errorf("the args of %s cannot be read: %v", op.ID, err)

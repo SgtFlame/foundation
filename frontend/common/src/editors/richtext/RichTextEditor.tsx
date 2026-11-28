@@ -1,13 +1,16 @@
 // Edits a Volume's document file with everyone who has it open (forge
 // 35b-1): the rich-text editor in page mode over the file's room, its
 // selection told to the workbench as the top-level block it starts in.
+// The document's page setup says whether it opens in block mode (forge
+// 35c-2), which the toolbar switches for everyone.
 
 import { useEffect, useState } from 'react'
 import { useWorkbenchContext, useWorkbenchSubject } from '../../workbench/context/WorkbenchContext.ts'
 import type { EditorProps } from '../../workbench/points.ts'
 import { openWorkbenchLink } from '../../workbench/links.ts'
 import { useCollabSession, useCollabState } from '../markdown/collab/useCollabSession.ts'
-import { richTextContent, fragmentOf } from './content.ts'
+import { richTextContent, fragmentOf, setPageSetup } from './content.ts'
+import { usePageSetup } from './PageView.tsx'
 import type { RichTextObject } from './RichTextObject.ts'
 import { RichTextView, type RichTextSelection } from './RichTextView.tsx'
 
@@ -16,6 +19,7 @@ function RichTextEditor({ object, tabId, registry }: EditorProps<RichTextObject>
   const state = useCollabState(session)
   const store = useWorkbenchContext()
   const [selection, setSelection] = useState<RichTextSelection>()
+  const setup = usePageSetup(session.doc)
   useWorkbenchSubject(
     tabId,
     { type: 'document', id: object.fileId, label: object.name, summary: object.helpText },
@@ -38,7 +42,8 @@ function RichTextEditor({ object, tabId, registry }: EditorProps<RichTextObject>
   }, [session, store, tabId])
 
   return (
-    <RichTextView session={session} readOnly={object.readOnly} mode="page" label={object.name} onSelection={setSelection}
+    <RichTextView session={session} readOnly={object.readOnly} mode={setup.blocks ? 'blocks' : 'page'} label={object.name} onSelection={setSelection}
+      onMode={(mode) => setPageSetup(session.doc, { ...setup, blocks: mode === 'blocks' })}
       onLink={(href) => (href.startsWith('workbench:') ? openWorkbenchLink(registry, href) : false)} />
   )
 }

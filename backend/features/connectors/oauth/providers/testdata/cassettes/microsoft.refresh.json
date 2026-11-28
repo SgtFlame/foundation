@@ -1,0 +1,7 @@
+{
+  "token_type": "Bearer",
+  "scope": "https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send",
+  "expires_in": "3599",
+  "access_token": "eyJ0eXAi-microsoft-access-2",
+  "refresh_token": "0.AXEA-microsoft-refresh-2"
+}

@@ -1,0 +1,172 @@
+{
+  "id": "calendar-onHoldsExpire",
+  "name": "Release expired holds",
+  "description": "Every hour, releases each open Hold whose expiry has passed (as release does: its tentative events deleted, the Hold marked released), so time held for an unanswered proposal comes back on its own.",
+  "kind": "app.trigger",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onSchedule",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "every": "1h"
+      }
+    },
+    {
+      "id": "query",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "{where: {status: \"open\"}, limit: 5000}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "holds",
+      "type": "records.query",
+      "title": "The open holds",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "entity": "calHold"
+      }
+    },
+    {
+      "id": "due",
+      "type": "data.expression",
+      "title": "Those past their expiry",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "map(filter(records ?? [], (#.expires ?? \"\") != \"\" \u0026\u0026 date(#.expires) \u003c= date(time)), string(#._id))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "each",
+      "type": "flow.forEach",
+      "position": {
+        "x": 1020,
+        "y": 0
+      }
+    },
+    {
+      "id": "release",
+      "type": "flow.callGraph",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "graph": "fn-calendar-release",
+        "catch": true,
+        "inputs": [
+          {
+            "id": "hold",
+            "name": "hold",
+            "type": "string",
+            "description": "The Hold's id"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "released",
+            "name": "released",
+            "type": "bool",
+            "optional": true
+          },
+          {
+            "id": "error",
+            "name": "error",
+            "type": "string",
+            "optional": true
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "query",
+        "pin": "value"
+      },
+      "to": {
+        "node": "holds",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "holds",
+        "pin": "records"
+      },
+      "to": {
+        "node": "due",
+        "pin": "records"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "time"
+      },
+      "to": {
+        "node": "due",
+        "pin": "time"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "each",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "due",
+        "pin": "value"
+      },
+      "to": {
+        "node": "each",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "body"
+      },
+      "to": {
+        "node": "release",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "release",
+        "pin": "hold"
+      }
+    }
+  ]
+}

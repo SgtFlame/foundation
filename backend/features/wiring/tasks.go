@@ -33,7 +33,7 @@ func init() {
 			o.Contracts = append(o.Contracts, tracker.Contract(), trackerfake.ControlContract())
 			o.Impls = append(o.Impls, trackerfake.Default.Impl())
 		},
-		Start: func(ctx context.Context, s Started) error {
+		Seed: func(ctx context.Context, s Started) error {
 			ids, err := s.Tenants()
 			if err != nil {
 				return err
