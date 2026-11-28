@@ -34,6 +34,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/SgtFlame/foundation/backend/features/ai/providers"
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
@@ -75,6 +76,9 @@ type Env struct {
 	Locator *services.Locator
 	// Records is the records' deps, set once made (the records section)
 	Records *recordsdata.Deps
+	// Images is the AI image provider, usage-recorded (forge 35f-7), set
+	// once the AI provider is made.
+	Images *providers.Images
 }
 
 // Services is the locator, or nil (every service real, in process).
@@ -115,6 +119,14 @@ func (e *Env) RecordFiles() recordsfiles.Files {
 		return nil
 	}
 	return *e.Files
+}
+
+// ImageProvider is the AI image provider, or nil before it is made.
+func (e *Env) ImageProvider() providers.Images {
+	if e == nil || e.Images == nil {
+		return nil
+	}
+	return *e.Images
 }
 
 // Executable is this binary's path, for features that parse in a child

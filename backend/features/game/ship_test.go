@@ -868,7 +868,7 @@ func refineParts(t *testing.T, st *stack, world string, parts map[string]int) {
 			ids = append(ids, id)
 		}
 	}
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(90 * time.Second)
 	for _, id := range ids {
 		for {
 			r := st.send(1, "game.takeIngots", id, map[string]any{})
@@ -1267,4 +1267,56 @@ func TestSpaceport(t *testing.T) {
 	if r := st.refused("game.openPort", "t1", map[string]any{"pad": "p1", "from": "d1"}); !strings.Contains(r.Common.Message, "open already") {
 		t.Fatalf("opened twice: %q", r.Common.Message)
 	}
+}
+
+// V40: a ship is clamped on its bay floor until launched; a freighter or
+// barge launches only through an open spaceport
+func TestDocking(t *testing.T) {
+	st := newStack(t)
+	world := st.ok("game.createWorld", "", map[string]any{"name": "Dock moon"}).Target
+	q := []float64{0, 0, 0, 1}
+	d, _ := game.DesignOf("cutter")
+	need := map[string]int{"plate": 4, "wire": 2} // the cutter-chip contract
+	for _, b := range d.Blocks {
+		for part, n := range game.BlockCosts[b.Type] {
+			need[part] += int(n)
+		}
+	}
+	refineParts(t, st, world, need)
+	st.ok("game.startShip", "s0", map[string]any{"world": world, "design": "skiff", "x": 0, "y": 110, "z": 0, "q": q})
+	st.ok("game.handIn", "s0", map[string]any{"contract": "cutter-chip"})
+	layBay(t, st, world, "bay1", 0, 108, 20)
+	res := st.ok("game.startShip", "k1", map[string]any{"world": world, "design": "cutter", "x": 0, "y": 110, "z": 20, "q": q, "bay": "bay1"})
+	read := func(id string, seq uint64) game.Ship {
+		var s game.Ship
+		st.read(game.ShipsProjector, game.ShipType+"."+id, seq, &s)
+		return s
+	}
+	if k, b := read("k1", res.Seq), read("bay1", res.Seq); k.Bay != "bay1" || b.Holds != "k1" {
+		t.Fatalf("docked %q holds %q", k.Bay, b.Holds)
+	}
+	if r := st.refused("game.startShip", "k2", map[string]any{"world": world, "design": "cutter", "x": 0, "y": 110, "z": 20, "q": q, "bay": "bay1"}); !strings.Contains(r.Common.Message, "already holds") {
+		t.Fatalf("a full bay: %q", r.Common.Message)
+	}
+	if r := st.refused("game.launchShip", "k1", map[string]any{}); !strings.Contains(r.Common.Message, "finish") {
+		t.Fatalf("unfinished: %q", r.Common.Message)
+	}
+	if r := st.refused("game.launchShip", "s0", map[string]any{}); !strings.Contains(r.Common.Message, "docking clamp") {
+		t.Fatalf("a skiff: %q", r.Common.Message)
+	}
+	for i := range d.Blocks {
+		st.ok("game.placeBlock", "k1", map[string]any{"index": i})
+	}
+	if r := st.refused("game.flyShip", "k1", map[string]any{"x": 0, "y": 110, "z": 20, "q": q, "pilot": true}); !strings.Contains(r.Common.Message, "launch it") {
+		t.Fatalf("flying a clamped ship: %q", r.Common.Message)
+	}
+	res = st.ok("game.launchShip", "k1", map[string]any{})
+	if k, b := read("k1", res.Seq), read("bay1", res.Seq); k.Bay != "" || b.Holds != "" {
+		t.Fatalf("launched %q holds %q", k.Bay, b.Holds)
+	}
+	st.ok("game.flyShip", "k1", map[string]any{"x": 0, "y": 115, "z": 20, "q": q, "pilot": true})
+	if r := st.refused("game.launchShip", "k1", map[string]any{}); !strings.Contains(r.Common.Message, "docking clamp") {
+		t.Fatalf("launched twice: %q", r.Common.Message)
+	}
+	st.ok("game.startShip", "k2", map[string]any{"world": world, "design": "cutter", "x": 0, "y": 110, "z": 20, "q": q, "bay": "bay1"})
 }

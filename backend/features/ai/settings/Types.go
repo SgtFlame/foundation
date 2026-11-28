@@ -22,7 +22,7 @@ type Model struct {
 	Title         string  `json:"title"`
 	Provider      string  `json:"provider"`
 	Model         string  `json:"model"` // the provider's model ID
-	Kind          string  `json:"kind"`  // chat or embed
+	Kind          string  `json:"kind"`  // chat, embed or image (an image bills as output tokens)
 	ContextWindow int     `json:"contextWindow"`
 	Pricing       Pricing `json:"pricing"`
 }

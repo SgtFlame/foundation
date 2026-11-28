@@ -78,6 +78,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features"
 	activitycontext "github.com/SgtFlame/foundation/backend/features/activity/context"
+	"github.com/SgtFlame/foundation/backend/features/ai/providers"
 	"github.com/SgtFlame/foundation/backend/features/ai/providers/gemini"
 	"github.com/SgtFlame/foundation/backend/features/ai/rest/chathandlers"
 	"github.com/SgtFlame/foundation/backend/features/ai/rest/embedhandlers"
@@ -764,7 +765,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
 		// Features wired from their own files in features/wiring (calendar,
 		// tasks, …): a new feature adds a file there, not lines here
-		wiringEnv = &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Locator: loc, Records: &recordDeps}
+		var imageProvider providers.Images // set once the AI provider is made (forge 35f-7)
+		wiringEnv = &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Images: &imageProvider, Locator: loc, Records: &recordDeps}
 		if err := wiring.ContributeAll(registry, wiringEnv); err != nil {
 			return err
 		}
@@ -992,6 +994,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			return config.Read[usagesettings.Capture](configService, features.BackgroundArgs(ctx), usagesettings.CaptureID)
 		})
 		defer recorder.Close()
+		imageProvider = usage.ImageProvider(provider, "gemini", recorder)
 		usageService := usageproxy.Use(loc, func() usageservice.Service { return usageimpl.CreateService(usageimpl.WithDB(gdb)) })
 		embedService := embedproxy.Use(loc, func() embedservice.Service {
 			return embedimpl.CreateService(embedimpl.WithProvider(usage.EmbedProvider(provider, "gemini", recorder)))

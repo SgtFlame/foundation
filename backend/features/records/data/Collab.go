@@ -26,7 +26,7 @@ const DocumentKind = "record"
 func ContributeCollab(reg *extensions.Registry, deps func() Deps) {
 	collabservice.DocumentKinds.Register(reg, collabservice.DocumentKind{
 		Descriptor:  extensions.Descriptor{ID: DocumentKind, Source: "records"},
-		Description: "A record's markdown field: {entity, id, field}",
+		Description: "A record's markdown or richText field: {entity, id, field}; a richText field's room holds the document as a document file does, {format: 1, doc}",
 		Open: func(args features.ServiceArgs, ref json.RawMessage) (collabservice.Document, *features.ServiceResponse) {
 			return openFieldDoc(args, deps(), ref)
 		},
@@ -38,6 +38,7 @@ type fieldDoc struct {
 	entity, id, field   string
 	tenant              uint64
 	entityName, fieldNm string
+	rich                bool // a richText field (forge 35b-1): the room's text is {format: 1, doc}
 }
 
 func openFieldDoc(args features.ServiceArgs, d Deps, raw json.RawMessage) (collabservice.Document, *features.ServiceResponse) {
@@ -53,10 +54,10 @@ func openFieldDoc(args features.ServiceArgs, d Deps, raw json.RawMessage) (colla
 	if !ok || f.Hidden {
 		return nil, args.Fail(http.StatusNotFound, log.Code("field_not_found").Errorf("%s has no field %q", e.Name, ref.Field))
 	}
-	if f.Type != "markdown" {
-		return nil, args.Fail(http.StatusBadRequest, log.Code("not_markdown").Errorf("%s is a %s field, not markdown", f.Name, f.Type))
+	if f.Type != "markdown" && f.Type != "richText" {
+		return nil, args.Fail(http.StatusBadRequest, log.Code("not_markdown").Errorf("%s is a %s field, not markdown or rich text", f.Name, f.Type))
 	}
-	return &fieldDoc{deps: d, entity: ref.Entity, id: ref.ID, field: ref.Field, tenant: args.Principal.TenantID, entityName: e.Name, fieldNm: f.Name}, nil
+	return &fieldDoc{deps: d, entity: ref.Entity, id: ref.ID, field: ref.Field, tenant: args.Principal.TenantID, entityName: e.Name, fieldNm: f.Name, rich: f.Type == "richText"}, nil
 }
 
 // Key is per tenant, so two tenants never share a room.
@@ -93,7 +94,8 @@ func (f *fieldDoc) Access(args features.ServiceArgs) (bool, *features.ServiceRes
 	return !records.Allows(first(e.RuleFor(args.Context(), args.Principal, "update")), r, args.Principal), nil
 }
 
-// Load is the field's text; none is empty.
+// Load is the field's text; none is empty. A richText field's document is
+// put in the envelope a document file holds, so one editor seeds both.
 func (f *fieldDoc) Load(args features.ServiceArgs) (string, error) {
 	r, _, err := Get(args, f.deps, f.entity, f.id)
 	if err != nil {
@@ -102,22 +104,49 @@ func (f *fieldDoc) Load(args features.ServiceArgs) (string, error) {
 	if r == nil {
 		return "", log.Code("record_not_found").Errorf("there is no record %s of %s", f.id, f.entityName)
 	}
+	raw := r[f.field]
+	if f.rich {
+		if records.IsNull(raw) {
+			return "", nil
+		}
+		out, _ := json.Marshal(richEnvelope{Format: 1, Doc: raw})
+		return string(out), nil
+	}
 	var s string
-	if raw := r[f.field]; !records.IsNull(raw) {
+	if !records.IsNull(raw) {
 		_ = json.Unmarshal(raw, &s)
 	}
 	return s, nil
 }
 
-// Save sets the field with record.update as the writer; text the record
+// richEnvelope is a document file's shape (volumeservice.DocumentFile).
+type richEnvelope struct {
+	Format int             `json:"format"`
+	Doc    json.RawMessage `json:"doc"`
+}
+
+// Save sets the field with record.update (a richText field with
+// record.setRichText) as the writer; text the record
 // already holds commits nothing.
 func (f *fieldDoc) Save(args features.ServiceArgs, text string) error {
 	if f.deps.Bus == nil {
 		return log.Code("bus_unavailable").Errorf("records cannot be changed here")
 	}
-	value, _ := json.Marshal(text)
-	a, _ := json.Marshal(map[string]any{"entity": f.entity, "set": map[string]json.RawMessage{f.field: value}})
-	res := f.deps.Bus.Execute(bus.Request{ServiceArgs: args, ID: "collab-" + strconv.FormatUint(features.NewTSID(), 10), Type: "record.update", Target: f.id, Args: a})
+	command := "record.update"
+	var a []byte
+	if f.rich {
+		// record.setRichText checks the document's shape and commits nothing for the one the record holds
+		var env richEnvelope
+		if err := json.Unmarshal([]byte(text), &env); err != nil || len(env.Doc) == 0 {
+			return log.Code("bad_document").Errorf("a rich text room saves {format: 1, doc}")
+		}
+		command = "record.setRichText"
+		a, _ = json.Marshal(map[string]any{"entity": f.entity, "field": f.field, "content": env.Doc})
+	} else {
+		value, _ := json.Marshal(text)
+		a, _ = json.Marshal(map[string]any{"entity": f.entity, "set": map[string]json.RawMessage{f.field: value}})
+	}
+	res := f.deps.Bus.Execute(bus.Request{ServiceArgs: args, ID: "collab-" + strconv.FormatUint(features.NewTSID(), 10), Type: command, Target: f.id, Args: a})
 	if len(res.Problems) > 0 {
 		return log.Code("save_refused").Errorf("%s", res.Problems[0].Message)
 	}

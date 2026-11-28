@@ -17,6 +17,13 @@ var RecordActions = []string{"read", "create", "update", "delete"}
 // agent.use on its records (forge 7p-2). entity:<id>.* does not include it.
 const AgentUse = "use"
 
+// EntityDefine is the action a role names to let its holders define the
+// entity types an entity type's records hold (forge 35c-1): a Docs
+// Member's entity:database.define is record.define on the app's
+// Database records, so they may change a database's properties.
+// entity:<id>.* does not include it.
+const EntityDefine = "define"
+
 // EntityAction splits an action a role or a command names,
 // entity:<id>.<action>, into the entity type and its record actions (or
 // AgentUse).
@@ -28,7 +35,7 @@ func EntityAction(a string) (entity string, actions []string, ok bool) {
 		return "", nil, false
 	case act == "*":
 		return entity, RecordActions, true
-	case slices.Contains(RecordActions, act), act == AgentUse:
+	case slices.Contains(RecordActions, act), act == AgentUse, act == EntityDefine:
 		return entity, []string{act}, true
 	}
 	return "", nil, false

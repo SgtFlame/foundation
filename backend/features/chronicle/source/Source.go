@@ -76,7 +76,7 @@ func ownerOf(ctx context.Context) (chronicle.Owner, bool, bool) {
 	case !ok:
 		return chronicle.Owner{}, false, false
 	case p.Kind == features.PrincipalUser:
-		return chronicle.Owner{TenantID: p.TenantID, UserID: p.UserID}, true, true
+		return chronicle.Owner{TenantID: p.TenantID, UserID: p.UserID, Projects: chronicle.ReadableProjects(ctx, p)}, true, true
 	case p.Kind == features.PrincipalAgent && p.MemoryOf != 0:
 		return chronicle.Owner{TenantID: p.TenantID, UserID: p.MemoryOf}, false, true
 	}
