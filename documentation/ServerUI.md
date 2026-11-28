@@ -528,3 +528,5 @@ Verification:
 
 ## Changed in forge 30d
 `mui.table` columns take `type: "editor"` with a `recordField`: the cell shows the value with `record.fieldValue`'s display and, on a click or Enter, edits it in place with the field's own editor (`FieldInput` of `renderers/record/FieldEditor.tsx`; computed fields stay read-only). Text-like fields commit on Enter or blur, the rest at once, Escape cancels. The cell sends `edit {key, field, value, expect}`, `expect` being the row's `_seq` when editing began, for a handler to pass to `record.update`; when the row changes while the cell is open it says *Changed by <name>*. Forge's starter *Record table* uses it in its `editable` variant (forge `StarterLibrary.md` › *Built in part 30d*).
+
+*Send command* (`live.sendCommand`) also takes an optional `command` input, which replaces the config's command when it is not empty, for a generic view that sends a command its page names in a prop (the Board view's `moveCommand`, such as `todos.task.move`).
