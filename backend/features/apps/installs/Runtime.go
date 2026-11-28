@@ -126,10 +126,19 @@ func command(d Deps, typ, app, name string, c apps.Command, g cognition.Graph) l
 // uninstalled or the query removed.
 func query(d Deps, typ, app, name string, g cognition.Graph) live.Query {
 	spec, _ := specOf[livenodes.QuerySpec](g.Spec)
+	action := spec.Action
+	if action == "record.read" {
+		action = "" // checked by the app's reach in Run (forge 26d-3)
+	}
 	return live.Query{
 		Descriptor: extensions.Descriptor{ID: typ, Source: "app:" + app}, Title: spec.Title, Description: spec.Description,
-		Params: spec.Params, Action: spec.Action,
+		Params: spec.Params, Action: action,
 		Run: func(f live.Feed) error {
+			if spec.Action == "record.read" {
+				if err := reaches(f.Args(), d, app); err != nil {
+					return err
+				}
+			}
 			return livenodes.RunQuery(f, d.Nodes, livenodes.QueryRun{ID: g.ID,
 				Graph: func() (*cognition.Graph, error) {
 					in, ok := Running(f.Context(), d.Projections, f.Args().Principal.TenantID, app)
@@ -148,6 +157,32 @@ func query(d Deps, typ, app, name string, g cognition.Graph) live.Query {
 			})
 		},
 	}
+}
+
+// reaches refuses a query of an app whose spec needs record.read to a
+// principal who may read none of the app's own entity types' records
+// (forge 26d-3): record.read on the tenant is held by no app role, whose
+// permissions are scoped to the app's types, so an app's own users could
+// not read its queries. The query's graph still reads only the records
+// its principal may read, by their row rules.
+func reaches(args features.ServiceArgs, d Deps, app string) error {
+	in, ok := Running(args.Context(), d.Projections, args.Principal.TenantID, app)
+	if !ok || len(in.Version.Owned) == 0 {
+		res := authz.Tenant(args.Principal)
+		return authz.Check(args.Context(), args.Principal, "record.read", res).Err("record.read", res)
+	}
+	var first error
+	for _, e := range in.Version.Owned {
+		res := records.Resource(args.Principal, e)
+		err := authz.Check(args.Context(), args.Principal, "record.read", res).Err("record.read", res)
+		if err == nil {
+			return nil
+		}
+		if first == nil {
+			first = err
+		}
+	}
+	return first
 }
 
 // actionOf is the action an app's command needs: the manifest's

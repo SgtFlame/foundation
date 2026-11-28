@@ -1,0 +1,29 @@
+{
+  "name": "chat.messaging.reaction.remove",
+  "title": "Remove a reaction",
+  "description": "Takes back the connection's account's reaction. Removing one not there succeeds.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "The channel's id"
+      },
+      "id": {
+        "type": "string",
+        "description": "The message's id"
+      },
+      "emoji": {
+        "type": "string",
+        "description": "The emoji's name"
+      }
+    },
+    "required": [
+      "channel",
+      "id",
+      "emoji"
+    ]
+  },
+  "effect": "external",
+  "source": "connector"
+}

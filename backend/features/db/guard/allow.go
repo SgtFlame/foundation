@@ -67,6 +67,8 @@ var Allow = []Row{
 	{Package: "features/connectors", Owner: "connectors", Storage: "connector KV (cx_*)", Imports: []string{jsImp}},
 	{Package: "features/connectors/services/connectorsservice/impl", Owner: "connectors", Storage: "connector KV and CX streams, for adapters without a handle", Imports: []string{jsImp}},
 	{Package: "features/connectors/connections", Owner: "connectors", Storage: "connector KV", Imports: []string{jsImp}},
+	{Package: "features/connectors/hooks", Owner: "connectors", Storage: "connector KV (cx_hooks, cx_hook_rates)", Imports: []string{jsImp}},
+	{Package: "features/connectors/oauth", Owner: "connectors", Storage: "connector KV (cx_oauth_<tenant>)", Imports: []string{jsImp}},
 
 	// Buses and routing across processes (21f-2): a durable bus's stream,
 	// and the routes of tenants' calls to dedicated servers.

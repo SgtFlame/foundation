@@ -1,0 +1,2068 @@
+{
+  "id": "tasks-syncImport",
+  "name": "Import a project's board",
+  "description": "The job importing a project's tracker board (part 30h), as the app, one at a time per project. Its first run (cursor empty) maps the board's lists to the project's statuses, by tracker list or by name, making a status for each list with none, marks the sync importing and enqueues the first page. Each later run imports one page of cards (card.list) as tasks with their outside card, skipping cards already imported, and enqueues the next page; the last marks the sync ok. A non-retryable tracker error marks the sync failed with its message; a retryable one fails the run, so the job retries it.",
+  "kind": "server.action",
+  "version": 1,
+  "owner": "app:tasks",
+  "variables": [
+    {
+      "id": "prevRank",
+      "name": "Previous rank",
+      "type": "string",
+      "description": "The rank of the status made last, so the next goes after it"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "project",
+            "name": "project",
+            "type": "string"
+          },
+          {
+            "id": "cursor",
+            "name": "cursor",
+            "type": "string",
+            "optional": true
+          },
+          {
+            "id": "page",
+            "name": "page",
+            "type": "number",
+            "optional": true
+          },
+          {
+            "id": "imported",
+            "name": "imported",
+            "type": "number",
+            "optional": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "pid",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "(project ?? \"\") == \"\" ? \"none\" : project",
+        "type": "string"
+      }
+    },
+    {
+      "id": "pr",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "tasksProject"
+      }
+    },
+    {
+      "id": "mode",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "type": "string",
+        "expr": "pr == nil || string(pr.connection ?? \"\") == \"\" || string(pr.board ?? \"\") == \"\" ? \"off\" : ((cursor ?? \"\") == \"\" ? \"map\" : \"page\")"
+      }
+    },
+    {
+      "id": "isOff",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "mode == \"off\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "ifOff",
+      "type": "flow.branch",
+      "position": {
+        "x": 1700,
+        "y": 0
+      }
+    },
+    {
+      "id": "offDone",
+      "type": "flow.return",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "isMap",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "mode == \"map\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "ifMap",
+      "type": "flow.branch",
+      "position": {
+        "x": 2040,
+        "y": 200
+      }
+    },
+    {
+      "id": "conn",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "expr": "string(pr.connection)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "board",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 400
+      },
+      "config": {
+        "expr": "string(pr.board)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "getBoard",
+      "type": "connector.call",
+      "title": "Read the board",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "contract": "tasks.tracker@1",
+        "operation": "board.get",
+        "connection": true,
+        "inputs": [
+          {
+            "id": "id",
+            "name": "id",
+            "type": "string"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "board",
+            "name": "board",
+            "type": "json"
+          },
+          {
+            "id": "lists",
+            "name": "lists",
+            "type": "json"
+          },
+          {
+            "id": "labels",
+            "name": "labels",
+            "type": "json"
+          },
+          {
+            "id": "members",
+            "name": "members",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "sq",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "{where: {project: pid}, sort: [{field: \"rank\"}], limit: 200}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "statuses",
+      "type": "records.query",
+      "position": {
+        "x": 1020,
+        "y": 600
+      },
+      "config": {
+        "entity": "tasksStatus"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "let open = filter(lists ?? [], !(#.closed ?? false));\nlet st = statuses ?? [];\nlet mapped = map(filter(st, string(#.outsideList ?? \"\") != \"\"), string(#.outsideList));\nlet pend = filter(open, !(#.id in mapped));\nlet upd = filter(map(pend, let l = #; let s = find(st, string(#.outsideList ?? \"\") == \"\" \u0026\u0026 lower(#.name) == lower(l.name)); s == nil ? nil : {id: s._id, set: {outsideList: l.id}}), # != nil);\nlet made = filter(pend, let l = #; none(st, string(#.outsideList ?? \"\") == \"\" \u0026\u0026 lower(#.name) == lower(l.name)));\n{updates: upd,\n creates: map(made, ({project: pid, name: #.name, outsideList: #.id,\n   category: lower(#.name) matches \"done|complete|closed|finished\" ? \"done\" : (lower(#.name) matches \"doing|progress|review|active\" ? \"doing\" : \"todo\")})),\n lastRank: string((last(st) ?? {}).rank ?? \"\")}"
+      }
+    },
+    {
+      "id": "updList",
+      "type": "data.expression",
+      "position": {
+        "x": 3060,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.updates",
+        "type": "json"
+      }
+    },
+    {
+      "id": "updates",
+      "type": "flow.forEach",
+      "title": "Each status to map",
+      "position": {
+        "x": 3400,
+        "y": 0
+      }
+    },
+    {
+      "id": "updId",
+      "type": "data.expression",
+      "position": {
+        "x": 3740,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "updArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 3740,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"tasksStatus\", set: item.set}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "mapStatus",
+      "type": "live.sendCommand",
+      "title": "Map the status to its list",
+      "position": {
+        "x": 4080,
+        "y": 0
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "mapFail",
+      "type": "jobs.fail",
+      "position": {
+        "x": 4420,
+        "y": 0
+      },
+      "config": {
+        "retryable": true
+      }
+    },
+    {
+      "id": "lastRank",
+      "type": "data.expression",
+      "position": {
+        "x": 3060,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.lastRank",
+        "type": "string"
+      }
+    },
+    {
+      "id": "keepRank",
+      "type": "data.setVariable",
+      "position": {
+        "x": 3740,
+        "y": 400
+      },
+      "config": {
+        "type": "string",
+        "variable": "prevRank"
+      }
+    },
+    {
+      "id": "createList",
+      "type": "data.expression",
+      "position": {
+        "x": 3060,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.creates",
+        "type": "json"
+      }
+    },
+    {
+      "id": "creates",
+      "type": "flow.forEach",
+      "title": "Each list without a status",
+      "position": {
+        "x": 4080,
+        "y": 200
+      }
+    },
+    {
+      "id": "prev",
+      "type": "data.getVariable",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "type": "string",
+        "variable": "prevRank"
+      }
+    },
+    {
+      "id": "none",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "expr": "\"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "rank",
+      "type": "records.rankBetween",
+      "position": {
+        "x": 340,
+        "y": 200
+      }
+    },
+    {
+      "id": "createArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 4420,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"tasksStatus\", values: fromPairs(concat(toPairs(item), [[\"rank\", rank]]))}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "makeStatus",
+      "type": "live.sendCommand",
+      "title": "Make a status for the list",
+      "position": {
+        "x": 4760,
+        "y": 0
+      },
+      "config": {
+        "command": "record.create"
+      }
+    },
+    {
+      "id": "makeFail",
+      "type": "jobs.fail",
+      "position": {
+        "x": 5100,
+        "y": 0
+      },
+      "config": {
+        "retryable": true
+      }
+    },
+    {
+      "id": "nextRank",
+      "type": "data.setVariable",
+      "position": {
+        "x": 5100,
+        "y": 200
+      },
+      "config": {
+        "type": "string",
+        "variable": "prevRank"
+      }
+    },
+    {
+      "id": "startArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 800
+      },
+      "config": {
+        "expr": "{entity: \"tasksProject\", set: {sync: {state: \"importing\", imported: 0, error: \"\", lastSync: (pr.sync ?? {}).lastSync}}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "markImporting",
+      "type": "live.sendCommand",
+      "title": "Mark the sync importing",
+      "position": {
+        "x": 4420,
+        "y": 400
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "firstPage",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "expr": "{project: pid, cursor: \"-\", page: 1}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "firstKey",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 600
+      },
+      "config": {
+        "expr": "\"sync-\" + pid",
+        "type": "string"
+      }
+    },
+    {
+      "id": "firstId",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 1000
+      },
+      "config": {
+        "expr": "\"import-\" + pid + \"-\" + string(pr._seq) + \"-p1\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "enqueueFirst",
+      "type": "jobs.enqueue",
+      "title": "Import the first page",
+      "position": {
+        "x": 4760,
+        "y": 200
+      },
+      "config": {
+        "graph": "tasks-syncImport"
+      }
+    },
+    {
+      "id": "mapDone",
+      "type": "flow.return",
+      "position": {
+        "x": 5100,
+        "y": 400
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "pageCursor",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "expr": "cursor == \"-\" ? \"\" : cursor",
+        "type": "string"
+      }
+    },
+    {
+      "id": "limit",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 600
+      },
+      "config": {
+        "expr": "100",
+        "type": "number"
+      }
+    },
+    {
+      "id": "listCards",
+      "type": "connector.call",
+      "title": "List a page of cards",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "contract": "tasks.tracker@1",
+        "operation": "card.list",
+        "connection": true,
+        "inputs": [
+          {
+            "id": "board",
+            "name": "board",
+            "type": "string"
+          },
+          {
+            "id": "cursor",
+            "name": "cursor",
+            "type": "string",
+            "optional": true
+          },
+          {
+            "id": "limit",
+            "name": "limit",
+            "type": "number",
+            "optional": true
+          }
+        ],
+        "outputs": [
+          {
+            "id": "cards",
+            "name": "cards",
+            "type": "json"
+          },
+          {
+            "id": "cursor",
+            "name": "cursor",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "eq",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 200
+      },
+      "config": {
+        "expr": "{filter: {field: \"outsideId\", op: \"in\", value: map(cards ?? [], #.id)}, limit: 500}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "known",
+      "type": "records.query",
+      "position": {
+        "x": 3060,
+        "y": 600
+      },
+      "config": {
+        "entity": "taskItem"
+      }
+    },
+    {
+      "id": "sq2",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 800
+      },
+      "config": {
+        "expr": "{where: {project: pid}, sort: [{field: \"rank\"}], limit: 200}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "pageStatuses",
+      "type": "records.query",
+      "position": {
+        "x": 1020,
+        "y": 1200
+      },
+      "config": {
+        "entity": "tasksStatus"
+      }
+    },
+    {
+      "id": "pagePlan",
+      "type": "data.expression",
+      "position": {
+        "x": 3400,
+        "y": 200
+      },
+      "config": {
+        "type": "json",
+        "expr": "let have = map(known ?? [], string(#.outsideId ?? \"\"));\nlet st = pageStatuses ?? [];\nlet fresh = filter(cards ?? [], !(#.id in have) \u0026\u0026 !(#.archived ?? false));\n{tasks: map(fresh, let c = #; let s = find(st, string(#.outsideList ?? \"\") == c.list);\n  fromPairs(filter(toPairs({project: pid, title: c.title == \"\" ? \"(untitled)\" : c.title, description: c.description ?? \"\",\n    due: len(string(c.due ?? \"\")) \u003e= 10 ? string(c.due)[:10] : \"\", status: s == nil ? \"\" : s._id,\n    outside: {id: c.id, version: c.version, updatedAt: c.updatedAt, list: c.list}}), #[1] != nil \u0026\u0026 #[1] != \"\"))),\n next: string(next ?? \"\"), count: len(fresh)}"
+      }
+    },
+    {
+      "id": "taskList",
+      "type": "data.expression",
+      "position": {
+        "x": 3740,
+        "y": 600
+      },
+      "config": {
+        "expr": "pagePlan.tasks",
+        "type": "json"
+      }
+    },
+    {
+      "id": "each",
+      "type": "flow.forEach",
+      "title": "Each new card",
+      "position": {
+        "x": 4080,
+        "y": 400
+      }
+    },
+    {
+      "id": "newTask",
+      "type": "data.newId",
+      "position": {
+        "x": 0,
+        "y": 800
+      }
+    },
+    {
+      "id": "makeTask",
+      "type": "live.sendCommand",
+      "title": "Make the task",
+      "position": {
+        "x": 4420,
+        "y": 600
+      },
+      "config": {
+        "command": "tasks.task.create"
+      }
+    },
+    {
+      "id": "taskFail",
+      "type": "jobs.fail",
+      "position": {
+        "x": 4760,
+        "y": 400
+      },
+      "config": {
+        "retryable": true
+      }
+    },
+    {
+      "id": "more",
+      "type": "data.expression",
+      "position": {
+        "x": 3740,
+        "y": 800
+      },
+      "config": {
+        "expr": "pagePlan.next != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "ifMore",
+      "type": "flow.branch",
+      "position": {
+        "x": 4420,
+        "y": 800
+      }
+    },
+    {
+      "id": "nextPage",
+      "type": "data.expression",
+      "position": {
+        "x": 3740,
+        "y": 1000
+      },
+      "config": {
+        "expr": "{project: pid, cursor: pagePlan.next, page: (page ?? 1) + 1, imported: int(imported ?? 0) + pagePlan.count}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "nextId",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 1400
+      },
+      "config": {
+        "expr": "\"import-\" + pid + \"-\" + string(pr._seq) + \"-p\" + string((page ?? 1) + 1)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "enqueueNext",
+      "type": "jobs.enqueue",
+      "title": "Import the next page",
+      "position": {
+        "x": 5100,
+        "y": 600
+      },
+      "config": {
+        "graph": "tasks-syncImport"
+      }
+    },
+    {
+      "id": "countArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 3740,
+        "y": 1200
+      },
+      "config": {
+        "expr": "{entity: \"tasksProject\", set: {sync: {state: \"importing\", imported: int(imported ?? 0) + pagePlan.count, error: \"\", lastSync: (pr.sync ?? {}).lastSync}}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "countPage",
+      "type": "live.sendCommand",
+      "title": "Count the page",
+      "position": {
+        "x": 4760,
+        "y": 600
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "doneArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 3740,
+        "y": 1400
+      },
+      "config": {
+        "expr": "{entity: \"tasksProject\", set: {sync: {state: \"ok\", imported: int(imported ?? 0) + pagePlan.count, error: \"\", lastSync: clock}}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "clock",
+      "type": "data.now",
+      "position": {
+        "x": 0,
+        "y": 1000
+      }
+    },
+    {
+      "id": "markOk",
+      "type": "live.sendCommand",
+      "title": "Mark the sync ok",
+      "position": {
+        "x": 4760,
+        "y": 800
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "pageDone",
+      "type": "flow.return",
+      "position": {
+        "x": 5100,
+        "y": 800
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "failArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 400
+      },
+      "config": {
+        "expr": "{entity: \"tasksProject\", set: {sync: {state: \"failed\", imported: int((pr.sync ?? {}).imported ?? 0), error: string(error?.message ?? \"the tracker refused\"), lastSync: (pr.sync ?? {}).lastSync}}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "markFailed",
+      "type": "live.sendCommand",
+      "title": "Mark the sync failed",
+      "position": {
+        "x": 3060,
+        "y": 800
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "failArgs2",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 600
+      },
+      "config": {
+        "expr": "{entity: \"tasksProject\", set: {sync: {state: \"failed\", imported: int((pr.sync ?? {}).imported ?? 0), error: string(error?.message ?? \"the tracker refused\"), lastSync: (pr.sync ?? {}).lastSync}}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "markFailed2",
+      "type": "live.sendCommand",
+      "title": "Mark the sync failed",
+      "position": {
+        "x": 3060,
+        "y": 1000
+      },
+      "config": {
+        "command": "record.update"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "project"
+      },
+      "to": {
+        "node": "pid",
+        "pin": "project"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pr",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "pr",
+        "pin": "record"
+      },
+      "to": {
+        "node": "mode",
+        "pin": "pr"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "cursor"
+      },
+      "to": {
+        "node": "mode",
+        "pin": "cursor"
+      }
+    },
+    {
+      "from": {
+        "node": "mode",
+        "pin": "value"
+      },
+      "to": {
+        "node": "isOff",
+        "pin": "mode"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ifOff",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "isOff",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ifOff",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "ifOff",
+        "pin": "true"
+      },
+      "to": {
+        "node": "offDone",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "mode",
+        "pin": "value"
+      },
+      "to": {
+        "node": "isMap",
+        "pin": "mode"
+      }
+    },
+    {
+      "from": {
+        "node": "ifOff",
+        "pin": "false"
+      },
+      "to": {
+        "node": "ifMap",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "isMap",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ifMap",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "pr",
+        "pin": "record"
+      },
+      "to": {
+        "node": "conn",
+        "pin": "pr"
+      }
+    },
+    {
+      "from": {
+        "node": "pr",
+        "pin": "record"
+      },
+      "to": {
+        "node": "board",
+        "pin": "pr"
+      }
+    },
+    {
+      "from": {
+        "node": "ifMap",
+        "pin": "true"
+      },
+      "to": {
+        "node": "getBoard",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "conn",
+        "pin": "value"
+      },
+      "to": {
+        "node": "getBoard",
+        "pin": "connection"
+      }
+    },
+    {
+      "from": {
+        "node": "board",
+        "pin": "value"
+      },
+      "to": {
+        "node": "getBoard",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "sq",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "sq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "statuses",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "getBoard",
+        "pin": "lists"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "lists"
+      }
+    },
+    {
+      "from": {
+        "node": "statuses",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "statuses"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "updList",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "getBoard",
+        "pin": "then"
+      },
+      "to": {
+        "node": "updates",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "updList",
+        "pin": "value"
+      },
+      "to": {
+        "node": "updates",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "updates",
+        "pin": "item"
+      },
+      "to": {
+        "node": "updId",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "updates",
+        "pin": "item"
+      },
+      "to": {
+        "node": "updArgs",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "updates",
+        "pin": "body"
+      },
+      "to": {
+        "node": "mapStatus",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "updId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mapStatus",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "updArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mapStatus",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "mapStatus",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "mapFail",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "mapStatus",
+        "pin": "message"
+      },
+      "to": {
+        "node": "mapFail",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "lastRank",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "updates",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "keepRank",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "lastRank",
+        "pin": "value"
+      },
+      "to": {
+        "node": "keepRank",
+        "pin": "value"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "createList",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "keepRank",
+        "pin": "then"
+      },
+      "to": {
+        "node": "creates",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "createList",
+        "pin": "value"
+      },
+      "to": {
+        "node": "creates",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "prev",
+        "pin": "value"
+      },
+      "to": {
+        "node": "rank",
+        "pin": "after"
+      }
+    },
+    {
+      "from": {
+        "node": "none",
+        "pin": "value"
+      },
+      "to": {
+        "node": "rank",
+        "pin": "before"
+      }
+    },
+    {
+      "from": {
+        "node": "creates",
+        "pin": "item"
+      },
+      "to": {
+        "node": "createArgs",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "rank",
+        "pin": "rank"
+      },
+      "to": {
+        "node": "createArgs",
+        "pin": "rank"
+      }
+    },
+    {
+      "from": {
+        "node": "creates",
+        "pin": "body"
+      },
+      "to": {
+        "node": "makeStatus",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "createArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "makeStatus",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "makeStatus",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "makeFail",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "makeStatus",
+        "pin": "message"
+      },
+      "to": {
+        "node": "makeFail",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "makeStatus",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "nextRank",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "rank",
+        "pin": "rank"
+      },
+      "to": {
+        "node": "nextRank",
+        "pin": "value"
+      }
+    },
+    {
+      "from": {
+        "node": "pr",
+        "pin": "record"
+      },
+      "to": {
+        "node": "startArgs",
+        "pin": "pr"
+      }
+    },
+    {
+      "from": {
+        "node": "creates",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "markImporting",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "markImporting",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "startArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "markImporting",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "firstPage",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "firstKey",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "firstId",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "pr",
+        "pin": "record"
+      },
+      "to": {
+        "node": "firstId",
+        "pin": "pr"
+      }
+    },
+    {
+      "from": {
+        "node": "markImporting",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "enqueueFirst",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "firstPage",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueueFirst",
+        "pin": "inputs"
+      }
+    },
+    {
+      "from": {
+        "node": "firstKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueueFirst",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "firstId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueueFirst",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "enqueueFirst",
+        "pin": "then"
+      },
+      "to": {
+        "node": "mapDone",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "getBoard",
+        "pin": "failed"
+      },
+      "to": {
+        "node": "markFailed",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "getBoard",
+        "pin": "error"
+      },
+      "to": {
+        "node": "failArgs",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "pr",
+        "pin": "record"
+      },
+      "to": {
+        "node": "failArgs",
+        "pin": "pr"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "markFailed",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "failArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "markFailed",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "cursor"
+      },
+      "to": {
+        "node": "pageCursor",
+        "pin": "cursor"
+      }
+    },
+    {
+      "from": {
+        "node": "ifMap",
+        "pin": "false"
+      },
+      "to": {
+        "node": "listCards",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "conn",
+        "pin": "value"
+      },
+      "to": {
+        "node": "listCards",
+        "pin": "connection"
+      }
+    },
+    {
+      "from": {
+        "node": "board",
+        "pin": "value"
+      },
+      "to": {
+        "node": "listCards",
+        "pin": "board"
+      }
+    },
+    {
+      "from": {
+        "node": "pageCursor",
+        "pin": "value"
+      },
+      "to": {
+        "node": "listCards",
+        "pin": "cursor"
+      }
+    },
+    {
+      "from": {
+        "node": "limit",
+        "pin": "value"
+      },
+      "to": {
+        "node": "listCards",
+        "pin": "limit"
+      }
+    },
+    {
+      "from": {
+        "node": "listCards",
+        "pin": "cards"
+      },
+      "to": {
+        "node": "eq",
+        "pin": "cards"
+      }
+    },
+    {
+      "from": {
+        "node": "eq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "known",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "sq2",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "sq2",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pageStatuses",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "known",
+        "pin": "records"
+      },
+      "to": {
+        "node": "pagePlan",
+        "pin": "known"
+      }
+    },
+    {
+      "from": {
+        "node": "pageStatuses",
+        "pin": "records"
+      },
+      "to": {
+        "node": "pagePlan",
+        "pin": "pageStatuses"
+      }
+    },
+    {
+      "from": {
+        "node": "listCards",
+        "pin": "cards"
+      },
+      "to": {
+        "node": "pagePlan",
+        "pin": "cards"
+      }
+    },
+    {
+      "from": {
+        "node": "listCards",
+        "pin": "cursor"
+      },
+      "to": {
+        "node": "pagePlan",
+        "pin": "next"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pagePlan",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "pagePlan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "taskList",
+        "pin": "pagePlan"
+      }
+    },
+    {
+      "from": {
+        "node": "listCards",
+        "pin": "then"
+      },
+      "to": {
+        "node": "each",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "taskList",
+        "pin": "value"
+      },
+      "to": {
+        "node": "each",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "body"
+      },
+      "to": {
+        "node": "makeTask",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "newTask",
+        "pin": "id"
+      },
+      "to": {
+        "node": "makeTask",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "makeTask",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "makeTask",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "taskFail",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "makeTask",
+        "pin": "message"
+      },
+      "to": {
+        "node": "taskFail",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "pagePlan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "more",
+        "pin": "pagePlan"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "ifMore",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "more",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ifMore",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "nextPage",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "pagePlan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "nextPage",
+        "pin": "pagePlan"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "page"
+      },
+      "to": {
+        "node": "nextPage",
+        "pin": "page"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "imported"
+      },
+      "to": {
+        "node": "nextPage",
+        "pin": "imported"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "imported"
+      },
+      "to": {
+        "node": "countArgs",
+        "pin": "imported"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "imported"
+      },
+      "to": {
+        "node": "doneArgs",
+        "pin": "imported"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "nextId",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "pr",
+        "pin": "record"
+      },
+      "to": {
+        "node": "nextId",
+        "pin": "pr"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "page"
+      },
+      "to": {
+        "node": "nextId",
+        "pin": "page"
+      }
+    },
+    {
+      "from": {
+        "node": "pr",
+        "pin": "record"
+      },
+      "to": {
+        "node": "countArgs",
+        "pin": "pr"
+      }
+    },
+    {
+      "from": {
+        "node": "pagePlan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "countArgs",
+        "pin": "pagePlan"
+      }
+    },
+    {
+      "from": {
+        "node": "ifMore",
+        "pin": "true"
+      },
+      "to": {
+        "node": "countPage",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "countPage",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "countArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "countPage",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "countPage",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "enqueueNext",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "nextPage",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueueNext",
+        "pin": "inputs"
+      }
+    },
+    {
+      "from": {
+        "node": "firstKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueueNext",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "nextId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueueNext",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "pagePlan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "doneArgs",
+        "pin": "pagePlan"
+      }
+    },
+    {
+      "from": {
+        "node": "clock",
+        "pin": "time"
+      },
+      "to": {
+        "node": "doneArgs",
+        "pin": "clock"
+      }
+    },
+    {
+      "from": {
+        "node": "ifMore",
+        "pin": "false"
+      },
+      "to": {
+        "node": "markOk",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "markOk",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "doneArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "markOk",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "markOk",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "pageDone",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "listCards",
+        "pin": "failed"
+      },
+      "to": {
+        "node": "markFailed2",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "listCards",
+        "pin": "error"
+      },
+      "to": {
+        "node": "failArgs2",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "pr",
+        "pin": "record"
+      },
+      "to": {
+        "node": "failArgs2",
+        "pin": "pr"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "markFailed2",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "failArgs2",
+        "pin": "value"
+      },
+      "to": {
+        "node": "markFailed2",
+        "pin": "args"
+      }
+    }
+  ]
+}

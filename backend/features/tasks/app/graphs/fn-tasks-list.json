@@ -1,0 +1,356 @@
+{
+  "id": "fn-tasks-list",
+  "name": "List tasks",
+  "description": "Lists the tasks the caller may see, each with its id, number (KEY-n), title, project, status, assignees, due date, priority and state: of one project, or assigned to someone (me for the caller), or both; active ones by default (state proposed for proposals, archived, or all), finished ones only with includeDone. Also lists the caller's projects with their statuses, so a task can be made in or moved to one.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:tasks",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "project",
+            "type": "string",
+            "optional": true,
+            "description": "A project's id"
+          },
+          {
+            "id": "assignee",
+            "type": "string",
+            "optional": true,
+            "description": "A user id, or me for the caller"
+          },
+          {
+            "id": "state",
+            "type": "string",
+            "optional": true,
+            "description": "active (the default), proposed, archived or all"
+          },
+          {
+            "id": "includeDone",
+            "type": "bool",
+            "optional": true,
+            "description": "Whether finished tasks are listed too"
+          },
+          {
+            "id": "limit",
+            "type": "number",
+            "optional": true,
+            "description": "At most this many tasks, 100 when left out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "tq",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "let who = (assignee ?? \"\") == \"me\" ? me : (assignee ?? \"\");\nlet w = (project ?? \"\") == \"\" ? {} : {project: project};\nwho == \"\" ? {where: w, sort: [{field: \"due\"}], limit: 2000} : {where: w, filter: {field: \"assignees\", op: \"contains\", value: who}, sort: [{field: \"due\"}], limit: 2000}"
+      }
+    },
+    {
+      "id": "tasks",
+      "type": "records.query",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "taskItem"
+      }
+    },
+    {
+      "id": "projects",
+      "type": "records.query",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "entity": "tasksProject",
+        "limit": 500
+      }
+    },
+    {
+      "id": "statuses",
+      "type": "records.query",
+      "position": {
+        "x": 0,
+        "y": 600
+      },
+      "config": {
+        "entity": "tasksStatus",
+        "sort": [
+          {
+            "field": "rank"
+          }
+        ],
+        "limit": 5000
+      }
+    },
+    {
+      "id": "out",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "let st = (state ?? \"\") == \"\" ? \"active\" : state;\nlet n = int(limit ?? 0) \u003e 0 ? int(limit) : 100;\nlet pkeys = fromPairs(map(projects ?? [], [#._id, string(#.key ?? \"\")]));\nlet names = fromPairs(map(statuses ?? [], [#._id, #.name]));\nlet rows = filter(tasks ?? [], (st == \"all\" || (#.state ?? \"active\") == st) \u0026\u0026 ((includeDone ?? false) || (#.completedAt ?? \"\") == \"\"));\n{tasks: map(rows[:min(n, len(rows))], ({id: #._id, ref: (pkeys[string(#.project)] ?? \"\") + \"-\" + string(#.number ?? \"\"), title: #.title, project: #.project,\n   status: names[string(#.status ?? \"\")] ?? \"\", statusId: #.status ?? \"\", assignees: #.assignees ?? [], due: #.due ?? \"\", priority: #.priority ?? \"none\", state: #.state ?? \"active\"})),\n more: len(rows) \u003e n,\n projects: map(filter(projects ?? [], !(#.archived ?? false)), { let p = #; ({id: p._id, name: p.name, key: p.key ?? \"\", statuses: map(filter(statuses ?? [], string(#.project) == p._id), ({id: #._id, name: #.name, category: #.category}))}) })}"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "tasks",
+            "type": "json"
+          },
+          {
+            "id": "more",
+            "type": "bool"
+          },
+          {
+            "id": "projects",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "tasksOut",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "out.tasks",
+        "type": "json"
+      }
+    },
+    {
+      "id": "moreOut",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "out.more",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "projectsOut",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 400
+      },
+      "config": {
+        "expr": "out.projects",
+        "type": "json"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "project"
+      },
+      "to": {
+        "node": "tq",
+        "pin": "project"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "assignee"
+      },
+      "to": {
+        "node": "tq",
+        "pin": "assignee"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "tq",
+        "pin": "me"
+      }
+    },
+    {
+      "from": {
+        "node": "tq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "tasks",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "state"
+      },
+      "to": {
+        "node": "out",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "limit"
+      },
+      "to": {
+        "node": "out",
+        "pin": "limit"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "includeDone"
+      },
+      "to": {
+        "node": "out",
+        "pin": "includeDone"
+      }
+    },
+    {
+      "from": {
+        "node": "tasks",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "tasks"
+      }
+    },
+    {
+      "from": {
+        "node": "projects",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "projects"
+      }
+    },
+    {
+      "from": {
+        "node": "statuses",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "statuses"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "out",
+        "pin": "value"
+      },
+      "to": {
+        "node": "tasksOut",
+        "pin": "out"
+      }
+    },
+    {
+      "from": {
+        "node": "out",
+        "pin": "value"
+      },
+      "to": {
+        "node": "moreOut",
+        "pin": "out"
+      }
+    },
+    {
+      "from": {
+        "node": "out",
+        "pin": "value"
+      },
+      "to": {
+        "node": "projectsOut",
+        "pin": "out"
+      }
+    },
+    {
+      "from": {
+        "node": "tasksOut",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "tasks"
+      }
+    },
+    {
+      "from": {
+        "node": "moreOut",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "more"
+      }
+    },
+    {
+      "from": {
+        "node": "projectsOut",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "projects"
+      }
+    }
+  ]
+}

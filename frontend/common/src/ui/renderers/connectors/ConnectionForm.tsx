@@ -6,13 +6,19 @@
 // (the connection.test call) and Save (connection.create or
 // connection.update, sent with {secret: true} so DevTools records no
 // secret). Generic over every connector type, scripted and announced ones
-// included. After a create it goes on editing the new connection.
+// included. After a create it goes on editing the new connection. A type
+// with OAuth (forge 26a-1) shows who signed it in and Sign in with …
+// (Sign in again once its sign-in expired), which opens the provider in a
+// popup (the connection.signIn call) and hears the callback's result; with
+// popups blocked, the page itself goes and comes back. A type that
+// receives callbacks shows its hook (forge 26b-2): registered, the URL to
+// paste into the service when the type registers nothing, or why not.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Alert, Box, Button, Chip, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from '@mui/material'
 import { live } from '../../../live/LiveConnection.ts'
 import { useQuery } from '../../../live/useQuery.ts'
-import type { ConnectionDescription, ConnectionTestResult, TypeList } from '../../../services/Connectors.ts'
+import type { ConnectionDescription, ConnectionTestResult, OAuthResult, TypeList } from '../../../services/Connectors.ts'
 import type { Schema } from '../../../settings/schema.ts'
 import { SchemaField, type FieldContext } from '../../../tabs/settings/SchemaField.tsx'
 import { getAt, setAt } from '../../../settings/schema.ts'
@@ -125,6 +131,40 @@ export function ConnectionForm(p: RendererProps) {
     }
   }
 
+  // The OAuth popup's answer
+  useEffect(() => {
+    const heard = (e: MessageEvent) => {
+      const r = e.data as OAuthResult
+      if (e.origin !== window.location.origin || r?.type !== 'connector.oauth' || r.connection !== existing?.id) return
+      setBusy(false)
+      setMessage(r.error ? { severity: 'error', text: r.message || r.error } : { severity: 'success', text: r.account ? `Signed in as ${r.account}` : 'Signed in' })
+      p.emit('signedIn', { ok: !r.error, account: r.account, error: r.error })
+    }
+    window.addEventListener('message', heard)
+    return () => window.removeEventListener('message', heard)
+  }, [existing?.id, p])
+
+  const signIn = async () => {
+    if (!existing) return
+    // Opened in the click, so no popup blocker takes it for an ad
+    const popup = window.open('', 'connector-oauth', 'popup,width=520,height=680')
+    setBusy(true)
+    setMessage({ severity: 'info', text: 'Signing in…' })
+    try {
+      const back = window.location.pathname + window.location.search
+      let url = ''
+      await live.call('connection.signIn', { id: existing.id, return: back }, (event, data) => {
+        if (event === 'result') url = (data as { url: string }).url
+      })
+      if (popup) popup.location.href = url
+      else window.location.assign(url)
+    } catch (err) {
+      popup?.close()
+      setBusy(false)
+      setMessage({ severity: 'error', text: (err as Error).message })
+    }
+  }
+
   const test = async () => {
     if (!existing) return
     setBusy(true)
@@ -170,6 +210,29 @@ export function ConnectionForm(p: RendererProps) {
           </Select>
         </FormControl>
       )}
+      {existing && described.data?.oauth && (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Button variant={existing.account && existing.status !== 'error' ? 'outlined' : 'contained'} disabled={disabled || busy} onClick={() => void signIn()}>
+            {existing.account ? 'Sign in again' : `Sign in with ${described.data.oauth.title}`}
+          </Button>
+          <Typography variant="body2" color="text.secondary">
+            {existing.account ? `Signed in as ${existing.account}` : 'Not signed in yet'}
+          </Typography>
+        </Stack>
+      )}
+      {!existing && info?.type.oauth && <Alert severity="info">Save it, then sign in.</Alert>}
+      {existing?.hook?.manual && existing.hook.url && (
+        <Alert severity="info">
+          Paste this address into the service's webhook settings, for {existing.hook.events?.join(', ')}:{' '}
+          <Typography component="span" variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{existing.hook.url}</Typography>
+        </Alert>
+      )}
+      {existing?.hook?.registered && (
+        <Typography variant="caption" color="text.secondary">
+          The service sends {existing.hook.events?.join(', ')} to this connection's hook.
+        </Typography>
+      )}
+      {existing?.hook?.error && <Alert severity="warning">The hook is not registered: {existing.hook.error}</Alert>}
       {info && !info.online && <Alert severity="warning">No adapter serves {info.type.meta.title} right now: it can be saved, not tested or used.</Alert>}
       {typeId && (
         <>

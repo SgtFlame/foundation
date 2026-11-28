@@ -1,0 +1,15 @@
+{
+  "endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+  "query": {
+    "access_type": "offline",
+    "client_id": "g-client",
+    "code_challenge": "xTYRBLTDt1gS3-rw_3FBVafZ0iNg9bZYBbG8fRPvkEs",
+    "code_challenge_method": "S256",
+    "include_granted_scopes": "true",
+    "prompt": "consent",
+    "redirect_uri": "https://axiom.example.com/api/v1/connectors/oauth/callback",
+    "response_type": "code",
+    "scope": "openid email https://mail.google.com/",
+    "state": "state-1"
+  }
+}

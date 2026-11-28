@@ -1,0 +1,186 @@
+{
+  "id": "qry-nexus-messages",
+  "name": "messages",
+  "description": "A channel's latest messages, newest first ({messages}, with each author expanded), or a thread's replies when parent is given, oldest first; limit 50 when left out. Pages show channels with a reversed mui.virtualList over nexusMessage instead. params {channel, parent?, limit?}.",
+  "kind": "data.query",
+  "version": 1,
+  "owner": "app:nexus",
+  "spec": {
+    "query": "messages",
+    "title": "A channel's messages",
+    "description": "A channel's latest messages, newest first ({messages}, with each author expanded), or a thread's replies when parent is given, oldest first; limit 50 when left out. Pages show channels with a reversed mui.virtualList over nexusMessage instead. params {channel, parent?, limit?}.",
+    "params": {
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": "string"
+        },
+        "parent": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "channel"
+      ]
+    },
+    "action": "record.read"
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onQuery",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "channel",
+            "name": "channel",
+            "type": "string"
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "type": "string",
+            "optional": true
+          },
+          {
+            "id": "limit",
+            "name": "limit",
+            "type": "number",
+            "optional": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "q",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "{where: {channel: channel ?? \"\", parent: parent ?? \"\"}, sort: [{field: \"createdAt\", desc: (parent ?? \"\") == \"\"}], limit: int(limit ?? 50), expand: [\"author\"]}"
+      }
+    },
+    {
+      "id": "found",
+      "type": "records.query",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusMessage"
+      }
+    },
+    {
+      "id": "out",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "{messages: found ?? []}"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "result",
+            "name": "result",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "channel"
+      },
+      "to": {
+        "node": "q",
+        "pin": "channel"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "parent"
+      },
+      "to": {
+        "node": "q",
+        "pin": "parent"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "limit"
+      },
+      "to": {
+        "node": "q",
+        "pin": "limit"
+      }
+    },
+    {
+      "from": {
+        "node": "q",
+        "pin": "value"
+      },
+      "to": {
+        "node": "found",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "found",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "out",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "result"
+      }
+    }
+  ]
+}

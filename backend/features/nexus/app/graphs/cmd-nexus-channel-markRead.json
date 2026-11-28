@@ -1,0 +1,420 @@
+{
+  "id": "cmd-nexus-channel-markRead",
+  "name": "nexus.channel.markRead",
+  "description": "Marks the target channel read for the caller: args.count is the channel's message count they have seen (the unread query's count), so their unread count is the channel's count less it.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:nexus",
+  "spec": {
+    "command": "channel.markRead",
+    "title": "Mark a channel read",
+    "description": "Marks the target channel read for the caller: args.count is the channel's message count they have seen (the unread query's count), so their unread count is the channel's count less it.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "number",
+          "description": "The channel's message count when read"
+        }
+      },
+      "required": [
+        "count"
+      ]
+    },
+    "area": "rec",
+    "targetType": "nexusChannel",
+    "projection": "records.record",
+    "action": "record.read",
+    "events": [
+      "created",
+      "updated",
+      "deleted"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "mineId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "type": "string",
+        "expr": "target + \"-\" + me"
+      }
+    },
+    {
+      "id": "mine",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusMember"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "let n = args.count ?? 0;\n{problem: mine == nil ? \"you are not a member of \" + target : \"\",\n members: (mine?.seen ?? 0) == n ? [] : [{id: mine?._id ?? \"\", set: {seen: n}}]}\n",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1700,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "w0list",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.members ?? []",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0",
+      "type": "flow.forEach",
+      "title": "update nexusMember (members)",
+      "position": {
+        "x": 2040,
+        "y": 200
+      }
+    },
+    {
+      "id": "w0id",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w0w",
+      "type": "records.update",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusMember"
+      }
+    },
+    {
+      "id": "w0s",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0x",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.expect",
+        "type": "number"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "mineId",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "mineId",
+        "pin": "me"
+      }
+    },
+    {
+      "from": {
+        "node": "mineId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mine",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "mine",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "mine"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0s",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0s",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0x",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0x",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "expect"
+      }
+    }
+  ]
+}

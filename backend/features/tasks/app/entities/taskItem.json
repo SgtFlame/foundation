@@ -1,0 +1,291 @@
+{
+  "id": "taskItem",
+  "owner": "app:tasks",
+  "name": "Task",
+  "description": "A to-do of the Tasks library app, in a project and a status, ordered within its status; proposed by an agent until a person accepts it",
+  "titleField": "title",
+  "fields": [
+    {
+      "id": "title",
+      "name": "Title",
+      "type": "text",
+      "description": "What is to be done",
+      "required": true,
+      "searchable": true
+    },
+    {
+      "id": "number",
+      "name": "Number",
+      "type": "autoNumber",
+      "description": "Its number, shown with the project's key (WEB-42)"
+    },
+    {
+      "id": "description",
+      "name": "Description",
+      "type": "richText",
+      "description": "The details",
+      "searchable": true
+    },
+    {
+      "id": "project",
+      "name": "Project",
+      "type": "relation",
+      "description": "The project it belongs to",
+      "relation": {
+        "entity": "tasksProject"
+      },
+      "required": true
+    },
+    {
+      "id": "status",
+      "name": "Status",
+      "type": "relation",
+      "description": "The status (board column) it is in",
+      "relation": {
+        "entity": "tasksStatus"
+      }
+    },
+    {
+      "id": "rank",
+      "name": "Position",
+      "type": "rank",
+      "description": "Its place within its status, set only by moving it",
+      "scope": "status"
+    },
+    {
+      "id": "assignees",
+      "name": "Assignees",
+      "type": "relation",
+      "description": "Who does it",
+      "relation": {
+        "entity": "user",
+        "many": true
+      }
+    },
+    {
+      "id": "due",
+      "name": "Due",
+      "type": "date",
+      "description": "When it is due"
+    },
+    {
+      "id": "start",
+      "name": "Start",
+      "type": "date",
+      "description": "When work on it starts"
+    },
+    {
+      "id": "priority",
+      "name": "Priority",
+      "type": "enum",
+      "description": "How urgent it is",
+      "options": [
+        {
+          "id": "none",
+          "name": "None"
+        },
+        {
+          "id": "low",
+          "name": "Low"
+        },
+        {
+          "id": "medium",
+          "name": "Medium"
+        },
+        {
+          "id": "high",
+          "name": "High"
+        },
+        {
+          "id": "urgent",
+          "name": "Urgent"
+        }
+      ],
+      "default": "none"
+    },
+    {
+      "id": "labels",
+      "name": "Labels",
+      "type": "relation",
+      "description": "The project's labels on it",
+      "relation": {
+        "entity": "taskLabel",
+        "many": true
+      }
+    },
+    {
+      "id": "parent",
+      "name": "Parent",
+      "type": "relation",
+      "description": "The task it is part of",
+      "relation": {
+        "entity": "taskItem"
+      }
+    },
+    {
+      "id": "attachments",
+      "name": "Attachments",
+      "type": "list",
+      "description": "Files attached to it",
+      "items": {
+        "id": "file",
+        "name": "File",
+        "type": "file"
+      }
+    },
+    {
+      "id": "source",
+      "name": "Source",
+      "type": "object",
+      "description": "Where it came from: a workbench: link to a mail thread, a message or an event",
+      "fields": [
+        {
+          "id": "link",
+          "name": "Link",
+          "type": "text",
+          "description": "A workbench: link"
+        },
+        {
+          "id": "title",
+          "name": "Title",
+          "type": "text",
+          "description": "What the link shows"
+        },
+        {
+          "id": "kind",
+          "name": "Kind",
+          "type": "text",
+          "description": "mail, message, event…"
+        }
+      ]
+    },
+    {
+      "id": "sourceLink",
+      "name": "Source link",
+      "type": "text",
+      "description": "The source's workbench: link, kept by tasks.task.create so an agent proposes one task per source"
+    },
+    {
+      "id": "state",
+      "name": "State",
+      "type": "enum",
+      "description": "proposed (by an agent, until someone accepts it), active or archived",
+      "options": [
+        {
+          "id": "proposed",
+          "name": "Proposed"
+        },
+        {
+          "id": "active",
+          "name": "Active"
+        },
+        {
+          "id": "archived",
+          "name": "Archived"
+        }
+      ],
+      "default": "active"
+    },
+    {
+      "id": "proposedBy",
+      "name": "Proposed by",
+      "type": "text",
+      "description": "The agent or person that proposed it"
+    },
+    {
+      "id": "outside",
+      "name": "Outside",
+      "type": "object",
+      "description": "Its card in the project's tracker (part 30h)",
+      "fields": [
+        {
+          "id": "id",
+          "name": "ID",
+          "type": "text",
+          "description": "The card's id"
+        },
+        {
+          "id": "version",
+          "name": "Version",
+          "type": "text",
+          "description": "The card's version last seen"
+        },
+        {
+          "id": "updatedAt",
+          "name": "Updated",
+          "type": "dateTime",
+          "description": "When the card last changed"
+        },
+        {
+          "id": "list",
+          "name": "List",
+          "type": "text",
+          "description": "The card's list last seen"
+        },
+        {
+          "id": "synced",
+          "name": "Synced",
+          "type": "json",
+          "description": "What the task and its card both held when the sync last wrote it ({title, description, due, list}), so a change made here since is told from the sync's own writes"
+        }
+      ]
+    },
+    {
+      "id": "outsideId",
+      "name": "Card id",
+      "type": "text",
+      "description": "The card's id in the project's tracker, kept beside outside so the sync finds a task by its card"
+    },
+    {
+      "id": "completedAt",
+      "name": "Completed",
+      "type": "dateTime",
+      "description": "When it moved to a done status"
+    },
+    {
+      "id": "createdAt",
+      "name": "Created",
+      "type": "createdAt",
+      "description": "When it was made"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "byStatus",
+      "fields": [
+        "project",
+        "status",
+        "rank"
+      ]
+    },
+    {
+      "id": "byAssignee",
+      "fields": [
+        "assignees",
+        "due"
+      ]
+    },
+    {
+      "id": "byState",
+      "fields": [
+        "state",
+        "assignees"
+      ]
+    },
+    {
+      "id": "bySource",
+      "fields": [
+        "sourceLink"
+      ]
+    },
+    {
+      "id": "byOutside",
+      "fields": [
+        "outsideId"
+      ]
+    }
+  ],
+  "storage": {
+    "projection": "sql"
+  }
+}

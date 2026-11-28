@@ -23,6 +23,7 @@ import { CACHE_LINE, CACHE_NOTES, CACHE_REACH, cacheReady, cacheSpot, POULTICE }
 import { COUNCIL_LINE, COUNCIL_LINES, councilReady, isHawksRest, REEVE_LINE, REEVE_LINES, reeveReady } from '../story/Council.ts'
 import { afterJourney, ARRIVE_LINE, isAldermere, journeyReady, LEGS } from '../story/Journey.ts'
 import { atGate, gateSpot, PALACE_LINE, PALACE_LINES, palaceReady } from '../story/Palace.ts'
+import { atInn, INN_LINE, innSpot, KINGS_COUNCIL_LINE, KINGS_COUNCIL_LINES, kingsCouncilReady, waitForNewMoon, waitReady } from '../story/NewMoon.ts'
 import { NORTH_LINE, NORTH_SENSE, northRoadReady, waymarkAt, waymarkSpots } from '../story/NorthRoad.ts'
 import { TOLD_LINE, ASHBY_LINE, ASHBY_SENSE, ashbyReady, isAshby, remnantAt, remnantSpots, TRACK_LINE, TRACK_REACH, TRACK_SENSE, trackPrints, trackReady } from '../story/Ashby.ts'
 import { WELL_LINE, WELL_REACH, WELL_SENSE, WELL_WARD_LINE, wellReady, wellSpot } from '../story/Well.ts'
@@ -2270,6 +2271,8 @@ export class AreaViewport {
     }
     // S35: the palace gate stands in Aldermere
     if (st && !this.set.interior && isAldermere(this.area.name)) this.drawPalaceGate()
+    // S36: and the Lantern inn by its south edge
+    if (st && !this.set.interior && isAldermere(this.area.name)) this.drawInn()
   }
 
   // S32: the north road's waymarks, from the end of Ashby's furrows to the
@@ -2353,6 +2356,13 @@ export class AreaViewport {
   private palaceOn = false
   private stepPalace(p: { x: number; z: number }): void {
     const st = this.story
+    // S36: near the Lantern's door the hint offers a room
+    const inn = !!st && waitReady(st.done) && this.byInn(p)
+    if (inn !== this.atLantern) {
+      this.atLantern = inn
+      this.updateHint()
+    }
+    if (st && !this.palaceOn && kingsCouncilReady(st.done, st.clock) && isAldermere(this.area.name) && !this.set.interior && atGate(gateSpot(this.area.width, this.set.cell), p)) return this.kingsCouncil()
     if (!st || this.palaceOn || this.set.interior || !palaceReady(st.done) || !isAldermere(this.area.name)) return
     if (!atGate(gateSpot(this.area.width, this.set.cell), p)) return
     this.palaceOn = true
@@ -2368,6 +2378,67 @@ export class AreaViewport {
       this.say(PALACE_LINE)
     }, PALACE_LINES.length * 7000)
   }
+  // S36: whether a point is at the Lantern's door, in Aldermere
+  private atLantern = false
+  private byInn(p: { x: number; z: number }): boolean {
+    return !this.set.interior && isAldermere(this.area.name) && atInn(innSpot(this.area.width, this.area.depth, this.set.cell), p)
+  }
+
+  // S36: R at the Lantern's door: a room, and the days pass to the new moon
+  private waitAtInn(): void {
+    const st = this.story!
+    st.clock = waitForNewMoon(st.clock)
+    const fade = document.createElement('div')
+    fade.style.cssText = 'position:absolute;inset:0;background:#000;opacity:1;transition:opacity 2s;z-index:3;pointer-events:none'
+    this.container.appendChild(fade)
+    setTimeout(() => (fade.style.opacity = '0'), 600)
+    setTimeout(() => fade.remove(), 2800)
+    if (st.done.waited) this.savePlace(true)
+    else this.reach('waited')
+    // after the clock's own dusk caption, which the jump to evening brings
+    setTimeout(() => {
+      if (this.story === st) this.say(INN_LINE)
+    }, 1500)
+  }
+
+  // S36: on the new-moon night the gate opens again, for the king's council
+  private kingsCouncil(): void {
+    this.palaceOn = true
+    const here = () => (this.story && isAldermere(this.area.name) ? this.story : null)
+    KINGS_COUNCIL_LINES.forEach((line, i) => setTimeout(() => {
+      if (here()) this.say(line)
+    }, i * 7000))
+    setTimeout(() => {
+      const s = here()
+      this.palaceOn = false
+      if (!s || s.done.kingscouncil) return
+      this.reach('kingscouncil')
+      this.say(KINGS_COUNCIL_LINE)
+    }, KINGS_COUNCIL_LINES.length * 7000)
+  }
+
+  // S36: the Lantern, a timber inn with a lit lantern over its door
+  private drawInn(): void {
+    const wall = new THREE.MeshStandardNodeMaterial({ color: 0x8a6a48, roughness: 0.95 })
+    const roof = new THREE.MeshStandardNodeMaterial({ color: 0x4a3a34, roughness: 1 })
+    const glow = new THREE.MeshStandardNodeMaterial({ color: 0xffc66b, emissive: new THREE.Color(0xffa830), emissiveIntensity: 2 })
+    const at = innSpot(this.area.width, this.area.depth, this.set.cell)
+    const inn = new THREE.Group()
+    const body = new THREE.Mesh(new THREE.BoxGeometry(6, 3, 3), wall)
+    body.position.set(0, 1.5, 1.5)
+    const top = new THREE.Mesh(new THREE.ConeGeometry(4.4, 1.8, 4), roof)
+    top.rotation.y = Math.PI / 4
+    top.scale.set(1, 1, 0.55)
+    top.position.set(0, 3.9, 1.5)
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.5, 0.35), glow)
+    lamp.position.set(0, 2.4, -0.1)
+    const light = new THREE.PointLight(0xffb050, 6, 9)
+    light.position.set(0, 2.3, -0.4)
+    inn.add(body, top, lamp, light)
+    inn.position.set(at.x, 0, at.z)
+    this.marks.add(inn)
+  }
+
   private drawPalaceGate(): void {
     const stone = new THREE.MeshStandardNodeMaterial({ color: 0xb8b0a0, roughness: 0.9 })
     const banner = new THREE.MeshStandardNodeMaterial({ color: 0x7a1f2b, roughness: 1 })
@@ -2644,6 +2715,11 @@ export class AreaViewport {
   // R by Hawk's Rest's hearth: rest, and draw the first card
   private rest(): void {
     const st = this.story
+    // S36: in Aldermere, R at the Lantern's door waits for the new moon
+    if (st && waitReady(st.done)) {
+      const p = this.player()
+      if (p && this.byInn(p)) return this.waitAtInn()
+    }
     // S31: after word of Ashby, the hearth-watch meets at Hawk's Rest's hearth
     if (st && councilReady(st.done) && isHawksRest(this.area.name) && this.nearHearth()) return this.council()
     if (st && reeveReady(st.done) && isHawksRest(this.area.name) && this.nearHearth()) return this.tellReeve()
@@ -3056,7 +3132,7 @@ export class AreaViewport {
     this.hint.textContent = this.talk.open
       ? 'Pick an answer · 1 to 9 · Esc to end the talk'
       : this.playing && this.story && !this.combat
-      ? `The story · click to walk, talk or go through a door · J hides the steps${this.nearHearth() && this.story.done.road && !this.story.done.rest ? ' · R to rest by the hearth' : ''}${this.story.done.morning ? ' · K: the herbal' : ''}${this.story.done.herbal && this.nearHearth() ? ' · B: stillness · C: cook' : ''}${this.story.done.rest ? ' · M: the almanac' : ''}${this.story.done.rest && this.nearHearth() && canSleep(this.story.clock) ? ' · R: sleep' : ''}${this.story.done.ditch ? ' · N: notes' : ''}${this.focus ? ' · focusing: your senses sharpen' : this.story.done.howl ? ' · hold F to focus your senses' : ''}`
+      ? `The story · click to walk, talk or go through a door · J hides the steps${this.nearHearth() && this.story.done.road && !this.story.done.rest ? ' · R to rest by the hearth' : ''}${this.story.done.morning ? ' · K: the herbal' : ''}${this.story.done.herbal && this.nearHearth() ? ' · B: stillness · C: cook' : ''}${this.story.done.rest ? ' · M: the almanac' : ''}${this.story.done.rest && this.nearHearth() && canSleep(this.story.clock) ? ' · R: sleep' : ''}${this.story.done.ditch ? ' · N: notes' : ''}${this.atLantern ? ' · R: take a room at the Lantern and wait for the new moon' : ''}${this.focus ? ' · focusing: your senses sharpen' : this.story.done.howl ? ' · hold F to focus your senses' : ''}`
       : this.playing && this.combat
       ? 'Fighting · click a Hollowed to attack it · 1 Strike · 2 Pivot · 3 Guard · click the ground to back away'
       : this.playing

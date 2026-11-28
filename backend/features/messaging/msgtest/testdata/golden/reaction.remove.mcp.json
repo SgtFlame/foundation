@@ -1,0 +1,46 @@
+{
+  "name": "chat_messaging_reaction_remove",
+  "title": "Remove a reaction",
+  "description": "Takes back the connection's account's reaction. Removing one not there succeeds.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "The channel's id"
+      },
+      "id": {
+        "type": "string",
+        "description": "The message's id"
+      },
+      "emoji": {
+        "type": "string",
+        "description": "The emoji's name"
+      }
+    },
+    "required": [
+      "channel",
+      "id",
+      "emoji"
+    ]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean",
+        "description": "Always true: a failure is an error"
+      }
+    },
+    "required": [
+      "ok"
+    ]
+  },
+  "annotations": {
+    "title": "Remove a reaction",
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true
+  }
+}

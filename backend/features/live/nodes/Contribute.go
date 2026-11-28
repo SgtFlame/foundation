@@ -168,7 +168,8 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			"target":{"type":"string","title":"Target","description":"The object's id when the Target input is unconnected"}},"required":["command"]}`),
 		Pins: cognition.Pins{
 			In: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), {ID: "target", Name: "Target", Type: "string", Optional: true, Description: "The id of the object to change; the config's when unconnected"},
-				{ID: "args", Name: "Args", Type: cognition.Any, Optional: true, Description: "The command's args, an object"}},
+				{ID: "args", Name: "Args", Type: cognition.Any, Optional: true, Description: "The command's args, an object"},
+				{ID: "command", Name: "Command", Type: "string", Optional: true, Description: "The command type when it is known only at run time (a generic view's prop naming an app's command); the config's when unconnected or empty"}},
 			Out: []cognition.Pin{cognition.ExecPin("ok", "OK"), cognition.ExecPin("rejected", "Rejected"),
 				cognition.DataPin("problems", "Problems", "json", "Why it was refused: [{path, message, fix}]"),
 				cognition.DataPin("message", "Message", "string", "The refusal's first message")},
@@ -181,6 +182,9 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			target, _ := cognition.Get[string](in, "target")
 			if target == "" {
 				target = c.Target
+			}
+			if cmd, _ := cognition.Get[string](in, "command"); cmd != "" {
+				c.Command = cmd
 			}
 			sender, ok := x.Host.(Sender)
 			if !ok {
@@ -228,9 +232,6 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			if d.Store == nil {
 				return nil, "", fmt.Errorf("there is no projection store")
 			}
-			if q, ok := x.Host.(*QueryHost); ok {
-				q.Reads = append(q.Reads, Read{Projector: c.Projector, Key: key})
-			}
 			get := d.Store.Get
 			if dry := bus.DryOf(x.Context()); dry != nil {
 				get = dry.Get // a sandboxed run's own events over the projection (forge 06f)
@@ -239,8 +240,15 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			if err != nil {
 				return nil, "", err
 			}
-			if q, isQ := x.Host.(*QueryHost); isQ && ok {
-				q.Pos = q.Pos.Merge(v.Position())
+			if q, isQ := x.Host.(*QueryHost); isQ {
+				read := Read{Projector: c.Projector, Key: key, Checked: true}
+				if ok && v.Value != nil {
+					read.Seq = v.Seq
+				}
+				q.Reads = append(q.Reads, read)
+				if ok {
+					q.Pos = q.Pos.Merge(v.Position())
+				}
 			}
 			var value any
 			if ok && v.Value != nil {

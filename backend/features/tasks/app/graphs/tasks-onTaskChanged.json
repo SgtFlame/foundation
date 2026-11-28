@@ -1,0 +1,278 @@
+{
+  "id": "tasks-onTaskChanged",
+  "name": "A task changed here",
+  "description": "Sends a task's change to its project's tracker (part 30h): when a task of a project connected to a board is made or its title, description, due date, status or state changes, by anyone but the app itself (so the sync's own writes never echo back), enqueues tasks-syncPush, one push at a time per task.",
+  "kind": "app.trigger",
+  "version": 1,
+  "owner": "app:tasks",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "records.onChanged",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "entity": "taskItem",
+        "events": [
+          "created",
+          "updated"
+        ]
+      }
+    },
+    {
+      "id": "pidOf",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "string((record ?? {}).project ?? \"none\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "pr",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "tasksProject"
+      }
+    },
+    {
+      "id": "push",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "type": "bool",
+        "expr": "let r = record ?? {};\nlet o = old ?? {};\nlet linked = pr != nil \u0026\u0026 string(pr.connection ?? \"\") != \"\" \u0026\u0026 string(pr.board ?? \"\") != \"\";\nlinked \u0026\u0026 (kind == \"created\" || any([\"title\", \"description\", \"due\", \"status\", \"state\"], toJSON(r[#]) != toJSON(o[#])))"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1360,
+        "y": 0
+      }
+    },
+    {
+      "id": "key",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"task-\" + id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "jobId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "expr": "\"push-\" + id + \"-\" + string(record._seq)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "inputs",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 600
+      },
+      "config": {
+        "expr": "{task: id}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "enqueue",
+      "type": "jobs.enqueue",
+      "title": "Push the task",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "graph": "tasks-syncPush"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "pidOf",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "pidOf",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pr",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "pr",
+        "pin": "record"
+      },
+      "to": {
+        "node": "push",
+        "pin": "pr"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "event"
+      },
+      "to": {
+        "node": "push",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "push",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "old"
+      },
+      "to": {
+        "node": "push",
+        "pin": "old"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "push",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "key",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "jobId",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "jobId",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "inputs",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "key",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "jobId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "inputs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "inputs"
+      }
+    }
+  ]
+}
