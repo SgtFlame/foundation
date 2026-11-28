@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -102,10 +103,13 @@ type document interface {
 	save(args features.ServiceArgs, text string) error
 }
 
-// fileDoc is a volume file, read and written as it is on disk.
+// fileDoc is a volume file, read and written as it is on disk. A
+// document's saves (forge 35a-1) are checked and kept as a document file
+// (volumeservice.DocumentFile); a refusal is a refusal.
 type fileDoc struct {
 	svc  *service
 	file string // absolute path
+	typ  string // its file type: markdown or document
 }
 
 func (f fileDoc) key() string  { return f.file }
@@ -120,7 +124,14 @@ func (f fileDoc) load(features.ServiceArgs) (string, error) {
 }
 
 // save writes the file atomically, through a dotted temp file.
-func (f fileDoc) save(_ features.ServiceArgs, text string) error {
+func (f fileDoc) save(args features.ServiceArgs, text string) error {
+	if f.typ == "document" {
+		file, refused := volumeservice.DocumentFile(args, []byte(text))
+		if refused != nil {
+			return refusal{*refused} // DocumentFile logged it
+		}
+		text = string(file)
+	}
 	tmp := filepath.Join(filepath.Dir(f.file), "."+filepath.Base(f.file)+".tmp")
 	err := os.WriteFile(tmp, []byte(text), 0o644)
 	if err == nil {
@@ -133,6 +144,12 @@ func (f fileDoc) save(_ features.ServiceArgs, text string) error {
 	f.svc.events.Publish(volumeservice.FileEvent{Op: volumeservice.FileChanged, File: f.file})
 	return nil
 }
+
+// refusal is a save refused for what it holds, told to the room as
+// saved with its status and error code rather than logged as a failure.
+type refusal struct{ features.ServiceResponse }
+
+func (r refusal) Error() string { return r.Message }
 
 // otherDoc is a document of a contributed kind.
 type otherDoc struct{ d collabservice.Document }
@@ -196,7 +213,10 @@ func (r *room) saveLoop() {
 			continue
 		}
 		saved := control{Op: "saved", Code: http.StatusOK, At: time.Now().UnixMilli()}
-		if err := r.doc.save(req.args, req.text); err != nil {
+		var refused refusal
+		if err := r.doc.save(req.args, req.text); errors.As(err, &refused) {
+			saved.Code, saved.Message, saved.ErrorCode = int(refused.Code), refused.Message, refused.ErrorCode
+		} else if err != nil {
 			log.With("file", r.doc.name()).Error(context.Background(), err, "cannot save %q", r.doc.name())
 			saved.Code = http.StatusInternalServerError
 			saved.Message = "cannot save " + r.doc.name() + ": " + err.Error()

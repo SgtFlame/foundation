@@ -1,0 +1,28 @@
+{
+  "name": "chat_messaging_check",
+  "title": "Check",
+  "description": "Signs in and lists the channels: whether the connection's credentials work.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean",
+        "description": "Always true: a failure is an error"
+      }
+    },
+    "required": [
+      "ok"
+    ]
+  },
+  "annotations": {
+    "title": "Check",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

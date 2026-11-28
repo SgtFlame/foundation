@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/SgtFlame/foundation/backend/features"
+	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
 	"github.com/SgtFlame/foundation/backend/features/records"
@@ -166,6 +167,7 @@ type spec struct {
 	events                                []string
 	action                                string
 	create                                bool // may target an entity type that does not exist yet
+	newTarget                             func() string
 	decide                                func(c *decision) ([]live.NewEvent, []live.Problem)
 }
 
@@ -193,7 +195,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			Descriptor: extensions.Descriptor{ID: s.id, Source: "records"}, Title: s.title, Description: s.description,
 			Args: json.RawMessage(s.args), Examples: []json.RawMessage{json.RawMessage(s.example)}, Events: s.events,
 			Area: live.AreaDefinitions, TargetType: TargetType, Projection: DraftProjector, Action: action,
-			NoBranch: live.MainOnly(s.id),
+			NoBranch: live.MainOnly(s.id) || s.id == "entity.createUserDefined", NewTarget: s.newTarget,
 			Resource: func(p features.Principal, t live.Target) string { return records.Resource(p, t.ID) },
 			Decide: func(d live.Decision) ([]live.NewEvent, []live.Problem) {
 				c := &decision{Decision: d, deps: deps()}
@@ -205,6 +207,13 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				}
 				if !c.exists && !s.create {
 					return nil, problem("target", fmt.Sprintf("there is no entity type %q", d.Target.ID), "make it first with entity.create {name, fields}")
+				}
+				// A user-defined type (forge 35c-1) is changed only by
+				// those who may define its parent record's types
+				if c.exists && c.entity().UserDefined {
+					if problems := c.mayDefine(*c.entity()); problems != nil {
+						return nil, problems
+					}
 				}
 				events, problems := s.decide(c)
 				if problems != nil || len(events) == 0 {
@@ -301,6 +310,54 @@ func commandSpecs() []spec {
 			},
 		},
 		{
+			id: "entity.createUserDefined", title: "Create a user-defined entity type", create: true, events: []string{EventCreated},
+			newTarget:   func() string { return "ud_" + strconv.FormatUint(features.NewTSID(), 10) },
+			description: "Makes an entity type a running app defines for its users after install (forge 35c-1), such as a Docs database's properties: owned by the app but part of no app version, held by a parent record, and changed only by those who may define that record's types (record.define on it). Send it without a target to get a new id (ud_<tsid>). Change its fields with entity.addField, updateField and removeField, and publish each change with entity.publish.",
+			args:        `{"type":"object","properties":{"name":{"type":"string","description":"What people call it, e.g. Projects"},"description":{"type":"string","description":"What a record of it is, for a model"},"owner":{"type":"string","description":"app:<appId>, the app that defines it"},"parent":{"type":"object","description":"The record that holds it, e.g. a Database record","properties":{"entity":{"type":"string","description":"The parent record's entity type"},"id":{"type":"string","description":"The parent record's id"}},"required":["entity","id"]},"titleField":{"type":"string","description":"The field shown as a record's title, by id"},"fields":{"type":"array","items":` + fieldSchema + `,"description":"Its fields, as entity.addField takes them"}},"required":["name","owner","parent"]}`,
+			example:     `{"name":"Projects","owner":"app:docs","parent":{"entity":"database","id":"7"},"fields":[{"name":"Name","type":"text","required":true},{"name":"Status","type":"enum","options":[{"id":"todo","name":"To do"},{"id":"done","name":"Done"}]}]}`,
+			decide: func(c *decision) ([]live.NewEvent, []live.Problem) {
+				if c.exists {
+					return nil, problem("target", fmt.Sprintf("there is already an entity type %q", c.Target.ID), "send it without a target to get a new id")
+				}
+				if c.Target.ID == records.UserEntity || strings.HasPrefix(c.Target.ID, "_") {
+					return nil, problem("target", fmt.Sprintf("%q cannot be an entity type's id", c.Target.ID), "send it without a target to get a new id")
+				}
+				a, problems := args[struct {
+					Name, Description, Owner, TitleField string
+					Parent                               *records.Parent
+					Fields                               []records.Field
+				}](c)
+				if problems != nil {
+					return nil, problems
+				}
+				if !strings.HasPrefix(a.Owner, "app:") || !live.ValidToken(strings.TrimPrefix(a.Owner, "app:")) {
+					return nil, problem("args.owner", fmt.Sprintf("%q is not an app", a.Owner), "give app:<appId>, the app that defines the type")
+				}
+				if a.Parent == nil || !live.ValidToken(a.Parent.Entity) || a.Parent.ID == "" {
+					return nil, problem("args.parent", "the parent record is missing", "give {entity, id} of the record that holds the type")
+				}
+				e := records.EntityType{ID: c.Target.ID, Name: a.Name, Description: a.Description, Owner: a.Owner, TitleField: a.TitleField,
+					Fields: []records.Field{}, Indexes: []records.Index{}, UserDefined: true, Parent: a.Parent}
+				if problems := c.mayDefine(e); problems != nil {
+					return nil, problems
+				}
+				for i, f := range a.Fields {
+					if problems := c.prepare(&f, fmt.Sprintf("args.fields.%d", i)); problems != nil {
+						return nil, problems
+					}
+					e.Fields = append(e.Fields, f)
+					c.draft.Entity.Fields = e.Fields
+				}
+				if e.TitleField == "" {
+					if i := slices.IndexFunc(e.Fields, func(f records.Field) bool { return f.Type == "text" }); i >= 0 {
+						e.TitleField = e.Fields[i].ID
+					}
+				}
+				c.draft.Entity = records.EntityType{}
+				return ev(EventCreated, map[string]any{"entity": e}), nil
+			},
+		},
+		{
 			id: "entity.import", title: "Import an entity type", create: true, events: []string{EventImported},
 			description: "Replaces the target entity type's whole draft with a definition given as JSON (its name, description, owner, title field, fields with their ids, indexes and access, as entity.describe gives it), or makes it. Records keep their values by field id, so a field kept by id keeps its values. Its published versions stay until it is published again. Importing an app (app.import) uses it.",
 			args:        `{"type":"object","properties":{"entity":{"type":"object","description":"An entity type as entity.describe returns it: {name, description?, owner?, titleField?, fields, indexes?, access?}"}},"required":["entity"]}`,
@@ -330,6 +387,12 @@ func commandSpecs() []spec {
 					}
 					records.Normalize(&e.Fields[i])
 				}
+				if c.exists && c.entity().UserDefined {
+					// an import never turns a user-defined type into an app's own
+					e.UserDefined, e.Parent, e.Owner = true, c.entity().Parent, c.entity().Owner
+				} else if e.UserDefined || e.Parent != nil {
+					return nil, problem("args.entity.userDefined", "an import cannot make a user-defined type", "make it with entity.createUserDefined")
+				}
 				if c.exists {
 					cur := *c.entity()
 					cur.Version = 0
@@ -352,6 +415,9 @@ func commandSpecs() []spec {
 				}
 				if in == (Info{}) {
 					return nil, nil
+				}
+				if in.Owner != nil && c.entity().UserDefined && *in.Owner != c.entity().Owner {
+					return nil, problem("args.owner", "a user-defined type stays with the app that made it", "leave the owner out")
 				}
 				return ev(EventInfoSet, in), nil
 			},
@@ -592,8 +658,20 @@ func commandSpecs() []spec {
 	}
 }
 
-// lastPublished is the target's last published version; nil before the
-// first.
+// mayDefine refuses a principal who may not define the types of e's
+// parent record (record.define on it, forge 35c-1); service principals
+// are let through by authz.Check.
+func (c *decision) mayDefine(e records.EntityType) []live.Problem {
+	if e.Parent == nil {
+		return problem("entity.parent", "a user-defined type has no parent record", "")
+	}
+	resource := records.ParentResource(c.Principal, *e.Parent)
+	if err := authz.Check(c.Context(), c.Principal, "record.define", resource).Err("record.define", resource); err != nil {
+		return []live.Problem{{Code: "forbidden", Path: "entity.parent", Message: fmt.Sprintf("you may not define the entity types of %s %s", e.Parent.Entity, e.Parent.ID), Fix: "ask for a role that may edit that record"}}
+	}
+	return nil
+}
+
 // published is another entity type's published version, for the
 // rollups that read it.
 func (c *decision) published(id string) (records.EntityType, bool) {
@@ -645,6 +723,8 @@ func searchChanged(prev *records.EntityType, e records.EntityType) bool {
 	return sig(prev) != sig(&e)
 }
 
+// lastPublished is the target's last published version; nil before the
+// first.
 func (c *decision) lastPublished() *records.EntityType {
 	v, ok, err := c.deps.Projections.Get(c.Context(), c.Principal.TenantID, PublishedProjector, c.Target.Key())
 	if err != nil || !ok {

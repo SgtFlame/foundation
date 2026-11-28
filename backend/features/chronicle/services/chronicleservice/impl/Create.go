@@ -22,6 +22,7 @@ func (s *service) Create(args chronicleservice.CreateArgs) chronicleservice.Entr
 	if err := s.db.WithContext(args.Context()).Create(&entry).Error; err != nil {
 		return chronicleservice.EntryResponse{Common: *args.Fail(http.StatusInternalServerError, log.Wrap(err))}
 	}
-	s.index(args.ServiceArgs, entry.ID)
+	_, _ = chronicle.RefreshFacts(s.db.WithContext(args.Context()), &entry)
+	s.refresh(args.ServiceArgs, entry.ID)
 	return chronicleservice.EntryResponse{Common: features.OK(), Entry: entry}
 }

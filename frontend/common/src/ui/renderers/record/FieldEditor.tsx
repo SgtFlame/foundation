@@ -33,6 +33,7 @@ const str = (v: unknown) => (v === undefined || v === null ? '' : String(v))
 
 // A saved record's markdown field is edited together (forge 07l)
 const MarkdownField = lazy(() => import('../doc/DocMarkdown.tsx').then((m) => ({ default: m.MarkdownField })))
+const RichTextField = lazy(() => import('../doc/DocRichText.tsx').then((m) => ({ default: m.RichTextField })))
 
 export interface FieldInputProps {
   field: Field
@@ -241,7 +242,13 @@ export function FieldInput(props: FieldInputProps) {
     case 'longText':
       return text(true, str(value), (t) => (t === '' ? null : t))
     case 'richText':
-      return text(true, plainText(value as RichTextDoc), (t) => (t === '' ? null : docFromText(t)))
+      // A record not saved yet has no room: its text goes with the form as paragraphs
+      if (!props.entity || !props.record) return text(true, plainText(value as RichTextDoc), (t) => (t === '' ? null : docFromText(t)))
+      return (
+        <Suspense fallback={null}>
+          <RichTextField entity={props.entity} id={props.record} field={field.id} label={label} disabled={disabled} mode="compact" />
+        </Suspense>
+      )
     case 'markdown':
       // A record not saved yet has no room: its text goes with the form
       if (!props.entity || !props.record) return text(true, str(value), (t) => (t === '' ? null : t))

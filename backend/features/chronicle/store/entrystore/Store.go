@@ -63,6 +63,7 @@ func Open(ctx context.Context, dir string, dimensions int) (*Store, error) {
 		{Name: "tenant_id", Type: arrow.BinaryTypes.String},
 		{Name: "owner_id", Type: arrow.BinaryTypes.String},
 		{Name: "shared", Type: arrow.FixedWidthTypes.Boolean},
+		{Name: "scope", Type: arrow.BinaryTypes.String},
 		{Name: "hash", Type: arrow.BinaryTypes.String},
 		{Name: "title", Type: arrow.BinaryTypes.String},
 		{Name: "text", Type: arrow.BinaryTypes.String},
@@ -205,11 +206,12 @@ func (s *Store) Put(ctx context.Context, row chronicle.Row) error {
 	b.Field(1).(*array.StringBuilder).Append(id(row.TenantID))
 	b.Field(2).(*array.StringBuilder).Append(id(row.OwnerID))
 	b.Field(3).(*array.BooleanBuilder).Append(row.Shared)
-	b.Field(4).(*array.StringBuilder).Append(row.Hash)
-	b.Field(5).(*array.StringBuilder).Append(row.Title)
-	b.Field(6).(*array.StringBuilder).Append(row.Text)
-	b.Field(7).(*array.BooleanBuilder).Append(row.Vector != nil)
-	vectors := b.Field(8).(*array.FixedSizeListBuilder)
+	b.Field(4).(*array.StringBuilder).Append(row.Scope)
+	b.Field(5).(*array.StringBuilder).Append(row.Hash)
+	b.Field(6).(*array.StringBuilder).Append(row.Title)
+	b.Field(7).(*array.StringBuilder).Append(row.Text)
+	b.Field(8).(*array.BooleanBuilder).Append(row.Vector != nil)
+	vectors := b.Field(9).(*array.FixedSizeListBuilder)
 	vectors.Append(true)
 	vector := row.Vector
 	if vector == nil {
@@ -277,14 +279,22 @@ func score(row map[string]any) float64 {
 	return f
 }
 
-// where keeps the owner's rows and the tenant's shared ones (only others',
-// with OthersOnly).
+// where keeps the owner's rows, the tenant's shared ones and those of the
+// projects the owner may read (forge 35f-6); only others', with OthersOnly.
 func where(owner chronicle.Owner) string {
 	tenant := "tenant_id = " + quote(id(owner.TenantID))
-	if owner.OthersOnly {
-		return tenant + " AND shared = true AND owner_id <> " + quote(id(owner.UserID))
+	others := "shared = true"
+	if len(owner.Projects) > 0 {
+		scopes := make([]string, 0, len(owner.Projects))
+		for _, p := range owner.Projects {
+			scopes = append(scopes, quote(p))
+		}
+		others = "(shared = true OR scope IN (" + strings.Join(scopes, ", ") + "))"
 	}
-	return tenant + " AND (owner_id = " + quote(id(owner.UserID)) + " OR shared = true)"
+	if owner.OthersOnly {
+		return tenant + " AND " + others + " AND owner_id <> " + quote(id(owner.UserID))
+	}
+	return tenant + " AND (owner_id = " + quote(id(owner.UserID)) + " OR " + others + ")"
 }
 
 func matches(rows []map[string]any) []chronicle.Match {

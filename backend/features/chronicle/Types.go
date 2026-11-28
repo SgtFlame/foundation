@@ -3,6 +3,8 @@ package chronicle
 import (
 	"encoding/json"
 	"slices"
+
+	"github.com/SgtFlame/foundation/backend/features/records"
 )
 
 // EntryType is a kind of entry. The built-in types are code until custom
@@ -15,6 +17,16 @@ type EntryType struct {
 	Icon        string // an emoji
 	Description string // what the memory update reads when it proposes an entry of this type
 	Fields      json.RawMessage
+	// A type a tenant or project defines (forge 35f-6, TypeDefs.go) has
+	// its fields in the records' field catalog (RecordFields), checked
+	// with records.CheckValue, with Fields made from them for the entry
+	// editor's form; ParentTypes are the types its entries go under (any
+	// when empty) and Scope where it is defined: "tenant" or
+	// "project:<page>". Built-in types have none of these.
+	RecordFields []records.Field
+	ParentTypes  []string
+	Scope        string
+	Custom       bool
 }
 
 // Types are the built-in entry types, in the order the Chronicles view

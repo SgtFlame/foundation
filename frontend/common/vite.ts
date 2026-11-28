@@ -25,6 +25,7 @@ const routes = [
   'records',
   'apps',
   'collab',
+  'connectors',
 ]
 
 // The Vite configuration every app built on common needs; an app with
@@ -33,9 +34,11 @@ export function foundation(backend = 'http://localhost:8080', more: string[] = [
   return {
     name: 'foundation',
     config: (config) => ({
-      // y-monaco and the editor must share one Monaco and one Yjs
+      // y-monaco and the editor must share one Monaco and one Yjs; TipTap,
+      // Milkdown and y-prosemirror one ProseMirror (forge 35b-1), whose
+      // classes are checked with instanceof
       resolve: {
-        dedupe: ['monaco-editor', 'yjs'],
+        dedupe: ['monaco-editor', 'yjs', 'prosemirror-model', 'prosemirror-state', 'prosemirror-view', 'prosemirror-transform'],
         alias: [
           {
             // y-monaco imports this path, which monaco-editor 0.57's exports map no longer allows.

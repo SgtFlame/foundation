@@ -19,6 +19,7 @@ func (s *service) Delete(args chronicleservice.DeleteArgs) chronicleservice.Dele
 	if failed != nil {
 		return chronicleservice.DeleteResponse{Common: *failed}
 	}
+	referrers, _ := chronicle.Referrers(s.db.WithContext(args.Context()), entry)
 	var copies []uint64
 	err := s.db.WithContext(args.Context()).Transaction(func(tx *gorm.DB) error {
 		owned := func() *gorm.DB { return chronicle.Owned(tx, args.Principal) }
@@ -43,6 +44,9 @@ func (s *service) Delete(args chronicleservice.DeleteArgs) chronicleservice.Dele
 	s.index(args.ServiceArgs, entry.ID) // removes it from the entries table
 	for _, id := range copies {
 		s.index(args.ServiceArgs, id)
+	}
+	for _, r := range referrers {
+		s.refresh(args.ServiceArgs, r.ID) // their facts no longer name it
 	}
 	return chronicleservice.DeleteResponse{Common: features.OK()}
 }

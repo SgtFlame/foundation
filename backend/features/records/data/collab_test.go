@@ -9,6 +9,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features/kb/services/collabservice"
 	collabimpl "github.com/SgtFlame/foundation/backend/features/kb/services/collabservice/impl"
+	"github.com/SgtFlame/foundation/backend/features/records"
 	"github.com/SgtFlame/foundation/backend/features/records/data"
 )
 
@@ -162,4 +163,62 @@ func TestARecordFieldIsEditedInARoom(t *testing.T) {
 	if after := len(f.events(id)); after != before {
 		t.Errorf("an unchanged save committed %d events", after-before)
 	}
+}
+
+// A record's richText field (forge 35b-1) is edited in a room as a document
+// file is: seeded as {format: 1, doc}, saved with record.setRichText.
+func TestARichTextFieldIsEditedInARoom(t *testing.T) {
+	f := setup(t)
+	data.ContributeCollab(f.reg, func() data.Deps { return *f.deps })
+	f.ok("entity.create", "page", map[string]any{"name": "Page", "fields": []any{
+		map[string]any{"name": "title", "type": "text"},
+		map[string]any{"name": "content", "type": "richText"},
+	}})
+	f.publish("page", 1)
+	doc := `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Hello"}]}]}`
+	id := f.ok("record.create", "", map[string]any{"entity": "page", "values": map[string]any{"title": "Plan"}}).Target
+	f.ok("record.setRichText", id, map[string]any{"entity": "page", "field": "content", "content": json.RawMessage(doc)})
+	f.get("page", id, 0)
+
+	svc := collabimpl.New(collabimpl.WithGracePeriod(time.Minute), collabimpl.WithDocumentKinds(func(kind string) (collabservice.DocumentKind, bool) {
+		for _, k := range collabservice.DocumentKinds.All(f.reg) {
+			if k.ID == kind {
+				return k, true
+			}
+		}
+		return collabservice.DocumentKind{}, false
+	}))
+	opened := svc.OpenDoc(collabservice.OpenDocArgs{ServiceArgs: args(), Kind: "record", Ref: json.RawMessage(`{"entity":"page","id":"` + id + `","field":"content"}`)})
+	if opened.Common.Code != 200 {
+		t.Fatalf("OpenDoc: %+v", opened.Common)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a := &chanConn{in: make(chan []byte, 16), out: make(chan []byte, 256)}
+	sa := args()
+	sa.Ctx = ctx
+	go svc.Collaborate(collabservice.CollaborateArgs{ServiceArgs: sa, FileID: opened.FileID, Conn: a})
+	role := a.expect(t, "the writer's role", func(c map[string]any) bool { return c["op"] == "role" })
+	var seed struct {
+		Format int
+		Doc    map[string]any
+	}
+	if s, _ := role["seed"].(string); json.Unmarshal([]byte(s), &seed) != nil || seed.Format != 1 || seed.Doc["type"] != "doc" {
+		t.Fatalf("seed: %v", role["seed"])
+	}
+	a.in <- control(map[string]any{"op": "seeded"})
+
+	saved := `{"type":"doc","content":[{"type":"heading","attrs":{"level":1},"content":[{"type":"text","text":"Goals"}]}]}`
+	a.in <- control(map[string]any{"op": "save", "markdown": `{"format":1,"doc":` + saved + `}`})
+	a.expect(t, "saved", func(c map[string]any) bool { return c["op"] == "saved" && c["code"] == 200.0 })
+	var text string
+	for i := 0; text != "Goals" && i < 50; i++ {
+		time.Sleep(20 * time.Millisecond)
+		text = records.PlainText(f.get("page", id, 0)["content"])
+	}
+	if text != "Goals" {
+		t.Fatalf("the field reads %q", text)
+	}
+	a.in <- control(map[string]any{"op": "save", "markdown": `not a document`})
+	a.expect(t, "a refused save", func(c map[string]any) bool { return c["op"] == "saved" && c["code"] != 200.0 })
 }

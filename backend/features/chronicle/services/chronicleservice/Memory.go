@@ -42,3 +42,8 @@ func (m memory) Apply(args features.ServiceArgs, u chronicle.MemoryUpdate) ([]ch
 func (m memory) Flag(args features.ServiceArgs, round uint64) error {
 	return fail(m.svc.MemoryFlag(MemoryFlagArgs{ServiceArgs: args, RoundID: round}).Common)
 }
+
+func (m memory) Types(args features.ServiceArgs) ([]chronicle.EntryType, error) {
+	r := m.svc.Types(TypesArgs{ServiceArgs: args})
+	return r.Types, fail(r.Common)
+}

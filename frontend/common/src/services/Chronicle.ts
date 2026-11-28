@@ -1,6 +1,7 @@
 // Client for the backend Chronicle REST handlers
 // (backend/features/chronicle/rest/chroniclehandlers)
 
+import type { EntityField } from './Entities.ts'
 import { http, type ResponseStatus } from './http/client.ts'
 
 export { ServiceError } from './http/client.ts'
@@ -29,6 +30,8 @@ export interface Entry {
   ownerId: string // someone else's when it was shared with you: read-only
   shared?: 'tenant' | 'global' // global: the global tenant's copy of an approved share
   sourceId?: string // the entry a global copy was made from
+  scope?: string // project:<page> for a project's story bible entry
+  facts?: string // its fields and typed links as text, as search reads them
 }
 
 export type ShareStatus = 'pending' | 'tenantApproved' | 'approved' | 'rejected' | 'withdrawn'
@@ -78,9 +81,11 @@ export interface EntryInput {
   fullContext: string
   fields?: Record<string, unknown>
   parentId?: string
+  scope?: string // project:<page>, which the project's readers find too
 }
 
-// A related link; it has no direction
+// A related link (kind 'related', no direction) or a typed one read from
+// fromId to toId, such as 'sister of'
 export interface Link {
   id: string
   fromId: string
@@ -105,6 +110,25 @@ export interface EntryType {
   icon: string // an emoji
   description: string
   fields: unknown // the schema of its fields, in the settings schema language
+  // A tenant's or project's type (custom): its fields in the records'
+  // field catalog, the types its entries go under, and where it is defined
+  recordFields?: EntityField[]
+  parentTypes?: string[]
+  scope?: string // 'tenant' or 'project:<page>'
+  custom?: boolean
+}
+
+// A set of types a project copies, such as the fantasy story bible
+export interface Starter {
+  id: string
+  title: string
+  description: string
+  types: EntryType[]
+}
+
+export interface SaveTypeResponse extends ResponseStatus {
+  type?: EntryType
+  problems?: { path: string; message: string; fix?: string }[]
 }
 
 export interface ListResponse extends ResponseStatus {
@@ -132,6 +156,7 @@ export interface LinkRequest {
   fromId: string
   toId: string
   remove?: boolean
+  kind?: string // 'related' (the default) or a typed link from fromId to toId
 }
 
 export interface LinkResponse extends ResponseStatus {
@@ -140,6 +165,7 @@ export interface LinkResponse extends ResponseStatus {
 
 export interface TypesResponse extends ResponseStatus {
   types?: EntryType[]
+  starters?: Starter[]
 }
 
 export interface ReindexResponse extends ResponseStatus {
@@ -180,6 +206,24 @@ export const Chronicle = {
 
   async types(): Promise<TypesResponse> {
     const response = await http.get<TypesResponse>('/chronicle/types')
+    return response.data
+  },
+
+  // Makes or replaces a tenant's or project's type; a 400 carries problems
+  async saveType(type: Omit<EntryType, 'fields'>): Promise<SaveTypeResponse> {
+    const response = await http.post<SaveTypeResponse>('/chronicle/types/save', { type })
+    return response.data
+  },
+
+  // Removes a type no entry uses (409 type_in_use)
+  async deleteType(id: string, scope: string): Promise<ResponseStatus> {
+    const response = await http.post<ResponseStatus>('/chronicle/types/delete', { id, scope })
+    return response.data
+  },
+
+  // Copies a starter set's types into a scope, keeping those it has
+  async copyStarter(starter: string, scope: string): Promise<TypesResponse> {
+    const response = await http.post<TypesResponse>('/chronicle/types/copy-starter', { starter, scope })
     return response.data
   },
 

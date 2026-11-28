@@ -64,9 +64,13 @@ type Connection struct {
 	LastError string    `json:"lastError,omitempty"`
 	CheckedAt time.Time `json:"checkedAt,omitzero"`
 	Options   Options   `json:"options"`
-	CreatedAt time.Time `json:"createdAt"`
-	CreatedBy uint64    `json:"createdBy,string,omitempty"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	// Account is who signed it in, for a type with OAuth (forge 26a-1).
+	Account string `json:"account,omitempty"`
+	// Hook is its hook's registration with the service (forge 26b-2).
+	Hook      *HookState `json:"hook,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+	CreatedBy uint64     `json:"createdBy,string,omitempty"`
+	UpdatedAt time.Time  `json:"updatedAt"`
 }
 
 // Options are a connection's event source options.
@@ -212,6 +216,34 @@ func (f Fields) Validate(settings map[string]any, secrets map[string]string) []F
 	}
 	return out
 }
+
+// OAuthSecret is the secret a type with OAuth keeps its tokens in
+// (forge 26a-1): set by connection.setTokens, never shown, and given to
+// the adapter as accessToken and expiresAt.
+const OAuthSecret = "oauth"
+
+// HookState is where a connection's hook registration stands: the URL
+// and events it was registered for, or why it was not.
+type HookState struct {
+	URL    string   `json:"url,omitempty"`
+	Events []string `json:"events,omitempty"`
+	// Registered is set once the service has it; Manual when the type
+	// registers nothing, so a person pastes URL into the service.
+	Registered bool      `json:"registered,omitempty"`
+	Manual     bool      `json:"manual,omitempty"`
+	Error      string    `json:"error,omitempty"`
+	At         time.Time `json:"at"`
+}
+
+// HookSecret is the secret a connection keeps its hook's registration
+// and signing secret in (forge 26b-2), set by connection.setHook; the
+// signing secret reaches the adapter as hookSecret.
+const HookSecret = "hook"
+
+// SystemSecrets are the secrets the server keeps, never named by
+// connection.create or connection.update nor checked against the type's
+// schema.
+var SystemSecrets = []string{OAuthSecret, HookSecret}
 
 // FieldProblem is a settings problem at a path.
 type FieldProblem struct{ Path, Message string }

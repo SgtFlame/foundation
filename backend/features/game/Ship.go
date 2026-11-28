@@ -47,6 +47,10 @@ const (
 	EventArmsWorked     = "armsWorked"  // {world, ship, count} (V38: the shipyard's robot arms placed a ship's blocks)
 	EventPortOpened     = "portOpened"  // {world, pads} (V39: the spaceport tower opened a port over two landing pads)
 	EventArmPlaced      = "armPlaced"   // {world, indices} (V38: blocks of this ship placed by a shipyard's arms, from finished blocks in storage)
+	EventDocked         = "docked"      // {world, ship} (V40: a ship was started on this bay floor, which now holds it)
+	EventLaunched       = "launched"    // {world, tower?} (V40: this ship's docking clamp let it go; a freighter or barge through an open spaceport's tower)
+	EventUndocked       = "undocked"    // {world, ship} (V40: the ship this bay floor held was launched; the bay is empty again)
+	EventParked         = "parked"      // {world, bay} (V41: the ship was flown back onto a free bay floor, whose clamp holds it again; its pilot stands up)
 )
 
 // ShipDesign is a premade ship: its blocks in its own grid, x right, y up
@@ -134,6 +138,10 @@ type Ship struct {
 	Types []string `json:"types,omitempty"`
 	// V39: an open spaceport tower's landing pads
 	Port []string `json:"port,omitempty"`
+	// V40: the bay floor whose docking clamp holds this ship, until it is launched
+	Bay string `json:"bay,omitempty"`
+	// V40: the ship a bay floor holds; a new ship starts only on an empty bay
+	Holds string `json:"holds,omitempty"`
 	// V36: what a storage building holds, by name: components (a count),
 	// minerals, ore, rock and iron (m³)
 	Stock     map[string]float64 `json:"stock,omitempty"`
@@ -280,6 +288,8 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		Index   *int               `json:"index"`
 		Indices []int              `json:"indices"`
 		Pads    []string           `json:"pads"`
+		Bay     string             `json:"bay"`
+		Ship    string             `json:"ship"`
 		X       float64            `json:"x"`
 		Y       float64            `json:"y"`
 		Z       float64            `json:"z"`
@@ -307,7 +317,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	}
 	switch f.Event.Type {
 	case EventShipStarted:
-		s = Ship{ID: f.Event.Target.ID, World: d.World, Design: d.Design, Blocks: d.Blocks, Placed: []int{}, Crew: []string{}, X: d.X, Y: d.Y, Z: d.Z, Q: d.Q, Charge: 1, Types: d.Types}
+		s = Ship{ID: f.Event.Target.ID, World: d.World, Design: d.Design, Blocks: d.Blocks, Placed: []int{}, Crew: []string{}, X: d.X, Y: d.Y, Z: d.Z, Q: d.Q, Charge: 1, Types: d.Types, Bay: d.Bay}
 	case EventBlockPlaced:
 		if d.Index != nil {
 			i := sort.SearchInts(s.Placed, *d.Index)
@@ -320,6 +330,16 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 		}
 	case EventPortOpened:
 		s.Port = d.Pads
+	case EventDocked:
+		s.Holds = d.Ship
+	case EventLaunched:
+		s.Bay = ""
+	case EventParked:
+		s.Bay, s.Pilot, s.V = d.Bay, "", [3]float64{}
+	case EventUndocked:
+		if s.Holds == d.Ship {
+			s.Holds = ""
+		}
 	case EventArmPlaced:
 		for _, x := range d.Indices {
 			i := sort.SearchInts(s.Placed, x)
@@ -403,7 +423,7 @@ func foldShip(f live.Fold) (json.RawMessage, error) {
 	return json.Marshal(s)
 }
 
-const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron, ore} (m³ in its hold), charge (its battery, 0 to 1), forge {ore, at, kind} (V20: a cabin's forge smelting ore since Unix ms at; V30: kind, when set, the mineral or rock it refines into components), fab {item, at} (V23: a cabin's fabricator making a circuit board, or V24 an ion thruster kit, since Unix ms at), boost (V24: what ion thruster kits add to its thrust), jump (V27: a jump drive is fitted), types (V31: a chip design's block types by index), seq, updatedAt}"
+const shipFields = "{id, world, design, blocks (how many the design has), placed (the indices of the design's blocks placed), x, y, z (metres from the moon's centre), q (orientation [x, y, z, w]), v (velocity), pilot (the user flying it, or empty), crew (the users riding as its crew), cargo {dust, rock, iron, ore} (m³ in its hold), charge (its battery, 0 to 1), forge {ore, at, kind} (V20: a cabin's forge smelting ore since Unix ms at; V30: kind, when set, the mineral or rock it refines into components), fab {item, at} (V23: a cabin's fabricator making a circuit board, or V24 an ion thruster kit, since Unix ms at), boost (V24: what ion thruster kits add to its thrust), jump (V27: a jump drive is fitted), types (V31: a chip design's block types by index), port (V39: an open tower's pads), bay (V40: the bay floor clamping it until launched; V41: or parked on again), holds (V40: the ship a bay floor holds), seq, updatedAt}"
 
 func without(list []string, v string) []string {
 	out := []string{}

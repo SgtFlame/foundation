@@ -1,0 +1,1 @@
+| [Records.md](Records.md) › *Built in forge 35c-1* | Entity types made at runtime (forge 35c-1): user-defined types held by a parent record, `entity.createUserDefined`, `record.define`, and the nodes a running app defines them with |

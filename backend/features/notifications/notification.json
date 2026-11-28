@@ -1,0 +1,25 @@
+{
+  "id": "notification",
+  "owner": "tenant",
+  "name": "Notification",
+  "description": "Something one person must see, sent by an app (forge 26e-1): a mention, a review waiting, mail, an agent's question. Only its recipient reads, marks or dismisses it.",
+  "titleField": "title",
+  "fields": [
+    {"id": "recipient", "name": "Recipient", "type": "text", "description": "The user id of the person it is for", "required": true},
+    {"id": "app", "name": "App", "type": "text", "description": "The app that sent it, such as nexus or mail"},
+    {"id": "kind", "name": "Kind", "type": "text", "description": "What it is, such as mention, review or question"},
+    {"id": "title", "name": "Title", "type": "text", "description": "One line saying what happened", "required": true},
+    {"id": "body", "name": "Body", "type": "text", "description": "A short excerpt, as plain text"},
+    {"id": "link", "name": "Link", "type": "text", "description": "A workbench: link opening what it is about"},
+    {"id": "key", "name": "Key", "type": "text", "description": "What makes it unique for its recipient (<app>:<subject>:<kind>): the same key notifies once"},
+    {"id": "read", "name": "Read", "type": "bool", "description": "Whether its recipient has seen it", "default": false},
+    {"id": "created", "name": "Created", "type": "createdAt", "description": "When it was sent"}
+  ],
+  "indexes": [{"id": "by_recipient", "fields": ["recipient", "created"]}],
+  "access": {
+    "read": "principal.kind == 'user' && string(record.recipient) == principal.user",
+    "create": "false",
+    "update": "principal.kind == 'user' && string(record.recipient) == principal.user",
+    "delete": "principal.kind == 'user' && string(record.recipient) == principal.user"
+  }
+}

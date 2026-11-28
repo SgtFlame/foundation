@@ -1,0 +1,1 @@
+- give a git type the file store through `git.ServerFiles` in `serve.go`, never the store itself before it exists;
