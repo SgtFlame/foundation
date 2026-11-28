@@ -145,7 +145,7 @@ func contributeWrites(reg *extensions.Registry, deps func() data.Deps) {
 				return withExpect(map[string]any{"field": c["field"], "items": in["items"]}, in)
 			}},
 		{id: "records.move", command: "record.move", title: "Move record",
-			description: "Moves a record to a new place in an order (forge 35a-2): sets its rank field between the record it goes after and the one it goes before, with other values in set changed in the same event (a page's new parent). Its event commits with the command's.",
+			description: "Moves a record to a new place in an order (forge 30c, 35a-2): sets its rank field between the record it goes after and the one it goes before, with other values in set changed in the same event (a page's new parent, a board column's status). Its event commits with the command's.",
 			example:     "Move record docsPage at the target after the page it was dropped below, with set {parent}",
 			config:      `,"field":{"type":"string","title":"Field","description":"The rank field's id"}`,
 			in: []cognition.Pin{idPin("The record's id"),

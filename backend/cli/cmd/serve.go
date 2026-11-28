@@ -1291,6 +1291,10 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 				return err
 			}
 		}
+		// features' own start work, such as seeding library apps (features/wiring)
+		if err := wiring.SeedAll(ctx, wiring.Started{Store: projections, Apps: appService, Bus: liveBus, Tenants: tenantIDs}); err != nil {
+			return err
+		}
 		// Scripted connector types (forge 07d), served in this process too
 		go scripted.Serve(ctx, nats.Conn(), func() scripted.Deps { return scriptedDeps }, tenantIDs, scripted.Options{})
 		uiSessions := ui.NewKVSessions(nats.JS())

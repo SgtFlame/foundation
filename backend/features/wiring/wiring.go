@@ -36,12 +36,15 @@ import (
 	"sync"
 
 	"github.com/SgtFlame/foundation/backend/features/ai/providers"
+	"github.com/SgtFlame/foundation/backend/features/apps/services/appservice"
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 	kbtools "github.com/SgtFlame/foundation/backend/features/kb/tools"
+	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
 	recordsfiles "github.com/SgtFlame/foundation/backend/features/records/files"
 )
@@ -62,6 +65,19 @@ type Feature struct {
 	// services are made (optional; forge 35a-2): serve calls StartAll. It
 	// must not block, and stops when ctx ends.
 	Start func(ctx context.Context, env *Env) error
+	// Seed runs once the server's live core and services are up, before
+	// it serves requests (optional): seeding a library app, for one. It
+	// must be idempotent, since every process runs it at every start
+	// (forge 30c; serve calls SeedAll).
+	Seed func(ctx context.Context, s Started) error
+}
+
+// Started is what a feature's Seed may use.
+type Started struct {
+	Store   live.Store
+	Apps    appservice.Service
+	Bus     *bus.Bus
+	Tenants func() ([]uint64, error)
 }
 
 // Env is what a feature's contributions may read from the server. Its fields
@@ -233,4 +249,17 @@ func Adapters(o *adapter.Options) {
 			f.Adapter(o)
 		}
 	}
+}
+
+// SeedAll runs every registered feature's Seed, in name order.
+func SeedAll(ctx context.Context, s Started) error {
+	for _, f := range Features() {
+		if f.Seed == nil {
+			continue
+		}
+		if err := f.Seed(ctx, s); err != nil {
+			return err
+		}
+	}
+	return nil
 }
