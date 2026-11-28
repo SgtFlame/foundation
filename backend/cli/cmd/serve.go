@@ -765,7 +765,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Features wired from their own files in features/wiring (calendar,
 		// tasks, …): a new feature adds a file there, not lines here
 		var imageProvider providers.Images // set once the AI provider is made (forge 35f-7)
-		if err := wiring.ContributeAll(registry, &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Images: &imageProvider}); err != nil {
+		wiringEnv := &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Images: &imageProvider, KB: &kbToolDeps}
+		if err := wiring.ContributeAll(registry, wiringEnv); err != nil {
 			return err
 		}
 		var infraNodeDeps infranodes.Deps
@@ -920,6 +921,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		})
 
 		fileEvents := volumeservice.NewFileEvents()
+		wiringEnv.FileEvents = &fileEvents
 		if loc.Client != nil {
 			// The index must not miss a file: a durable bus, followed only
 			// where the index runs (forge 21f-2)
@@ -1100,6 +1102,10 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Adapters' settings on cx.resolve and their sources' status on
 		// cx.status, in a queue group in every process
 		if err := connections.Serve(ctx, nats.Conn(), func() connections.Deps { return connectionDeps }); err != nil {
+			return err
+		}
+		// Features' background work (features/wiring: docs' page.saved)
+		if err := wiring.StartAll(ctx, wiringEnv); err != nil {
 			return err
 		}
 		// This process's adapter serves the builtin types implemented here

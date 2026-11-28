@@ -29,6 +29,7 @@
 package wiring
 
 import (
+	"context"
 	"os"
 	"slices"
 	"strings"
@@ -39,6 +40,8 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
+	kbtools "github.com/SgtFlame/foundation/backend/features/kb/tools"
 	recordsfiles "github.com/SgtFlame/foundation/backend/features/records/files"
 )
 
@@ -54,6 +57,10 @@ type Feature struct {
 	// Adapter adds the connector types, contracts and implementations that
 	// the server's in-process adapter serves for the feature (optional).
 	Adapter func(o *adapter.Options)
+	// Start starts the feature's background work once the server's
+	// services are made (optional; forge 35a-2): serve calls StartAll. It
+	// must not block, and stops when ctx ends.
+	Start func(ctx context.Context, env *Env) error
 }
 
 // Env is what a feature's contributions may read from the server. Its fields
@@ -68,6 +75,27 @@ type Env struct {
 	// Images is the AI image provider, usage-recorded (forge 35f-7), set
 	// once the AI provider is made.
 	Images *providers.Images
+	// KB is the knowledge base's root and services (forge 35a-2), set once
+	// they are made.
+	KB *kbtools.Deps
+	// FileEvents is the Volumes' file events (forge 35a-2), set once made.
+	FileEvents *volumeservice.FileEvents
+}
+
+// Knowledge is the knowledge base's root and services, or empty ones.
+func (e *Env) Knowledge() kbtools.Deps {
+	if e == nil || e.KB == nil {
+		return kbtools.Deps{}
+	}
+	return *e.KB
+}
+
+// VolumeFiles is the Volumes' file events, or nil before they are made.
+func (e *Env) VolumeFiles() volumeservice.FileEvents {
+	if e == nil || e.FileEvents == nil {
+		return nil
+	}
+	return *e.FileEvents
 }
 
 // Connectors is the connectors' deps, or empty ones.
@@ -152,6 +180,23 @@ func ContributeAll(reg *extensions.Registry, env *Env) error {
 			continue
 		}
 		if err := f.Contribute(reg, env); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// StartAll starts every registered feature's background work, in name
+// order, once serve has made its services.
+func StartAll(ctx context.Context, env *Env) error {
+	if env == nil {
+		env = &Env{}
+	}
+	for _, f := range Features() {
+		if f.Start == nil {
+			continue
+		}
+		if err := f.Start(ctx, env); err != nil {
 			return err
 		}
 	}

@@ -1,0 +1,142 @@
+{
+  "id": "qry-docs-favourites",
+  "name": "favourites",
+  "description": "The caller's Favourites in their order, each with its page (title, icon, Volume), leaving out pages in the trash or deleted.",
+  "kind": "data.query",
+  "version": 1,
+  "owner": "app:docs",
+  "spec": {
+    "query": "favourites",
+    "title": "My favourites",
+    "description": "The caller's favourite pages in their order: [{_id (the favourite's), page, rank, title, icon, volume}]; pages in the trash or deleted are left out. Add one with record.create docsFavourite {user, page}, order them with record.move, remove with record.delete.",
+    "params": {
+      "type": "object",
+      "properties": {}
+    },
+    "action": "record.read"
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onQuery",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "query",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "{where: {user: user}, sort: [{field: \"rank\"}], expand: [\"page\"], limit: 500}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "find",
+      "type": "records.query",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "docsFavourite"
+      }
+    },
+    {
+      "id": "out",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "map(filter(favs ?? [], #._expanded?.page != nil \u0026\u0026 #._expanded.page.trashedAt == nil), ({_id: #._id, page: #.page, rank: #.rank, title: #._expanded.page.title ?? \"\", icon: #._expanded.page.icon ?? \"\", volume: #._expanded.page.volume}))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "result",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "query",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "query",
+        "pin": "value"
+      },
+      "to": {
+        "node": "find",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "favs"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "out",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "result"
+      }
+    }
+  ]
+}

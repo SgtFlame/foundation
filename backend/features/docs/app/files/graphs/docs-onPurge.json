@@ -1,0 +1,243 @@
+{
+  "id": "docs-onPurge",
+  "name": "Old trash is purged",
+  "description": "Every day, as the app, deletes for good the pages that went to the trash more than the app's trashDays ago (30 by default): each page's document file, then its record (page.purge). A page whose file is already gone is deleted all the same, so a run cut short is finished by the next.",
+  "kind": "app.trigger",
+  "version": 1,
+  "owner": "app:docs",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onSchedule",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "every": "24h"
+      }
+    },
+    {
+      "id": "days",
+      "type": "apps.setting",
+      "title": "Days pages stay in the trash",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "app": "docs",
+        "key": "trashDays"
+      }
+    },
+    {
+      "id": "q",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "{filter: {field: \"trashedAt\", op: \"lt\", value: date(time).Add(duration(\"-\" + string(int(days ?? 30) * 24) + \"h\")).UTC().Format(\"2006-01-02T15:04:05Z07:00\")}, fields: [\"file\"], limit: 500}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "old",
+      "type": "records.query",
+      "title": "Pages trashed before then",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "each",
+      "type": "flow.forEach",
+      "position": {
+        "x": 1020,
+        "y": 0
+      }
+    },
+    {
+      "id": "file",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.file",
+        "type": "json"
+      }
+    },
+    {
+      "id": "rm",
+      "type": "docs.removePageFile",
+      "position": {
+        "x": 1700,
+        "y": 0
+      }
+    },
+    {
+      "id": "id",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "string(item._id)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "delArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "expr": "{entity: \"docsPage\"}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "del",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "command": "record.delete"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "time"
+      },
+      "to": {
+        "node": "q",
+        "pin": "time"
+      }
+    },
+    {
+      "from": {
+        "node": "days",
+        "pin": "value"
+      },
+      "to": {
+        "node": "q",
+        "pin": "days"
+      }
+    },
+    {
+      "from": {
+        "node": "q",
+        "pin": "value"
+      },
+      "to": {
+        "node": "old",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "each",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "old",
+        "pin": "records"
+      },
+      "to": {
+        "node": "each",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "file",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "body"
+      },
+      "to": {
+        "node": "rm",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "file",
+        "pin": "value"
+      },
+      "to": {
+        "node": "rm",
+        "pin": "file"
+      }
+    },
+    {
+      "from": {
+        "node": "rm",
+        "pin": "then"
+      },
+      "to": {
+        "node": "del",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "del",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "delArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "del",
+        "pin": "args"
+      }
+    }
+  ]
+}
