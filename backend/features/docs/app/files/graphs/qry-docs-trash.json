@@ -1,0 +1,198 @@
+{
+  "id": "qry-docs-trash",
+  "name": "trash",
+  "description": "A Volume's trash: the pages put in the trash themselves (not those that went with a parent), newest first, each with how many went with it. Nothing without volume.read on the Volume.",
+  "kind": "data.query",
+  "version": 1,
+  "owner": "app:docs",
+  "spec": {
+    "query": "trash",
+    "title": "A Volume's trash",
+    "description": "The pages trashed in a Volume, newest first: [{_id, title, icon, trashedAt, parent, with}] where with counts the subpages that went with it; empty without volume.read. params {volume}",
+    "params": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "type": "string",
+          "description": "The Volume's id"
+        }
+      },
+      "required": [
+        "volume"
+      ]
+    },
+    "action": "record.read"
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onQuery",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "volume",
+            "name": "volume",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "read",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"read\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "may",
+      "type": "docs.mayUseVolume",
+      "position": {
+        "x": 340,
+        "y": 0
+      }
+    },
+    {
+      "id": "query",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "{where: {volume: may ? string(volume ?? \"\") : \"-\"}, filter: {field: \"trashedAt\", op: \"gt\", value: \"0001-01-01T00:00:00Z\"}, sort: [{field: \"trashedAt\", desc: true}], fields: [\"title\", \"icon\", \"trashedAt\", \"trashedWith\", \"parent\"]}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "find",
+      "type": "records.query",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "out",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "map(filter(pages ?? [], string(#.trashedWith ?? \"\") == string(#._id)), { let p = #; ({_id: p._id, title: p.title ?? \"\", icon: p.icon ?? \"\", trashedAt: p.trashedAt, parent: p.parent, with: len(filter(pages ?? [], string(#.trashedWith ?? \"\") == string(p._id))) - 1}) })",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "result",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "volume"
+      },
+      "to": {
+        "node": "may",
+        "pin": "volume"
+      }
+    },
+    {
+      "from": {
+        "node": "read",
+        "pin": "value"
+      },
+      "to": {
+        "node": "may",
+        "pin": "access"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "volume"
+      },
+      "to": {
+        "node": "query",
+        "pin": "volume"
+      }
+    },
+    {
+      "from": {
+        "node": "may",
+        "pin": "allowed"
+      },
+      "to": {
+        "node": "query",
+        "pin": "may"
+      }
+    },
+    {
+      "from": {
+        "node": "query",
+        "pin": "value"
+      },
+      "to": {
+        "node": "find",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "pages"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "out",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "result"
+      }
+    }
+  ]
+}

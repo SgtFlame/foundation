@@ -1,0 +1,11 @@
+{
+  "type": "function",
+  "function": {
+    "name": "chat_messaging_check",
+    "description": "Signs in and lists the channels: whether the connection's credentials work.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+}

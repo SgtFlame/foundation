@@ -12,6 +12,8 @@ import { useCollabSession, useCollabState } from '../../../editors/markdown/coll
 import { richTextContent } from '../../../editors/richtext/content.ts'
 import { baseExtensions } from '../../../editors/richtext/extensions.ts'
 import { RichTextView, type RichTextMode, type RichTextSelection } from '../../../editors/richtext/RichTextView.tsx'
+import type { SlashItem } from '../../../editors/richtext/blockOps.ts'
+import type { BlockCommand } from '../../../editors/richtext/BlockChrome.tsx'
 import { openWorkbenchLink } from '../../../workbench/links.ts'
 import { useUiHost } from '../../UiHostContext.ts'
 import type { RendererProps } from '../../points.ts'
@@ -37,6 +39,8 @@ export interface RichTextFieldProps {
   onSaved?(at: number): void
   onLink?(href: string, text: string): boolean | Promise<boolean>
   onSelection?(s: RichTextSelection): void
+  items?: SlashItem[]
+  onCommand?(c: BlockCommand): void
 }
 
 export default function DocRichText(p: RendererProps) {
@@ -45,7 +49,7 @@ export default function DocRichText(p: RendererProps) {
   emit.current = p.emit
   const handles = useRef(p.handles)
   handles.current = p.handles
-  const mode = (['page', 'pageless', 'compact'].includes(str(p.props.mode)) ? str(p.props.mode) : 'pageless') as RichTextMode
+  const mode = (['page', 'pageless', 'compact', 'blocks'].includes(str(p.props.mode)) ? str(p.props.mode) : 'pageless') as RichTextMode
   const minHeight = p.props.minHeight as number | undefined
   const maxHeight = p.props.maxHeight as number | undefined
   if (!str(p.props.entity) && !str(p.props.id) && p.props.value && typeof p.props.value === 'object') {
@@ -57,6 +61,8 @@ export default function DocRichText(p: RendererProps) {
       minHeight={minHeight} maxHeight={maxHeight} disabled={!!p.props.disabled}
       onSaved={(at) => handles.current('saved') && emit.current('saved', { at })}
       onSelection={(s) => handles.current('selection') && emit.current('selection', { ...s })}
+      items={Array.isArray(p.props.items) ? (p.props.items as SlashItem[]) : undefined}
+      onCommand={(c) => emit.current('command', { ...c })}
       onLink={async (href, text) => {
         if (href.startsWith('workbench:') && host.registry) return openWorkbenchLink(host.registry, href)
         if (!handles.current('linkClicked')) return false
@@ -105,7 +111,8 @@ function RoomEditor({ fileId, readOnly, p, onClosed }: { fileId: string; readOnl
   }, [state.lastSavedAt])
   return (
     <RichTextView session={session} readOnly={readOnly} mode={p.mode ?? 'compact'} toolbar={p.toolbar} outline={p.outline} placeholder={p.placeholder}
-      minHeight={p.minHeight} maxHeight={p.maxHeight} label={p.label} onLink={p.onLink} onSelection={p.onSelection} />
+      minHeight={p.minHeight} maxHeight={p.maxHeight} label={p.label} onLink={p.onLink} onSelection={p.onSelection}
+      items={p.items} onCommand={p.onCommand} />
   )
 }
 

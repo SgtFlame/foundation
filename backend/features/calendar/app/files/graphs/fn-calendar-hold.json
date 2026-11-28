@@ -1,0 +1,736 @@
+{
+  "id": "fn-calendar-hold",
+  "name": "Hold times",
+  "description": "Holds proposed times while a proposal is open: a tentative event per slot on the caller's own calendar (the first they own unless calendar is given; a connected one sends them outside, so others see the time busy) and a Hold grouping them, released after the calendar section's holdDays unless one is chosen. The events' ids are the Hold's id with _s0, _s1…, so holding again makes nothing twice. Args {slots: [{start, end}], purpose, subject?: {entity, id}, calendar?, zone?}.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "slots",
+            "type": "json",
+            "description": "The times to hold, [{start, end}] in RFC 3339"
+          },
+          {
+            "id": "purpose",
+            "type": "string",
+            "description": "What the time is held for; the tentative events' title"
+          },
+          {
+            "id": "subject",
+            "type": "json",
+            "optional": true,
+            "description": "What the proposal is about, {entity, id} (a mail thread, a conversation)"
+          },
+          {
+            "id": "calendar",
+            "type": "string",
+            "optional": true,
+            "description": "The calendar to hold them on; the caller's first own calendar when left out"
+          },
+          {
+            "id": "zone",
+            "type": "string",
+            "optional": true,
+            "description": "The events' time zone; the calendar's when left out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "calQuery",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "{filter: {field: \"owner\", op: \"eq\", value: user != \"\" ? user : \"0\"}, sort: [{field: \"_createdAt\"}], limit: 50}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "cals",
+      "type": "records.query",
+      "title": "The caller's own calendars",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "cal",
+      "type": "data.expression",
+      "title": "Where the time is held",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "let own = filter(records ?? [], !(#.room ?? false)); (calendar ?? \"\") != \"\" ? ({id: calendar, zone: \"\"}) : (len(own) \u003e 0 ? ({id: string(own[0]._id), zone: own[0].zone ?? \"\"}) : ({id: \"\", zone: \"\"}))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "has",
+      "type": "flow.branch",
+      "position": {
+        "x": 1700,
+        "y": 0
+      }
+    },
+    {
+      "id": "hasCal",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "cal.id != \"\" \u0026\u0026 len(slots ?? []) \u003e 0",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "newId",
+      "type": "data.newId",
+      "position": {
+        "x": 0,
+        "y": 400
+      }
+    },
+    {
+      "id": "holdId",
+      "type": "data.expression",
+      "title": "The hold's id, read once",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "string(fresh)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "days",
+      "type": "data.setting",
+      "position": {
+        "x": 0,
+        "y": 600
+      },
+      "config": {
+        "section": "calendar",
+        "path": "holdDays",
+        "type": "number"
+      }
+    },
+    {
+      "id": "events",
+      "type": "data.expression",
+      "title": "The tentative events, by id",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "map(slots, ({event: holdId + \"_s\" + string(#index), start: #.start, end: #.end}))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "expires",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "expr": "now().Add(duration(string(int(days ?? 5) * 24) + \"h\")).UTC().Format(\"2006-01-02T15:04:05Z\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "holdArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"calHold\", values: {title: purpose, calendar: cal.id, slots: events, status: \"open\", expires: expires, subject: subject}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "makeHold",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "command": "record.create"
+      }
+    },
+    {
+      "id": "each",
+      "type": "flow.forEach",
+      "position": {
+        "x": 2380,
+        "y": 0
+      }
+    },
+    {
+      "id": "eventArgs",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "expr": "{entity: \"calEvent\", values: {calendar: cal.id, title: purpose, start: item.start, end: item.end, zone: (zone ?? \"\") != \"\" ? zone : (cal.zone != \"\" ? cal.zone : \"UTC\"), status: \"tentative\", transparency: \"opaque\", hold: split(item.event, \"_s\")[0]}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "eventId",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.event",
+        "type": "string"
+      }
+    },
+    {
+      "id": "makeEvent",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 3060,
+        "y": 0
+      },
+      "config": {
+        "command": "record.create"
+      }
+    },
+    {
+      "id": "produced",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "expr": "{entity: \"calHold\", id: holdId}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 2720,
+        "y": 400
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "hold",
+            "type": "string"
+          },
+          {
+            "id": "slots",
+            "type": "json"
+          },
+          {
+            "id": "expires",
+            "type": "string"
+          },
+          {
+            "id": "produced",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "none",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 600
+      },
+      "config": {
+        "expr": "len(slots ?? []) == 0 ? \"no times to hold\" : \"you have no calendar of your own to hold the times on\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "flow.return",
+      "position": {
+        "x": 2040,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdRefused",
+      "type": "flow.return",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "calQuery",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "calQuery",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cals",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "cals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "cal",
+        "pin": "records"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendar"
+      },
+      "to": {
+        "node": "cal",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "value"
+      },
+      "to": {
+        "node": "hasCal",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "slots"
+      },
+      "to": {
+        "node": "hasCal",
+        "pin": "slots"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "has",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "hasCal",
+        "pin": "value"
+      },
+      "to": {
+        "node": "has",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "newId",
+        "pin": "id"
+      },
+      "to": {
+        "node": "holdId",
+        "pin": "fresh"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "slots"
+      },
+      "to": {
+        "node": "events",
+        "pin": "slots"
+      }
+    },
+    {
+      "from": {
+        "node": "holdId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "events",
+        "pin": "holdId"
+      }
+    },
+    {
+      "from": {
+        "node": "days",
+        "pin": "value"
+      },
+      "to": {
+        "node": "expires",
+        "pin": "days"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "purpose"
+      },
+      "to": {
+        "node": "holdArgs",
+        "pin": "purpose"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "value"
+      },
+      "to": {
+        "node": "holdArgs",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "events",
+        "pin": "value"
+      },
+      "to": {
+        "node": "holdArgs",
+        "pin": "events"
+      }
+    },
+    {
+      "from": {
+        "node": "expires",
+        "pin": "value"
+      },
+      "to": {
+        "node": "holdArgs",
+        "pin": "expires"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "subject"
+      },
+      "to": {
+        "node": "holdArgs",
+        "pin": "subject"
+      }
+    },
+    {
+      "from": {
+        "node": "has",
+        "pin": "true"
+      },
+      "to": {
+        "node": "makeHold",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "holdId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "makeHold",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "holdArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "makeHold",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "makeHold",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "each",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "events",
+        "pin": "value"
+      },
+      "to": {
+        "node": "each",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "body"
+      },
+      "to": {
+        "node": "makeEvent",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "eventArgs",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "cal",
+        "pin": "value"
+      },
+      "to": {
+        "node": "eventArgs",
+        "pin": "cal"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "purpose"
+      },
+      "to": {
+        "node": "eventArgs",
+        "pin": "purpose"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "zone"
+      },
+      "to": {
+        "node": "eventArgs",
+        "pin": "zone"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "item"
+      },
+      "to": {
+        "node": "eventId",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "eventId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "makeEvent",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "eventArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "makeEvent",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "each",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "holdId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "hold"
+      }
+    },
+    {
+      "from": {
+        "node": "events",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "slots"
+      }
+    },
+    {
+      "from": {
+        "node": "expires",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "expires"
+      }
+    },
+    {
+      "from": {
+        "node": "holdId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "holdId"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "produced"
+      }
+    },
+    {
+      "from": {
+        "node": "has",
+        "pin": "false"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "slots"
+      },
+      "to": {
+        "node": "none",
+        "pin": "slots"
+      }
+    },
+    {
+      "from": {
+        "node": "none",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "makeHold",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "holdRefused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "makeHold",
+        "pin": "message"
+      },
+      "to": {
+        "node": "holdRefused",
+        "pin": "error"
+      }
+    }
+  ]
+}

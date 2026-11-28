@@ -125,7 +125,11 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
+	gitconnector "github.com/SgtFlame/foundation/backend/features/connectors/git"
+	"github.com/SgtFlame/foundation/backend/features/connectors/git/gittest"
+	"github.com/SgtFlame/foundation/backend/features/connectors/hooks"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
+	"github.com/SgtFlame/foundation/backend/features/connectors/oauth"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	connectorsimpl "github.com/SgtFlame/foundation/backend/features/connectors/services/connectorsservice/impl"
 	"github.com/SgtFlame/foundation/backend/features/controlplane"
@@ -251,6 +255,7 @@ import (
 
 var (
 	serveAddr         string
+	servePublicURL    string
 	serveKBRoot       string
 	serveDataDir      string
 	serveDB           string
@@ -617,6 +622,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var jobNodeDeps jobsnodes.Deps
 		var connectorDeps connectors.Deps
 		var connectionDeps connections.Deps
+		var oauthDeps oauth.Deps
 		var scriptedDeps scripted.Deps
 		var uiService uiservice.Service
 		var madeDeps made.Deps
@@ -764,10 +770,16 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
 		// Features wired from their own files in features/wiring (calendar,
 		// tasks, …): a new feature adds a file there, not lines here
-		var imageProvider providers.Images // set once the AI provider is made (forge 35f-7)
-		if err := wiring.ContributeAll(registry, &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Images: &imageProvider}); err != nil {
+		var gitMirrors volumeservice.Mirrors // the mirrored Volumes (forge 24e), set once the file events exist
+		var imageProvider providers.Images   // set once the AI provider is made (forge 35f-7)
+		wiringEnv := &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Records: &recordDeps, Images: &imageProvider, Mirrors: &gitMirrors, KB: &kbToolDeps}
+		if err := wiring.ContributeAll(registry, wiringEnv); err != nil {
 			return err
 		}
+		// OAuth for connections (forge 26a-1): its settings list the OAuth
+		// providers, so it comes after every feature has contributed them
+		oauth.ContributeSettings(registry)
+		oauth.Contribute(registry, func() oauth.Deps { return oauthDeps }) // connection.signIn
 		var infraNodeDeps infranodes.Deps
 		infranodes.Contribute(registry, func() infranodes.Deps { return infraNodeDeps }) // Ensure host, instance, unit, packages, Wait healthy, Remove (forge 22e)
 		var infraOutbox func(features.ServiceArgs, live.Area) error
@@ -920,6 +932,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		})
 
 		fileEvents := volumeservice.NewFileEvents()
+		wiringEnv.FileEvents = &fileEvents
+		gitMirrors = volumeservice.Mirrors{Root: kbRoot, Events: fileEvents} // forge 24e
 		if loc.Client != nil {
 			// The index must not miss a file: a durable bus, followed only
 			// where the index runs (forge 21f-2)
@@ -1091,6 +1105,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		}
 		connectorDeps = connectors.Deps{Registry: connectorRegistry, Dispatcher: connectorDispatcher}
 		connectionDeps = connections.Deps{Projections: projections, Bus: liveBus, Registry: connectorRegistry, Secrets: secretStore, Dispatcher: connectorDispatcher, Config: configService, Extensions: registry}
+		oauthDeps = oauth.Deps{Connections: func() connections.Deps { return connectionDeps }, PublicBase: publicURL()}
+		connectionDeps.Tokens = oauth.Tokens{Deps: oauthDeps} // forge 26a-1
+		connectionDeps.PublicBase = publicURL()               // hooks' base URL (forge 26b-2)
 		scriptedDeps = scripted.Deps{Store: projections, Engine: cognitionEngine, Books: connectors.InJetStream(connectorRegistry.JetStream()), Reg: registry}
 		// The connectors' data service (forge 21e-1), served over NATS for
 		// adapters without a JetStream handle by serve --services (21g-1)
@@ -1100,6 +1117,10 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Adapters' settings on cx.resolve and their sources' status on
 		// cx.status, in a queue group in every process
 		if err := connections.Serve(ctx, nats.Conn(), func() connections.Deps { return connectionDeps }); err != nil {
+			return err
+		}
+		// Features' background work (features/wiring: docs' page.saved)
+		if err := wiring.StartAll(ctx, wiringEnv); err != nil {
 			return err
 		}
 		// This process's adapter serves the builtin types implemented here
@@ -1116,6 +1137,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		recordEmbedder = embedService
 		recordFiles := recordsfiles.New(nats.JS())
 		recordFiles.SetAccounts(natsAccounts)
+		gittest.Default.SetFiles(recordFiles)     // the Git test server keeps large files there (forge 24a)
+		gitconnector.ServerFiles.Set(recordFiles) // and the git types (forge 24b)
 		// The record files' data service (forge 21d-4), served over NATS by
 		// serve --services (21g-1)
 		_ = filesproxy.Use(loc, func() filesservice.Service { return filesimpl.CreateService(filesimpl.WithStore(recordFiles)) })
@@ -1269,7 +1292,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			}
 		}
 		// features' own start work, such as seeding library apps (features/wiring)
-		if err := wiring.StartAll(ctx, wiring.Started{Store: projections, Apps: appService, Bus: liveBus, Tenants: tenantIDs}); err != nil {
+		if err := wiring.SeedAll(ctx, wiring.Started{Store: projections, Apps: appService, Bus: liveBus, Tenants: tenantIDs}); err != nil {
 			return err
 		}
 		// Scripted connector types (forge 07d), served in this process too
@@ -1305,6 +1328,15 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		public := router.Group("/api/v1")
 		api := public.Group("", rest.RequireUser())
 		volumes := api.Group("", kbhandlers.InTenant())
+
+		// Connector hooks (forge 26b-1) are outside /api/v1 and its session:
+		// a service proves itself by the signature its connection's type checks
+		hookServer := &hooks.Server{NC: nats.Conn(), JS: connectorRegistry.JetStream(), Limits: func(ctx context.Context) hooks.Limits {
+			l, _ := config.Read[hooks.Limits](configService, features.BackgroundArgs(ctx), hooks.SectionID)
+			return l
+		}}
+		router.POST(hooks.Path+":id", gin.WrapH(hookServer))
+		oauth.Register(api, func() oauth.Deps { return oauthDeps }) // the OAuth callback (forge 26a-1)
 
 		identityHandler := &identityhandlers.IdentityHandler{}
 		identityHandler.Register(public, identityService)
@@ -1461,6 +1493,7 @@ func init() {
 	// is called directly, e.g.:
 	// serveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	serveCmd.Flags().StringVar(&serveAddr, "addr", ":8080", "address to listen on")
+	serveCmd.Flags().StringVar(&servePublicURL, "public-url", "", "the server's public URL, such as https://axiom.example.com, where OAuth providers send people back (default $FOUNDATION_PUBLIC_URL; an OAuth app registration's redirect base wins)")
 	serveCmd.Flags().StringVar(&serveKBRoot, "kb-root", "", "absolute knowledge base root directory (default ~/.foundation/kb)")
 	serveCmd.Flags().StringVar(&serveDataDir, "data-dir", "", "directory of the database, the LanceDB index and (without Vault) secret.key (default ~/.foundation)")
 	serveCmd.Flags().StringVar(&serveDB, "db", "", "SQLite tenant database file (default <data-dir>/foundation.db)")
@@ -1609,4 +1642,12 @@ func unitSet(set string) (issuer.Set, bool) {
 		pol += issuer.ConfigPolicy
 	}
 	return issuer.Set{Permissions: natsauth.Everything, Policy: pol}, true
+}
+
+// publicURL is --public-url, else $FOUNDATION_PUBLIC_URL (forge 26a-1).
+func publicURL() string {
+	if servePublicURL != "" {
+		return servePublicURL
+	}
+	return os.Getenv("FOUNDATION_PUBLIC_URL")
 }

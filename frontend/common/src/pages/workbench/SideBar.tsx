@@ -8,6 +8,7 @@ import { onOpenSideView } from '../../workbench/sideView.ts'
 import type { EditorRegistry } from './EditorRegistry.ts'
 import AccountMenu from '../../session/AccountMenu.tsx'
 import WorkspaceMenu from '../../workspace/WorkspaceMenu.tsx'
+import NotificationBell from '../../notifications/NotificationBell.tsx'
 
 const storageKey = 'workbench.sideView'
 const collapsedKey = 'workbench.sideView.collapsed'
@@ -95,6 +96,7 @@ function SideBar({ registry }: { registry: EditorRegistry }) {
           </Tooltip>
         ))}
       </Stack>
+      <NotificationBell registry={registry} />
       <WorkspaceMenu />
       <AccountMenu registry={registry} />
       </Stack>

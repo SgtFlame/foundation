@@ -1,0 +1,21 @@
+{
+  "id": "docsFavourite",
+  "name": "Favourite",
+  "owner": "app:docs",
+  "description": "A page a person keeps in their Favourites (forge 35a-2), in the order they put them; each person sees and changes only their own.",
+  "titleField": "user",
+  "fields": [
+    {"id": "user", "name": "User", "type": "user", "description": "Whose favourite it is", "required": true},
+    {"id": "page", "name": "Page", "type": "relation", "description": "The page", "relation": {"entity": "docsPage"}, "required": true},
+    {"id": "rank", "name": "Position", "type": "rank", "scope": "user", "description": "Its place in the person's Favourites"}
+  ],
+  "indexes": [
+    {"id": "by_user_rank", "fields": ["user", "rank"]}
+  ],
+  "access": {
+    "read": "principal.kind == 'app' || record.user == principal.user",
+    "create": "record.user == principal.user",
+    "update": "record.user == principal.user",
+    "delete": "principal.kind == 'app' || record.user == principal.user"
+  }
+}

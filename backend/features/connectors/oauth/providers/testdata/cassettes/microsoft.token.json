@@ -1,0 +1,9 @@
+{
+  "token_type": "Bearer",
+  "scope": "https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send",
+  "expires_in": 4241,
+  "ext_expires_in": 4241,
+  "access_token": "eyJ0eXAi-microsoft-access",
+  "refresh_token": "0.AXEA-microsoft-refresh",
+  "id_token_claims": {"iss": "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0", "preferred_username": "ann@contoso.com", "name": "Ann", "oid": "00000000-0000-0000-66f3-3332eca7ea81", "aud": "m-client"}
+}

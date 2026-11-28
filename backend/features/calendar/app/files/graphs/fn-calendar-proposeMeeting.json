@@ -1,0 +1,898 @@
+{
+  "id": "fn-calendar-proposeMeeting",
+  "name": "Propose a meeting",
+  "description": "Finds times when everyone is free (as findFreeTime does) and holds them for the proposal (as hold does), returning the slots to put in a draft; it never sends anything itself. An agent whose autonomy is suggest gets the slots only, with no Hold. Args {people, durationMinutes, from, to, purpose, subject?, count?, calendar?, zone?}; an agent naming nobody proposes for the person who made it, on that person's calendar it may write.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "people",
+            "type": "json",
+            "optional": true,
+            "description": "The people's user ids, as text; the calling person is always included; an agent that names nobody proposes for the person who made it"
+          },
+          {
+            "id": "durationMinutes",
+            "type": "number",
+            "description": "The meeting's length in minutes"
+          },
+          {
+            "id": "from",
+            "type": "string",
+            "description": "The window's start, RFC 3339"
+          },
+          {
+            "id": "to",
+            "type": "string",
+            "description": "The window's end (exclusive), RFC 3339"
+          },
+          {
+            "id": "purpose",
+            "type": "string",
+            "description": "What the meeting is for; the held events' title"
+          },
+          {
+            "id": "subject",
+            "type": "json",
+            "optional": true,
+            "description": "What the proposal is about, {entity, id}"
+          },
+          {
+            "id": "count",
+            "type": "number",
+            "optional": true,
+            "description": "How many times to propose, 3 when left out"
+          },
+          {
+            "id": "calendar",
+            "type": "string",
+            "optional": true,
+            "description": "The calendar to hold the times on; left out, the caller's own, or for an agent the first calendar of the people's it may see"
+          },
+          {
+            "id": "zone",
+            "type": "string",
+            "optional": true,
+            "description": "The held events' time zone; the calendar's when left out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "everyone",
+      "type": "data.expression",
+      "title": "The caller and the people named",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "kind == \"agent\" ? (len(people ?? []) \u003e 0 ? map(people, string(#)) : (agentRecord?._createdBy == nil ? [] : [string(agentRecord._createdBy)])) : (user == \"\" ? map(people ?? [], string(#)) : uniq(concat([user], map(people ?? [], string(#)))))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "calQ",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "{filter: {field: \"owner\", op: \"in\", value: len(everyone) \u003e 0 ? everyone : [\"none\"]}, sort: [{field: \"_createdAt\"}], limit: 50}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "cals",
+      "type": "records.query",
+      "title": "The people's calendars the caller may see",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "where",
+      "type": "data.expression",
+      "title": "The calendar to hold on",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "(calendar ?? \"\") != \"\" || kind != \"agent\" ? (calendar ?? \"\") : (let own = filter(cals ?? [], !(#.room ?? false)); len(own) \u003e 0 ? string(own[0]._id) : \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "whereZone",
+      "type": "data.expression",
+      "title": "The zone the times are held in",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "(zone ?? \"\") != \"\" ? zone : (let c = first(filter(cals ?? [], string(#._id) == where)); string(c?.zone ?? \"\"))",
+        "type": "string"
+      }
+    },
+    {
+      "id": "find",
+      "type": "flow.callGraph",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "graph": "fn-calendar-findFreeTime",
+        "inputs": [
+          {
+            "id": "people",
+            "name": "people",
+            "type": "json",
+            "optional": true,
+            "description": "The people's user ids, as text; the calling person is always included; an agent that names nobody finds times for the person who made it"
+          },
+          {
+            "id": "durationMinutes",
+            "name": "durationMinutes",
+            "type": "number",
+            "description": "The meeting's length in minutes"
+          },
+          {
+            "id": "from",
+            "name": "from",
+            "type": "string",
+            "description": "The window's start, RFC 3339"
+          },
+          {
+            "id": "to",
+            "name": "to",
+            "type": "string",
+            "description": "The window's end (exclusive), RFC 3339"
+          },
+          {
+            "id": "count",
+            "name": "count",
+            "type": "number",
+            "optional": true,
+            "description": "How many slots, 3 when left out"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "slots",
+            "name": "slots",
+            "type": "json",
+            "optional": true
+          },
+          {
+            "id": "count",
+            "name": "count",
+            "type": "number",
+            "optional": true
+          },
+          {
+            "id": "unknown",
+            "name": "unknown",
+            "type": "json",
+            "optional": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "mayHold",
+      "type": "data.expression",
+      "title": "Slots found, and the caller may hold time",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "expr": "found \u003e 0 \u0026\u0026 !(kind == \"agent\" \u0026\u0026 (agentRecord?.autonomy ?? \"draft\") == \"suggest\")",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "should",
+      "type": "flow.branch",
+      "position": {
+        "x": 1360,
+        "y": 200
+      }
+    },
+    {
+      "id": "times",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 400
+      },
+      "config": {
+        "expr": "map(slots ?? [], ({start: #.start, end: #.end}))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "hold",
+      "type": "flow.callGraph",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "graph": "fn-calendar-hold",
+        "catch": true,
+        "inputs": [
+          {
+            "id": "slots",
+            "name": "slots",
+            "type": "json",
+            "description": "The times to hold, [{start, end}] in RFC 3339"
+          },
+          {
+            "id": "purpose",
+            "name": "purpose",
+            "type": "string",
+            "description": "What the time is held for; the tentative events' title"
+          },
+          {
+            "id": "subject",
+            "name": "subject",
+            "type": "json",
+            "optional": true,
+            "description": "What the proposal is about, {entity, id} (a mail thread, a conversation)"
+          },
+          {
+            "id": "calendar",
+            "name": "calendar",
+            "type": "string",
+            "optional": true,
+            "description": "The calendar to hold them on; the caller's first own calendar when left out"
+          },
+          {
+            "id": "zone",
+            "name": "zone",
+            "type": "string",
+            "optional": true,
+            "description": "The events' time zone; the calendar's when left out"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "hold",
+            "name": "hold",
+            "type": "string",
+            "optional": true
+          },
+          {
+            "id": "slots",
+            "name": "slots",
+            "type": "json",
+            "optional": true
+          },
+          {
+            "id": "expires",
+            "name": "expires",
+            "type": "string",
+            "optional": true
+          },
+          {
+            "id": "produced",
+            "name": "produced",
+            "type": "json",
+            "optional": true
+          },
+          {
+            "id": "error",
+            "name": "error",
+            "type": "string",
+            "optional": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "withEvents",
+      "type": "data.expression",
+      "title": "Each slot with its held event",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "expr": "let held = heldSlots ?? []; map(slots ?? [], let i = #index; let s = #; len(held) \u003e i ? fromPairs(concat(toPairs(s), [[\"event\", held[i].event]])) : s)",
+        "type": "json"
+      }
+    },
+    {
+      "id": "produced",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "expr": "(hold ?? \"\") == \"\" ? nil : ({entity: \"calHold\", id: hold})",
+        "type": "json"
+      }
+    },
+    {
+      "id": "held",
+      "type": "flow.return",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "slots",
+            "type": "json"
+          },
+          {
+            "id": "hold",
+            "type": "string"
+          },
+          {
+            "id": "expires",
+            "type": "string"
+          },
+          {
+            "id": "unknown",
+            "type": "json"
+          },
+          {
+            "id": "error",
+            "type": "string"
+          },
+          {
+            "id": "produced",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "only",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "slots",
+            "type": "json"
+          },
+          {
+            "id": "unknown",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdFailed",
+      "type": "flow.return",
+      "title": "The times, unheld",
+      "position": {
+        "x": 2380,
+        "y": 400
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "slots",
+            "type": "json"
+          },
+          {
+            "id": "unknown",
+            "type": "json"
+          },
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "me",
+        "pin": "kind"
+      },
+      "to": {
+        "node": "everyone",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "everyone",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "agentRecord"
+      },
+      "to": {
+        "node": "everyone",
+        "pin": "agentRecord"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "people"
+      },
+      "to": {
+        "node": "everyone",
+        "pin": "people"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "find",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "everyone",
+        "pin": "value"
+      },
+      "to": {
+        "node": "find",
+        "pin": "people"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "durationMinutes"
+      },
+      "to": {
+        "node": "find",
+        "pin": "durationMinutes"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "from"
+      },
+      "to": {
+        "node": "find",
+        "pin": "from"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "to"
+      },
+      "to": {
+        "node": "find",
+        "pin": "to"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "count"
+      },
+      "to": {
+        "node": "find",
+        "pin": "count"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "count"
+      },
+      "to": {
+        "node": "mayHold",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "kind"
+      },
+      "to": {
+        "node": "mayHold",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "agentRecord"
+      },
+      "to": {
+        "node": "mayHold",
+        "pin": "agentRecord"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "then"
+      },
+      "to": {
+        "node": "should",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "mayHold",
+        "pin": "value"
+      },
+      "to": {
+        "node": "should",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "slots"
+      },
+      "to": {
+        "node": "times",
+        "pin": "slots"
+      }
+    },
+    {
+      "from": {
+        "node": "should",
+        "pin": "true"
+      },
+      "to": {
+        "node": "hold",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "times",
+        "pin": "value"
+      },
+      "to": {
+        "node": "hold",
+        "pin": "slots"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "purpose"
+      },
+      "to": {
+        "node": "hold",
+        "pin": "purpose"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "subject"
+      },
+      "to": {
+        "node": "hold",
+        "pin": "subject"
+      }
+    },
+    {
+      "from": {
+        "node": "where",
+        "pin": "value"
+      },
+      "to": {
+        "node": "hold",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "zone"
+      },
+      "to": {
+        "node": "whereZone",
+        "pin": "zone"
+      }
+    },
+    {
+      "from": {
+        "node": "where",
+        "pin": "value"
+      },
+      "to": {
+        "node": "whereZone",
+        "pin": "where"
+      }
+    },
+    {
+      "from": {
+        "node": "cals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "whereZone",
+        "pin": "cals"
+      }
+    },
+    {
+      "from": {
+        "node": "whereZone",
+        "pin": "value"
+      },
+      "to": {
+        "node": "hold",
+        "pin": "zone"
+      }
+    },
+    {
+      "from": {
+        "node": "everyone",
+        "pin": "value"
+      },
+      "to": {
+        "node": "calQ",
+        "pin": "everyone"
+      }
+    },
+    {
+      "from": {
+        "node": "calQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cals",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "cals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "where",
+        "pin": "cals"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendar"
+      },
+      "to": {
+        "node": "where",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "kind"
+      },
+      "to": {
+        "node": "where",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "slots"
+      },
+      "to": {
+        "node": "withEvents",
+        "pin": "slots"
+      }
+    },
+    {
+      "from": {
+        "node": "hold",
+        "pin": "slots"
+      },
+      "to": {
+        "node": "withEvents",
+        "pin": "heldSlots"
+      }
+    },
+    {
+      "from": {
+        "node": "hold",
+        "pin": "hold"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "hold"
+      }
+    },
+    {
+      "from": {
+        "node": "hold",
+        "pin": "then"
+      },
+      "to": {
+        "node": "held",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "withEvents",
+        "pin": "value"
+      },
+      "to": {
+        "node": "held",
+        "pin": "slots"
+      }
+    },
+    {
+      "from": {
+        "node": "hold",
+        "pin": "hold"
+      },
+      "to": {
+        "node": "held",
+        "pin": "hold"
+      }
+    },
+    {
+      "from": {
+        "node": "hold",
+        "pin": "expires"
+      },
+      "to": {
+        "node": "held",
+        "pin": "expires"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "unknown"
+      },
+      "to": {
+        "node": "held",
+        "pin": "unknown"
+      }
+    },
+    {
+      "from": {
+        "node": "hold",
+        "pin": "error"
+      },
+      "to": {
+        "node": "held",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
+        "pin": "value"
+      },
+      "to": {
+        "node": "held",
+        "pin": "produced"
+      }
+    },
+    {
+      "from": {
+        "node": "hold",
+        "pin": "failed"
+      },
+      "to": {
+        "node": "holdFailed",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "hold",
+        "pin": "error"
+      },
+      "to": {
+        "node": "holdFailed",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "slots"
+      },
+      "to": {
+        "node": "holdFailed",
+        "pin": "slots"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "unknown"
+      },
+      "to": {
+        "node": "holdFailed",
+        "pin": "unknown"
+      }
+    },
+    {
+      "from": {
+        "node": "should",
+        "pin": "false"
+      },
+      "to": {
+        "node": "only",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "slots"
+      },
+      "to": {
+        "node": "only",
+        "pin": "slots"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "unknown"
+      },
+      "to": {
+        "node": "only",
+        "pin": "unknown"
+      }
+    }
+  ]
+}

@@ -1,0 +1,724 @@
+{
+  "id": "cmd-docs-page-move",
+  "name": "docs.page.move",
+  "description": "Moves a page, with its subpages, under another page of its Volume (or to the top) between two of its new siblings: its parent, ancestors and rank change, every subpage's ancestors follow, and both parents' counts change, in one batch. Refused when the new parent is the page itself or one of its subpages, so the tree never has a cycle; two moves at once that would make one conflict on the parent they both touch, and the later is refused when decided again.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:docs",
+  "spec": {
+    "command": "page.move",
+    "title": "Move a page",
+    "description": "Moves the target page under parent (left out: the Volume's top level), after the sibling after and before the sibling before (page ids; left out, first or last). Its subpages come with it; never into its own subtree.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "parent": {
+          "type": "string",
+          "description": "The page it goes under; left out, the Volume's top level"
+        },
+        "after": {
+          "type": "string",
+          "description": "The id of the sibling it goes after; left out, it goes first"
+        },
+        "before": {
+          "type": "string",
+          "description": "The id of the sibling it goes before; left out, it goes last"
+        }
+      }
+    },
+    "area": "rec",
+    "targetType": "docsPage",
+    "projection": "records.record",
+    "action": "record.update",
+    "events": [
+      "updated"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "volumeId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "string(state?.volume ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "write",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"write\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "may",
+      "type": "docs.mayUseVolume",
+      "position": {
+        "x": 680,
+        "y": 0
+      }
+    },
+    {
+      "id": "parentId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "(args.parent ?? \"\") == \"\" ? \"none\" : string(args.parent)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "parent",
+      "type": "records.get",
+      "title": "The new parent",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "oldId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "expr": "string(state?.parent ?? \"\") == \"\" ? \"none\" : string(state.parent)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "oldParent",
+      "type": "records.get",
+      "title": "The old parent",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "descQ",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 600
+      },
+      "config": {
+        "expr": "{filter: {field: \"ancestors\", op: \"contains\", value: target}, fields: [\"ancestors\"]}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "desc",
+      "type": "records.query",
+      "title": "Its subpages, at every depth",
+      "position": {
+        "x": 680,
+        "y": 600
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "let p = string(args.parent ?? \"\");\nlet old = string(state?.parent ?? \"\");\nlet anc = p == \"\" ? [] : concat(map(parent.ancestors ?? [], string(#)), [p]);\nlet moved = old != p;\n{problem: state == nil ? \"there is no page \" + target\n  : state.trashedAt != nil ? \"the page is in the trash: restore it first\"\n  : !may ? \"you may not change the pages of Volume \" + string(state.volume ?? \"\")\n  : p == target ? \"a page cannot go under itself\"\n  : p != \"\" \u0026\u0026 parent == nil ? \"there is no page \" + p\n  : p != \"\" \u0026\u0026 string(parent.volume ?? \"\") != string(state.volume ?? \"\") ? \"the new parent is in another Volume\"\n  : p != \"\" \u0026\u0026 parent.trashedAt != nil ? \"the new parent is in the trash\"\n  : p != \"\" \u0026\u0026 target in map(parent.ancestors ?? [], string(#)) ? \"a page cannot go under one of its own subpages\" : \"\",\n set: {parent: p == \"\" ? nil : p, ancestors: anc},\n after: string(args.after ?? \"\"), before: string(args.before ?? \"\"),\n updates: !moved ? [] : concat(\n   map(desc ?? [], { let d = #; let a = map(d.ancestors ?? [], string(#)); ({id: string(d._id), set: {ancestors: concat(anc, [target], a[findIndex(a, # == target) + 1:])}}) }),\n   old != \"\" \u0026\u0026 oldParent != nil ? [{id: old, set: {childCount: max(int(oldParent.childCount ?? 0) - 1, 0)}, expect: oldParent._seq}] : [],\n   p != \"\" ? [{id: p, set: {childCount: int(parent.childCount ?? 0) + 1}, expect: parent._seq}] : [])}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1700,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "mvAfter",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.after",
+        "type": "string"
+      }
+    },
+    {
+      "id": "mvBefore",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 600
+      },
+      "config": {
+        "expr": "plan.before",
+        "type": "string"
+      }
+    },
+    {
+      "id": "mvSet",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 800
+      },
+      "config": {
+        "expr": "plan.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "mv",
+      "type": "records.move",
+      "position": {
+        "x": 2040,
+        "y": 200
+      },
+      "config": {
+        "entity": "docsPage",
+        "field": "rank"
+      }
+    },
+    {
+      "id": "w0list",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 1000
+      },
+      "config": {
+        "expr": "plan.updates ?? []",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0",
+      "type": "flow.forEach",
+      "title": "subpages' ancestors and the parents' counts",
+      "position": {
+        "x": 2380,
+        "y": 0
+      }
+    },
+    {
+      "id": "w0id",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w0w",
+      "type": "records.update",
+      "position": {
+        "x": 3060,
+        "y": 0
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "w0s",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0x",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.expect",
+        "type": "number"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "volumeId",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "volumeId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "may",
+        "pin": "volume"
+      }
+    },
+    {
+      "from": {
+        "node": "write",
+        "pin": "value"
+      },
+      "to": {
+        "node": "may",
+        "pin": "access"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "parentId",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "parentId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "parent",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "oldId",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "oldId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "oldParent",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "descQ",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "descQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "desc",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "may",
+        "pin": "allowed"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "may"
+      }
+    },
+    {
+      "from": {
+        "node": "parent",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "parent"
+      }
+    },
+    {
+      "from": {
+        "node": "oldParent",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "oldParent"
+      }
+    },
+    {
+      "from": {
+        "node": "desc",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "desc"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mvAfter",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mvBefore",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mvSet",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "mv",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "mv",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "mvAfter",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mv",
+        "pin": "after"
+      }
+    },
+    {
+      "from": {
+        "node": "mvBefore",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mv",
+        "pin": "before"
+      }
+    },
+    {
+      "from": {
+        "node": "mvSet",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mv",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "mv",
+        "pin": "then"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0s",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0s",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0x",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0x",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "expect"
+      }
+    }
+  ]
+}
