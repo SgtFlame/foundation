@@ -39,7 +39,7 @@ func (p *plainer) block(n Node) []string {
 		return rows
 	case "codeBlock", "code_block":
 		return []string{plain(n)}
-	case "horizontalRule", "horizontal_rule", "pageBreak":
+	case "horizontalRule", "horizontal_rule", "pageBreak", "sectionBreak", "tableOfContents":
 		return nil
 	case "image":
 		if alt := n.attr("alt"); alt != "" {
@@ -48,6 +48,13 @@ func (p *plainer) block(n Node) []string {
 		return nil
 	case "mathBlock", "math_display", "blockMath":
 		return []string{latex(n)}
+	case "pageLink", "embed", "fileBlock":
+		for _, a := range []string{"title", "name", "href"} {
+			if v := n.attr(a); v != "" {
+				return []string{v}
+			}
+		}
+		return nil
 	}
 	if len(n.Content) == 0 {
 		if n.Type == "paragraph" {
@@ -71,6 +78,7 @@ func (p *plainer) inline(nodes []Node) string {
 			b.WriteString("\n")
 		case "mathInline", "math_inline", "inlineMath":
 			b.WriteString(latex(n))
+		case "pageNumber":
 		case "footnote", "footnoteReference":
 			text := p.inline(n.Content)
 			if text == "" {

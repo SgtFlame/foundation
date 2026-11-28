@@ -1,0 +1,207 @@
+{
+  "id": "fn-calendar-respond",
+  "name": "Answer an invitation",
+  "description": "Sets the caller's own answer to an event they are invited to: accepted, declined or tentative (calendar.event.respond, which changes only the caller's attendee entry). Args {event, answer, comment?}.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "event",
+            "type": "string",
+            "description": "The event's id"
+          },
+          {
+            "id": "answer",
+            "type": "string",
+            "description": "accepted, declined or tentative"
+          },
+          {
+            "id": "comment",
+            "type": "string",
+            "optional": true,
+            "description": "A note to the organizer"
+          }
+        ]
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "{answer: answer, comment: comment ?? \"\"}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "command": "calendar.event.respond"
+      }
+    },
+    {
+      "id": "produced",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"calEvent\", id: event}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "produced",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "refused",
+      "type": "flow.return",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "answer"
+      },
+      "to": {
+        "node": "args",
+        "pin": "answer"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "comment"
+      },
+      "to": {
+        "node": "args",
+        "pin": "comment"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "event"
+      },
+      "to": {
+        "node": "send",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "event"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "event"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "produced"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "error"
+      }
+    }
+  ]
+}

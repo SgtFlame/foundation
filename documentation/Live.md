@@ -243,3 +243,7 @@ The first part of the Control Plane (forge `documentation/plans/020a-1-DeployedN
 ## Changed in game V36 (forge 360)
 
 *Emit event* (`live.emit`) takes an optional `target` pin, another target of the command target's type and area, with a `projection` config naming the projection its state is read from: the node calls `Decision.Read` on it, so the commit expects it unchanged, and the event (`NewEvent.Target`) commits in the command's batch. The game's `game.smelt {from}` and `game.takeIngots {into}` use it to change a storage building with the forge.
+
+## Changed in forge 26d-4
+
+A query graph's *Read projection* keeps the sequence it read (`livenodes.Read.Checked`, `Seq`, never serialized). If the key's first entry in the watch that follows the run is at another sequence (made, changed or deleted in between), the query runs again. Before this, a change folded between the read and the watch's start was missed until the next one. That happened every time with an app projector, which starts on its first read (`Nexus.md` › *Changed in forge 26d-4*).

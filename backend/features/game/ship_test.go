@@ -1318,5 +1318,29 @@ func TestDocking(t *testing.T) {
 	if r := st.refused("game.launchShip", "k1", map[string]any{}); !strings.Contains(r.Common.Message, "docking clamp") {
 		t.Fatalf("launched twice: %q", r.Common.Message)
 	}
+	// V41: parking back on the bay floor
+	if r := st.refused("game.dockShip", "s0", map[string]any{"bay": "bay1"}); !strings.Contains(r.Common.Message, "only a cutter") {
+		t.Fatalf("parking a skiff: %q", r.Common.Message)
+	}
+	st.ok("game.flyShip", "k1", map[string]any{"x": 0, "y": 115, "z": 40, "q": q, "v": []float64{0, 0, 0}, "pilot": true})
+	if r := st.refused("game.dockShip", "k1", map[string]any{"bay": "bay1"}); !strings.Contains(r.Common.Message, "more than 12 m") {
+		t.Fatalf("parking from afar: %q", r.Common.Message)
+	}
+	st.ok("game.flyShip", "k1", map[string]any{"x": 0, "y": 112, "z": 21, "q": q, "v": []float64{3, 0, 0}, "pilot": true})
+	if r := st.refused("game.dockShip", "k1", map[string]any{"bay": "bay1"}); !strings.Contains(r.Common.Message, "slow down") {
+		t.Fatalf("parking at speed: %q", r.Common.Message)
+	}
+	st.ok("game.flyShip", "k1", map[string]any{"x": 0, "y": 112, "z": 21, "q": q, "v": []float64{0.5, 0, 0}, "pilot": true})
+	res = st.ok("game.dockShip", "k1", map[string]any{"bay": "bay1"})
+	if k, b := read("k1", res.Seq), read("bay1", res.Seq); k.Bay != "bay1" || b.Holds != "k1" || k.Pilot != "" {
+		t.Fatalf("parked %q holds %q pilot %q", k.Bay, b.Holds, k.Pilot)
+	}
+	if r := st.refused("game.dockShip", "k1", map[string]any{"bay": "bay1"}); !strings.Contains(r.Common.Message, "already holds this ship") {
+		t.Fatalf("parked twice: %q", r.Common.Message)
+	}
+	if r := st.refused("game.startShip", "k2", map[string]any{"world": world, "design": "cutter", "x": 0, "y": 110, "z": 20, "q": q, "bay": "bay1"}); !strings.Contains(r.Common.Message, "already holds") {
+		t.Fatalf("a bay holding a parked ship: %q", r.Common.Message)
+	}
+	st.ok("game.launchShip", "k1", map[string]any{})
 	st.ok("game.startShip", "k2", map[string]any{"world": world, "design": "cutter", "x": 0, "y": 110, "z": 20, "q": q, "bay": "bay1"})
 }

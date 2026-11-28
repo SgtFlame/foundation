@@ -1,0 +1,672 @@
+{
+  "id": "fn-calendar-applyReply",
+  "name": "Apply an answer received",
+  "description": "Applies an iTIP message that came from outside about an event the caller may change, such as an attendee's REPLY a mail carried (Parse iCalendar's method and event): the event is found by its UID (an invitation sent from here has \u003cevent id\u003e@axiom), and a REPLY sets that attendee's answer, a REQUEST or PUBLISH updates the details, a CANCEL cancels it (iTIP apply). Refused with reason other, older, notInvited, badResponse or notApplied (a COUNTER, which a person decides). Args {method, message}.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "method",
+            "type": "string",
+            "description": "The message's METHOD: REPLY, REQUEST, PUBLISH or CANCEL"
+          },
+          {
+            "id": "message",
+            "type": "json",
+            "description": "The message's event, as Parse iCalendar gives it"
+          }
+        ]
+      }
+    },
+    {
+      "id": "made",
+      "type": "data.expression",
+      "title": "The id of an event invited from here",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "let u = string(message?.iCalUID ?? \"\"); hasSuffix(u, \"@axiom\") ? trimSuffix(u, \"@axiom\") : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "byUidQ",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "{where: {iCalUID: (message?.iCalUID ?? \"\") != \"\" ? message.iCalUID : \"-\"}, limit: 20}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "byUid",
+      "type": "records.query",
+      "title": "Events with the UID the caller may see",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "calEvent"
+      }
+    },
+    {
+      "id": "byIdQ",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "{where: {_id: made != \"\" ? made : \"-\"}, limit: 1}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "byId",
+      "type": "records.query",
+      "title": "The event invited from here",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "calEvent"
+      }
+    },
+    {
+      "id": "found",
+      "type": "data.expression",
+      "title": "The event it is about",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "let rid = string(message?.recurrenceId ?? \"\"); first(filter(concat(mine ?? [], uid ?? []), string(#.recurrenceId ?? \"\") == rid))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "asEvent",
+      "type": "data.expression",
+      "title": "The record as an iCalendar event",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "let r = found; let z = (r?.zone ?? \"\") != \"\" ? r.zone : \"UTC\"; let f = \"2006-01-02T15:04:05\"; r == nil ? {} : {iCalUID: message.iCalUID, title: r.title ?? \"\", start: {local: date(r.start).In(timezone(z)).Format(f), zone: z}, end: {local: date(r.end).In(timezone(z)).Format(f), zone: z}, status: r.status ?? \"confirmed\", location: r.location ?? \"\", organizer: r.organizer, attendees: r.attendees ?? [], recurrenceId: r.recurrenceId ?? \"\", sequence: 0}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "apply",
+      "type": "calendar.itipApply",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "expr": "found == nil ? \"there is no event with this invitation's UID that you can see\" : !applied ? error : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "ifRefused",
+      "type": "flow.branch",
+      "position": {
+        "x": 3060,
+        "y": 0
+      }
+    },
+    {
+      "id": "setArgs",
+      "type": "data.expression",
+      "title": "What changed",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "expr": "let e = event; {entity: \"calEvent\", set: fromPairs(filter(toPairs({attendees: e.attendees ?? [], status: e.status ?? found.status, title: e.title ?? found.title, location: e.location ?? \"\"}), toJSON(found[#[0]]) != toJSON(#[1]))), expect: found._seq}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "foundId",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "expr": "string(found?._id ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "save",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 3400,
+        "y": 0
+      },
+      "config": {
+        "command": "record.update"
+      }
+    },
+    {
+      "id": "yes",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "true",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "no",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "expr": "false",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "produced",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"calEvent\", id: id}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 3740,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "applied",
+            "type": "bool"
+          },
+          {
+            "id": "event",
+            "type": "string"
+          },
+          {
+            "id": "produced",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "failed",
+      "type": "flow.return",
+      "position": {
+        "x": 3740,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "applied",
+            "type": "bool"
+          },
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "notApplied",
+      "type": "flow.return",
+      "title": "Not applied",
+      "position": {
+        "x": 3400,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "applied",
+            "type": "bool"
+          },
+          {
+            "id": "reason",
+            "type": "string"
+          },
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "message"
+      },
+      "to": {
+        "node": "made",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "message"
+      },
+      "to": {
+        "node": "byUidQ",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "byUidQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "byUid",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "made",
+        "pin": "value"
+      },
+      "to": {
+        "node": "byIdQ",
+        "pin": "made"
+      }
+    },
+    {
+      "from": {
+        "node": "byIdQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "byId",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "message"
+      },
+      "to": {
+        "node": "found",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "byId",
+        "pin": "records"
+      },
+      "to": {
+        "node": "found",
+        "pin": "mine"
+      }
+    },
+    {
+      "from": {
+        "node": "byUid",
+        "pin": "records"
+      },
+      "to": {
+        "node": "found",
+        "pin": "uid"
+      }
+    },
+    {
+      "from": {
+        "node": "found",
+        "pin": "value"
+      },
+      "to": {
+        "node": "asEvent",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "message"
+      },
+      "to": {
+        "node": "asEvent",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "asEvent",
+        "pin": "value"
+      },
+      "to": {
+        "node": "apply",
+        "pin": "event"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "method"
+      },
+      "to": {
+        "node": "apply",
+        "pin": "method"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "message"
+      },
+      "to": {
+        "node": "apply",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "found",
+        "pin": "value"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "apply",
+        "pin": "applied"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "applied"
+      }
+    },
+    {
+      "from": {
+        "node": "apply",
+        "pin": "error"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ifRefused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ifRefused",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "ifRefused",
+        "pin": "true"
+      },
+      "to": {
+        "node": "notApplied",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "no",
+        "pin": "value"
+      },
+      "to": {
+        "node": "notApplied",
+        "pin": "applied"
+      }
+    },
+    {
+      "from": {
+        "node": "apply",
+        "pin": "reason"
+      },
+      "to": {
+        "node": "notApplied",
+        "pin": "reason"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "notApplied",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "apply",
+        "pin": "event"
+      },
+      "to": {
+        "node": "setArgs",
+        "pin": "event"
+      }
+    },
+    {
+      "from": {
+        "node": "found",
+        "pin": "value"
+      },
+      "to": {
+        "node": "setArgs",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "found",
+        "pin": "value"
+      },
+      "to": {
+        "node": "foundId",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "ifRefused",
+        "pin": "false"
+      },
+      "to": {
+        "node": "save",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "foundId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "save",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "setArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "save",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "foundId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "save",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "yes",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "applied"
+      }
+    },
+    {
+      "from": {
+        "node": "foundId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "event"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "produced"
+      }
+    },
+    {
+      "from": {
+        "node": "save",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "failed",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "no",
+        "pin": "value"
+      },
+      "to": {
+        "node": "failed",
+        "pin": "applied"
+      }
+    },
+    {
+      "from": {
+        "node": "save",
+        "pin": "message"
+      },
+      "to": {
+        "node": "failed",
+        "pin": "error"
+      }
+    }
+  ]
+}

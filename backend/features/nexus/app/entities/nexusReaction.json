@@ -1,0 +1,21 @@
+{
+  "name": "Reactions",
+  "description": "One person's emoji reactions to one message (forge 26d-3), toggled by reaction.toggle. Its id is <message>-<user>",
+  "owner": "app:nexus",
+  "titleField": "message",
+  "fields": [
+    {"id": "message", "name": "Message", "type": "text", "required": true},
+    {"id": "channel", "name": "Channel", "type": "text", "required": true},
+    {"id": "user", "name": "User", "type": "relation", "relation": {"entity": "user"}, "required": true},
+    {"id": "emoji", "name": "Emoji", "type": "tags", "description": "The emoji they reacted with"},
+    {"id": "private", "name": "Private", "type": "bool", "default": false}
+  ],
+  "indexes": [
+    {"id": "by_message", "fields": ["message"]},
+    {"id": "by_channel", "fields": ["channel"]}
+  ],
+  "access": {
+    "update": "principal.kind != 'user' || string(record.user) == principal.user",
+    "delete": "principal.kind != 'user' || string(record.user) == principal.user"
+  }
+}

@@ -1,0 +1,195 @@
+{
+  "id": "qry-docs-tree",
+  "name": "tree",
+  "description": "The subpages of one page, or the top level of a Volume, in their order, outside the trash: what the page tree shows for one open node (it is read lazily, a query per open node). Nothing without volume.read on the Volume.",
+  "kind": "data.query",
+  "version": 1,
+  "owner": "app:docs",
+  "spec": {
+    "query": "tree",
+    "title": "A level of the page tree",
+    "description": "The pages directly under parent (left out: the Volume's top level) in rank order, outside the trash: a list of page records {_id, title, icon, childCount, rank, template, …}; empty without volume.read on the Volume. params {volume, parent?}",
+    "params": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "type": "string",
+          "description": "The Volume's id"
+        },
+        "parent": {
+          "type": "string",
+          "description": "The page whose subpages to list; the top level when left out"
+        }
+      },
+      "required": [
+        "volume"
+      ]
+    },
+    "action": "record.read"
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onQuery",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "volume",
+            "name": "volume",
+            "type": "string"
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "read",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"read\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "may",
+      "type": "docs.mayUseVolume",
+      "position": {
+        "x": 340,
+        "y": 0
+      }
+    },
+    {
+      "id": "query",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "{where: {volume: may ? string(volume ?? \"\") : \"-\", parent: (parent ?? \"\") == \"\" ? nil : parent, trashedAt: nil}, sort: [{field: \"rank\"}], fields: [\"title\", \"icon\", \"iconFile\", \"volume\", \"file\", \"parent\", \"childCount\", \"rank\", \"template\", \"database\", \"lastSavedAt\"]}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "find",
+      "type": "records.query",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "result",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "volume"
+      },
+      "to": {
+        "node": "may",
+        "pin": "volume"
+      }
+    },
+    {
+      "from": {
+        "node": "read",
+        "pin": "value"
+      },
+      "to": {
+        "node": "may",
+        "pin": "access"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "volume"
+      },
+      "to": {
+        "node": "query",
+        "pin": "volume"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "parent"
+      },
+      "to": {
+        "node": "query",
+        "pin": "parent"
+      }
+    },
+    {
+      "from": {
+        "node": "may",
+        "pin": "allowed"
+      },
+      "to": {
+        "node": "query",
+        "pin": "may"
+      }
+    },
+    {
+      "from": {
+        "node": "query",
+        "pin": "value"
+      },
+      "to": {
+        "node": "find",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "records"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "result"
+      }
+    }
+  ]
+}

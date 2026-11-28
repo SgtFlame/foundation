@@ -1,0 +1,481 @@
+{
+  "id": "cmd-nexus-dm-open",
+  "name": "nexus.dm.open",
+  "description": "Opens the direct conversation between the caller and args.user, its target dm-\u003clower id\u003e-\u003chigher id\u003e (user ids compared as text), making it and both memberships the first time; opening it again changes nothing.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:nexus",
+  "spec": {
+    "command": "dm.open",
+    "title": "Open a direct conversation",
+    "description": "Opens the direct conversation between the caller and args.user, its target dm-\u003clower id\u003e-\u003chigher id\u003e (user ids compared as text), making it and both memberships the first time; opening it again changes nothing.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "user": {
+          "type": "string",
+          "description": "The other person's user id"
+        }
+      },
+      "required": [
+        "user"
+      ]
+    },
+    "area": "rec",
+    "targetType": "nexusChannel",
+    "projection": "records.record",
+    "action": "record.create",
+    "events": [
+      "created",
+      "updated",
+      "deleted"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "let u = string(args.user ?? \"\");\nlet lo = me \u003c u ? me : u;\nlet hi = me \u003c u ? u : me;\nlet id = \"dm-\" + lo + \"-\" + hi;\n{problem: me == \"\" ? \"only a person opens a conversation\" : u == \"\" || u == me ? \"name someone else\" : target != id ? \"a direct conversation's id is \" + id : \"\",\n channels: state != nil ? [] : [{id: id, values: {name: \"\", kind: \"direct\", private: true, owner: me, peer: u}}],\n members: state != nil ? [] : [{id: id + \"-\" + me, values: {channel: id, user: me, role: \"member\", private: true, owner: me, seen: 0}}, {id: id + \"-\" + u, values: {channel: id, user: u, role: \"member\", private: true, owner: me, seen: 0}}]}\n",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1020,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 1360,
+        "y": 0
+      }
+    },
+    {
+      "id": "w0list",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.channels ?? []",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0",
+      "type": "flow.forEach",
+      "title": "create nexusChannel (channels)",
+      "position": {
+        "x": 1360,
+        "y": 200
+      }
+    },
+    {
+      "id": "w0id",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w0w",
+      "type": "records.create",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusChannel"
+      }
+    },
+    {
+      "id": "w0v",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.values",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w1list",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 600
+      },
+      "config": {
+        "expr": "plan.members ?? []",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w1",
+      "type": "flow.forEach",
+      "title": "create nexusMember (members)",
+      "position": {
+        "x": 1700,
+        "y": 400
+      }
+    },
+    {
+      "id": "w1id",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w1w",
+      "type": "records.create",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusMember"
+      }
+    },
+    {
+      "id": "w1v",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.values",
+        "type": "json"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "me"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0v",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0v",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "values"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w1list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "w1",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w1list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w1",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w1",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w1id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w1",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w1w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w1id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w1w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w1",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w1v",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w1v",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w1w",
+        "pin": "values"
+      }
+    }
+  ]
+}
