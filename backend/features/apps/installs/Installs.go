@@ -216,6 +216,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	}
 	contributeQueries(reg, deps)
 	contributeSettings(reg, deps)
+	contributeEphemeral(reg, deps)
 	contributePages(reg, deps)
 }
 

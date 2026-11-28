@@ -74,6 +74,9 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				h := &QueryHost{Pos: live.Position{}}
 				return h, func() any { return h }
 			}},
+		{Descriptor: extensions.Descriptor{ID: KindProjector}, Title: "Projector", Events: []string{OnFold}, Pure: true,
+			Description: "Folds one event of an app's records into a projection's value: from the key's current state and the event, its new state, with no side effects. Named by the app's manifest as a projector, the live core keeps the projection current while the app is installed (forge 26d-1), and the app's queries read it with Read projection as app.<appId>.<name>.",
+			Returns:     "the key's new state (Return's output value); nothing deletes the key"},
 		{Descriptor: extensions.Descriptor{ID: KindTrigger}, Title: "Trigger", Events: []string{OnEvent, OnSchedule, OnWebhook, "records.onChanged", "connector.on", "apps.onBranchMerged"},
 			Description: "Runs in the background, as its app's own principal, when an event is committed or on a schedule (webhooks come with forge 050-Workflows). Named by the app's manifest as a trigger, it runs only while the app is installed, each event or tick once, as a durable job (forge 07a).", Returns: "nothing"},
 	} {
@@ -334,6 +337,16 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		PinsFor: func(config json.RawMessage) (cognition.Pins, error) {
 			return declared(config, cognition.ExecPin(cognition.Then, ""), cognition.DataPin("params", "Params", "json", "The query's params"))
 		},
+	})
+	node(reg, 570, cognition.NodeType{
+		Descriptor: extensions.Descriptor{ID: OnFold}, Title: "On fold", Category: "Events", Event: true, Kinds: []string{KindProjector},
+		Description: "Starts a projector graph for one record event: the key's current state, the event and the record. Return the new state as the output value; nothing deletes the key.",
+		Example:     "On fold of message created: Return {count: (state.count ?? 0) + 1, last: event.id}",
+		Pins: cognition.Pins{Out: []cognition.Pin{cognition.ExecPin(cognition.Then, ""),
+			cognition.DataPin("state", "State", "json", "The key's current state; nothing before its first event"),
+			cognition.DataPin("event", "Event", "json", "The event: {type (created, updated, deleted…), entity, id (the record's), data, user, time, seq}"),
+			cognition.DataPin("record", "Record", "json", "The record as projected at or after the event, with its fields by id; nothing once deleted"),
+			cognition.DataPin("key", "Key", "string", "The key the event folds into")}},
 	})
 	node(reg, 600, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: OnEvent}, Title: "On event", Category: "Events", Event: true, Kinds: []string{KindTrigger},
