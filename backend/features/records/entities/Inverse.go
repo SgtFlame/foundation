@@ -24,7 +24,7 @@ func (c *decision) undo(command string, events []live.NewEvent) {
 	case "entity.publish":
 		c.NoUndo(app, "a published version stays, and records follow it; publish the draft again to replace it")
 		return
-	case "entity.create", "entity.import":
+	case "entity.create", "entity.import", "entity.createUserDefined":
 		if !c.exists {
 			var a struct {
 				Owner  string

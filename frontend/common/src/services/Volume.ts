@@ -19,8 +19,13 @@ export interface FileEntry {
   type: string // content type, one of fileTypes when created here
 }
 
-// The file types createFile accepts, mirroring volumeservice.FileTypes
-export const fileTypes = [{ type: 'markdown', label: 'Markdown', extension: '.md' }] as const
+// The file types createFile accepts, mirroring volumeservice.FileTypes.
+// `editable` is whether the workbench has an editor for it: a document
+// (forge 35a-1, ProseMirror JSON) opens in the rich-text editor (35b-1).
+export const fileTypes = [
+  { type: 'markdown', label: 'Markdown', extension: '.md', editable: true },
+  { type: 'document', label: 'Document', extension: '.doc.json', editable: true },
+] as const
 
 export interface ListFolderRequest {
   path: VolumePath

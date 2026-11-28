@@ -4,5 +4,9 @@
     "common",
     "engine",
     "example"
-  ]
+  ],
+  "resolutions": {
+    "prosemirror-model": "1.25.13",
+    "prosemirror-view": "1.44.0"
+  }
 }

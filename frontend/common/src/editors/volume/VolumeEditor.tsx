@@ -25,6 +25,7 @@ import { useWorkbenchSubject } from '../../workbench/context/WorkbenchContext.ts
 import type { EditorProps } from '../../workbench/points.ts'
 import { Volume, fileTypes } from '../../services/Volume.ts'
 import { openMarkdown } from '../markdown/openMarkdown.ts'
+import { openDocument } from '../richtext/openDocument.ts'
 import { openVolume } from './openVolume.ts'
 import type { VolumeObject } from './VolumeObject.ts'
 
@@ -127,10 +128,10 @@ function VolumeEditor({ object, registry, tabId }: EditorProps<VolumeObject>) {
                 key={`file:${entry.name}:${entry.type}`}
                 selected={selected === `file:${entry.name}:${entry.type}`}
                 onClick={() => setSelected(`file:${entry.name}:${entry.type}`)}
-                onDoubleClick={() =>
-                  entry.type === 'markdown' &&
-                  void listing.run(() => openMarkdown(registry, [...path, entry.name], entry.type))
-                }
+                onDoubleClick={() => {
+                  if (entry.type === 'markdown') void listing.run(() => openMarkdown(registry, [...path, entry.name], entry.type))
+                  else if (entry.type === 'document') void listing.run(() => openDocument(registry, [...path, entry.name]))
+                }}
               >
                 <ListItemIcon>
                   <DescriptionIcon />
@@ -162,7 +163,7 @@ function VolumeEditor({ object, registry, tabId }: EditorProps<VolumeObject>) {
           value={fileType}
           onChange={(event) => setFileType(event.target.value)}
         >
-          {fileTypes.map((t) => (
+          {fileTypes.filter((t) => t.editable).map((t) => (
             <MenuItem key={t.type} value={t.type}>
               {t.label} ({t.extension})
             </MenuItem>

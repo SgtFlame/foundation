@@ -124,8 +124,13 @@ func partOf(typ string, raw json.RawMessage) (Part, bool) {
 		return Part{}, false
 	}
 	def := map[string]json.RawMessage{"prefab": d.Prefab, "graph": d.Graph, "entity": d.Entity}[typ]
-	var x struct{ ID, Name, Description, Kind, Owner string }
-	if json.Unmarshal(def, &x) != nil || x.ID == "" {
+	var x struct {
+		ID, Name, Description, Kind, Owner string
+		UserDefined                        bool
+	}
+	// A user-defined entity type (forge 35c-1) is the app's users'
+	// content, never one of its parts
+	if json.Unmarshal(def, &x) != nil || x.ID == "" || x.UserDefined {
 		return Part{}, false
 	}
 	return Part{Type: typ, ID: x.ID, Name: x.Name, Description: x.Description, Kind: x.Kind, Owner: x.Owner, Rev: d.Rev, Published: d.Published, Changed: d.Rev != d.PublishedRev}, true

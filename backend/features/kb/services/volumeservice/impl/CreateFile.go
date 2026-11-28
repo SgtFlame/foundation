@@ -32,6 +32,10 @@ func (s *service) CreateFile(args volumeservice.CreateFileArgs) volumeservice.Cr
 	if failed == nil {
 		failed = volumeservice.Check(sa, s.root, parent, "write")
 	}
+	content := []byte(args.Content)
+	if failed == nil && args.Type == "document" {
+		content, failed = volumeservice.DocumentFile(sa, content)
+	}
 	if failed != nil {
 		return volumeservice.CreateFileResponse{Common: *failed}
 	}
@@ -43,7 +47,7 @@ func (s *service) CreateFile(args volumeservice.CreateFileArgs) volumeservice.Cr
 	case err != nil:
 		failed = sa.Fail(http.StatusInternalServerError, log.Wrap(err))
 	default:
-		_, err = f.WriteString(args.Content)
+		_, err = f.Write(content)
 		if closeErr := f.Close(); err == nil {
 			err = closeErr
 		}
