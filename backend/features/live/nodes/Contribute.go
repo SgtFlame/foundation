@@ -168,7 +168,8 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			"target":{"type":"string","title":"Target","description":"The object's id when the Target input is unconnected"}},"required":["command"]}`),
 		Pins: cognition.Pins{
 			In: []cognition.Pin{cognition.ExecPin(cognition.Then, ""), {ID: "target", Name: "Target", Type: "string", Optional: true, Description: "The id of the object to change; the config's when unconnected"},
-				{ID: "args", Name: "Args", Type: cognition.Any, Optional: true, Description: "The command's args, an object"}},
+				{ID: "args", Name: "Args", Type: cognition.Any, Optional: true, Description: "The command's args, an object"},
+				{ID: "command", Name: "Command", Type: "string", Optional: true, Description: "The command type when it is known only at run time (a generic view's prop naming an app's command); the config's when unconnected or empty"}},
 			Out: []cognition.Pin{cognition.ExecPin("ok", "OK"), cognition.ExecPin("rejected", "Rejected"),
 				cognition.DataPin("problems", "Problems", "json", "Why it was refused: [{path, message, fix}]"),
 				cognition.DataPin("message", "Message", "string", "The refusal's first message")},
@@ -181,6 +182,9 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			target, _ := cognition.Get[string](in, "target")
 			if target == "" {
 				target = c.Target
+			}
+			if cmd, _ := cognition.Get[string](in, "command"); cmd != "" {
+				c.Command = cmd
 			}
 			sender, ok := x.Host.(Sender)
 			if !ok {
