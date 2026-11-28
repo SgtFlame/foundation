@@ -1,0 +1,16 @@
+{
+  "type": "function",
+  "function": {
+    "name": "chat_messaging_members_list",
+    "description": "The members of a channel, or of the whole workspace when no channel is given.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": "string",
+          "description": "The channel's id; the whole workspace when left out"
+        }
+      }
+    }
+  }
+}

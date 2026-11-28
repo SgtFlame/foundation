@@ -1,0 +1,273 @@
+{
+  "id": "fn-nexus-post",
+  "name": "Post a message",
+  "description": "Posts a message to a channel as the caller (nexus.message.post): Markdown text, optionally a reply in the thread of parent, mentioning the user ids in mentions. Gives the new message's id, or why it was refused (not a member, archived).",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:nexus",
+  "variables": [
+    {
+      "id": "mid",
+      "name": "Message id",
+      "type": "string",
+      "description": "The new message's id, made once"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "channel",
+            "type": "string",
+            "description": "The channel's id"
+          },
+          {
+            "id": "text",
+            "type": "string",
+            "description": "Markdown"
+          },
+          {
+            "id": "parent",
+            "type": "string",
+            "optional": true,
+            "description": "The message to reply to, in its thread"
+          },
+          {
+            "id": "mentions",
+            "type": "json",
+            "optional": true,
+            "description": "User ids it mentions"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fresh",
+      "type": "data.newId",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "keep",
+      "type": "data.setVariable",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "variable": "mid",
+        "type": "string"
+      }
+    },
+    {
+      "id": "msgId",
+      "type": "data.getVariable",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "variable": "mid",
+        "type": "string"
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "type": "json",
+        "expr": "{channel: channel ?? \"\", text: text ?? \"\", parent: parent ?? \"\", mentions: mentions ?? []}"
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "command": "nexus.message.post"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "message",
+            "name": "message",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "refused",
+      "type": "flow.return",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "name": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "keep",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "fresh",
+        "pin": "id"
+      },
+      "to": {
+        "node": "keep",
+        "pin": "value"
+      }
+    },
+    {
+      "from": {
+        "node": "keep",
+        "pin": "then"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "msgId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "channel"
+      },
+      "to": {
+        "node": "args",
+        "pin": "channel"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "text"
+      },
+      "to": {
+        "node": "args",
+        "pin": "text"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "parent"
+      },
+      "to": {
+        "node": "args",
+        "pin": "parent"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "mentions"
+      },
+      "to": {
+        "node": "args",
+        "pin": "mentions"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "msgId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "error"
+      }
+    }
+  ]
+}

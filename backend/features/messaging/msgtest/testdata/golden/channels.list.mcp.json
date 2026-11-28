@@ -1,0 +1,69 @@
+{
+  "name": "chat_messaging_channels_list",
+  "title": "List channels",
+  "description": "The channels the connection's account can see or is in, with their kind (channel, private, direct, group), topic and member count.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "channels": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "description": "A channel",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The channel's id at the service"
+            },
+            "name": {
+              "type": "string",
+              "description": "Its name, without a leading #; for a direct conversation the other person's name"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "channel",
+                "private",
+                "direct",
+                "group"
+              ],
+              "description": "channel is public in its workspace, private for members only, direct between two people, group a few people without a name"
+            },
+            "topic": {
+              "type": "string",
+              "description": "Its topic"
+            },
+            "members": {
+              "type": "integer",
+              "description": "How many members it has"
+            },
+            "archived": {
+              "type": "boolean",
+              "description": "Whether it is archived (read-only)"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "kind"
+          ]
+        },
+        "description": "The channels"
+      }
+    },
+    "required": [
+      "channels"
+    ]
+  },
+  "annotations": {
+    "title": "List channels",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

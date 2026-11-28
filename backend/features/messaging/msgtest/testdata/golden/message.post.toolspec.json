@@ -1,0 +1,40 @@
+{
+  "name": "chat.messaging.message.post",
+  "title": "Post a message",
+  "description": "Posts a message in a channel, or as a reply in a thread, as the connection's account, under our key (a post with a key already used posts nothing and gives that message). Mention a member as @\u003cmember id\u003e; attach files uploaded with file.upload by their ids.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "The channel's id"
+      },
+      "key": {
+        "type": "string",
+        "description": "Our id for the message, the idempotency key"
+      },
+      "text": {
+        "type": "string",
+        "description": "The text as Markdown"
+      },
+      "thread": {
+        "type": "string",
+        "description": "Reply in the thread this message starts"
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Ids of files uploaded with file.upload"
+      }
+    },
+    "required": [
+      "channel",
+      "key",
+      "text"
+    ]
+  },
+  "effect": "external",
+  "source": "connector"
+}

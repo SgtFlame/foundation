@@ -1,0 +1,126 @@
+{
+  "id": "fn-nexus-search",
+  "name": "Search messages",
+  "description": "Searches the messages the caller may read for text (nexus.search), best first: each {id, channel, author, text, at}, at most limit (10 when left out).",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:nexus",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "text",
+            "type": "string",
+            "description": "What to search for"
+          },
+          {
+            "id": "limit",
+            "type": "number",
+            "optional": true,
+            "description": "How many, 10 when left out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "find",
+      "type": "records.search",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusMessage",
+        "limit": 20
+      }
+    },
+    {
+      "id": "out",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "map(take(filter(records ?? [], !(#.deleted ?? false)), int(limit ?? 10)), ({id: #._id, channel: #.channel ?? \"\", author: string(#.author ?? #.authorName ?? \"\"), text: #.text ?? \"\", at: #.createdAt}))"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "messages",
+            "name": "messages",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "text"
+      },
+      "to": {
+        "node": "find",
+        "pin": "text"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "records"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "limit"
+      },
+      "to": {
+        "node": "out",
+        "pin": "limit"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "out",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "messages"
+      }
+    }
+  ]
+}

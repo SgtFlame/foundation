@@ -98,9 +98,10 @@ type Impl struct {
 	// connection changes or the adapter stops.
 	Open func(ctx Context, conn Connection) (Session, error)
 	// Receive, for a type with Receives, verifies a callback and turns it
-	// into events (26b; declared, not called in 07b).
+	// into events: the runtime answers cx.receive with it (26b-1).
 	Receive Receiver
-	// Register registers the hook URL with the service (26b; not called).
+	// Register registers the hook URL with the service (26b-2): the
+	// runtime answers cx.register with it.
 	Register Registrar
 }
 
@@ -144,24 +145,30 @@ type Receiver interface {
 	Receive(ctx Context, conn Connection, cb Callback) ([]Event, error)
 }
 
-// Registrar registers the hook URL with the service itself (26b).
+// Registrar registers the hook URL with the service itself (26b-2), for
+// the events triggers listen to (their subscription names). Register and
+// Update give the registration and the signing secret the service chose
+// ("" when the connection's settings hold one); Foundation keeps both as
+// the connection's hook secret and gives the secret back in the resolved
+// settings as hookSecret. Register may be asked again for a connection
+// whose registration was lost, so it should find and reuse one for the
+// same URL.
 type Registrar interface {
-	Register(ctx Context, conn Connection, url string, events []string) (Registration, error)
+	Register(ctx Context, conn Connection, url string, events []string) (Registration, string, error)
+	Update(ctx Context, conn Connection, reg Registration, url string, events []string) (Registration, string, error)
 	Unregister(ctx Context, conn Connection, reg Registration) error
 }
 
 // Registration is what a Registrar keeps of a registered hook.
-type Registration struct {
-	ID   string          `json:"id"`
-	Data json.RawMessage `json:"data,omitempty"`
-}
+type Registration = connectors.HookRegistration
 
 // Callback is one HTTP request a service pushed to a hook.
 type Callback struct {
-	Method, Path string
-	Header       http.Header
-	Body         []byte
-	ReceivedAt   time.Time
+	Method     string      `json:"method"`
+	Path       string      `json:"path"`
+	Header     http.Header `json:"header"`
+	Body       []byte      `json:"body"`
+	ReceivedAt time.Time   `json:"receivedAt"`
 }
 
 // Surface is an inbound surface (75a): it listens on an outside endpoint
@@ -335,6 +342,28 @@ func (s *server) run(ctx context.Context) error {
 		}
 		for _, subj := range subjects {
 			sub, err := s.nc.QueueSubscribe(subj, connectors.CallQueue(id), s.receive)
+			if err != nil {
+				s.unsubscribe(subs)
+				return err
+			}
+			subs = append(subs, sub)
+		}
+	}
+	// Callbacks hooks received (26b-1), in the type's queue group too
+	for id, subjects := range s.receiveSubjects() {
+		for _, subj := range subjects {
+			sub, err := s.nc.QueueSubscribe(subj, connectors.CallQueue(id), s.receiveCallback)
+			if err != nil {
+				s.unsubscribe(subs)
+				return err
+			}
+			subs = append(subs, sub)
+		}
+	}
+	// Registering hooks with services (26b-2)
+	for id, subjects := range s.registerSubjects() {
+		for _, subj := range subjects {
+			sub, err := s.nc.QueueSubscribe(subj, connectors.CallQueue(id), s.registerHook)
 			if err != nil {
 				s.unsubscribe(subs)
 				return err

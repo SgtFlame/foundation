@@ -1,0 +1,33 @@
+{
+  "name": "chat.messaging.file.upload",
+  "title": "Upload a file",
+  "description": "Uploads a file to attach to a message posted after (message.post's files), its content base64 encoded. Gives the file with its id.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "The channel it is for"
+      },
+      "name": {
+        "type": "string",
+        "description": "The file's name"
+      },
+      "contentType": {
+        "type": "string",
+        "description": "Its media type"
+      },
+      "data": {
+        "type": "string",
+        "description": "Its content, base64 encoded"
+      }
+    },
+    "required": [
+      "channel",
+      "name",
+      "data"
+    ]
+  },
+  "effect": "write",
+  "source": "connector"
+}

@@ -9,6 +9,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connectorstest"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
+	"github.com/SgtFlame/foundation/backend/features/connectors/oauth"
 	"github.com/SgtFlame/foundation/backend/features/connectors/scripted"
 	"github.com/SgtFlame/foundation/backend/features/conversation/made"
 	"github.com/SgtFlame/foundation/backend/features/jobs"
@@ -106,6 +107,7 @@ func everything(t *testing.T) *extensions.Registry {
 	connectors.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
 	connectorsnodes.Contribute(reg, func() connectors.Deps { return connectors.Deps{} })
 	connections.Contribute(reg, func() connections.Deps { return connections.Deps{} })
+	oauth.Contribute(reg, func() oauth.Deps { return oauth.Deps{} }) // connection.signIn (forge 26a-1)
 	scripted.Contribute(reg, func() scripted.Deps { return scripted.Deps{} })
 	game.Contribute(reg, func() game.Deps { return game.Deps{} })                   // forge 360 V1
 	infra.Contribute(reg, func() infra.Deps { return infra.Deps{} })                // forge 22a
@@ -135,6 +137,14 @@ func connectorProblems(reg *extensions.Registry) []string {
 	for _, t := range connectors.Types.All(reg) {
 		for _, p := range connectors.CheckType(t.Type, func(ref string) (connectors.Contract, bool) { c, ok := refs[ref]; return c, ok }) {
 			out = append(out, "connector type "+t.Type.ID+": "+p.String())
+		}
+		for _, p := range connectors.CheckOAuth(t.Type, func(id string) (connectors.OAuthProvider, bool) { return connectors.OAuthProviderOf(reg, id) }) {
+			out = append(out, "connector type "+t.Type.ID+": "+p.String())
+		}
+	}
+	for _, p := range connectors.OAuthProviders.All(reg) { // forge 26a-1
+		for _, pr := range connectors.CheckOAuthProvider(p.Provider) {
+			out = append(out, "OAuth provider "+p.Provider.ID+": "+pr.String())
 		}
 	}
 	return out

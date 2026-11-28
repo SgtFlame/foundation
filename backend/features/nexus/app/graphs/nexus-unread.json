@@ -1,0 +1,99 @@
+{
+  "id": "nexus-unread",
+  "name": "Channel counts",
+  "description": "Folds a channel's messages into its count and the time of its last message, keyed by channel, for the unread query: a member's unread count is the count less their seen. Replies in threads are not counted.",
+  "kind": "projector",
+  "version": 1,
+  "owner": "app:nexus",
+  "nodes": [
+    {
+      "id": "fold",
+      "type": "live.onFold",
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "next",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "event.type == \"created\" \u0026\u0026 (record?.parent ?? \"\") == \"\" ? {count: (state?.count ?? 0) + 1, lastAt: record?.createdAt ?? state?.lastAt} : state"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "value",
+            "name": "value",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "fold",
+        "pin": "state"
+      },
+      "to": {
+        "node": "next",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "fold",
+        "pin": "event"
+      },
+      "to": {
+        "node": "next",
+        "pin": "event"
+      }
+    },
+    {
+      "from": {
+        "node": "fold",
+        "pin": "record"
+      },
+      "to": {
+        "node": "next",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "fold",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "next",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "value"
+      }
+    }
+  ]
+}

@@ -145,6 +145,26 @@ func contributeWrites(reg *extensions.Registry, deps func() data.Deps) {
 			args: func(c map[string]any, in cognition.Values) map[string]any {
 				return withExpect(map[string]any{"field": c["field"], "items": in["items"]}, in)
 			}},
+		{id: "records.move", command: "record.move", title: "Move record",
+			description: "Moves a record to a new place in an order (forge 30c, 35a-2): sets its rank field between the record it goes after and the one it goes before, with other values in set changed in the same event (a page's new parent, a board column's status). Its event commits with the command's.",
+			example:     "Move record docsPage at the target after the page it was dropped below, with set {parent}",
+			config:      `,"field":{"type":"string","title":"Field","description":"The rank field's id"}`,
+			in: []cognition.Pin{idPin("The record's id"),
+				{ID: "after", Name: "After", Type: "string", Optional: true, Description: "The id of the record it goes after; empty for the start"},
+				{ID: "before", Name: "Before", Type: "string", Optional: true, Description: "The id of the record it goes before; empty for the end"},
+				{ID: "set", Name: "Set", Type: cognition.Any, Optional: true, Description: "Other field id → new value, changed with the move"}, expectPin},
+			args: func(c map[string]any, in cognition.Values) map[string]any {
+				a := map[string]any{"field": c["field"]}
+				for _, k := range []string{"after", "before"} {
+					if s, _ := in[k].(string); s != "" {
+						a[k] = s
+					}
+				}
+				if s, ok := in["set"].(map[string]any); ok && len(s) > 0 {
+					a["set"] = s
+				}
+				return withExpect(a, in)
+			}},
 	}
 	for i, w := range writes {
 		w := w
@@ -152,8 +172,15 @@ func contributeWrites(reg *extensions.Registry, deps func() data.Deps) {
 		if w.config != "" {
 			required += `,"field"`
 			example = `{"entity":"task","field":"tags"}`
+			if w.command == "record.move" {
+				example = `{"entity":"task","field":"position"}`
+			}
 		}
-		node(reg, 600+i*10, cognition.NodeType{
+		order := 600 + i*10
+		if order >= 650 { // Get record is 650
+			order = 645
+		}
+		node(reg, order, cognition.NodeType{
 			Descriptor: extensions.Descriptor{ID: w.id}, Title: w.title, Kinds: []string{livenodes.KindCommand},
 			Description: w.description + " Checked as " + w.command + " is, and refused with the command's problems.",
 			Example:     w.example,

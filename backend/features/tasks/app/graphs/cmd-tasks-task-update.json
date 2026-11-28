@@ -1,0 +1,645 @@
+{
+  "id": "cmd-tasks-task-update",
+  "name": "tasks.task.update",
+  "description": "Changes a task (the target): only the fields given, of its title, assignees (user ids), due and start dates (YYYY-MM-DD), priority (none, low, medium, high, urgent) and labels; given a status of its project, it also moves there, last, setting or clearing when it was completed.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:tasks",
+  "spec": {
+    "command": "task.update",
+    "title": "Change a task",
+    "description": "Changes a task (the target): only the fields given, of its title, assignees (user ids), due and start dates (YYYY-MM-DD), priority (none, low, medium, high, urgent) and labels; given a status of its project, it also moves there, last, setting or clearing when it was completed.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "What is to be done"
+        },
+        "assignees": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "User ids of the people who do it (replacing those it has)"
+        },
+        "due": {
+          "type": "string",
+          "description": "When it is due, YYYY-MM-DD"
+        },
+        "start": {
+          "type": "string",
+          "description": "When work on it starts, YYYY-MM-DD"
+        },
+        "priority": {
+          "type": "string",
+          "description": "none, low, medium, high or urgent"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Label ids of the project (replacing those it has)"
+        },
+        "status": {
+          "type": "string",
+          "description": "A status of its project to move it to"
+        }
+      }
+    },
+    "area": "rec",
+    "targetType": "taskItem",
+    "projection": "records.record",
+    "action": "record.update",
+    "events": [
+      "created",
+      "updated",
+      "deleted"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "sid",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "trim(string(args.status ?? \"\")) == \"\" ? \"none\" : trim(string(args.status))",
+        "type": "string"
+      }
+    },
+    {
+      "id": "st",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "tasksStatus"
+      }
+    },
+    {
+      "id": "lq",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "{where: {status: sid}, sort: [{field: \"rank\", desc: true}], limit: 1}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "last",
+      "type": "records.query",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "taskItem"
+      }
+    },
+    {
+      "id": "clock",
+      "type": "data.now",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "let a = args;\nlet t = state;\nlet asked = sid != \"none\";\nlet moving = st != nil \u0026\u0026 t != nil \u0026\u0026 string(st._id) != string(t.status ?? \"\");\nlet done = st?.category == \"done\";\nlet given = {title: a.title == nil ? nil : trim(a.title), assignees: a.assignees, due: a.due, start: a.start, priority: a.priority, labels: a.labels};\nlet changes = filter(toPairs(given), #[1] != nil);\nlet changed = fromPairs(moving ? concat(changes, [[\"status\", st._id], [\"completedAt\", done ? (t.completedAt ?? clock) : nil]]) : changes);\nlet tail = first(rows ?? []);\n{problem: t == nil ? \"there is no task \" + target\n   : asked \u0026\u0026 st == nil ? \"there is no status \" + sid\n   : st != nil \u0026\u0026 string(st.project) != string(t.project) ? \"that status is another project's\"\n   : a.title != nil \u0026\u0026 trim(a.title) == \"\" ? \"a task needs a title\"\n   : len(changed) == 0 \u0026\u0026 !asked ? \"give at least one change\" : \"\",\n moving: moving, empty: len(changed) == 0, after: tail == nil || tail._id == target ? \"\" : tail._id, changed: changed, expect: t?._seq}"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 2380,
+        "y": 0
+      }
+    },
+    {
+      "id": "moving",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.moving",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "ifMove",
+      "type": "flow.branch",
+      "title": "Moving to another status?",
+      "position": {
+        "x": 2380,
+        "y": 200
+      }
+    },
+    {
+      "id": "after",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 600
+      },
+      "config": {
+        "expr": "plan.after",
+        "type": "string"
+      }
+    },
+    {
+      "id": "before",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "expr": "\"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "changed",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 800
+      },
+      "config": {
+        "expr": "plan.changed",
+        "type": "json"
+      }
+    },
+    {
+      "id": "move",
+      "type": "records.move",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "entity": "taskItem",
+        "field": "rank"
+      }
+    },
+    {
+      "id": "empty",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 1000
+      },
+      "config": {
+        "expr": "plan.empty",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "ifEmpty",
+      "type": "flow.branch",
+      "title": "Nothing to change?",
+      "position": {
+        "x": 2720,
+        "y": 200
+      }
+    },
+    {
+      "id": "expect",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 1200
+      },
+      "config": {
+        "expr": "int(plan.expect ?? 0)",
+        "type": "number"
+      }
+    },
+    {
+      "id": "update",
+      "type": "records.update",
+      "position": {
+        "x": 3060,
+        "y": 0
+      },
+      "config": {
+        "entity": "taskItem"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "sid",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "sid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "st",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "sid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "lq",
+        "pin": "sid"
+      }
+    },
+    {
+      "from": {
+        "node": "lq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "last",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "st",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "st"
+      }
+    },
+    {
+      "from": {
+        "node": "sid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "sid"
+      }
+    },
+    {
+      "from": {
+        "node": "last",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "rows"
+      }
+    },
+    {
+      "from": {
+        "node": "clock",
+        "pin": "time"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "clock"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "moving",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "ifMove",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "moving",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ifMove",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "after",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "changed",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "ifMove",
+        "pin": "true"
+      },
+      "to": {
+        "node": "move",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "move",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "after",
+        "pin": "value"
+      },
+      "to": {
+        "node": "move",
+        "pin": "after"
+      }
+    },
+    {
+      "from": {
+        "node": "before",
+        "pin": "value"
+      },
+      "to": {
+        "node": "move",
+        "pin": "before"
+      }
+    },
+    {
+      "from": {
+        "node": "changed",
+        "pin": "value"
+      },
+      "to": {
+        "node": "move",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "empty",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "ifMove",
+        "pin": "false"
+      },
+      "to": {
+        "node": "ifEmpty",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "empty",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ifEmpty",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "expect",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "ifEmpty",
+        "pin": "false"
+      },
+      "to": {
+        "node": "update",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "update",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "changed",
+        "pin": "value"
+      },
+      "to": {
+        "node": "update",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "expect",
+        "pin": "value"
+      },
+      "to": {
+        "node": "update",
+        "pin": "expect"
+      }
+    }
+  ]
+}

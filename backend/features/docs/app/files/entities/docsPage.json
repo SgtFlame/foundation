@@ -1,0 +1,34 @@
+{
+  "id": "docsPage",
+  "name": "Page",
+  "owner": "app:docs",
+  "description": "A page of the docs library app (forge 35a-2): one document file in a Volume (pages/<id>.doc.json) with its place in the Volume's page tree, its icon and cover, and its trash. The tree is held here, never in folders: moving a page changes parent, ancestors and rank and never renames its file. Change pages through the docs.page.* commands and the createPage tool, which keep the tree whole; a Volume's grants are the floor of who may read and change its pages.",
+  "titleField": "title",
+  "storage": {
+    "projection": "sql"
+  },
+  "fields": [
+    {"id": "title", "name": "Title", "type": "text", "description": "The page's title; Untitled when empty", "searchable": true},
+    {"id": "icon", "name": "Icon", "type": "text", "description": "An emoji shown before the title"},
+    {"id": "iconFile", "name": "Icon image", "type": "file", "description": "An uploaded image used as the icon in place of the emoji"},
+    {"id": "cover", "name": "Cover", "type": "file", "description": "An uploaded image shown across the top of the page"},
+    {"id": "volume", "name": "Volume", "type": "text", "description": "The id of the Volume holding the page's document (kb.volumes)", "required": true},
+    {"id": "file", "name": "File", "type": "volumeFile", "description": "The page's document, pages/<id>.doc.json in its Volume"},
+    {"id": "parent", "name": "Parent", "type": "text", "description": "The id of the page it sits under; empty at the top of its Volume"},
+    {"id": "ancestors", "name": "Ancestors", "type": "list", "items": {"id": "item", "name": "Page", "type": "text"}, "description": "The ids of the pages above it, the top first; kept by the page commands, so a subtree is one query and a move into its own subtree is refused"},
+    {"id": "childCount", "name": "Subpages", "type": "number", "description": "How many subpages it has outside the trash, for the tree's expand arrow; kept by the page commands"},
+    {"id": "rank", "name": "Position", "type": "rank", "scope": "parent", "description": "Its place among its parent's subpages"},
+    {"id": "template", "name": "Template", "type": "bool", "description": "A template: listed under Templates, copied by createPage"},
+    {"id": "database", "name": "Database", "type": "text", "description": "The entity type of the database the page shows (35c-3); empty for a document page"},
+    {"id": "trashedAt", "name": "Trashed at", "type": "dateTime", "description": "When it went to the trash; empty when it is not in the trash"},
+    {"id": "trashedWith", "name": "Trashed with", "type": "text", "description": "The page whose trashing took it (itself for the page trashed), so restoring that page brings back what went with it and no more"},
+    {"id": "lastSavedAt", "name": "Last saved", "type": "dateTime", "description": "When its document file was last written (page.saved)"},
+    {"id": "hash", "name": "Hash", "type": "text", "description": "The SHA-256 of its document file as last saved"}
+  ],
+  "indexes": [
+    {"id": "by_volume_parent_rank", "fields": ["volume", "parent", "rank"]},
+    {"id": "by_ancestor", "fields": ["ancestors"]},
+    {"id": "by_trashed", "fields": ["volume", "trashedAt"]},
+    {"id": "by_trashed_with", "fields": ["trashedWith"]}
+  ]
+}

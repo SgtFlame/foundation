@@ -1,0 +1,1 @@
+| [Calendar.md](Calendar.md) › *Built in forge 28l* | `calendar.caldav` (discovery, sync-collection or etag deltas, keyed creates, etag-checked writes, free/busy, polled watch) and `calendar.ics` feeds, read-only calendars, the in-memory CalDAV server from the RFCs |

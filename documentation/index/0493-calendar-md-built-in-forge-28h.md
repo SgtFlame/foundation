@@ -1,0 +1,1 @@
+| [Calendar.md](Calendar.md) › *Built in forge 28h* | Free time and holds (forge 28h): `calendar.findFreeTime` over people's own calendars and hours, holds as tentative events, `proposeMeeting`, `choose`, `release`, `respond`, the hourly hold expiry |

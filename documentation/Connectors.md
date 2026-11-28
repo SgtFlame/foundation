@@ -496,6 +496,102 @@ Record commands do not take `heldBy` yet: setting a file someone else uploaded o
 - `records/data/richer_test.go` `TestFilesAreServedToReadersOnly`: `HeldFiles` vouches for a file to the record's reader, not to a user the row rule hides it from, nor one without a grant, nor through a field that holds no file; once the record is shared, to user 6 too, and never for a file the record does not hold;
 - end to end in Forge (`features/starter/mail`): the Mail app ingests through a user's own POP3 connection its account holds, and composes a draft's attachment uploaded by a user only when the reference names the draft.
 
+## Built in forge 26b-1
+
+**The hook endpoint**: signed callbacks a service pushes for one connection become connector events (forge plan `026b-1-HookEndpoint.md`).
+
+- **Hooks** (`features/connectors/hooks`): a hook is one connection's endpoint, `POST /hooks/cx/<hookId>`, served outside `/api/v1` and its session (a service proves itself by the signature). KV `cx_hooks` (services account) holds `hook.<id>` → `{id, tenant, connection, type, createdAt}` and `conn.<tenant>.<connection>` → the id; ids are 128 random bits as hex. `hooks.Ensure` makes a connection's hook once (two processes racing keep one: the loser deletes its own), `hooks.Of` reads it, `hooks.Drop` removes it, `Hook.URL(base)` gives its URL. `connections.Reconcile` ensures the hook of every connection whose type has `receives` while an installed trigger listens to a contract of it with a `callback` event, and the connections follower drops it when the connection is deleted. `connections.describe` gives it as `hook {id, path}` to those who may manage the connection.
+- **A request** (`hooks.Server`, an `http.Handler`): anything but `POST` is 405; a body over the limit 413 (before any signature is read); an unknown hook 404, counted in `Server.Unknown` and logged at info without its body; past the hook's rate 429 with `Retry-After`; then the callback (`adapter.Callback {method, path, header, body, receivedAt}`) is asked of the type's adapter on **`cx.receive.<tenant>.<type>.<connection>`** (request/reply in the adapter's queue group `cx.<type>`, like calls, so an external adapter verifies too and the connection's secrets stay with whoever resolves them). The adapter resolves the connection, runs the type's `adapter.Receiver`, refuses an event of a contract the type does not implement, publishes each event to `CX_<tenant>` through its books (its id in `Nats-Msg-Id`, so a delivery sent again is kept once), and only then replies `{events}`. A refusal (`invalid`, `auth`, `notSupported`) is 400, `rateLimited` 429, a failed publish, no adapter or a timeout 503, so the service sends it again; success is 200 only once JetStream has every event.
+- **Verifying** (`hooks/verify`): `verify.Verify(scheme, secret, header, body, now)` for each of `connectors.Receivers` (`stripe`: `Stripe-Signature` `t=…,v1=…`; `github`: `X-Hub-Signature-256`, no time; `standard-webhooks`: `Webhook-Id`/`Webhook-Timestamp`/`Webhook-Signature`, a `whsec_` base64 key; `hmac-sha256`: `X-Signature-256` over `<timestamp>.<body>` with `X-Signature-Timestamp`), timestamps within `verify.Tolerance` (5 minutes), compared in constant time; `verify.Sign` makes the headers, for tests and the test types. A type's `Receive` calls it with the secret from its connection's settings.
+- **Limits**: the `connectors.hooks` section (System › Connectors, app scope): `maxBodyKB` (1024), and a token bucket per hook, `ratePerSecond` (20) and `burst` (100), kept in KV `cx_hook_rates` by compare-and-set so every process shares it (a bucket that cannot be read lets the request through).
+- **Adapters**: `adapter.Serve` answers `cx.receive` for each `Impl` with a `Receive`; `connectors.AdapterPermissions` lets a fenced adapter subscribe to `cx.receive.*.<type>.*` for a type with `receives`. `test.secure` (`connectorstest`) now receives `hmac-sha256` callbacks signed with its password (`connectorstest.Receiver`).
+- **Not yet**: registering the hook with the service (`adapter.Registrar`, 26b-2), showing a hook's URL in the connection form (26b-2), and serving it from a split service set's gateway (21g).
+- **Tests**: `go test ./features/connectors/hooks/...` (each scheme accepted once and refused for a bad signature or an old timestamp, unknown, dropped and oversized hooks, a failed publish answering 503 and its retry kept once, ten repeats and two at once one event, the rate limit) and `connections`' `TestCallbacks` (the hook made for a listening trigger, deliveries repeated and sent to two adapter processes reaching the trigger once, dropped on delete).
+
+## Built in forge 26a-1
+
+**OAuth sign-in for connections**, built once for every connector type (forge plan `026a-1-OAuthCore.md`).
+
+- **Metadata** (`connectors/OAuth.go`): `Type.OAuth {provider, scopes, extra}` names a provider and the scopes the type needs, with `extra` authorize parameters (`access_type=offline`). A provider is a `connectors.OAuthProvider` on the `connector.oauthProvider` point (`connectors.ContributeOAuthProvider`, `OAuthProviderOf`): `title` (*Sign in with …*), `authorizeURL`, `tokenURL`, `revokeURL`, `pkce`, `scopeSeparator`, `scopes` (each with what it allows), `userInfoURL` and `accountField` (who signed in: that field of the userinfo answer, else of the token answer) and `register` (where an administrator registers the app). `CheckOAuthProvider` checks a provider and `CheckOAuth` a type against it (an unknown provider or an undeclared scope); the registry refuses announcements failing it, and `apps/tools`' `TestMetadata` runs both over every builtin.
+- **App registrations**: the `connectors.oauth` section (System › Connectors › *OAuth apps*, scopes `app` and `tenant`), one object per provider registered when `oauth.ContributeSettings` runs (so after the providers): `clientId`, `clientSecret` (a secret setting) and `redirectBase`. A tenant's own wins over the app scope's default; personal connections use them too (no client id of a person's own). Without one, sign-in fails with `oauth_not_registered`, naming where to register.
+- **Starting** (`connectors/oauth`): the live call `connection.signIn {id, return?}` (never a tool) checks `manage` on the connection, makes a single-use state in KV `cx_oauth_<tenant>` (10 minutes: the connection, the person, the provider, the PKCE verifier, the redirect and the route to return to) and ends with `result {url}`, the authorize URL with an S256 challenge. The redirect is `<redirectBase or serve --public-url / $FOUNDATION_PUBLIC_URL>/api/v1/connectors/oauth/callback`.
+- **The callback** (`oauth.Register` on the signed-in `/api/v1` group, so it runs as the person who started it): `oauth.Finish` refuses a state another person started (`oauth_state_other`, leaving it for its owner), spends it by a delete at the revision it read (a second tab gets `oauth_state_unknown`), trades the code with the verifier and the registration's credentials, reads the account, and commits the internal **`connection.setTokens {secrets: {oauth}, account}`** as that person: the tokens (`connections.Tokens`: access and refresh token, type, scope, expiry, provider) become the connection's `oauth` secret through `live.Command.Seal`, `Connection.account` records who signed in, and an error status is cleared. The page it answers posts `{type: "connector.oauth", connection, account, error, message}` to its opener and closes; opened without a popup it returns to the route with `?oauth=done` or the error code.
+- **Refresh** (`oauth.Tokens`, `connections.Deps.Tokens`): `cx.resolve` gives an adapter only `accessToken` and `expiresAt` (never the refresh token or the client secret). Within 5 minutes of expiry the token is refreshed under the lock `oauth.<connection>` in `cx_locks_<tenant>`; a process that waited for it takes the tokens the other kept (the projection is waited for before the lock is released), so a rotating refresh token is spent once. An `invalid_grant` sets the connection's status `error` with `connections.SignInAgain` and answers `auth`; signing in again clears it. A type with OAuth has the `oauth` secret field (`Fields.WithOAuth`) beside its own.
+- **The form**: `connection.form` shows *Sign in with <provider>* (`connections.describe` now gives `oauth {provider, title}`), *Signed in as …* and *Sign in again*, opens the provider in a popup opened in the click (the page itself when popups are blocked), and emits `signedIn {ok, account, error}`.
+- **Testing**: `connectors/oauth/oauthtest` is an in-process provider (`Consent` stands in for the person's approval; the token endpoint checks PKCE, rotates refresh tokens and answers `invalid_grant`; userinfo; revoke; `Refreshes`, `Delay`, `Invalidate`) with the `test.oauth` type. `connections`' `TestOAuthSignIn` and `TestOAuthRefresh` cover tokens kept as a secret shown only as set, spent, unknown and another person's states, a refused verifier, a refused consent, `cx.resolve`'s settings, two processes refreshing once, and `invalid_grant` marking the connection.
+- **Not yet**: revoking at the provider when a connection is deleted, the real providers and `XOAUTH2` (26a-2), and a `forge oauth` tool over the test provider (with 26a-2, which brings a server a provider to sign in with).
+
+## Built in forge 26b-2
+
+**Hook registration and backfill** (forge plan `026b-2-HookRegistration.md`).
+
+- **Registering**: `connections.Reconcile` (every process, on each connection or install event and every minute) works out, for each usable connection whose type has `receives`, the callback events triggers listen to (their `subscription` names, else ids, sorted) and makes its registration match (`connections/Hooks.go`): under the lock `hook.<connection>` in `cx_locks_<tenant>`, after reading the connection again, it asks the type's adapter on **`cx.register.<tenant>.<type>.<connection>`** (`connectors.RegisterRequest {op: register|update|unregister, url, events, registration}`, reply `{registration, secret}`), answered by `adapter.Serve` for each `Impl.Register` (`adapter.Registrar`: `Register` and `Update` give the registration and the signing secret the service chose, `Unregister`). The outcome is committed by the internal **`connection.setHook {hook, secrets: {hook}}`** as the service principal: `Connection.hook {url, events, registered, manual, error, at}`, and the registration with its signing secret as the connection's `hook` secret. A type with no Registrar (`notSupported`) gets `manual`: the form shows the URL to paste into the service. A failure is kept as `error` and tried again on the next pass; when no trigger listens any more the registration is removed (`unregister`) and the state cleared. Removing a deleted connection's registration at the service is not done.
+- **The URL** is `<publicBaseUrl>/hooks/cx/<hookId>`: the `connectors.hooks` section's `publicBaseUrl`, else `serve --public-url` (`connections.Deps.PublicBase`); without either the state's `error` says so and nothing is registered (in development, `stripe listen` or `gh webhook forward` reach a local server).
+- **Secrets**: `oauth` and `hook` are `connections.SystemSecrets`, kept only by the server (`connection.create`/`update` naming them are refused, and they are not checked against the type's schema); `cx.resolve` gives the hook's signing secret as `hookSecret` (`test.secure` verifies with it when set, else its password).
+- **Backfill** needs nothing new: an event with `delivery: [watch, callback]` keeps its leased `Watch`, which publishes with the same ids, so a callback that arrives late is dropped by `CX_<tenant>`'s duplicate window and reaches a trigger once.
+- **Not yet**: *On connector event*'s `correlate` filter (a callback's correlation key matched against the record that started its operation).
+- **Tests**: `connections`' `TestHookRegistration` (three processes reconciling at once register once with the fake service `connectorstest.Hooks`, the signing secret resolved and verifying a callback, unregistered when the app is uninstalled) and `TestBackfillThenLateCallbacks` (three events watched, their callbacks then posted, three trigger runs).
+
+## Built in forge 26f-1
+
+`chat.messaging@1` is the one contract for outside chat services (Slack, Discord, Teams), and `msgtest.chat` is the Messaging test server that implements it with no outside service (forge's part 26f-1, [026f-1-MessagingContract.md](../../forge/documentation/plans/026f-1-MessagingContract.md)).
+
+- **The contract** (`features/messaging`, `messaging.Contract()`, a builtin that passes `CheckContract`). Its shapes are `messaging.Channel` (`kind`: `channel`, `private`, `direct` or `group`), `Member` and `Message`. A message has its `thread`, its `key` when it was posted through the contract, `author`, Markdown `text` with mentions as `@<member id>`, `mentions`, `files`, `reactions` per emoji, `replies`, `posted` and `edited`.
+  - Operations:
+    - `channels.list` and `members.list {channel?}`.
+    - `messages.list {channel, thread?, since?, limit?}`: the latest messages oldest first, or with `since` the messages posted or edited after that cursor plus the ids `deleted`, always with the next `cursor`. An expired cursor is `invalid` with `cursor_expired` (`messaging.CodeCursorExpired`).
+    - `message.post {channel, key, text, thread?, files?}`, keyed, effect `send`.
+    - `message.edit` and `message.delete`, refused as `invalid` on someone else's message. Deleting a message that is gone answers `deleted: false`.
+    - `reaction.add` and `reaction.remove`, both idempotent.
+    - `file.upload {channel, name, contentType, data}`, with base64 `data`.
+    - `check`.
+  - Events: `messagePosted` and `messageEdited` (with the whole message), `messageDeleted`, `reactionChanged {message, emoji, user, added}` and `channelChanged`. Each is keyed by its notice `id` and delivered by `watch` or `callback`, so Slack and Teams use 26b's hooks and Discord its gateway.
+  - A connection's own posts are raised too. A bridge knows them by `key`.
+- **The test server** (`messaging/msgtest`) has the Calendar test server's form (question 28.6): a Go builtin over in-memory workspaces, scripted through `msgtest.control@1`. It is not a scripted sample app, so every Foundation package tests against it without installing anything.
+  - Connections whose settings name the same `workspace` share it, as two people in one Slack do. `user` is the account's member id.
+  - A workspace starts with `#general` and `#random` and the members `u-dana` and `u-lee`. A private channel is seen only by its members.
+  - Control operations:
+    - the outside world: `post` (as another member), `edit`, `delete`, `react` and `addChannel`;
+    - faults: `fail` (the next calls of an operation), `expireCursor` and `dropNotifications` (the change stays in `messages.list`);
+    - `state`.
+  - `Watch` raises every change in the workspace on each connection's session, with notice ids `<connection>-<seq>`.
+  - The `msgtest.call` live call runs one operation as the caller, which `forge msgtest` uses.
+  - Wired in `features/wiring/messaging.go`. Give the type one adapter instance, since its state lives in that process.
+- **The suite** (`messaging/contracttest.Run`) is what every `chat.messaging@1` type passes. It checks that:
+  - a post is keyed;
+  - replies are listed under their thread only;
+  - lists are oldest first;
+  - a cursor gives only the changes since, with deletions;
+  - edits are reported;
+  - reactions count once;
+  - files attach;
+  - delete is idempotent;
+  - an expired cursor is `cursor_expired`.
+- **Tests**:
+  - `go test ./features/messaging/...`: the suite against the test server, the checks, the golden tool shapes of every operation (`msgtest/testdata/golden`, `-update` after a deliberate change), and faults and private channels.
+  - `TestWatchBothWays`: two connections in one workspace each get every notice in order, and a dropped notice is still listed.
+- **Not yet**: the two-way fixture through *Call connector* and *On connector event* comes with 26f-2's bridges, whose blueprints it tests.
+
+## Built in forge 26a-2
+
+The first OAuth providers (forge's plan `026a-2-OAuthProviders.md`).
+
+- **`connectors/oauth/providers`** (wired in `features/wiring/oauthproviders.go`, before serve registers the `connectors.oauth` section): **Google** (PKCE, `access_type=offline`, `prompt=consent`, default scopes `openid email`, account `id_token.email`, Gmail's `https://mail.google.com/` and the calendar scopes), **Microsoft** (the identity platform v2.0 under `login.microsoftonline.com/{tenant}/…`, PKCE, default scopes `openid profile offline_access`, account `id_token.preferred_username`, the outlook.office.com IMAP, POP and SMTP scopes and Graph's calendar, mail and Teams scopes; one token is for one resource, so a type asks for Outlook or Graph scopes, never both) and **Slack** (OAuth v2 bot tokens, no PKCE, scopes joined by `,`, account `{team.id}/{authed_user.id}`, the chat scopes).
+- **`OAuthProvider`** gained `Extra` (authorize parameters every sign-in sends), `DefaultScopes` (asked before the type's, each declared), `TenantSegment` (the URLs hold `{tenant}`, filled from the registration's `tenant`, `common` when empty; the section shows a *Directory* field for such a provider) and `TokenAuth` (`post`, the default, or `basic`). `AccountField` is a dotted path (`team.id`), a claim of the token response's `id_token` (`id_token.email`, read without checking the signature: it came straight from the provider over TLS) or a template of those (`{team.id}/{authed_user.id}`), read by `oauth.ReadAccount`.
+- **A connection may choose its sign-in**: `OAuth.Field` names a settings field holding one of `OAuth.Choices` (`{provider, scopes, extra}`), and `OAuth.For(settings)` is the choice a connection made; a connection that chose none signs in another way (a password), `connection.signIn` refuses it with `oauth_not_chosen`, and `connections.describe` names a provider only for a connection that chose one. `CheckOAuth` checks every choice and that the field is a settings property.
+- `oauth.AuthorizeURL`, `oauth.TokenRequest` and `Deps.Exchange` are the pure pieces of the flow, for golden tests.
+
+### Decisions to review after seeing it
+
+- Slack signs in for a bot token (`scope`), not a user token (`user_scope`): the bridge of 26g posts as the app. A type wanting a user token would add `user_scope` through `Extra`.
+- Revoking at the provider when a connection is deleted is still not done (the providers' `revokeURL`s are declared for it).
+
+### Verification
+
+- `go test ./features/connectors/oauth/providers`: the providers pass `CheckOAuthProvider`; golden authorize URLs and token requests per provider (`testdata/golden`, `-update`); token, refresh and error answers per provider from cassettes written from the providers' documentation (`testdata/cassettes`), Slack's error coming with 200; each account read from its token answer.
+- `go test ./features/connectors/connections -run OAuth`: `TestOAuthChoice` (a password connection cannot start OAuth; a choosing one asks for its choice's scopes and signs in).
+- Signing in to the real providers waits for app registrations (deferred until Dec 15).
+
 ## Built in forge 35f-7
 AI image generation as a connector (forge [035f-7](../../forge/documentation/plans/035f-7-ImageGeneration.md)), in `features/ai/images`, wired from `features/wiring/images.go`.
 - **A new error code, `refused`** (`connectors.CodeRefused`, not retryable): the service declined on its own policy, such as an image model's safety refusal, shown to the user as such.
