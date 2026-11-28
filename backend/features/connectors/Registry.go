@@ -191,6 +191,7 @@ func (r *Registry) checkAnnouncement(a Announcement) []Problem {
 			c, ok := builtin[ref]
 			return c, ok
 		}))
+		prefix("type", CheckOAuth(*a.Type, func(id string) (OAuthProvider, bool) { return OAuthProviderOf(r.reg, id) }))
 	default:
 		out = append(out, Problem{Path: "", Message: "announces neither a type nor a surface"})
 	}

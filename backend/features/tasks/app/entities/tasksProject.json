@@ -1,6 +1,6 @@
 {
   "id": "tasksProject",
-  "owner": "app:todos",
+  "owner": "app:tasks",
   "name": "Project",
   "description": "A project of the Tasks library app: its tasks, statuses and labels, and who may see it (admins, members and guests, each kept as a grant on the project by the app)",
   "titleField": "name",
@@ -84,8 +84,46 @@
       "id": "connection",
       "name": "Tracker connection",
       "type": "connection",
-      "description": "An outside tracker (Trello, Asana\u2026) the project is kept in step with (part 30h)",
+      "description": "An outside tracker (Trello, Asana…) the project is kept in step with (part 30h)",
       "contract": "tasks.tracker@1"
+    },
+    {
+      "id": "board",
+      "name": "Tracker board",
+      "type": "text",
+      "description": "The id of the outside board (board.list) the project is kept in step with, through its tracker connection (part 30h)"
+    },
+    {
+      "id": "sync",
+      "name": "Sync",
+      "type": "object",
+      "description": "How the project's sync with its board stands, written by the app",
+      "fields": [
+        {
+          "id": "state",
+          "name": "State",
+          "type": "text",
+          "description": "importing, ok or failed"
+        },
+        {
+          "id": "lastSync",
+          "name": "Last sync",
+          "type": "dateTime",
+          "description": "When a change last went either way"
+        },
+        {
+          "id": "imported",
+          "name": "Imported",
+          "type": "number",
+          "description": "Cards imported by the last import"
+        },
+        {
+          "id": "error",
+          "name": "Error",
+          "type": "text",
+          "description": "The last failure's message"
+        }
+      ]
     },
     {
       "id": "archived",

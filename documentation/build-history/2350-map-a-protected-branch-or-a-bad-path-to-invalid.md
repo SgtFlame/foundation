@@ -1,0 +1,1 @@
+- map a protected branch or a bad path to `invalid`, never `auth`, which marks the connection failed.

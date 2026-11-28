@@ -1,0 +1,133 @@
+{
+  "id": "tasks-onProject",
+  "name": "A project was made",
+  "description": "Sets a new project up as the app (project.setup): its statuses To do, Doing, Review and Done. The app does it because a project's maker holds no grant on it until the app gives one.",
+  "kind": "app.trigger",
+  "version": 1,
+  "owner": "app:tasks",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "records.onChanged",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "entity": "tasksProject",
+        "events": [
+          "created"
+        ]
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "{}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "setup",
+      "type": "live.sendCommand",
+      "title": "Set the project up",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "command": "tasks.project.setup"
+      }
+    },
+    {
+      "id": "fail",
+      "type": "jobs.fail",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "retryable": true
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "\"the project could not be set up: \" + message",
+        "type": "string"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "setup",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "setup",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "setup",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "setup",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "fail",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "setup",
+        "pin": "message"
+      },
+      "to": {
+        "node": "why",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "fail",
+        "pin": "message"
+      }
+    }
+  ]
+}

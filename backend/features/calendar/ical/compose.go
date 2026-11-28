@@ -94,6 +94,9 @@ var partstats = map[string]string{calendar.NeedsAction: "NEEDS-ACTION", calendar
 // ComposeOptions are what else a composed file carries.
 type ComposeOptions struct {
 	Now time.Time // DTSTAMP; now when zero
+	// Resource writes a calendar object resource for a CalDAV server
+	// (forge 28l): no METHOD line, which RFC 4791 section 4.1 forbids.
+	Resource bool
 }
 
 // Compose writes events as .ics with a method (PUBLISH when empty), with
@@ -121,7 +124,9 @@ func Compose(method string, events []calendar.Event, o ComposeOptions) (string, 
 	w.line("PRODID", nil, ProdID)
 	w.line("VERSION", nil, "2.0")
 	w.line("CALSCALE", nil, "GREGORIAN")
-	w.line("METHOD", nil, method)
+	if !o.Resource {
+		w.line("METHOD", nil, method)
+	}
 	// The zones the events use and the years they span.
 	zones := map[string][2]int{}
 	note := func(z when.Zoned) {

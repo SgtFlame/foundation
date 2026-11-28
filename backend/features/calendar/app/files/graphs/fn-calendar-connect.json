@@ -125,7 +125,7 @@
         "y": 0
       },
       "config": {
-        "expr": "{entity: \"calCalendar\", values: {name: item.name ?? item.id, color: item.color ?? \"\", zone: item.zone ?? \"\", owner: user, connection: connection, outsideId: item.id, syncState: \"behind\"}}",
+        "expr": "{entity: \"calCalendar\", values: {name: item.name ?? item.id, color: item.color ?? \"\", zone: item.zone ?? \"\", owner: user, connection: connection, outsideId: item.id, syncState: \"behind\", readOnly: (item.access ?? \"owner\") in [\"reader\", \"freeBusy\"]}}",
         "type": "json"
       }
     },

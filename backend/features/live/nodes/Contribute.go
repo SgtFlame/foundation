@@ -232,9 +232,6 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			if d.Store == nil {
 				return nil, "", fmt.Errorf("there is no projection store")
 			}
-			if q, ok := x.Host.(*QueryHost); ok {
-				q.Reads = append(q.Reads, Read{Projector: c.Projector, Key: key})
-			}
 			get := d.Store.Get
 			if dry := bus.DryOf(x.Context()); dry != nil {
 				get = dry.Get // a sandboxed run's own events over the projection (forge 06f)
@@ -243,8 +240,15 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			if err != nil {
 				return nil, "", err
 			}
-			if q, isQ := x.Host.(*QueryHost); isQ && ok {
-				q.Pos = q.Pos.Merge(v.Position())
+			if q, isQ := x.Host.(*QueryHost); isQ {
+				read := Read{Projector: c.Projector, Key: key, Checked: true}
+				if ok && v.Value != nil {
+					read.Seq = v.Seq
+				}
+				q.Reads = append(q.Reads, read)
+				if ok {
+					q.Pos = q.Pos.Merge(v.Position())
+				}
 			}
 			var value any
 			if ok && v.Value != nil {

@@ -748,3 +748,9 @@ A page may read a query of an app it requires by `<app>.<query>` (Forge's CRM sa
 - `apps.CheckDocument` looks up `qry-<app>-<query>` with the dots as dashes, as `livenodes.QueryGraphID` names it.
 
 Test: Forge `go test ./features/starter/crm -run TestPages` (`TestPagesCheck`, `TestPagesExportImport`).
+
+## Changed in forge 30e
+Forge's Tasks app (`taskboard`, part 30e) shows another app's records: it requires the Tasks library app (`tasks`) and its pages read and change `taskItem` and `tasksProject` records through `tasks.*` commands and queries.
+
+- **An editor kind's subject may be a required app's type.** `entityOf` (`apps/installs/Pages.go`) takes the editor kind's `subject.type` as the page's entity when the app uses that type or requires other apps. The tab is then present on `record_<type>.<id>`, and its `record` holds that record for the `{record.…}` templates. Before this change only the app's own types counted, so such a tab's subject was the page itself.
+- **The document check accepts a required app's queries.** A prefab query named `<requiredApp>.<query>` (such as `tasks.myDay`) passes `apps.CheckDocument` when the app's `requires.apps` names that app. The install still checks that the query exists, through `requires`.

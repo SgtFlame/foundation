@@ -1,0 +1,197 @@
+{
+  "name": "chat_messaging_messages_list",
+  "title": "List messages",
+  "description": "The latest messages of a channel (or of one thread), oldest first, or with since the messages posted or edited after that cursor and the ids of those deleted. Either way it gives the cursor to store. A cursor too old is refused as invalid with cursor_expired in its message: list again without one.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "The channel's id"
+      },
+      "thread": {
+        "type": "string",
+        "description": "A thread's first message id: only that thread's replies"
+      },
+      "since": {
+        "type": "string",
+        "description": "The cursor from the last list, to get only changes since"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "description": "At most this many messages; 50 when left out"
+      }
+    },
+    "required": [
+      "channel"
+    ]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "messages": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "description": "A message",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The message's id at the service"
+            },
+            "channel": {
+              "type": "string",
+              "description": "Its channel's id"
+            },
+            "thread": {
+              "type": "string",
+              "description": "For a reply: the id of the message that starts its thread"
+            },
+            "key": {
+              "type": "string",
+              "description": "The key it was posted with through this contract, when it was; bridges know their own posts by it"
+            },
+            "author": {
+              "type": "object",
+              "description": "Who posted it",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Their id"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Their name"
+                },
+                "bot": {
+                  "type": "boolean",
+                  "description": "Whether a bot posted it"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            },
+            "text": {
+              "type": "string",
+              "description": "Its text as Markdown, mentions as @\u003cmember id\u003e"
+            },
+            "mentions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The member ids it mentions"
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "description": "A file attached to a message",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "The file's id at the service"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Its name"
+                  },
+                  "size": {
+                    "type": "integer",
+                    "description": "Its size in bytes"
+                  },
+                  "contentType": {
+                    "type": "string",
+                    "description": "Its media type"
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "Where the service serves it to the connection"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ]
+              },
+              "description": "Its files"
+            },
+            "reactions": {
+              "type": "array",
+              "description": "Its reactions, one per emoji",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "emoji": {
+                    "type": "string",
+                    "description": "The emoji, e.g. thumbsup"
+                  },
+                  "count": {
+                    "type": "integer",
+                    "description": "How many reacted"
+                  },
+                  "users": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Who reacted"
+                  }
+                },
+                "required": [
+                  "emoji",
+                  "count"
+                ]
+              }
+            },
+            "replies": {
+              "type": "integer",
+              "description": "How many replies its thread has"
+            },
+            "posted": {
+              "type": "string",
+              "description": "When it was posted, RFC 3339"
+            },
+            "edited": {
+              "type": "string",
+              "description": "When it was last edited, RFC 3339"
+            }
+          },
+          "required": [
+            "id",
+            "channel",
+            "author",
+            "text",
+            "posted"
+          ]
+        },
+        "description": "The messages, oldest first"
+      },
+      "deleted": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Ids of messages deleted since the cursor"
+      },
+      "cursor": {
+        "type": "string",
+        "description": "The cursor to store for the next list"
+      }
+    },
+    "required": [
+      "messages",
+      "cursor"
+    ]
+  },
+  "annotations": {
+    "title": "List messages",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

@@ -1,0 +1,432 @@
+{
+  "id": "fn-docs-createPage",
+  "name": "Create a page",
+  "description": "Makes a page as the caller in one request: its document file in the Volume (pages/\u003cid\u003e.doc.json, empty or a copy of a template's), then its record at the end of its parent's subpages (docs.page.add). The caller needs volume.write on the Volume. If the record is refused, the new file is removed again. Gives the new page's id.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:docs",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "volume",
+            "type": "string",
+            "description": "The Volume's id (kb.volumes)"
+          },
+          {
+            "id": "parent",
+            "type": "string",
+            "optional": true,
+            "description": "The page it goes under; the Volume's top level when left out"
+          },
+          {
+            "id": "template",
+            "type": "string",
+            "optional": true,
+            "description": "A template page whose document and title it starts from"
+          },
+          {
+            "id": "title",
+            "type": "string",
+            "optional": true,
+            "description": "The title; the template's, or Untitled, when left out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "newId",
+      "type": "data.newId",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "pageId",
+      "type": "data.expression",
+      "title": "The new page's id, read once",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "string(fresh)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "tplId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "(template ?? \"\") == \"\" ? \"none\" : template",
+        "type": "string"
+      }
+    },
+    {
+      "id": "tpl",
+      "type": "records.get",
+      "title": "The template",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "from",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "tpl?.file",
+        "type": "json"
+      }
+    },
+    {
+      "id": "file",
+      "type": "docs.createPageFile",
+      "position": {
+        "x": 1360,
+        "y": 0
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "{volume: volume, parent: parent ?? \"\", title: (title ?? \"\") != \"\" ? title : string(tpl?.title ?? \"\"), file: file}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "command": "docs.page.add"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "id",
+            "type": "string"
+          },
+          {
+            "id": "produced",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "produced",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"docsPage\", id: id}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "undo",
+      "type": "docs.removePageFile",
+      "title": "Remove the file again",
+      "position": {
+        "x": 2380,
+        "y": 200
+      }
+    },
+    {
+      "id": "refused",
+      "type": "flow.return",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "newId",
+        "pin": "id"
+      },
+      "to": {
+        "node": "pageId",
+        "pin": "fresh"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "template"
+      },
+      "to": {
+        "node": "tplId",
+        "pin": "template"
+      }
+    },
+    {
+      "from": {
+        "node": "tplId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "tpl",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "tpl",
+        "pin": "record"
+      },
+      "to": {
+        "node": "from",
+        "pin": "tpl"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "file",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "volume"
+      },
+      "to": {
+        "node": "file",
+        "pin": "volume"
+      }
+    },
+    {
+      "from": {
+        "node": "pageId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "file",
+        "pin": "page"
+      }
+    },
+    {
+      "from": {
+        "node": "from",
+        "pin": "value"
+      },
+      "to": {
+        "node": "file",
+        "pin": "from"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "volume"
+      },
+      "to": {
+        "node": "args",
+        "pin": "volume"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "parent"
+      },
+      "to": {
+        "node": "args",
+        "pin": "parent"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "title"
+      },
+      "to": {
+        "node": "args",
+        "pin": "title"
+      }
+    },
+    {
+      "from": {
+        "node": "tpl",
+        "pin": "record"
+      },
+      "to": {
+        "node": "args",
+        "pin": "tpl"
+      }
+    },
+    {
+      "from": {
+        "node": "file",
+        "pin": "file"
+      },
+      "to": {
+        "node": "args",
+        "pin": "file"
+      }
+    },
+    {
+      "from": {
+        "node": "file",
+        "pin": "then"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "pageId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "pageId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "pageId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "produced"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "undo",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "file",
+        "pin": "file"
+      },
+      "to": {
+        "node": "undo",
+        "pin": "file"
+      }
+    },
+    {
+      "from": {
+        "node": "undo",
+        "pin": "then"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "error"
+      }
+    }
+  ]
+}
