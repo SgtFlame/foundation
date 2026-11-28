@@ -15,8 +15,14 @@ The task model: the **`tasks` library app** (forge's 5g sample, once `tasks` too
 - **New node *Move record*** (`records.move`, command graphs): `record.move` decided as *Update record* is, `after`/`before`/`set` pins.
 - **Import fix**: an app import that first brings an entity type without its relations (one relating to a type not imported yet) also leaves out a `rank` scoped by one of them, until the second pass (`appservice` `Import.go`).
 - **List fields in queries**: `where` on a many relation wants a whole list; filter for one item with `{field, op: "contains", value}` (the graphs here do).
-- **Known gap** (not this part's to fix): the graph read nodes (*Get record*, *Query*) do not check `record.read` on the type, as the `records.find` query does; a person with no role on the type reads every record a row rule does not restrict (with no allowing role there is no rule). The tests check readers as `records.find` does.
 - Test with `go test ./features/tasks/`: seeding twice; Alice (member of *Website relaunch*) and Gus (guest of *Billing*) see only their projects; a move to Done sets `completedAt` and back clears it; removing Alice from the project revokes her grant; `myDay`, `projectTasks` and `tasks.list`; an agent with autonomy `suggest` proposes and `draft` makes a task, a run confined to one task changes no other; `TestTenThousandTasks` filters tasks by assignee in SQL: 1 000 by default, `TASKS_N=10000` for the acceptance (21 ms reading 101 rows; making them takes about five minutes, each create taking the task number counter).
+
+## Changed in forge 30f
+For action items from mail (Forge's Mail triage agent proposing tasks):
+
+- *Task* has a new text field `sourceLink`, indexed by `bySource`. `task.create` sets it to `source.link`.
+- **An agent proposes one task per source.** A `task.create` sent by an agent whose `source.link` matches a task it can read (in any state, including dismissed, which archives) is refused: *a task from this source was already proposed*. A person may make more than one task from the same source.
+- The read nodes now check `record.read` (foundation#32), so the 30c known gap is closed.
 
 ## Built in forge 30g
 

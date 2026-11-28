@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"strings"
 	"testing"
 	"time"
 
@@ -488,6 +489,11 @@ func TestTaskModel(t *testing.T) {
 	eventually(t, "the proposal", 5*time.Second, func() bool { return f.get(tasks.EntityTask, proposal)["_id"] != nil })
 	if p := f.get(tasks.EntityTask, proposal); p["state"] != "proposed" || p["proposedBy"] != fmt.Sprintf("agent:%d", triage) {
 		t.Errorf("the suggest agent's task: %v", p)
+	}
+	// Forge 30f: an agent proposes one task per source
+	again := f.tool(f.asAgent(triage, ""), "tasks.create", map[string]any{"project": web, "title": "Reply to Dana again", "source": map[string]any{"link": "workbench:mailThread/7"}})
+	if again["made"] == true || !strings.Contains(fmt.Sprint(again["error"]), "already proposed") {
+		t.Errorf("a second proposal from one source: %v", again)
 	}
 	out = f.tool(f.asAgent(planner, ""), "tasks.create", map[string]any{"project": web, "title": "Plan the launch"})
 	drafted, _ := out["task"].(string)

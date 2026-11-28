@@ -1,14 +1,14 @@
 {
   "id": "cmd-tasks-task-create",
   "name": "tasks.task.create",
-  "description": "Makes a task in a project, its target the new task's id, last in its status (the project's first to-do status when left out): its title, a plain-text description, assignees (user ids), due and start dates (YYYY-MM-DD), a priority (none, low, medium, high, urgent), labels, a parent task, and the source it came from ({link, title, kind}, a workbench link to a mail thread, a message or an event). Made by an agent whose autonomy is suggest (or unset), it is a proposal until a person accepts it; with autonomy draft, an active task.",
+  "description": "Makes a task in a project, its target the new task's id, last in its status (the project's first to-do status when left out): its title, a plain-text description, assignees (user ids), due and start dates (YYYY-MM-DD), a priority (none, low, medium, high, urgent), labels, a parent task, and the source it came from ({link, title, kind}, a workbench link to a mail thread, a message or an event; an agent proposes one task per source, so a second is refused). Made by an agent whose autonomy is suggest (or unset), it is a proposal until a person accepts it; with autonomy draft, an active task.",
   "kind": "command",
   "version": 1,
   "owner": "app:tasks",
   "spec": {
     "command": "task.create",
     "title": "New task",
-    "description": "Makes a task in a project, its target the new task's id, last in its status (the project's first to-do status when left out): its title, a plain-text description, assignees (user ids), due and start dates (YYYY-MM-DD), a priority (none, low, medium, high, urgent), labels, a parent task, and the source it came from ({link, title, kind}, a workbench link to a mail thread, a message or an event). Made by an agent whose autonomy is suggest (or unset), it is a proposal until a person accepts it; with autonomy draft, an active task.",
+    "description": "Makes a task in a project, its target the new task's id, last in its status (the project's first to-do status when left out): its title, a plain-text description, assignees (user ids), due and start dates (YYYY-MM-DD), a priority (none, low, medium, high, urgent), labels, a parent task, and the source it came from ({link, title, kind}, a workbench link to a mail thread, a message or an event; an agent proposes one task per source, so a second is refused). Made by an agent whose autonomy is suggest (or unset), it is a proposal until a person accepts it; with autonomy draft, an active task.",
     "args": {
       "type": "object",
       "properties": {
@@ -192,6 +192,29 @@
       }
     },
     {
+      "id": "dq",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "let link = trim(string(args.source?.link ?? \"\"));\n{where: {sourceLink: link == \"\" ? \"-\" : link}, limit: 1}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "dup",
+      "type": "records.query",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "entity": "taskItem"
+      }
+    },
+    {
       "id": "none",
       "type": "data.expression",
       "position": {
@@ -219,7 +242,7 @@
         "y": 0
       },
       "config": {
-        "expr": "let a = args;\nlet title = trim(a.title ?? \"\");\nlet isAgent = kind == \"agent\";\nlet autonomy = string(agentRecord?.autonomy ?? \"suggest\");\nlet proposed = isAgent \u0026\u0026 autonomy == \"suggest\";\nlet text = trim(a.description ?? \"\");\nlet doc = text == \"\" ? nil : {type: \"doc\", content: map(split(text, \"\\n\\n\"), ({type: \"paragraph\", content: [{type: \"text\", text: #}]}))};\nlet given = {description: doc, assignees: a.assignees, due: a.due, start: a.start, priority: a.priority, labels: a.labels, parent: a.parent, source: a.source};\nlet vals = fromPairs(concat(\n  [[\"title\", title], [\"project\", pid], [\"status\", sid], [\"rank\", rank], [\"state\", proposed ? \"proposed\" : \"active\"], [\"proposedBy\", isAgent ? \"agent:\" + agent : \"\"]],\n  filter(toPairs(given), #[1] != nil \u0026\u0026 #[1] != \"\")));\n{problem: state != nil ? \"there is already a task \" + target\n   : title == \"\" ? \"give the task a title\"\n   : project == nil ? \"there is no project \" + pid + \" you may see\"\n   : sid == \"\" ? (string(a.status ?? \"\") != \"\" ? \"the project has no status \" + string(a.status) : \"the project has no statuses yet\")\n   : \"\",\n tasks: [{id: target, values: vals}]}",
+        "expr": "let a = args;\nlet title = trim(a.title ?? \"\");\nlet isAgent = kind == \"agent\";\nlet autonomy = string(agentRecord?.autonomy ?? \"suggest\");\nlet proposed = isAgent \u0026\u0026 autonomy == \"suggest\";\nlet text = trim(a.description ?? \"\");\nlet doc = text == \"\" ? nil : {type: \"doc\", content: map(split(text, \"\\n\\n\"), ({type: \"paragraph\", content: [{type: \"text\", text: #}]}))};\nlet given = {description: doc, assignees: a.assignees, due: a.due, start: a.start, priority: a.priority, labels: a.labels, parent: a.parent, source: a.source, sourceLink: trim(string(a.source?.link ?? \"\"))};\nlet vals = fromPairs(concat(\n  [[\"title\", title], [\"project\", pid], [\"status\", sid], [\"rank\", rank], [\"state\", proposed ? \"proposed\" : \"active\"], [\"proposedBy\", isAgent ? \"agent:\" + agent : \"\"]],\n  filter(toPairs(given), #[1] != nil \u0026\u0026 #[1] != \"\")));\n{problem: state != nil ? \"there is already a task \" + target\n   : title == \"\" ? \"give the task a title\"\n   : project == nil ? \"there is no project \" + pid + \" you may see\"\n   : isAgent \u0026\u0026 len(dup ?? []) \u003e 0 ? \"a task from this source was already proposed (\" + string(first(dup)._id) + \"); propose none again\"\n   : sid == \"\" ? (string(a.status ?? \"\") != \"\" ? \"the project has no status \" + string(a.status) : \"the project has no statuses yet\")\n   : \"\",\n tasks: [{id: target, values: vals}]}",
         "type": "json"
       }
     },
@@ -499,6 +522,36 @@
       "to": {
         "node": "plan",
         "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "dq",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "dq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "dup",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "dup",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "dup"
       }
     },
     {
