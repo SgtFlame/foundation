@@ -62,7 +62,7 @@
         "y": 0
       },
       "config": {
-        "expr": "{filter: {field: \"owner\", op: \"eq\", value: user}, sort: [{field: \"_createdAt\"}], limit: 50}",
+        "expr": "{filter: {field: \"owner\", op: \"eq\", value: user != \"\" ? user : \"0\"}, sort: [{field: \"_createdAt\"}], limit: 50}",
         "type": "json"
       }
     },

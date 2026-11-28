@@ -19,7 +19,7 @@
             "id": "people",
             "type": "json",
             "optional": true,
-            "description": "The people's user ids, as text; the caller (a person) is always included"
+            "description": "The people's user ids, as text; the calling person is always included; an agent that names nobody finds times for the person who made it"
           },
           {
             "id": "durationMinutes",
@@ -62,7 +62,7 @@
         "y": 0
       },
       "config": {
-        "expr": "kind == \"agent\" || user == \"\" ? map(people ?? [], string(#)) : uniq(concat([user], map(people ?? [], string(#))))",
+        "expr": "kind == \"agent\" ? (len(people ?? []) \u003e 0 ? map(people, string(#)) : (agentRecord?._createdBy == nil ? [] : [string(agentRecord._createdBy)])) : (user == \"\" ? map(people ?? [], string(#)) : uniq(concat([user], map(people ?? [], string(#)))))",
         "type": "json"
       }
     },
@@ -270,6 +270,16 @@
       "to": {
         "node": "ids",
         "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "agentRecord"
+      },
+      "to": {
+        "node": "ids",
+        "pin": "agentRecord"
       }
     },
     {

@@ -1,7 +1,7 @@
 {
   "id": "fn-calendar-proposeMeeting",
   "name": "Propose a meeting",
-  "description": "Finds times when everyone is free (as findFreeTime does) and holds them for the proposal (as hold does), returning the slots to put in a draft; it never sends anything itself. An agent whose autonomy is suggest gets the slots only, with no Hold. Args {people, durationMinutes, from, to, purpose, subject?, count?}.",
+  "description": "Finds times when everyone is free (as findFreeTime does) and holds them for the proposal (as hold does), returning the slots to put in a draft; it never sends anything itself. An agent whose autonomy is suggest gets the slots only, with no Hold. Args {people, durationMinutes, from, to, purpose, subject?, count?, calendar?, zone?}; an agent naming nobody proposes for the person who made it, on that person's calendar it may write.",
   "kind": "function",
   "version": 1,
   "owner": "app:calendar",
@@ -19,7 +19,7 @@
             "id": "people",
             "type": "json",
             "optional": true,
-            "description": "The people's user ids, as text; the caller is always included"
+            "description": "The people's user ids, as text; the calling person is always included; an agent that names nobody proposes for the person who made it"
           },
           {
             "id": "durationMinutes",
@@ -52,6 +52,18 @@
             "type": "number",
             "optional": true,
             "description": "How many times to propose, 3 when left out"
+          },
+          {
+            "id": "calendar",
+            "type": "string",
+            "optional": true,
+            "description": "The calendar to hold the times on; left out, the caller's own, or for an agent the first calendar of the people's it may see"
+          },
+          {
+            "id": "zone",
+            "type": "string",
+            "optional": true,
+            "description": "The held events' time zone; the calendar's when left out"
           }
         ]
       }
@@ -73,8 +85,58 @@
         "y": 0
       },
       "config": {
-        "expr": "kind == \"agent\" || user == \"\" ? map(people ?? [], string(#)) : uniq(concat([user], map(people ?? [], string(#))))",
+        "expr": "kind == \"agent\" ? (len(people ?? []) \u003e 0 ? map(people, string(#)) : (agentRecord?._createdBy == nil ? [] : [string(agentRecord._createdBy)])) : (user == \"\" ? map(people ?? [], string(#)) : uniq(concat([user], map(people ?? [], string(#)))))",
         "type": "json"
+      }
+    },
+    {
+      "id": "calQ",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "{filter: {field: \"owner\", op: \"in\", value: len(everyone) \u003e 0 ? everyone : [\"none\"]}, sort: [{field: \"_createdAt\"}], limit: 50}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "cals",
+      "type": "records.query",
+      "title": "The people's calendars the caller may see",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "where",
+      "type": "data.expression",
+      "title": "The calendar to hold on",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "(calendar ?? \"\") != \"\" || kind != \"agent\" ? (calendar ?? \"\") : (let own = filter(cals ?? [], !(#.room ?? false)); len(own) \u003e 0 ? string(own[0]._id) : \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "whereZone",
+      "type": "data.expression",
+      "title": "The zone the times are held in",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "(zone ?? \"\") != \"\" ? zone : (let c = first(filter(cals ?? [], string(#._id) == where)); string(c?.zone ?? \"\"))",
+        "type": "string"
       }
     },
     {
@@ -82,7 +144,7 @@
       "type": "flow.callGraph",
       "position": {
         "x": 680,
-        "y": 0
+        "y": 200
       },
       "config": {
         "graph": "fn-calendar-findFreeTime",
@@ -92,7 +154,7 @@
             "name": "people",
             "type": "json",
             "optional": true,
-            "description": "The people's user ids, as text; the caller (a person) is always included"
+            "description": "The people's user ids, as text; the calling person is always included; an agent that names nobody finds times for the person who made it"
           },
           {
             "id": "durationMinutes",
@@ -148,7 +210,7 @@
       "title": "Slots found, and the caller may hold time",
       "position": {
         "x": 1020,
-        "y": 0
+        "y": 200
       },
       "config": {
         "expr": "found \u003e 0 \u0026\u0026 !(kind == \"agent\" \u0026\u0026 (agentRecord?.autonomy ?? \"draft\") == \"suggest\")",
@@ -160,7 +222,7 @@
       "type": "flow.branch",
       "position": {
         "x": 1360,
-        "y": 0
+        "y": 200
       }
     },
     {
@@ -168,7 +230,7 @@
       "type": "data.expression",
       "position": {
         "x": 1020,
-        "y": 200
+        "y": 400
       },
       "config": {
         "expr": "map(slots ?? [], ({start: #.start, end: #.end}))",
@@ -179,7 +241,7 @@
       "id": "hold",
       "type": "flow.callGraph",
       "position": {
-        "x": 1700,
+        "x": 2040,
         "y": 0
       },
       "config": {
@@ -259,7 +321,7 @@
       "type": "data.expression",
       "title": "Each slot with its held event",
       "position": {
-        "x": 2040,
+        "x": 2380,
         "y": 0
       },
       "config": {
@@ -271,7 +333,7 @@
       "id": "produced",
       "type": "data.expression",
       "position": {
-        "x": 2040,
+        "x": 2380,
         "y": 200
       },
       "config": {
@@ -283,7 +345,7 @@
       "id": "held",
       "type": "flow.return",
       "position": {
-        "x": 2380,
+        "x": 2720,
         "y": 0
       },
       "config": {
@@ -319,7 +381,28 @@
       "id": "only",
       "type": "flow.return",
       "position": {
-        "x": 2040,
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "slots",
+            "type": "json"
+          },
+          {
+            "id": "unknown",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdFailed",
+      "type": "flow.return",
+      "title": "The times, unheld",
+      "position": {
+        "x": 2380,
         "y": 400
       },
       "config": {
@@ -331,6 +414,10 @@
           {
             "id": "unknown",
             "type": "json"
+          },
+          {
+            "id": "error",
+            "type": "string"
           }
         ]
       }
@@ -355,6 +442,16 @@
       "to": {
         "node": "everyone",
         "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "agentRecord"
+      },
+      "to": {
+        "node": "everyone",
+        "pin": "agentRecord"
       }
     },
     {
@@ -529,6 +626,106 @@
     },
     {
       "from": {
+        "node": "where",
+        "pin": "value"
+      },
+      "to": {
+        "node": "hold",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "zone"
+      },
+      "to": {
+        "node": "whereZone",
+        "pin": "zone"
+      }
+    },
+    {
+      "from": {
+        "node": "where",
+        "pin": "value"
+      },
+      "to": {
+        "node": "whereZone",
+        "pin": "where"
+      }
+    },
+    {
+      "from": {
+        "node": "cals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "whereZone",
+        "pin": "cals"
+      }
+    },
+    {
+      "from": {
+        "node": "whereZone",
+        "pin": "value"
+      },
+      "to": {
+        "node": "hold",
+        "pin": "zone"
+      }
+    },
+    {
+      "from": {
+        "node": "everyone",
+        "pin": "value"
+      },
+      "to": {
+        "node": "calQ",
+        "pin": "everyone"
+      }
+    },
+    {
+      "from": {
+        "node": "calQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cals",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "cals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "where",
+        "pin": "cals"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendar"
+      },
+      "to": {
+        "node": "where",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "kind"
+      },
+      "to": {
+        "node": "where",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
         "node": "find",
         "pin": "slots"
       },
@@ -633,8 +830,38 @@
         "pin": "failed"
       },
       "to": {
-        "node": "only",
+        "node": "holdFailed",
         "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "hold",
+        "pin": "error"
+      },
+      "to": {
+        "node": "holdFailed",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "slots"
+      },
+      "to": {
+        "node": "holdFailed",
+        "pin": "slots"
+      }
+    },
+    {
+      "from": {
+        "node": "find",
+        "pin": "unknown"
+      },
+      "to": {
+        "node": "holdFailed",
+        "pin": "unknown"
       }
     },
     {

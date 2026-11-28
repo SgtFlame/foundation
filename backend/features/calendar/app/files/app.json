@@ -79,14 +79,16 @@
     {
       "id": "calWriter",
       "title": "Calendar writer",
-      "description": "Granted on one calendar (by the app, to its maker and those it is shared with for write): reads and changes its events",
+      "description": "Granted on one calendar (by the app, to its maker and those it is shared with for write): reads and changes its events and the holds proposals put on it",
       "actions": [
         "entity:calCalendar.read",
         "entity:calCalendar.update",
         "entity:calEvent.*",
+        "entity:calHold.*",
         "entity:calOccurrence.read"
       ],
       "rowRules": {
+        "calHold": "principal.hasRole('calWriter', record.calendar)",
         "calEvent": "principal.hasRole('calWriter', record.calendar)",
         "calOccurrence": "principal.hasRole('calWriter', record.calendar)"
       }
@@ -215,7 +217,7 @@
       "graph": "fn-calendar-proposeMeeting",
       "title": "Propose a meeting",
       "effect": "write",
-      "description": "Finds free times for the caller and the given people and holds them as tentative events while the proposal is open, returning the slots (each with its held event) for a draft; sends nothing. An agent with suggest autonomy gets the slots only"
+      "description": "Finds free times for the caller and the given people and holds them as tentative events while the proposal is open, returning the slots (each with its held event) for a draft; sends nothing. An agent with suggest autonomy gets the slots only; an agent that names nobody proposes for the person who made it, on that person's calendar it may write"
     },
     {
       "name": "hold",
@@ -223,6 +225,27 @@
       "title": "Hold times",
       "effect": "write",
       "description": "Holds given slots [{start, end}] as tentative events on the caller's own calendar, grouped in a Hold that is released after a few days unless one is chosen; give purpose and optionally subject {entity, id}"
+    },
+    {
+      "name": "answerInvitation",
+      "graph": "fn-calendar-answerInvitation",
+      "title": "Answer an invitation received",
+      "effect": "write",
+      "description": "Answers an invitation that came from outside (an event Parse iCalendar read from a mail's .ics) as the caller: accepted or tentative puts it on their own calendar, declined takes it off; returns the iTIP REPLY {to, text} to send the organizer. Args {invitation, attendee, answer, comment?, calendar?}"
+    },
+    {
+      "name": "applyReply",
+      "graph": "fn-calendar-applyReply",
+      "title": "Apply an answer received",
+      "effect": "write",
+      "description": "Applies an iTIP message from outside (an attendee's REPLY a mail carried) to the event it is about, found by its UID: sets that attendee's answer, or updates or cancels the event. Args {method, message}"
+    },
+    {
+      "name": "holds",
+      "graph": "fn-calendar-holds",
+      "title": "Open holds",
+      "effect": "read",
+      "description": "The open Holds of a proposal's subject {entity, id} (a mail thread) that the caller may see, each with its held slots and their event ids, to tell which time a reply picks before calling choose"
     },
     {
       "name": "choose",

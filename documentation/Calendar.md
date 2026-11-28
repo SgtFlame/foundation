@@ -73,3 +73,41 @@ Finding times that suit several people and holding them while a proposal is open
 - **Proposals** (`calendar.proposeMeeting {people, durationMinutes, from, to, purpose, subject?, count?}`): finds slots and holds them, returning each slot with its held `event`, the `hold` and `expires`; an agent whose `agentRecord.autonomy` is `suggest` gets the slots only.
 - **Answers** (`calendar.respond {event, answer, comment?}`): the caller's own answer through `calendar.event.respond`.
 - Tested end to end in Forge's `features/starter/calendar` (`freetime_test.go`): three people in three zones, a hold seen busy by a colleague's free/busy, choosing twice, releasing, expiry by the trigger, a suggesting agent, and a hold on a Calendar test server calendar reaching it as tentative events.
+
+## Changed in forge 28i: proposals for an agent's maker, and open holds
+
+Part 28i's first step (Forge's Mail app proposes times by mail; Forge `MailApp.md` › *Built in part 28i*).
+
+- **An agent proposes for the person who made it**: `calendar.findFreeTime` and `calendar.proposeMeeting` called by an agent that names nobody take `agentRecord._createdBy` as the people. `proposeMeeting` holds on the given `calendar`, else for an agent on the first calendar that person owns (not a room) that the agent can see, in that calendar's zone unless `zone` is given. The person gives the agent *Calendar writer* (`calWriter`) on that calendar. That role now also holds `entity:calHold.*`, with the row rule `principal.hasRole('calWriter', record.calendar)`.
+- **`calendar.hold`** for a caller who is not a user (an agent) no longer queries calendars owned by `""`. `proposeMeeting`'s slots-only answer carries `error` when the hold failed.
+- **Open holds** (`calendar.holds {subject}`, `fn-calendar-holds`, read): the open Holds of a proposal's subject (`{entity, id}`, a mail thread) that the caller may see, each with its slots and their event ids. An agent reads them to tell which time a reply picks before `calendar.choose`.
+- **Invitations from outside** (forge 28i, second step):
+  - `calendar.answerInvitation {invitation, attendee, answer, comment?, calendar?}` (`fn-calendar-answerInvitation`) answers an event *Parse iCalendar* read, as the caller. Accepted or tentative mirrors it onto the caller's first own calendar through `calendar.event.mirror`, with the caller's attendee entry answered and its `user` set. Declined takes it off again. The event's id is `<calendar>_i_<base64url UID>`, so answering again replaces the answer. It returns the iTIP REPLY `{to, text}` from *iTIP reply*.
+  - `calendar.applyReply {method, message}` (`fn-calendar-applyReply`) finds the event by UID (`<event id>@axiom` names an event invited from here), applies the message with *iTIP apply*, and updates its attendees, status, title and location.
+
+## Built in forge 28l: CalDAV and ICS feeds
+
+Two outside calendar types, Go connector types beside the Calendar test server, each passing `calendar/contracttest`. Neither needs OAuth or a hook endpoint. Both read every `.ics` a service returns in ical's child process: `providers.Reader(nil)` is `ical.Child` over this program, and tests pass `providers.InProcess`. Shared helpers live in `calendar/providers`: windows, occurrences, computed free/busy, merging a change, answering as the connection's own attendee, and HTTP statuses as connector errors.
+
+- **`calendar.caldav`** (`calendar/providers/caldav`):
+  - Settings are `url` (or discovery from the email's domain through `/.well-known/caldav`), `email` (its own attendee entry), `username`, the app `password` (a secret) and `pollSeconds` (60).
+  - **Discovery** goes `current-user-principal`, then `calendar-home-set`, then the home's collections. Task lists are left out. A calendar's id is its collection's last path segment, with its name, Apple colour and `calendar-timezone`'s TZID. Access is `owner` with the write privilege, else `reader`. The first writable calendar is primary.
+  - **Ids**: an event's id is its resource's name without `.ics`, and its etag is the resource's. A series and its exceptions are one resource. An exception's id adds `_<recurrence id>`, and its `seriesId` is the resource's.
+  - **Listing**: `event.list` sends a `calendar-query` with the window's time range. The cursor is a `sync-collection` token (RFC 6578), read before the window, following a truncated answer (507) and reporting 404 members as removed. An invalid token is `cursor_expired`. A server without `sync-collection` gets a cursor holding the window and a short hash of each resource's etag; a resource gone from the window is fetched again to tell a deletion from a move.
+  - **Writes**: `event.create` sends a PUT with `If-None-Match: *` to the resource named from our key. A retry after a lost answer finds the 412 and returns what the first try made. An exception joins its series' resource. `event.update` and `event.respond` rewrite the resource with `If-Match`; a moved etag is `conflict`. `event.delete` sends a DELETE with `If-Match`. Deleting an exception adds an `EXDATE` to its series.
+  - Resources are composed without `METHOD` (`ical.ComposeOptions.Resource`, RFC 4791 §4.1), from the event shape. Properties the shape does not carry (alarms, `X-` properties) are not kept when Axiom rewrites a resource.
+  - **Free/busy** comes from `free-busy-query` where the server answers it, else computed from a window query. Other people's free/busy is not offered.
+  - **`Watch`** polls every calendar's delta each `pollSeconds` and raises `eventChanged` and `eventRemoved`. This is a type setting, not the `calendar` section, because adapters never read configuration.
+  - Answers are read with `encoding/xml`, which fetches no entities, capped at 16 MB. Redirects keep their method, and credentials follow them only to the same host or over https.
+- **`calendar.ics`** (`calendar/providers/ics`):
+  - Settings are the feed `url` (`webcal://` taken as `https://`), `name`, `zone` and `refreshMinutes` (60).
+  - It is one read-only calendar `feed` (access `reader`), fetched with `If-None-Match` and `If-Modified-Since`, read in the child, and filtered to the window.
+  - The cursor is the feed's validators and a short hash per event. An unchanged feed's delta costs one 304, and a changed one names what changed and what went.
+  - Every write is `notSupported`. A feed over 1 MB, or one the child refuses, is `invalid` with the reason.
+- **Read-only calendars in the app**: `calendar.connect` sets the new `calCalendar.readOnly` for a calendar listed with access `reader` or `freeBusy`. `calendar-push` sends nothing for such a calendar, so an event made on a feed stays in Axiom.
+- **Wired** from `wiring/calendar.go`: the builtin types are registered, and the in-process adapter serves both.
+- **Tested**:
+  - `go test ./features/calendar/providers/...` runs the contract suite against `caldav/caldavtest`, an in-memory CalDAV server written from RFC 4791, 6578 and 6764 in place of recordings (question 28.12). It runs once acting as a Nextcloud (everything) and once as an iCloud (no `sync-collection`, no `free-busy-query`).
+  - The same package covers discovery through `/.well-known/caldav`, a create retried after a lost answer making one resource, outside changes across a truncated sync, an expired token, series exceptions, `Watch` on both kinds of server, and answers in RFC 6578's own form.
+  - For the feed: the read-only suite, a delta skipped on 304, and malformed and oversized feeds refused by the real child.
+  - Forge's `features/starter/calendar` (`outside_test.go`): the Calendar app connects, mirrors, pushes and watches through a CalDAV server and a feed.
