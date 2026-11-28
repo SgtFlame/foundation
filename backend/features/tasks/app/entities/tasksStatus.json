@@ -55,6 +55,12 @@
       "type": "rank",
       "description": "Its place among the project's statuses",
       "scope": "project"
+    },
+    {
+      "id": "outsideList",
+      "name": "Tracker list",
+      "type": "text",
+      "description": "The outside list (column) this status is kept in step with (part 30h)"
     }
   ],
   "indexes": [

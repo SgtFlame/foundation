@@ -33,6 +33,11 @@ import (
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	"github.com/SgtFlame/foundation/backend/features/live/natsd"
+	"github.com/SgtFlame/foundation/backend/features/connectors"
+	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
+	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
+	"github.com/SgtFlame/foundation/backend/features/tasks/tracker"
+	"github.com/SgtFlame/foundation/backend/features/tasks/tracker/trackerfake"
 	livenodes "github.com/SgtFlame/foundation/backend/features/live/nodes"
 	"github.com/SgtFlame/foundation/backend/features/live/project"
 	"github.com/SgtFlame/foundation/backend/features/live/subscribe"
@@ -67,6 +72,10 @@ type fixture struct {
 	runner  *jobs.Runner
 	n       atomic.Int64
 	botOnce sync.Once
+	// The connector stack, served by serveTracker (forge 30h)
+	srv        *natsd.Server
+	dispatcher *connectors.Dispatcher
+	connDeps   func() connections.Deps
 }
 
 type jobSettings struct{}
@@ -81,7 +90,7 @@ func (jobSettings) Resolved(features.ServiceArgs, string) (json.RawMessage, erro
 // triggers; and the Tasks app seeded into tenant 1, twice.
 func setup(t *testing.T) *fixture {
 	reg := extensions.NewRegistry()
-	reg.Declare(livenodes.TriggerEvents, tools.Tools, tools.Sources)
+	reg.Declare(livenodes.TriggerEvents, tools.Tools, tools.Sources, connectors.Contracts, connectors.Types)
 	cognitionnodes.Contribute(reg)
 	uinodes.Contribute(reg)
 	if err := uicomponents.Contribute(reg); err != nil {
@@ -97,6 +106,8 @@ func setup(t *testing.T) *fixture {
 		installDep installs.Deps
 		jobDeps    jobs.Deps
 		jobNodes   jobsnodes.Deps
+		cxDeps     connectors.Deps
+		connDeps   connections.Deps
 	)
 	livenodes.Contribute(reg, func() livenodes.Deps { return nodeDeps })
 	drafts.Contribute(reg, func() drafts.Deps { return draftDeps })
@@ -111,6 +122,15 @@ func setup(t *testing.T) *fixture {
 	jobsnodes.Contribute(reg, func() jobsnodes.Deps { return jobNodes })
 	authznodes.Contribute(reg)
 	authz.ContributeAgents(reg)
+	// Connectors, for the two-way sync (forge 30h): the tracker contract,
+	// the Tasks test server, connections and their event sources
+	connectors.Contribute(reg, func() connectors.Deps { return cxDeps })
+	connectorsnodes.Contribute(reg, func() connectors.Deps { return cxDeps })
+	connections.Contribute(reg, func() connections.Deps { return connDeps })
+	connections.ContributeTrigger(reg, func() connections.Deps { return connDeps })
+	tracker.Contribute(reg)
+	var dispatcher *connectors.Dispatcher
+	trackerfake.Contribute(reg, func() trackerfake.Dispatcher { return dispatcher })
 
 	gdb, err := db.Open(db.WithPath(filepath.Join(t.TempDir(), "test.db")))
 	if err != nil {
@@ -144,6 +164,15 @@ func setup(t *testing.T) *fixture {
 	f.bus.Resolve = installs.CommandFor(func() installs.Deps { return installDep }, livenodes.CommandFor(func() livenodes.Deps { return nodeDeps }))
 	f.subs.Resolve = installs.QueryFor(func() installs.Deps { return installDep }, livenodes.QueryFor(func() livenodes.Deps { return nodeDeps }))
 	jobDeps = jobs.Deps{Projections: p, Bus: f.bus, Engine: eng, Config: jobSettings{}}
+	registry := connectors.NewRegistry(reg, srv.JS())
+	registry.SetCheckEvery(50 * time.Millisecond)
+	t.Cleanup(registry.Close)
+	cx := connections.Connections{Deps: func() connections.Deps { return connDeps }}
+	dispatcher = &connectors.Dispatcher{NC: srv.Conn(), Registry: registry, Connections: cx, Failed: cx.Failed, Timeout: 10 * time.Second}
+	cxDeps = connectors.Deps{Registry: registry, Dispatcher: dispatcher}
+	connDeps = connections.Deps{Projections: p, Bus: f.bus, Registry: registry, Secrets: memSecrets{}, Dispatcher: dispatcher}
+	f.srv, f.dispatcher = srv, dispatcher
+	f.connDeps = func() connections.Deps { return connDeps }
 
 	// Access, before the app installs, so its roles are made
 	appDB, err := db.Open(db.WithPath(filepath.Join(t.TempDir(), "app.db")))
@@ -160,6 +189,8 @@ func setup(t *testing.T) *fixture {
 	ui.ContributeAccess(reg)
 	ui.ContributePrefabAccess(reg)
 	jobs.ContributeAccess(reg)
+	connectors.ContributeAccess(reg)
+	connections.ContributeAccess(reg)
 	pol := authz.NewPolicy(appDB, reg)
 	authz.Install(pol)
 	t.Cleanup(func() { authz.Install(nil) })
@@ -340,7 +371,7 @@ func TestDocumentChecks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(d.Parts.Entities) != 6 || len(d.Parts.Graphs) < 15 {
+	if len(d.Parts.Entities) != 7 || len(d.Parts.Graphs) < 15 {
 		t.Fatalf("%d entity types and %d graphs", len(d.Parts.Entities), len(d.Parts.Graphs))
 	}
 }

@@ -61,6 +61,10 @@
         "source": {
           "type": "object",
           "description": "What it came from: {link, title, kind}"
+        },
+        "outside": {
+          "type": "object",
+          "description": "Its card in the project's tracker {id, version, updatedAt, list}; only the Tasks app's own sync sets it"
         }
       },
       "required": [
@@ -242,7 +246,7 @@
         "y": 0
       },
       "config": {
-        "expr": "let a = args;\nlet title = trim(a.title ?? \"\");\nlet isAgent = kind == \"agent\";\nlet autonomy = string(agentRecord?.autonomy ?? \"suggest\");\nlet proposed = isAgent \u0026\u0026 autonomy == \"suggest\";\nlet text = trim(a.description ?? \"\");\nlet doc = text == \"\" ? nil : {type: \"doc\", content: map(split(text, \"\\n\\n\"), ({type: \"paragraph\", content: [{type: \"text\", text: #}]}))};\nlet given = {description: doc, assignees: a.assignees, due: a.due, start: a.start, priority: a.priority, labels: a.labels, parent: a.parent, source: a.source, sourceLink: trim(string(a.source?.link ?? \"\"))};\nlet vals = fromPairs(concat(\n  [[\"title\", title], [\"project\", pid], [\"status\", sid], [\"rank\", rank], [\"state\", proposed ? \"proposed\" : \"active\"], [\"proposedBy\", isAgent ? \"agent:\" + agent : \"\"]],\n  filter(toPairs(given), #[1] != nil \u0026\u0026 #[1] != \"\")));\n{problem: state != nil ? \"there is already a task \" + target\n   : title == \"\" ? \"give the task a title\"\n   : project == nil ? \"there is no project \" + pid + \" you may see\"\n   : isAgent \u0026\u0026 len(dup ?? []) \u003e 0 ? \"a task from this source was already proposed (\" + string(first(dup)._id) + \"); propose none again\"\n   : sid == \"\" ? (string(a.status ?? \"\") != \"\" ? \"the project has no status \" + string(a.status) : \"the project has no statuses yet\")\n   : \"\",\n tasks: [{id: target, values: vals}]}",
+        "expr": "let a = args;\nlet title = trim(a.title ?? \"\");\nlet isAgent = kind == \"agent\";\nlet autonomy = string(agentRecord?.autonomy ?? \"suggest\");\nlet proposed = isAgent \u0026\u0026 autonomy == \"suggest\";\nlet text = trim(a.description ?? \"\");\nlet doc = text == \"\" ? nil : {type: \"doc\", content: map(split(text, \"\\n\\n\"), ({type: \"paragraph\", content: [{type: \"text\", text: #}]}))};\nlet given = {description: doc, assignees: a.assignees, due: a.due, start: a.start, priority: a.priority, labels: a.labels, parent: a.parent, source: a.source, sourceLink: trim(string(a.source?.link ?? \"\"))};\nlet isApp = kind == \"app\";\nlet out = isApp \u0026\u0026 a.outside != nil ? a.outside : nil;\nlet synced = out == nil ? [] : [[\"outside\", out], [\"outsideId\", string(out.id ?? \"\")]];\nlet vals = fromPairs(concat(synced,\n  [[\"title\", title], [\"project\", pid], [\"status\", sid], [\"rank\", rank], [\"state\", proposed ? \"proposed\" : \"active\"], [\"proposedBy\", isAgent ? \"agent:\" + agent : \"\"]],\n  filter(toPairs(given), #[1] != nil \u0026\u0026 #[1] != \"\")));\n{problem: state != nil ? \"there is already a task \" + target\n   : title == \"\" ? \"give the task a title\"\n   : project == nil ? \"there is no project \" + pid + \" you may see\"\n   : isAgent \u0026\u0026 len(dup ?? []) \u003e 0 ? \"a task from this source was already proposed (\" + string(first(dup)._id) + \"); propose none again\"\n   : sid == \"\" ? (string(a.status ?? \"\") != \"\" ? \"the project has no status \" + string(a.status) : \"the project has no statuses yet\")\n   : \"\",\n tasks: [{id: target, values: vals}]}",
         "type": "json"
       }
     },

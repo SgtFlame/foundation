@@ -9,7 +9,8 @@
     "taskItem",
     "taskCheck",
     "taskComment",
-    "taskLabel"
+    "taskLabel",
+    "taskSyncLog"
   ],
   "commands": [
     {
@@ -93,7 +94,8 @@
         "entity:taskItem.*",
         "entity:taskCheck.*",
         "entity:taskComment.*",
-        "entity:taskLabel.*"
+        "entity:taskLabel.*",
+        "entity:taskSyncLog.*"
       ]
     },
     {
@@ -120,7 +122,8 @@
         "entity:taskItem.*",
         "entity:taskCheck.*",
         "entity:taskComment.*",
-        "entity:taskLabel.*"
+        "entity:taskLabel.*",
+        "entity:taskSyncLog.read"
       ],
       "rowRules": {
         "tasksStatus": "principal.hasRole('projectAdmin', record.project)",
@@ -128,7 +131,8 @@
         "taskCheck": "principal.hasRole('projectAdmin', record.project)",
         "taskComment": "principal.hasRole('projectAdmin', record.project)",
         "taskLabel": "principal.hasRole('projectAdmin', record.project)",
-        "tasksProject": "principal.hasRole('projectAdmin', record._id)"
+        "tasksProject": "principal.hasRole('projectAdmin', record._id)",
+        "taskSyncLog": "principal.hasRole('projectAdmin', record.project)"
       }
     },
     {
@@ -145,7 +149,8 @@
         "entity:taskComment.read",
         "entity:taskComment.create",
         "entity:taskLabel.read",
-        "entity:taskLabel.create"
+        "entity:taskLabel.create",
+        "entity:taskSyncLog.read"
       ],
       "rowRules": {
         "tasksStatus": "principal.hasRole('member', record.project)",
@@ -153,7 +158,8 @@
         "taskCheck": "principal.hasRole('member', record.project)",
         "taskComment": "principal.hasRole('member', record.project)",
         "taskLabel": "principal.hasRole('member', record.project)",
-        "tasksProject": "principal.hasRole('member', record._id)"
+        "tasksProject": "principal.hasRole('member', record._id)",
+        "taskSyncLog": "principal.hasRole('member', record.project)"
       },
       "agentWarning": "An agent that is a member may make and change every task of the project"
     },
@@ -193,6 +199,24 @@
       "title": "A project's people changed",
       "description": "Keeps a project's grants equal to its admins, members and guests: enqueues the project's grant sync, one at a time per project.",
       "graph": "tasks-onProjectPeople"
+    },
+    {
+      "id": "onConnect",
+      "title": "A project was connected to a board",
+      "description": "Imports a project's tracker board when its connection and board are set or changed, or its sync is set to retry (part 30h)",
+      "graph": "tasks-onConnect"
+    },
+    {
+      "id": "onTaskChanged",
+      "title": "A task changed here",
+      "description": "Pushes a task's change to its project's tracker board, unless the change was the sync's own (part 30h)",
+      "graph": "tasks-onTaskChanged"
+    },
+    {
+      "id": "onCardChanged",
+      "title": "A card changed in a tracker",
+      "description": "Pulls a card's change from a tracker connection, dropping the echo of our own pushes (part 30h)",
+      "graph": "tasks-onCardChanged"
     }
   ],
   "tools": [
