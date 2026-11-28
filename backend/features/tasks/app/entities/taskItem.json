@@ -1,6 +1,6 @@
 {
   "id": "taskItem",
-  "owner": "app:todos",
+  "owner": "app:tasks",
   "name": "Task",
   "description": "A to-do of the Tasks library app, in a project and a status, ordered within its status; proposed by an agent until a person accepts it",
   "titleField": "title",

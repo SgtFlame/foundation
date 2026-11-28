@@ -1,14 +1,14 @@
 {
-  "id": "cmd-todos-task-accept",
-  "name": "todos.task.accept",
-  "description": "Accepts a task an agent proposed (the target): it becomes an active task in its project.",
+  "id": "cmd-tasks-task-dismiss",
+  "name": "tasks.task.dismiss",
+  "description": "Dismisses a task an agent proposed (the target): it is archived, kept but no longer shown.",
   "kind": "command",
   "version": 1,
-  "owner": "app:todos",
+  "owner": "app:tasks",
   "spec": {
-    "command": "task.accept",
-    "title": "Accept a proposed task",
-    "description": "Accepts a task an agent proposed (the target): it becomes an active task in its project.",
+    "command": "task.dismiss",
+    "title": "Dismiss a proposed task",
+    "description": "Dismisses a task an agent proposed (the target): it is archived, kept but no longer shown.",
     "args": {
       "type": "object",
       "properties": {}
@@ -43,7 +43,7 @@
         "y": 0
       },
       "config": {
-        "expr": "{problem: state == nil ? \"there is no task \" + target : state.state != \"proposed\" ? \"the task is not a proposal\" : \"\",\n tasks: [{id: target, set: {state: \"active\"}, expect: state._seq}]}",
+        "expr": "{problem: state == nil ? \"there is no task \" + target : state.state != \"proposed\" ? \"the task is not a proposal\" : \"\",\n tasks: [{id: target, set: {state: \"archived\"}, expect: state._seq}]}",
         "type": "json"
       }
     },

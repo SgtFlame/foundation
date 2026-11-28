@@ -1,52 +1,33 @@
 {
-  "id": "cmd-todos-task-update",
-  "name": "todos.task.update",
-  "description": "Changes a task (the target): only the fields given, of its title, assignees (user ids), due and start dates (YYYY-MM-DD), priority (none, low, medium, high, urgent) and labels; given a status of its project, it also moves there, last, setting or clearing when it was completed.",
+  "id": "cmd-tasks-task-move",
+  "name": "tasks.task.move",
+  "description": "Moves a task (the target) to a status of its project, between the tasks it was dropped between (after: the one above, before: the one below; both left out puts it last). A move to a done status sets when it was completed; a move out of one clears it.",
   "kind": "command",
   "version": 1,
-  "owner": "app:todos",
+  "owner": "app:tasks",
   "spec": {
-    "command": "task.update",
-    "title": "Change a task",
-    "description": "Changes a task (the target): only the fields given, of its title, assignees (user ids), due and start dates (YYYY-MM-DD), priority (none, low, medium, high, urgent) and labels; given a status of its project, it also moves there, last, setting or clearing when it was completed.",
+    "command": "task.move",
+    "title": "Move a task",
+    "description": "Moves a task (the target) to a status of its project, between the tasks it was dropped between (after: the one above, before: the one below; both left out puts it last). A move to a done status sets when it was completed; a move out of one clears it.",
     "args": {
       "type": "object",
       "properties": {
-        "title": {
-          "type": "string",
-          "description": "What is to be done"
-        },
-        "assignees": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "User ids of the people who do it (replacing those it has)"
-        },
-        "due": {
-          "type": "string",
-          "description": "When it is due, YYYY-MM-DD"
-        },
-        "start": {
-          "type": "string",
-          "description": "When work on it starts, YYYY-MM-DD"
-        },
-        "priority": {
-          "type": "string",
-          "description": "none, low, medium, high or urgent"
-        },
-        "labels": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Label ids of the project (replacing those it has)"
-        },
         "status": {
           "type": "string",
-          "description": "A status of its project to move it to"
+          "description": "The status's id"
+        },
+        "after": {
+          "type": "string",
+          "description": "The id of the task it goes after; empty for the top"
+        },
+        "before": {
+          "type": "string",
+          "description": "The id of the task it goes before; empty for the bottom"
         }
-      }
+      },
+      "required": [
+        "status"
+      ]
     },
     "area": "rec",
     "targetType": "taskItem",
@@ -133,7 +114,7 @@
       },
       "config": {
         "type": "json",
-        "expr": "let a = args;\nlet t = state;\nlet asked = sid != \"none\";\nlet moving = st != nil \u0026\u0026 t != nil \u0026\u0026 string(st._id) != string(t.status ?? \"\");\nlet done = st?.category == \"done\";\nlet given = {title: a.title == nil ? nil : trim(a.title), assignees: a.assignees, due: a.due, start: a.start, priority: a.priority, labels: a.labels};\nlet changes = filter(toPairs(given), #[1] != nil);\nlet changed = fromPairs(moving ? concat(changes, [[\"status\", st._id], [\"completedAt\", done ? (t.completedAt ?? clock) : nil]]) : changes);\nlet tail = first(rows ?? []);\n{problem: t == nil ? \"there is no task \" + target\n   : asked \u0026\u0026 st == nil ? \"there is no status \" + sid\n   : st != nil \u0026\u0026 string(st.project) != string(t.project) ? \"that status is another project's\"\n   : a.title != nil \u0026\u0026 trim(a.title) == \"\" ? \"a task needs a title\"\n   : len(changed) == 0 \u0026\u0026 !asked ? \"give at least one change\" : \"\",\n moving: moving, empty: len(changed) == 0, after: tail == nil || tail._id == target ? \"\" : tail._id, changed: changed, expect: t?._seq}"
+        "expr": "let a = args;\nlet t = state;\nlet done = st?.category == \"done\";\nlet tail = first(rows ?? []);\nlet after = string(a.after ?? \"\");\nlet before = string(a.before ?? \"\");\nlet atEnd = after == \"\" \u0026\u0026 before == \"\";\n{problem: t == nil ? \"there is no task \" + target : st == nil ? \"there is no status \" + sid : string(st.project) != string(t.project) ? \"that status is another project's\" : \"\",\n after: atEnd ? (tail == nil || tail._id == target ? \"\" : tail._id) : after, before: before,\n set: {status: st?._id, completedAt: done ? (t?.completedAt ?? clock) : nil}}"
       }
     },
     {
@@ -177,32 +158,11 @@
       }
     },
     {
-      "id": "moving",
-      "type": "data.expression",
-      "position": {
-        "x": 1700,
-        "y": 400
-      },
-      "config": {
-        "expr": "plan.moving",
-        "type": "bool"
-      }
-    },
-    {
-      "id": "ifMove",
-      "type": "flow.branch",
-      "title": "Moving to another status?",
-      "position": {
-        "x": 2380,
-        "y": 200
-      }
-    },
-    {
       "id": "after",
       "type": "data.expression",
       "position": {
         "x": 1700,
-        "y": 600
+        "y": 400
       },
       "config": {
         "expr": "plan.after",
@@ -213,23 +173,23 @@
       "id": "before",
       "type": "data.expression",
       "position": {
-        "x": 0,
-        "y": 400
+        "x": 1700,
+        "y": 600
       },
       "config": {
-        "expr": "\"\"",
+        "expr": "plan.before",
         "type": "string"
       }
     },
     {
-      "id": "changed",
+      "id": "set",
       "type": "data.expression",
       "position": {
         "x": 1700,
         "y": 800
       },
       "config": {
-        "expr": "plan.changed",
+        "expr": "plan.set",
         "type": "json"
       }
     },
@@ -237,56 +197,12 @@
       "id": "move",
       "type": "records.move",
       "position": {
-        "x": 2720,
-        "y": 0
+        "x": 2380,
+        "y": 200
       },
       "config": {
         "entity": "taskItem",
         "field": "rank"
-      }
-    },
-    {
-      "id": "empty",
-      "type": "data.expression",
-      "position": {
-        "x": 1700,
-        "y": 1000
-      },
-      "config": {
-        "expr": "plan.empty",
-        "type": "bool"
-      }
-    },
-    {
-      "id": "ifEmpty",
-      "type": "flow.branch",
-      "title": "Nothing to change?",
-      "position": {
-        "x": 2720,
-        "y": 200
-      }
-    },
-    {
-      "id": "expect",
-      "type": "data.expression",
-      "position": {
-        "x": 1700,
-        "y": 1200
-      },
-      "config": {
-        "expr": "int(plan.expect ?? 0)",
-        "type": "number"
-      }
-    },
-    {
-      "id": "update",
-      "type": "records.update",
-      "position": {
-        "x": 3060,
-        "y": 0
-      },
-      "config": {
-        "entity": "taskItem"
       }
     }
   ],
@@ -467,36 +383,6 @@
         "pin": "value"
       },
       "to": {
-        "node": "moving",
-        "pin": "plan"
-      }
-    },
-    {
-      "from": {
-        "node": "if",
-        "pin": "false"
-      },
-      "to": {
-        "node": "ifMove",
-        "pin": "then"
-      }
-    },
-    {
-      "from": {
-        "node": "moving",
-        "pin": "value"
-      },
-      "to": {
-        "node": "ifMove",
-        "pin": "condition"
-      }
-    },
-    {
-      "from": {
-        "node": "plan",
-        "pin": "value"
-      },
-      "to": {
         "node": "after",
         "pin": "plan"
       }
@@ -507,14 +393,24 @@
         "pin": "value"
       },
       "to": {
-        "node": "changed",
+        "node": "before",
         "pin": "plan"
       }
     },
     {
       "from": {
-        "node": "ifMove",
-        "pin": "true"
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "set",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
       },
       "to": {
         "node": "move",
@@ -553,92 +449,12 @@
     },
     {
       "from": {
-        "node": "changed",
+        "node": "set",
         "pin": "value"
       },
       "to": {
         "node": "move",
         "pin": "set"
-      }
-    },
-    {
-      "from": {
-        "node": "plan",
-        "pin": "value"
-      },
-      "to": {
-        "node": "empty",
-        "pin": "plan"
-      }
-    },
-    {
-      "from": {
-        "node": "ifMove",
-        "pin": "false"
-      },
-      "to": {
-        "node": "ifEmpty",
-        "pin": "then"
-      }
-    },
-    {
-      "from": {
-        "node": "empty",
-        "pin": "value"
-      },
-      "to": {
-        "node": "ifEmpty",
-        "pin": "condition"
-      }
-    },
-    {
-      "from": {
-        "node": "plan",
-        "pin": "value"
-      },
-      "to": {
-        "node": "expect",
-        "pin": "plan"
-      }
-    },
-    {
-      "from": {
-        "node": "ifEmpty",
-        "pin": "false"
-      },
-      "to": {
-        "node": "update",
-        "pin": "then"
-      }
-    },
-    {
-      "from": {
-        "node": "event",
-        "pin": "target"
-      },
-      "to": {
-        "node": "update",
-        "pin": "id"
-      }
-    },
-    {
-      "from": {
-        "node": "changed",
-        "pin": "value"
-      },
-      "to": {
-        "node": "update",
-        "pin": "set"
-      }
-    },
-    {
-      "from": {
-        "node": "expect",
-        "pin": "value"
-      },
-      "to": {
-        "node": "update",
-        "pin": "expect"
       }
     }
   ]

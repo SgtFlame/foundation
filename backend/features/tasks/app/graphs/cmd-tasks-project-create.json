@@ -1,22 +1,52 @@
 {
-  "id": "cmd-todos-project-setup",
-  "name": "todos.project.setup",
-  "description": "Run by the Tasks app when a project is made (the target): gives it the statuses To do, Doing, Review and Done in that order. Does nothing for a project that has statuses already.",
+  "id": "cmd-tasks-project-create",
+  "name": "tasks.project.create",
+  "description": "Makes a Tasks project, its target the new project's id: its name, a short key for task numbers (made from the name when left out), a description, and the people who are members and guests. Its maker administers it. The Tasks app then gives it the statuses To do, Doing, Review and Done, and keeps its admins, members and guests as grants on it.",
   "kind": "command",
   "version": 1,
-  "owner": "app:todos",
+  "owner": "app:tasks",
   "spec": {
-    "command": "project.setup",
-    "title": "Set a project up",
-    "description": "Run by the Tasks app when a project is made (the target): gives it the statuses To do, Doing, Review and Done in that order. Does nothing for a project that has statuses already.",
+    "command": "project.create",
+    "title": "New project",
+    "description": "Makes a Tasks project, its target the new project's id: its name, a short key for task numbers (made from the name when left out), a description, and the people who are members and guests. Its maker administers it. The Tasks app then gives it the statuses To do, Doing, Review and Done, and keeps its admins, members and guests as grants on it.",
     "args": {
       "type": "object",
-      "properties": {}
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The project's name, such as Website relaunch"
+        },
+        "key": {
+          "type": "string",
+          "description": "A short prefix for its task numbers, such as WEB"
+        },
+        "description": {
+          "type": "string",
+          "description": "What the project is for, in Markdown"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "User ids of its members, besides its maker"
+        },
+        "guests": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "User ids of its guests, who see this project only"
+        }
+      },
+      "required": [
+        "name"
+      ]
     },
     "area": "rec",
     "targetType": "tasksProject",
     "projection": "records.record",
-    "action": "record.update",
+    "action": "record.create",
     "events": [
       "created",
       "updated",
@@ -44,37 +74,14 @@
       }
     },
     {
-      "id": "sq",
+      "id": "plan",
       "type": "data.expression",
       "position": {
         "x": 340,
         "y": 0
       },
       "config": {
-        "expr": "{where: {project: target}, limit: 100}",
-        "type": "json"
-      }
-    },
-    {
-      "id": "statuses",
-      "type": "records.query",
-      "position": {
-        "x": 680,
-        "y": 0
-      },
-      "config": {
-        "entity": "tasksStatus"
-      }
-    },
-    {
-      "id": "plan",
-      "type": "data.expression",
-      "position": {
-        "x": 1020,
-        "y": 0
-      },
-      "config": {
-        "expr": "let skip = state == nil || len(statuses ?? []) \u003e 0;\nlet defaults = [{id: \"todo\", name: \"To do\", category: \"todo\", color: \"grey\", rank: \"8\"},\n  {id: \"doing\", name: \"Doing\", category: \"doing\", color: \"blue\", rank: \"G\"},\n  {id: \"review\", name: \"Review\", category: \"doing\", color: \"purple\", rank: \"O\"},\n  {id: \"done\", name: \"Done\", category: \"done\", color: \"green\", rank: \"W\"}];\n{problem: kind != \"app\" ? \"only the Tasks app sets a project up\" : state == nil ? \"there is no project \" + target : \"\",\n statuses: skip ? [] : map(defaults, ({id: target + \"-\" + #.id, values: {project: target, name: #.name, category: #.category, color: #.color, rank: #.rank}}))}",
+        "expr": "let a = args;\nlet name = trim(a.name ?? \"\");\nlet letters = upper(replace(name, \" \", \"\"));\nlet key = trim(a.key ?? \"\") != \"\" ? upper(trim(a.key)) : (len(letters) \u003e 3 ? letters[:3] : letters);\nlet makers = me == \"\" ? [] : [me];\nlet members = uniq(concat(makers, map(a.members ?? [], string(#))));\n{problem: state != nil ? \"there is already a project \" + target : name == \"\" ? \"give the project a name, such as Website relaunch\" : \"\",\n projects: [{id: target, values: {name: name, key: key, description: a.description ?? \"\", admins: makers, members: members,\n   guests: filter(map(a.guests ?? [], string(#)), !(# in members)), defaultView: \"board\", archived: false}}]}",
         "type": "json"
       }
     },
@@ -82,7 +89,7 @@
       "id": "refused",
       "type": "data.expression",
       "position": {
-        "x": 1360,
+        "x": 680,
         "y": 0
       },
       "config": {
@@ -94,7 +101,7 @@
       "id": "if",
       "type": "flow.branch",
       "position": {
-        "x": 1700,
+        "x": 1020,
         "y": 0
       }
     },
@@ -102,7 +109,7 @@
       "id": "why",
       "type": "data.expression",
       "position": {
-        "x": 1360,
+        "x": 680,
         "y": 200
       },
       "config": {
@@ -114,7 +121,7 @@
       "id": "no",
       "type": "live.reject",
       "position": {
-        "x": 2040,
+        "x": 1360,
         "y": 0
       }
     },
@@ -122,20 +129,20 @@
       "id": "w0list",
       "type": "data.expression",
       "position": {
-        "x": 1360,
+        "x": 680,
         "y": 400
       },
       "config": {
-        "expr": "plan.statuses ?? []",
+        "expr": "plan.projects ?? []",
         "type": "json"
       }
     },
     {
       "id": "w0",
       "type": "flow.forEach",
-      "title": "create tasksStatus (statuses)",
+      "title": "create tasksProject (projects)",
       "position": {
-        "x": 2040,
+        "x": 1360,
         "y": 200
       }
     },
@@ -143,7 +150,7 @@
       "id": "w0id",
       "type": "data.expression",
       "position": {
-        "x": 2380,
+        "x": 1700,
         "y": 0
       },
       "config": {
@@ -155,18 +162,18 @@
       "id": "w0w",
       "type": "records.create",
       "position": {
-        "x": 2720,
+        "x": 2040,
         "y": 0
       },
       "config": {
-        "entity": "tasksStatus"
+        "entity": "tasksProject"
       }
     },
     {
       "id": "w0v",
       "type": "data.expression",
       "position": {
-        "x": 2380,
+        "x": 1700,
         "y": 200
       },
       "config": {
@@ -179,31 +186,21 @@
     {
       "from": {
         "node": "me",
-        "pin": "kind"
+        "pin": "user"
       },
       "to": {
         "node": "plan",
-        "pin": "kind"
+        "pin": "me"
       }
     },
     {
       "from": {
         "node": "event",
-        "pin": "target"
+        "pin": "args"
       },
       "to": {
-        "node": "sq",
-        "pin": "target"
-      }
-    },
-    {
-      "from": {
-        "node": "sq",
-        "pin": "value"
-      },
-      "to": {
-        "node": "statuses",
-        "pin": "query"
+        "node": "plan",
+        "pin": "args"
       }
     },
     {
@@ -224,16 +221,6 @@
       "to": {
         "node": "plan",
         "pin": "target"
-      }
-    },
-    {
-      "from": {
-        "node": "statuses",
-        "pin": "records"
-      },
-      "to": {
-        "node": "plan",
-        "pin": "statuses"
       }
     },
     {

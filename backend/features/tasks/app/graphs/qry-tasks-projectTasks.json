@@ -1,10 +1,10 @@
 {
-  "id": "qry-todos-projectTasks",
+  "id": "qry-tasks-projectTasks",
   "name": "projectTasks",
   "description": "A project's board: the project, its statuses in order, its active tasks in their order within their statuses (each with its number as KEY-n), its labels, and the tasks agents proposed for it. params {project}.",
   "kind": "data.query",
   "version": 1,
-  "owner": "app:todos",
+  "owner": "app:tasks",
   "spec": {
     "query": "projectTasks",
     "title": "A project's tasks",

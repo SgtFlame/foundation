@@ -1,10 +1,10 @@
 {
-  "id": "qry-todos-myDay",
+  "id": "qry-tasks-myDay",
   "name": "myDay",
   "description": "The viewer's day across their projects: their active, unfinished tasks due today or earlier (overdue first), their other unfinished tasks, and the tasks agents proposed for them. params {today?} (YYYY-MM-DD, the viewer's own date; the server's when left out).",
   "kind": "data.query",
   "version": 1,
-  "owner": "app:todos",
+  "owner": "app:tasks",
   "spec": {
     "query": "myDay",
     "title": "My day",

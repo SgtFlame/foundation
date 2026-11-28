@@ -1,6 +1,6 @@
 {
   "id": "tasksStatus",
-  "owner": "app:todos",
+  "owner": "app:tasks",
   "name": "Status",
   "description": "One column of a project's board: a status its tasks are in, with a category (to do, doing, done) that says what it means",
   "titleField": "name",

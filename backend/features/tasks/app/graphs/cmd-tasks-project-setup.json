@@ -1,20 +1,20 @@
 {
-  "id": "cmd-todos-task-dismiss",
-  "name": "todos.task.dismiss",
-  "description": "Dismisses a task an agent proposed (the target): it is archived, kept but no longer shown.",
+  "id": "cmd-tasks-project-setup",
+  "name": "tasks.project.setup",
+  "description": "Run by the Tasks app when a project is made (the target): gives it the statuses To do, Doing, Review and Done in that order. Does nothing for a project that has statuses already.",
   "kind": "command",
   "version": 1,
-  "owner": "app:todos",
+  "owner": "app:tasks",
   "spec": {
-    "command": "task.dismiss",
-    "title": "Dismiss a proposed task",
-    "description": "Dismisses a task an agent proposed (the target): it is archived, kept but no longer shown.",
+    "command": "project.setup",
+    "title": "Set a project up",
+    "description": "Run by the Tasks app when a project is made (the target): gives it the statuses To do, Doing, Review and Done in that order. Does nothing for a project that has statuses already.",
     "args": {
       "type": "object",
       "properties": {}
     },
     "area": "rec",
-    "targetType": "taskItem",
+    "targetType": "tasksProject",
     "projection": "records.record",
     "action": "record.update",
     "events": [
@@ -36,14 +36,45 @@
       }
     },
     {
-      "id": "plan",
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "sq",
       "type": "data.expression",
       "position": {
         "x": 340,
         "y": 0
       },
       "config": {
-        "expr": "{problem: state == nil ? \"there is no task \" + target : state.state != \"proposed\" ? \"the task is not a proposal\" : \"\",\n tasks: [{id: target, set: {state: \"archived\"}, expect: state._seq}]}",
+        "expr": "{where: {project: target}, limit: 100}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "statuses",
+      "type": "records.query",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "tasksStatus"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "let skip = state == nil || len(statuses ?? []) \u003e 0;\nlet defaults = [{id: \"todo\", name: \"To do\", category: \"todo\", color: \"grey\", rank: \"8\"},\n  {id: \"doing\", name: \"Doing\", category: \"doing\", color: \"blue\", rank: \"G\"},\n  {id: \"review\", name: \"Review\", category: \"doing\", color: \"purple\", rank: \"O\"},\n  {id: \"done\", name: \"Done\", category: \"done\", color: \"green\", rank: \"W\"}];\n{problem: kind != \"app\" ? \"only the Tasks app sets a project up\" : state == nil ? \"there is no project \" + target : \"\",\n statuses: skip ? [] : map(defaults, ({id: target + \"-\" + #.id, values: {project: target, name: #.name, category: #.category, color: #.color, rank: #.rank}}))}",
         "type": "json"
       }
     },
@@ -51,7 +82,7 @@
       "id": "refused",
       "type": "data.expression",
       "position": {
-        "x": 680,
+        "x": 1360,
         "y": 0
       },
       "config": {
@@ -63,7 +94,7 @@
       "id": "if",
       "type": "flow.branch",
       "position": {
-        "x": 1020,
+        "x": 1700,
         "y": 0
       }
     },
@@ -71,7 +102,7 @@
       "id": "why",
       "type": "data.expression",
       "position": {
-        "x": 680,
+        "x": 1360,
         "y": 200
       },
       "config": {
@@ -83,7 +114,7 @@
       "id": "no",
       "type": "live.reject",
       "position": {
-        "x": 1360,
+        "x": 2040,
         "y": 0
       }
     },
@@ -91,20 +122,20 @@
       "id": "w0list",
       "type": "data.expression",
       "position": {
-        "x": 680,
+        "x": 1360,
         "y": 400
       },
       "config": {
-        "expr": "plan.tasks ?? []",
+        "expr": "plan.statuses ?? []",
         "type": "json"
       }
     },
     {
       "id": "w0",
       "type": "flow.forEach",
-      "title": "update taskItem (tasks)",
+      "title": "create tasksStatus (statuses)",
       "position": {
-        "x": 1360,
+        "x": 2040,
         "y": 200
       }
     },
@@ -112,7 +143,7 @@
       "id": "w0id",
       "type": "data.expression",
       "position": {
-        "x": 1700,
+        "x": 2380,
         "y": 0
       },
       "config": {
@@ -122,43 +153,61 @@
     },
     {
       "id": "w0w",
-      "type": "records.update",
+      "type": "records.create",
       "position": {
-        "x": 2040,
+        "x": 2720,
         "y": 0
       },
       "config": {
-        "entity": "taskItem"
+        "entity": "tasksStatus"
       }
     },
     {
-      "id": "w0s",
+      "id": "w0v",
       "type": "data.expression",
       "position": {
-        "x": 1700,
+        "x": 2380,
         "y": 200
       },
       "config": {
-        "expr": "item.set",
+        "expr": "item.values",
         "type": "json"
-      }
-    },
-    {
-      "id": "w0x",
-      "type": "data.expression",
-      "position": {
-        "x": 1700,
-        "y": 400
-      },
-      "config": {
-        "expr": "item.expect",
-        "type": "number"
       }
     }
   ],
   "edges": [
     {
       "from": {
+        "node": "me",
+        "pin": "kind"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "sq",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "sq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "statuses",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
         "node": "event",
         "pin": "state"
       },
@@ -175,6 +224,16 @@
       "to": {
         "node": "plan",
         "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "statuses",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "statuses"
       }
     },
     {
@@ -303,38 +362,18 @@
         "pin": "item"
       },
       "to": {
-        "node": "w0s",
+        "node": "w0v",
         "pin": "item"
       }
     },
     {
       "from": {
-        "node": "w0s",
+        "node": "w0v",
         "pin": "value"
       },
       "to": {
         "node": "w0w",
-        "pin": "set"
-      }
-    },
-    {
-      "from": {
-        "node": "w0",
-        "pin": "item"
-      },
-      "to": {
-        "node": "w0x",
-        "pin": "item"
-      }
-    },
-    {
-      "from": {
-        "node": "w0x",
-        "pin": "value"
-      },
-      "to": {
-        "node": "w0w",
-        "pin": "expect"
+        "pin": "values"
       }
     }
   ]

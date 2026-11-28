@@ -1,52 +1,22 @@
 {
-  "id": "cmd-todos-project-create",
-  "name": "todos.project.create",
-  "description": "Makes a Tasks project, its target the new project's id: its name, a short key for task numbers (made from the name when left out), a description, and the people who are members and guests. Its maker administers it. The Tasks app then gives it the statuses To do, Doing, Review and Done, and keeps its admins, members and guests as grants on it.",
+  "id": "cmd-tasks-task-accept",
+  "name": "tasks.task.accept",
+  "description": "Accepts a task an agent proposed (the target): it becomes an active task in its project.",
   "kind": "command",
   "version": 1,
-  "owner": "app:todos",
+  "owner": "app:tasks",
   "spec": {
-    "command": "project.create",
-    "title": "New project",
-    "description": "Makes a Tasks project, its target the new project's id: its name, a short key for task numbers (made from the name when left out), a description, and the people who are members and guests. Its maker administers it. The Tasks app then gives it the statuses To do, Doing, Review and Done, and keeps its admins, members and guests as grants on it.",
+    "command": "task.accept",
+    "title": "Accept a proposed task",
+    "description": "Accepts a task an agent proposed (the target): it becomes an active task in its project.",
     "args": {
       "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "The project's name, such as Website relaunch"
-        },
-        "key": {
-          "type": "string",
-          "description": "A short prefix for its task numbers, such as WEB"
-        },
-        "description": {
-          "type": "string",
-          "description": "What the project is for, in Markdown"
-        },
-        "members": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "User ids of its members, besides its maker"
-        },
-        "guests": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "User ids of its guests, who see this project only"
-        }
-      },
-      "required": [
-        "name"
-      ]
+      "properties": {}
     },
     "area": "rec",
-    "targetType": "tasksProject",
+    "targetType": "taskItem",
     "projection": "records.record",
-    "action": "record.create",
+    "action": "record.update",
     "events": [
       "created",
       "updated",
@@ -66,14 +36,6 @@
       }
     },
     {
-      "id": "me",
-      "type": "live.currentUser",
-      "position": {
-        "x": 0,
-        "y": 200
-      }
-    },
-    {
       "id": "plan",
       "type": "data.expression",
       "position": {
@@ -81,7 +43,7 @@
         "y": 0
       },
       "config": {
-        "expr": "let a = args;\nlet name = trim(a.name ?? \"\");\nlet letters = upper(replace(name, \" \", \"\"));\nlet key = trim(a.key ?? \"\") != \"\" ? upper(trim(a.key)) : (len(letters) \u003e 3 ? letters[:3] : letters);\nlet makers = me == \"\" ? [] : [me];\nlet members = uniq(concat(makers, map(a.members ?? [], string(#))));\n{problem: state != nil ? \"there is already a project \" + target : name == \"\" ? \"give the project a name, such as Website relaunch\" : \"\",\n projects: [{id: target, values: {name: name, key: key, description: a.description ?? \"\", admins: makers, members: members,\n   guests: filter(map(a.guests ?? [], string(#)), !(# in members)), defaultView: \"board\", archived: false}}]}",
+        "expr": "{problem: state == nil ? \"there is no task \" + target : state.state != \"proposed\" ? \"the task is not a proposal\" : \"\",\n tasks: [{id: target, set: {state: \"active\"}, expect: state._seq}]}",
         "type": "json"
       }
     },
@@ -133,14 +95,14 @@
         "y": 400
       },
       "config": {
-        "expr": "plan.projects ?? []",
+        "expr": "plan.tasks ?? []",
         "type": "json"
       }
     },
     {
       "id": "w0",
       "type": "flow.forEach",
-      "title": "create tasksProject (projects)",
+      "title": "update taskItem (tasks)",
       "position": {
         "x": 1360,
         "y": 200
@@ -160,49 +122,41 @@
     },
     {
       "id": "w0w",
-      "type": "records.create",
+      "type": "records.update",
       "position": {
         "x": 2040,
         "y": 0
       },
       "config": {
-        "entity": "tasksProject"
+        "entity": "taskItem"
       }
     },
     {
-      "id": "w0v",
+      "id": "w0s",
       "type": "data.expression",
       "position": {
         "x": 1700,
         "y": 200
       },
       "config": {
-        "expr": "item.values",
+        "expr": "item.set",
         "type": "json"
+      }
+    },
+    {
+      "id": "w0x",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.expect",
+        "type": "number"
       }
     }
   ],
   "edges": [
-    {
-      "from": {
-        "node": "me",
-        "pin": "user"
-      },
-      "to": {
-        "node": "plan",
-        "pin": "me"
-      }
-    },
-    {
-      "from": {
-        "node": "event",
-        "pin": "args"
-      },
-      "to": {
-        "node": "plan",
-        "pin": "args"
-      }
-    },
     {
       "from": {
         "node": "event",
@@ -349,18 +303,38 @@
         "pin": "item"
       },
       "to": {
-        "node": "w0v",
+        "node": "w0s",
         "pin": "item"
       }
     },
     {
       "from": {
-        "node": "w0v",
+        "node": "w0s",
         "pin": "value"
       },
       "to": {
         "node": "w0w",
-        "pin": "values"
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0x",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0x",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "expect"
       }
     }
   ]

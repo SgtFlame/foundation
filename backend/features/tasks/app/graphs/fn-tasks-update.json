@@ -1,18 +1,10 @@
 {
-  "id": "fn-todos-comment",
-  "name": "Comment on a task",
-  "description": "Adds a comment to a task, as the caller: its body in Markdown. An agent's run confined to some records comments only on a task among them or of a project among them. Gives the comment's id.",
+  "id": "fn-tasks-update",
+  "name": "Change a task",
+  "description": "Changes a task, as the caller (tasks.task.update): only the fields given, of its title, assignees (user ids, replacing them), due and start dates (YYYY-MM-DD), priority (none, low, medium, high, urgent) and status (a status of its project, where it then goes last). An agent's run confined to some records changes only a task among them or of a project among them.",
   "kind": "function",
   "version": 1,
-  "owner": "app:todos",
-  "variables": [
-    {
-      "id": "cid",
-      "name": "Comment id",
-      "type": "string",
-      "description": "The new comment's id, made once"
-    }
-  ],
+  "owner": "app:tasks",
   "nodes": [
     {
       "id": "call",
@@ -29,9 +21,40 @@
             "description": "The task's id"
           },
           {
-            "id": "body",
+            "id": "title",
             "type": "string",
-            "description": "The comment, in Markdown"
+            "optional": true,
+            "description": "What is to be done"
+          },
+          {
+            "id": "assignees",
+            "type": "json",
+            "optional": true,
+            "description": "User ids of the people who do it, a list replacing those it has"
+          },
+          {
+            "id": "due",
+            "type": "string",
+            "optional": true,
+            "description": "When it is due, YYYY-MM-DD"
+          },
+          {
+            "id": "start",
+            "type": "string",
+            "optional": true,
+            "description": "When work on it starts, YYYY-MM-DD"
+          },
+          {
+            "id": "priority",
+            "type": "string",
+            "optional": true,
+            "description": "none, low, medium, high or urgent"
+          },
+          {
+            "id": "status",
+            "type": "string",
+            "optional": true,
+            "description": "A status of its project to move it to"
           }
         ]
       }
@@ -76,7 +99,7 @@
       },
       "config": {
         "type": "string",
-        "expr": "let inside = len(reach ?? []) == 0 || any(reach, (#.entity == \"taskItem\" \u0026\u0026 string(#.id) == tid) || (#.entity == \"tasksProject\" \u0026\u0026 string(#.id) == string(t?.project ?? \"\")));\nt == nil ? \"there is no task \" + tid + \" you may see\" : !inside ? \"this run may comment only on the tasks it is about\" : trim(body ?? \"\") == \"\" ? \"give the comment a body\" : \"\""
+        "expr": "let inside = len(reach ?? []) == 0 || any(reach, (#.entity == \"taskItem\" \u0026\u0026 string(#.id) == tid) || (#.entity == \"tasksProject\" \u0026\u0026 string(#.id) == string(t?.project ?? \"\")));\nt == nil ? \"there is no task \" + tid + \" you may see\" : !inside ? \"this run may change only the tasks it is about\" : \"\""
       }
     },
     {
@@ -100,58 +123,26 @@
       }
     },
     {
-      "id": "fresh",
-      "type": "data.newId",
-      "position": {
-        "x": 0,
-        "y": 400
-      }
-    },
-    {
-      "id": "keep",
-      "type": "data.setVariable",
-      "position": {
-        "x": 2040,
-        "y": 0
-      },
-      "config": {
-        "variable": "cid",
-        "type": "string"
-      }
-    },
-    {
-      "id": "commentId",
-      "type": "data.getVariable",
-      "position": {
-        "x": 0,
-        "y": 600
-      },
-      "config": {
-        "variable": "cid",
-        "type": "string"
-      }
-    },
-    {
       "id": "args",
       "type": "data.expression",
       "position": {
-        "x": 1020,
+        "x": 340,
         "y": 200
       },
       "config": {
         "type": "json",
-        "expr": "{entity: \"taskComment\", values: {task: tid, project: string(t?.project ?? \"\"), body: body}}"
+        "expr": "fromPairs(filter(toPairs({title: title, assignees: assignees, due: due, start: start, priority: priority, status: status}), #[1] != nil \u0026\u0026 #[1] != \"\"))"
       }
     },
     {
       "id": "send",
       "type": "live.sendCommand",
       "position": {
-        "x": 2380,
+        "x": 2040,
         "y": 0
       },
       "config": {
-        "command": "record.create"
+        "command": "tasks.task.update"
       }
     },
     {
@@ -159,7 +150,7 @@
       "type": "data.expression",
       "position": {
         "x": 0,
-        "y": 800
+        "y": 400
       },
       "config": {
         "type": "bool",
@@ -171,7 +162,7 @@
       "type": "data.expression",
       "position": {
         "x": 0,
-        "y": 1000
+        "y": 600
       },
       "config": {
         "type": "bool",
@@ -179,21 +170,33 @@
       }
     },
     {
+      "id": "produced",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "type": "json",
+        "expr": "{entity: \"taskItem\", id: tid}"
+      }
+    },
+    {
       "id": "ok",
       "type": "flow.return",
       "position": {
-        "x": 2720,
+        "x": 2380,
         "y": 0
       },
       "config": {
         "outputs": [
           {
-            "id": "made",
+            "id": "changed",
             "type": "bool"
           },
           {
-            "id": "comment",
-            "type": "string"
+            "id": "produced",
+            "type": "json"
           }
         ]
       }
@@ -202,13 +205,13 @@
       "id": "refused",
       "type": "flow.return",
       "position": {
-        "x": 2720,
+        "x": 2380,
         "y": 200
       },
       "config": {
         "outputs": [
           {
-            "id": "made",
+            "id": "changed",
             "type": "bool"
           },
           {
@@ -221,7 +224,7 @@
     {
       "id": "kept",
       "type": "flow.return",
-      "title": "Not commented",
+      "title": "Outside the run",
       "position": {
         "x": 2040,
         "y": 200
@@ -229,7 +232,7 @@
       "config": {
         "outputs": [
           {
-            "id": "made",
+            "id": "changed",
             "type": "bool"
           },
           {
@@ -293,16 +296,6 @@
     },
     {
       "from": {
-        "node": "call",
-        "pin": "body"
-      },
-      "to": {
-        "node": "check",
-        "pin": "body"
-      }
-    },
-    {
-      "from": {
         "node": "check",
         "pin": "value"
       },
@@ -348,7 +341,7 @@
       },
       "to": {
         "node": "kept",
-        "pin": "made"
+        "pin": "changed"
       }
     },
     {
@@ -363,42 +356,72 @@
     },
     {
       "from": {
+        "node": "call",
+        "pin": "title"
+      },
+      "to": {
+        "node": "args",
+        "pin": "title"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "assignees"
+      },
+      "to": {
+        "node": "args",
+        "pin": "assignees"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "due"
+      },
+      "to": {
+        "node": "args",
+        "pin": "due"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "start"
+      },
+      "to": {
+        "node": "args",
+        "pin": "start"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "priority"
+      },
+      "to": {
+        "node": "args",
+        "pin": "priority"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "status"
+      },
+      "to": {
+        "node": "args",
+        "pin": "status"
+      }
+    },
+    {
+      "from": {
         "node": "if",
         "pin": "false"
       },
       "to": {
-        "node": "keep",
-        "pin": "then"
-      }
-    },
-    {
-      "from": {
-        "node": "fresh",
-        "pin": "id"
-      },
-      "to": {
-        "node": "keep",
-        "pin": "value"
-      }
-    },
-    {
-      "from": {
-        "node": "keep",
-        "pin": "then"
-      },
-      "to": {
         "node": "send",
         "pin": "then"
-      }
-    },
-    {
-      "from": {
-        "node": "commentId",
-        "pin": "value"
-      },
-      "to": {
-        "node": "send",
-        "pin": "target"
       }
     },
     {
@@ -407,28 +430,8 @@
         "pin": "value"
       },
       "to": {
-        "node": "args",
-        "pin": "tid"
-      }
-    },
-    {
-      "from": {
-        "node": "t",
-        "pin": "record"
-      },
-      "to": {
-        "node": "args",
-        "pin": "t"
-      }
-    },
-    {
-      "from": {
-        "node": "call",
-        "pin": "body"
-      },
-      "to": {
-        "node": "args",
-        "pin": "body"
+        "node": "send",
+        "pin": "target"
       }
     },
     {
@@ -458,17 +461,27 @@
       },
       "to": {
         "node": "ok",
-        "pin": "made"
+        "pin": "changed"
       }
     },
     {
       "from": {
-        "node": "commentId",
+        "node": "tid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "tid"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
         "pin": "value"
       },
       "to": {
         "node": "ok",
-        "pin": "comment"
+        "pin": "produced"
       }
     },
     {
@@ -488,7 +501,7 @@
       },
       "to": {
         "node": "refused",
-        "pin": "made"
+        "pin": "changed"
       }
     },
     {

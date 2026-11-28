@@ -1,10 +1,10 @@
 {
-  "id": "cmd-todos-task-create",
-  "name": "todos.task.create",
+  "id": "cmd-tasks-task-create",
+  "name": "tasks.task.create",
   "description": "Makes a task in a project, its target the new task's id, last in its status (the project's first to-do status when left out): its title, a plain-text description, assignees (user ids), due and start dates (YYYY-MM-DD), a priority (none, low, medium, high, urgent), labels, a parent task, and the source it came from ({link, title, kind}, a workbench link to a mail thread, a message or an event). Made by an agent whose autonomy is suggest (or unset), it is a proposal until a person accepts it; with autonomy draft, an active task.",
   "kind": "command",
   "version": 1,
-  "owner": "app:todos",
+  "owner": "app:tasks",
   "spec": {
     "command": "task.create",
     "title": "New task",

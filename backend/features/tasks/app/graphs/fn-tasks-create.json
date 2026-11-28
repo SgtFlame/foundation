@@ -1,10 +1,10 @@
 {
-  "id": "fn-todos-create",
+  "id": "fn-tasks-create",
   "name": "Create a task",
-  "description": "Makes a task in a project, as the caller (todos.task.create): its title, and optionally a status, a plain-text description, assignees (user ids), due and start dates (YYYY-MM-DD), a priority (none, low, medium, high, urgent), labels, a parent task and the source it came from ({link, title, kind}). An agent whose autonomy is suggest makes a proposal a person accepts or dismisses; with autonomy draft, a task. Gives the new task's id.",
+  "description": "Makes a task in a project, as the caller (tasks.task.create): its title, and optionally a status, a plain-text description, assignees (user ids), due and start dates (YYYY-MM-DD), a priority (none, low, medium, high, urgent), labels, a parent task and the source it came from ({link, title, kind}). An agent whose autonomy is suggest makes a proposal a person accepts or dismisses; with autonomy draft, a task. Gives the new task's id.",
   "kind": "function",
   "version": 1,
-  "owner": "app:todos",
+  "owner": "app:tasks",
   "variables": [
     {
       "id": "tid",
@@ -26,7 +26,7 @@
           {
             "id": "project",
             "type": "string",
-            "description": "The project's id (todos.list lists projects' tasks)"
+            "description": "The project's id (tasks.list lists projects' tasks)"
           },
           {
             "id": "title",
@@ -124,7 +124,7 @@
         "y": 0
       },
       "config": {
-        "command": "todos.task.create"
+        "command": "tasks.task.create"
       }
     },
     {
