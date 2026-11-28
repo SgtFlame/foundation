@@ -49,7 +49,10 @@ func Path(app, entity string) string { return "app:" + app + "/entity:" + entity
 // (forge 05c): each action on one of the app's own entity types becomes
 // record.<action> scoped to that type's path, so the roles reach nothing
 // beyond the app (question 1), and each role's row rules go with it
-// (question 4).
+// (question 4). Since forge 40f an action may also name an entity type
+// of an app it requires (Version.Required), scoped to that app's path
+// (app:mail/entity:mailMessage/record.read), which authz lets cross
+// that app's fence.
 func AppRoles(v Version) []authz.AppRole {
 	m := v.Manifest
 	out := make([]authz.AppRole, 0, len(m.Roles))
@@ -60,13 +63,19 @@ func AppRoles(v Version) []authz.AppRole {
 		}
 		for _, a := range r.Actions {
 			entity, acts, ok := EntityAction(a)
-			if !ok || !slices.Contains(v.Owned, entity) {
+			owner := m.ID
+			if !ok {
 				continue
 			}
+			if !slices.Contains(v.Owned, entity) {
+				if owner = v.Required[entity]; owner == "" {
+					continue
+				}
+			}
 			for _, act := range acts {
-				p := Path(m.ID, entity) + "/" + authz.Permission("record", act)
+				p := Path(owner, entity) + "/" + authz.Permission("record", act)
 				if act == AgentUse {
-					p = Path(m.ID, entity) + "/" + authz.Permission("agent", act)
+					p = Path(owner, entity) + "/" + authz.Permission("agent", act)
 				}
 				if !slices.Contains(ar.Permissions, p) {
 					ar.Permissions = append(ar.Permissions, p)

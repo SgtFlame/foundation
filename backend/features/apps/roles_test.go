@@ -32,3 +32,16 @@ func TestAgentUseAction(t *testing.T) {
 		t.Errorf("a command naming use was not refused: %+v", c.problems)
 	}
 }
+
+// A role may name a required app's entity type (forge 40f): its
+// permission is scoped to that app's path; a type neither the app's nor a
+// required app's is left out.
+func TestRoleNamesRequiredType(t *testing.T) {
+	v := Version{Owned: []string{"note"}, Required: map[string]string{"mailMessage": "mail"}, Manifest: Manifest{ID: "sales", Name: "Sales",
+		Entities: []string{"note", "mailMessage"}, Requires: Requires{Apps: []string{"mail"}},
+		Roles:    []Role{{ID: "matcher", Actions: []string{"entity:mailMessage.read", "entity:note.create", "entity:other.read"}}}}}
+	got := AppRoles(v)[0].Permissions
+	if !slices.Equal(got, []string{"app:mail/entity:mailMessage/record.read", "app:sales/entity:note/record.create"}) {
+		t.Errorf("permissions: %v", got)
+	}
+}

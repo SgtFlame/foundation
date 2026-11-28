@@ -474,7 +474,11 @@ func (h *Handle) Toast(severity, message string) {
 // editor kind app:<appId>:<kind>.
 func (h *Handle) OpenEditor(kind, id, name, helpText string, params any) {
 	raw, _ := json.Marshal(params)
-	h.Do(Action{Type: "openEditor", Kind: KindID(h.s.page.App, kind), ID: id, Name: name, HelpText: helpText, Params: raw})
+	full := KindID(h.s.page.App, kind)
+	if strings.HasPrefix(kind, "app:") {
+		full = kind // another app's kind, app:mail:thread (forge 40f)
+	}
+	h.Do(Action{Type: "openEditor", Kind: full, ID: id, Name: name, HelpText: helpText, Params: raw})
 }
 
 // Share opens the Share dialog on a resource, such as one record's path
