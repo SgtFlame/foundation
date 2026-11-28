@@ -125,6 +125,8 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
+	gitconnector "github.com/SgtFlame/foundation/backend/features/connectors/git"
+	"github.com/SgtFlame/foundation/backend/features/connectors/git/gittest"
 	"github.com/SgtFlame/foundation/backend/features/connectors/hooks"
 	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
 	"github.com/SgtFlame/foundation/backend/features/connectors/oauth"
@@ -768,8 +770,9 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		infratest.Contribute(registry)                                                 // the Infrastructure test server connector type (forge 22c)
 		// Features wired from their own files in features/wiring (calendar,
 		// tasks, …): a new feature adds a file there, not lines here
-		var imageProvider providers.Images // set once the AI provider is made (forge 35f-7)
-		if err := wiring.ContributeAll(registry, &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Records: &recordDeps, Images: &imageProvider}); err != nil {
+		var gitMirrors volumeservice.Mirrors // the mirrored Volumes (forge 24e), set once the file events exist
+		var imageProvider providers.Images   // set once the AI provider is made (forge 35f-7)
+		if err := wiring.ContributeAll(registry, &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Records: &recordDeps, Images: &imageProvider, Mirrors: &gitMirrors}); err != nil {
 			return err
 		}
 		// OAuth for connections (forge 26a-1): its settings list the OAuth
@@ -928,6 +931,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		})
 
 		fileEvents := volumeservice.NewFileEvents()
+		gitMirrors = volumeservice.Mirrors{Root: kbRoot, Events: fileEvents} // forge 24e
 		if loc.Client != nil {
 			// The index must not miss a file: a durable bus, followed only
 			// where the index runs (forge 21f-2)
@@ -1127,6 +1131,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		recordEmbedder = embedService
 		recordFiles := recordsfiles.New(nats.JS())
 		recordFiles.SetAccounts(natsAccounts)
+		gittest.Default.SetFiles(recordFiles)     // the Git test server keeps large files there (forge 24a)
+		gitconnector.ServerFiles.Set(recordFiles) // and the git types (forge 24b)
 		// The record files' data service (forge 21d-4), served over NATS by
 		// serve --services (21g-1)
 		_ = filesproxy.Use(loc, func() filesservice.Service { return filesimpl.CreateService(filesimpl.WithStore(recordFiles)) })

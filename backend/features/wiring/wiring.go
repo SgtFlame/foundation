@@ -39,6 +39,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
 	recordsfiles "github.com/SgtFlame/foundation/backend/features/records/files"
 )
@@ -72,6 +73,17 @@ type Env struct {
 	// Images is the AI image provider, usage-recorded (forge 35f-7), set
 	// once the AI provider is made.
 	Images *providers.Images
+	// Mirrors writes the mirrored Volumes (forge 24e), set once the file
+	// events exist; nil without a knowledge base.
+	Mirrors *volumeservice.Mirrors
+}
+
+// VolumeMirrors is the mirrored Volumes' writer, or nil before it is made.
+func (e *Env) VolumeMirrors() *volumeservice.Mirrors {
+	if e == nil || e.Mirrors == nil || e.Mirrors.Root == "" {
+		return nil
+	}
+	return e.Mirrors
 }
 
 // Connectors is the connectors' deps, or empty ones.

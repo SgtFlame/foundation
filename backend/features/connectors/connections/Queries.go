@@ -312,6 +312,30 @@ func contributeQueries(reg *extensions.Registry, deps func() Deps) {
 			return nil
 		},
 	})
+	live.Calls.Register(reg, live.Call{
+		Descriptor: extensions.Descriptor{ID: "connection.secretCall", Source: "connectors"}, Title: "Send a secret to a connection",
+		Description: "Sends an operation whose args hold a secret, such as unlocking a git.ssh connection's key with its passphrase (git.key@1 unlock), to a connection the caller may use. The browser sends it with {secret: true}; the args are kept nowhere. Args {connection, contract, operation, args}; ends with one result event {result} or {error {code, message, detail}}.",
+		Run: func(c live.CallRun) *features.ServiceResponse {
+			var a struct {
+				Connection, Contract, Operation string
+				Args                            json.RawMessage
+			}
+			if err := json.Unmarshal(c.Args, &a); err != nil || a.Connection == "" || a.Contract == "" || a.Operation == "" {
+				return c.Fail(http.StatusBadRequest, log.Code("invalid_args").Errorf("connection.secretCall needs a connection, a contract and an operation"))
+			}
+			res, err := SecretCall(c.ServiceArgs, deps(), a.Connection, a.Contract, a.Operation, a.Args)
+			var ce *connectors.Error
+			switch {
+			case errors.As(err, &ce):
+				c.Emit("result", map[string]any{"error": ce})
+			case err != nil:
+				return c.Fail(http.StatusForbidden, err)
+			default:
+				c.Emit("result", map[string]any{"result": res})
+			}
+			return nil
+		},
+	})
 	tools.Tools.Register(reg, tools.Tool{
 		Descriptor: extensions.Descriptor{ID: "connection.test", Source: "connectors"}, Title: "Test a connection", Effect: tools.EffectExternal,
 		Description: "Signs in to a connection's service and does nothing, to see whether its settings work; records its status. Gives {ok, error {code, message}}.",
