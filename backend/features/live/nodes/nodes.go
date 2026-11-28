@@ -34,6 +34,9 @@ const (
 	KindAction  = "server.action"
 	KindQuery   = "data.query"
 	KindTrigger = "app.trigger"
+	// KindProjector folds one record event into an app projector's value
+	// (forge 26d-1).
+	KindProjector = "projector"
 	// KindConnectorOp is a scripted connector's operation graph (forge
 	// 07d), registered by connectors/scripted; nodes allowed in actions
 	// that a connector operation may use name it too.
@@ -44,6 +47,8 @@ const (
 const (
 	OnCommand = "live.onCommand"
 	OnQuery   = "live.onQuery"
+	// OnFold starts a projector graph with the state and the event.
+	OnFold = "live.onFold"
 )
 
 // Deps are what the nodes and resolvers need, made after the registry.
@@ -462,4 +467,17 @@ func RunQuery(f live.Feed, d Deps, q QueryRun) error {
 			return nil
 		}
 	}
+}
+
+// Send sends a command as a node of x's run does (forge 35c-1): through
+// the host when it sends for the run (a UI session's handle, a test's
+// sender), else through b as the run's principal, or the run's sandbox.
+func Send(x *cognition.Exec, b *bus.Bus, typ, target string, args any) ([]live.Problem, *features.ServiceResponse) {
+	if sender, ok := x.Host.(Sender); ok {
+		return sender.Command(typ, target, args)
+	}
+	if b == nil && bus.DryOf(x.Context()) == nil {
+		return nil, x.Fail(503, log.Code("no_bus").New("there is no command bus"))
+	}
+	return busSender{args: x.ServiceArgs, bus: b}.Command(typ, target, args)
 }

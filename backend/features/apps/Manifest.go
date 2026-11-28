@@ -46,9 +46,15 @@ type Manifest struct {
 	Connectors []Connector `json:"connectors"`
 	// Tools are tools the app gives the model (forge 07j), installed as
 	// <appId>.<name>.
-	Tools    []Tool   `json:"tools"`
-	Requires Requires `json:"requires"`
-	Version  int      `json:"version"` // the published version; 0 in a draft never published
+	Tools []Tool `json:"tools"`
+	// Projectors are projections the app keeps from its records' events
+	// (forge 26d-1), read as app.<appId>.<name>.
+	Projectors []Projector `json:"projectors"`
+	// Ephemeral are topics of signals never stored, such as typing (forge
+	// 26d-1).
+	Ephemeral []Ephemeral `json:"ephemeral"`
+	Requires  Requires    `json:"requires"`
+	Version   int         `json:"version"` // the published version; 0 in a draft never published
 }
 
 // DefaultFrame is the prefab an app that names no frame is framed by:
@@ -246,6 +252,17 @@ func Normalize(m *Manifest) {
 	}
 	if m.Tools == nil {
 		m.Tools = []Tool{}
+	}
+	if m.Projectors == nil {
+		m.Projectors = []Projector{}
+	}
+	for i := range m.Projectors {
+		if m.Projectors[i].Entities == nil {
+			m.Projectors[i].Entities = []string{}
+		}
+	}
+	if m.Ephemeral == nil {
+		m.Ephemeral = []Ephemeral{}
 	}
 	if m.Connectors == nil {
 		m.Connectors = []Connector{}

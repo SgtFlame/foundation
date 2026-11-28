@@ -78,6 +78,7 @@ import (
 
 	"github.com/SgtFlame/foundation/backend/features"
 	activitycontext "github.com/SgtFlame/foundation/backend/features/activity/context"
+	"github.com/SgtFlame/foundation/backend/features/ai/providers"
 	"github.com/SgtFlame/foundation/backend/features/ai/providers/gemini"
 	"github.com/SgtFlame/foundation/backend/features/ai/rest/chathandlers"
 	"github.com/SgtFlame/foundation/backend/features/ai/rest/embedhandlers"
@@ -766,7 +767,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Features wired from their own files in features/wiring (calendar,
 		// tasks, …): a new feature adds a file there, not lines here
 		var gitMirrors volumeservice.Mirrors // the mirrored Volumes (forge 24e), set once the file events exist
-		if err := wiring.ContributeAll(registry, &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Mirrors: &gitMirrors}); err != nil {
+		var imageProvider providers.Images   // set once the AI provider is made (forge 35f-7)
+		if err := wiring.ContributeAll(registry, &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Images: &imageProvider, Mirrors: &gitMirrors}); err != nil {
 			return err
 		}
 		var infraNodeDeps infranodes.Deps
@@ -994,6 +996,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 			return config.Read[usagesettings.Capture](configService, features.BackgroundArgs(ctx), usagesettings.CaptureID)
 		})
 		defer recorder.Close()
+		imageProvider = usage.ImageProvider(provider, "gemini", recorder)
 		usageService := usageproxy.Use(loc, func() usageservice.Service { return usageimpl.CreateService(usageimpl.WithDB(gdb)) })
 		embedService := embedproxy.Use(loc, func() embedservice.Service {
 			return embedimpl.CreateService(embedimpl.WithProvider(usage.EmbedProvider(provider, "gemini", recorder)))
@@ -1057,6 +1060,8 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// Commands decide on the projections; queries are subscriptions
 		projections := project.New(nats.JS(), registry)
 		projections.SetAccounts(natsAccounts)
+		// Installed apps' projectors are read as app.<appId>.<name> (forge 26d-1)
+		projections.SetResolver(installs.ProjectorResolver(func() installs.Deps { return installDeps }))
 		defer projections.Close()
 		liveBus := bus.New(projections)
 		subscriptions := subscribe.New(projections, registry)

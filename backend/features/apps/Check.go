@@ -77,6 +77,8 @@ func CheckManifest(m Manifest, env Env) []live.Problem {
 	c.triggers()
 	c.connectors()
 	c.tools()
+	c.projectors()
+	c.ephemeral()
 	c.requires()
 	return c.problems
 }
@@ -326,8 +328,8 @@ func (c *check) commands() {
 		c.graph(path+".graph", cmd.Graph, "command", "command", cmd.Type)
 		if _, acts, ok := EntityAction(cmd.Action); ok && len(acts) > 1 {
 			c.add(path+".action", fmt.Sprintf("a command needs one action, and %s is every one", cmd.Action), "name the one it does, such as entity:task.update")
-		} else if ok && acts[0] == AgentUse {
-			c.add(path+".action", "a command's action is a record action, not use", "name read, create, update or delete")
+		} else if ok && (acts[0] == AgentUse || acts[0] == EntityDefine) {
+			c.add(path+".action", "a command's action is a record action, not "+acts[0], "name read, create, update or delete")
 		} else if cmd.Action != "" {
 			c.action(path+".action", cmd.Action)
 		}

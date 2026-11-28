@@ -17,6 +17,6 @@ func (r CreateRequest) ToArgs(args features.ServiceArgs) chronicleservice.Create
 func (in EntryInput) toInput() chronicleservice.EntryInput {
 	return chronicleservice.EntryInput{
 		Type: in.Type, Title: in.Title, ShortSummary: in.ShortSummary, FullSummary: in.FullSummary, FullContext: in.FullContext,
-		Fields: in.Fields, ParentID: in.ParentID,
+		Fields: in.Fields, ParentID: in.ParentID, Scope: in.Scope,
 	}
 }

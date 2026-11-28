@@ -7,7 +7,8 @@ type Row struct {
 	EntryID  uint64
 	TenantID uint64
 	OwnerID  uint64
-	Shared   bool // other members may find it (and everyone, in the global tenant)
+	Shared   bool   // other members may find it (and everyone, in the global tenant)
+	Scope    string // "project:<page>" for a project's entry (forge 35f-6)
 	Hash     string
 	Title    string
 	Text     string
@@ -29,6 +30,9 @@ type Owner struct {
 	TenantID   uint64
 	UserID     uint64
 	OthersOnly bool
+	// Projects are the project scopes whose entries are found too (forge
+	// 35f-6, ReadableProjects).
+	Projects []string
 }
 
 // Store keeps the active entries' text for keyword (BM25) search and their

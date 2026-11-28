@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/SgtFlame/foundation/backend/features/extensions"
@@ -86,7 +87,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 	register(reg, tools.Tool{
 		Descriptor:  extensions.Descriptor{ID: "kb.read", Order: 110, Source: source},
 		Title:       "Read a file",
-		Description: fmt.Sprintf("Reads a markdown file in the user's Volumes, or a range of its lines (at most %d at once). The text comes back exactly as stored, with a [n] to cite it by. Read a file before editing it.", maxReadLines),
+		Description: fmt.Sprintf("Reads a markdown file or a document (.doc.json, read as its Markdown) in the user's Volumes, or a range of its lines (at most %d at once). A markdown file's text comes back exactly as stored, with a [n] to cite it by. Read a file before editing it.", maxReadLines),
 		Input:       json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","minLength":1,"description":"The file's path, as a search result or citation names it, e.g. veritas/notes.md"},"startLine":{"type":"integer","minimum":1,"description":"The first line, from 1"},"endLine":{"type":"integer","minimum":1,"description":"The last line, inclusive"}},"required":["path"]}`),
 		Effect:      tools.EffectRead,
 		Run: func(call tools.Call) (tools.Result, error) {
@@ -98,7 +99,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 				return tools.Result{}, err
 			}
 			d := deps()
-			_, rel, file, err := resolve(d.Root, args.Path)
+			_, rel, file, err := resolve(d.Root, args.Path, "markdown", "document")
 			if err != nil {
 				return tools.Result{}, err
 			}
@@ -112,7 +113,14 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 			if err != nil {
 				return tools.Result{}, fmt.Errorf("cannot read %q", rel)
 			}
-			lines := strings.SplitAfter(string(content), "\n")
+			// A document is read as its derived Markdown (forge 35a-1),
+			// whose lines its citations name
+			_, typ, _ := kbservice.SplitFile(filepath.Base(file))
+			body, err := volumeservice.TextOf(typ, content)
+			if err != nil {
+				return tools.Result{}, fmt.Errorf("%q is not a readable document", rel)
+			}
+			lines := strings.SplitAfter(body, "\n")
 			if n := len(lines); n > 0 && lines[n-1] == "" {
 				lines = lines[:n-1]
 			}
@@ -239,17 +247,27 @@ func onlyLibrary(sources []string) bool {
 }
 
 // resolve turns a path relative to the root ("veritas/notes.md", the
-// extension optional) into a volume path, its normalized form and the
-// file, which must lie inside a volume.
-func resolve(root, p string) (kbservice.VolumePath, string, string, error) {
-	p = strings.Trim(strings.TrimSpace(filepath.ToSlash(p)), "/")
-	if !strings.HasSuffix(p, ".md") {
-		p += ".md"
+// extension optional) into a volume path, its normalized form, the file,
+// which must lie inside a volume, and its type, which must be one of
+// types (markdown when none are given; a path without an extension is
+// markdown).
+func resolve(root, p string, types ...string) (kbservice.VolumePath, string, string, error) {
+	if len(types) == 0 {
+		types = []string{"markdown"}
 	}
+	p = strings.Trim(strings.TrimSpace(filepath.ToSlash(p)), "/")
 	segments := strings.Split(p, "/")
 	base, typ, ok := kbservice.SplitFile(segments[len(segments)-1])
+	if !ok {
+		p += ".md"
+		segments = strings.Split(p, "/")
+		base, typ, ok = kbservice.SplitFile(segments[len(segments)-1])
+	}
 	if !ok || len(segments) < 2 {
 		return kbservice.VolumePath{}, "", "", fmt.Errorf("%q is not a markdown file's path inside a Volume, such as veritas/notes.md (names cannot contain dots)", p)
+	}
+	if !slices.Contains(types, typ) {
+		return kbservice.VolumePath{}, "", "", fmt.Errorf("%q is a %s file; this tool takes only %s files", p, typ, strings.Join(types, " and "))
 	}
 	typed := kbservice.NewVolumePath().Folder(append(segments[:len(segments)-1:len(segments)-1], base)...).Type(typ).Root(root)
 	file, err := typed.Build()
@@ -266,7 +284,14 @@ func resolve(root, p string) (kbservice.VolumePath, string, string, error) {
 
 // titleOf is a path without its extension.
 func titleOf(rel string) string {
-	return strings.TrimSuffix(rel, ".md")
+	dir, name := "", rel
+	if i := strings.LastIndex(rel, "/"); i >= 0 {
+		dir, name = rel[:i+1], rel[i+1:]
+	}
+	if base, _, ok := kbservice.SplitFile(name); ok {
+		return dir + base
+	}
+	return rel
 }
 
 // markdownSafe keeps text from closing the emphasis it is shown in.
