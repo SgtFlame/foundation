@@ -211,10 +211,12 @@ func asStrings(m map[string]any) map[string]string {
 }
 
 // entityOf is the entity type of a page's record: the editor kind's
-// subject type when the app uses that entity type, else the route's
-// :entity param (the Records app's pages).
+// subject type when the app uses that entity type, or when the app
+// requires other apps whose types it shows (forge 30e: the taskboard app's
+// task tab over the todos app's taskItem), else the route's :entity param
+// (the Records app's pages).
 func entityOf(m apps.Manifest, k *apps.EditorKind, params map[string]any) string {
-	if k != nil && k.Subject != nil && slices.Contains(m.Entities, k.Subject.Type) {
+	if k != nil && k.Subject != nil && (slices.Contains(m.Entities, k.Subject.Type) || (len(m.Requires.Apps) > 0 && k.Subject.Type != "")) {
 		return k.Subject.Type
 	}
 	e, _ := params["entity"].(string)

@@ -330,8 +330,13 @@ func (c *docCheck) prefab(path string, p ui.Prefab, other bool) {
 			if slices.ContainsFunc(c.d.Manifest.Queries, func(q Query) bool { return q.Name == name }) || (c.env.Query != nil && c.env.Query(name)) {
 				return true
 			}
-			_, ok := c.graphOf("qry-" + name)
-			return ok
+			if _, ok := c.graphOf("qry-" + name); ok {
+				return true
+			}
+			// A required app's query, <appId>.<name> (forge 30e: todos.myDay),
+			// whose graph is that app's and checked when it was published
+			app, _, scoped := strings.Cut(name, ".")
+			return scoped && slices.Contains(c.d.Manifest.Requires.Apps, app)
 		},
 		Graph: func(id string) (string, bool) {
 			g, ok := c.graphOf(id)
