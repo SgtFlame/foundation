@@ -1,0 +1,30 @@
+{
+  "name": "chat_messaging_messages_list",
+  "description": "The latest messages of a channel (or of one thread), oldest first, or with since the messages posted or edited after that cursor and the ids of those deleted. Either way it gives the cursor to store. A cursor too old is refused as invalid with cursor_expired in its message: list again without one.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "The channel's id"
+      },
+      "thread": {
+        "type": "string",
+        "description": "A thread's first message id: only that thread's replies"
+      },
+      "since": {
+        "type": "string",
+        "description": "The cursor from the last list, to get only changes since"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "description": "At most this many messages; 50 when left out"
+      }
+    },
+    "required": [
+      "channel"
+    ]
+  }
+}

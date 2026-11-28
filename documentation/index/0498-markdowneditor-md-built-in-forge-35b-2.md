@@ -1,0 +1,1 @@
+| [MarkdownEditor.md](MarkdownEditor.md) › *Built in forge 35b-2* | Page view (forge 35b-2): page setup, pagination as decorations, headers and footers, footnotes per page, breaks, table of contents, ruler indents, print |

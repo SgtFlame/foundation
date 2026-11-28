@@ -526,6 +526,20 @@ Verification:
   - scrolling a column ran at about 50 frames a second on the headless development build.
 - The two-session browser walk comes with forge 30d's Board view.
 
+
+## Built in forge 26d-2
+
+Forge's part 26d-2 (chat primitives, [forge plan](../../forge/documentation/plans/026d-2-ChatPrimitives.md)):
+- **`mui.virtualList` takes `reverse`**: a chat's message list. The first record (the newest, with a descending sort) is drawn at the bottom, and rows are as tall as their content (measured by `@tanstack/react-virtual`, keyed by record id, `rowHeight` their least). The list opens at the bottom and follows new records only while scrolled there; otherwise a *New messages* button shows. `endReached` is sent when the oldest record scrolls into view at the top. The `window` event, selection and `open` still speak in record indexes, so `ui/Window.go` is unchanged: the server holds the same window over `records.find`, and older records are reached by scrolling up. Up and Down move toward older and newer rows.
+- **`chat.composer`** (`renderers/doc/Composer.tsx`, its text logic in `composerText.ts` with `yarn test` unit tests) is a Markdown message box. `@` suggests people and agents from `mentions` (`{id, name, label, kind}`, bound to a query), `:` suggests a small set of emoji by name, and files attach by button or paste, uploaded as record files of `entity` (`Records.upload`). Enter sends and Shift+Enter adds a line. It emits `send {text, mentions, files}`, where `mentions` are the ids of the `@name`s it holds (once each, in order; an unknown name stays text), and `typing {}` at most every three seconds while the text changes.
+
+Verification: `yarn build` and `yarn test` in common; `go test ./features/ui/... ./features/apps/tools` (TestMetadata). The 50 000-message frame-rate check on a production build is run with the Messaging app (26d-4), the first page to use both.
+
+## Changed in forge 30d
+`mui.table` columns take `type: "editor"` with a `recordField`: the cell shows the value with `record.fieldValue`'s display and, on a click or Enter, edits it in place with the field's own editor (`FieldInput` of `renderers/record/FieldEditor.tsx`; computed fields stay read-only). Text-like fields commit on Enter or blur, the rest at once, Escape cancels. The cell sends `edit {key, field, value, expect}`, `expect` being the row's `_seq` when editing began, for a handler to pass to `record.update`; when the row changes while the cell is open it says *Changed by <name>*. Forge's starter *Record table* uses it in its `editable` variant (forge `StarterLibrary.md` › *Built in part 30d*).
+
+*Send command* (`live.sendCommand`) also takes an optional `command` input, which replaces the config's command when it is not empty, for a generic view that sends a command its page names in a prop (the Board view's `moveCommand`, such as `tasks.task.move`).
+
 ## Built in forge 40a and 40b: charts, stat values and the relation picker
 
 Forge's parts 40a and 40b (plans `../forge/documentation/plans/040a-Charts.md`, `040b-RelationPicker.md`) added three primitives, whole, to Foundation:
@@ -540,3 +554,4 @@ Forge's starter library builds on them: *Stat tile* (`statTile`, a live aggregat
 `mui.table` columns take `type: "editor"` with a `recordField`: the cell shows the value with `record.fieldValue`'s display and, on a click or Enter, edits it in place with the field's own editor (`FieldInput` of `renderers/record/FieldEditor.tsx`; computed fields stay read-only). Text-like fields commit on Enter or blur, the rest at once, Escape cancels. The cell sends `edit {key, field, value, expect}`, `expect` being the row's `_seq` when editing began, for a handler to pass to `record.update`; when the row changes while the cell is open it says *Changed by <name>*. Forge's starter *Record table* uses it in its `editable` variant (forge `StarterLibrary.md` › *Built in part 30d*).
 
 *Send command* (`live.sendCommand`) also takes an optional `command` input, which replaces the config's command when it is not empty, for a generic view that sends a command its page names in a prop (the Board view's `moveCommand`, such as `todos.task.move`).
+

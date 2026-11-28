@@ -1,0 +1,304 @@
+{
+  "id": "qry-tasks-projectTasks",
+  "name": "projectTasks",
+  "description": "A project's board: the project, its statuses in order, its active tasks in their order within their statuses (each with its number as KEY-n), its labels, and the tasks agents proposed for it. params {project}.",
+  "kind": "data.query",
+  "version": 1,
+  "owner": "app:tasks",
+  "spec": {
+    "query": "projectTasks",
+    "title": "A project's tasks",
+    "description": "A project's board: the project, its statuses in order, its active tasks in their order within their statuses (each with its number as KEY-n), its labels, and the tasks agents proposed for it. params {project}.",
+    "params": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string"
+        }
+      }
+    },
+    "action": "record.read"
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onQuery",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "project",
+            "name": "project",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "pid",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "(project ?? \"\") == \"\" ? \"none\" : project",
+        "type": "string"
+      }
+    },
+    {
+      "id": "pr",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "tasksProject"
+      }
+    },
+    {
+      "id": "byProject",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "{where: {project: pid}, sort: [{field: \"rank\"}], limit: 200}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "statuses",
+      "type": "records.query",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "tasksStatus"
+      }
+    },
+    {
+      "id": "tq",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "expr": "{where: {project: pid}, sort: [{field: \"rank\"}], limit: 5000}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "tasks",
+      "type": "records.query",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "entity": "taskItem"
+      }
+    },
+    {
+      "id": "lq",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 600
+      },
+      "config": {
+        "expr": "{where: {project: pid}, limit: 500}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "labels",
+      "type": "records.query",
+      "position": {
+        "x": 1020,
+        "y": 400
+      },
+      "config": {
+        "entity": "taskLabel"
+      }
+    },
+    {
+      "id": "out",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "let key = string(pr?.key ?? \"\");\nlet rows = map(tasks ?? [], { let t = #; ({id: t._id, ref: (key == \"\" ? \"#\" : key + \"-\") + string(t.number ?? \"\"), title: t.title, status: t.status ?? \"\", rank: t.rank ?? \"\",\n  assignees: t.assignees ?? [], due: t.due ?? \"\", priority: t.priority ?? \"none\", labels: t.labels ?? [], state: t.state ?? \"active\", completedAt: t.completedAt ?? \"\", source: t.source, version: t._seq}) });\n{project: pr, statuses: statuses ?? [], tasks: filter(rows, #.state == \"active\"), proposals: filter(rows, #.state == \"proposed\"), labels: labels ?? []}"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "result",
+            "name": "result",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "project"
+      },
+      "to": {
+        "node": "pid",
+        "pin": "project"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pr",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "byProject",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "byProject",
+        "pin": "value"
+      },
+      "to": {
+        "node": "statuses",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "tq",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "tq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "tasks",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "lq",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "lq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "labels",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "pr",
+        "pin": "record"
+      },
+      "to": {
+        "node": "out",
+        "pin": "pr"
+      }
+    },
+    {
+      "from": {
+        "node": "statuses",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "statuses"
+      }
+    },
+    {
+      "from": {
+        "node": "tasks",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "tasks"
+      }
+    },
+    {
+      "from": {
+        "node": "labels",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "labels"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "out",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "result"
+      }
+    }
+  ]
+}

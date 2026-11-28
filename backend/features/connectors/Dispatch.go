@@ -64,6 +64,16 @@ func (d *Dispatcher) jetStream() jetstream.JetStream {
 	return d.js
 }
 
+type secretKey struct{}
+
+// WithSecretCall marks ctx as connection.secretCall's, the one sender of
+// a Secret operation.
+func WithSecretCall(ctx context.Context) context.Context {
+	return context.WithValue(ctx, secretKey{}, true)
+}
+
+func secretCall(ctx context.Context) bool { v, _ := ctx.Value(secretKey{}).(bool); return v }
+
 // Call is one call through the dispatcher.
 type Call struct {
 	Contract   string          // id@version, an id (its latest), or conn.<connection>
@@ -89,10 +99,16 @@ func (d *Dispatcher) Call(args features.ServiceArgs, c Call) (json.RawMessage, *
 	if !ok {
 		return nil, Errorf(CodeNotSupported, "contract %s has no operation %q", info.Ref, c.Operation)
 	}
+	if op.Secret && !secretCall(ctx) {
+		return nil, Errorf(CodeInvalid, "%s %s takes a secret: only its own form sends it (connection.secretCall)", info.Ref, op.ID)
+	}
 	if len(c.Args) == 0 {
 		c.Args = json.RawMessage(`{}`)
 	}
 	if err := tools.CheckArgs(op.Args, c.Args); err != nil {
+		if op.Secret {
+			return nil, Errorf(CodeInvalid, "%s %s: the args do not fit", info.Ref, op.ID)
+		}
 		return nil, Errorf(CodeInvalid, "%s %s: %v", info.Ref, op.ID, err)
 	}
 	typ, conn, e := d.typeFor(args, info, c.Connection)

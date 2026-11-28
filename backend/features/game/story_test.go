@@ -208,4 +208,12 @@ func TestStorySaves(t *testing.T) {
 	if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != "steward" {
 		t.Fatalf("steward %+v", p)
 	}
+	// S36: the new moon and the king's council
+	for _, step := range []string{"waited", "kingscouncil"} {
+		res = st.ok("game.reachStory", farm, map[string]any{"step": step, "area": farm, "x": 9, "z": 3})
+		p = game.StoryPlace{}
+		if !st.read(game.StoriesProjector, game.PackKey(farm, 1), res.Seq, &p) || p.Last != step {
+			t.Fatalf("%s %+v", step, p)
+		}
+	}
 }

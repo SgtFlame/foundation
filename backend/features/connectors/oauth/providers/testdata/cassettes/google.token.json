@@ -1,0 +1,8 @@
+{
+  "access_token": "ya29.a0-google-access",
+  "expires_in": 3599,
+  "refresh_token": "1//0g-google-refresh",
+  "scope": "openid https://www.googleapis.com/auth/userinfo.email https://mail.google.com/",
+  "token_type": "Bearer",
+  "id_token_claims": {"iss": "https://accounts.google.com", "sub": "110169484474386276334", "email": "ann@example.com", "email_verified": true, "aud": "g-client"}
+}

@@ -1,6 +1,6 @@
 {
   "id": "taskItem",
-  "owner": "app:todos",
+  "owner": "app:tasks",
   "name": "Task",
   "description": "A to-do of the Tasks library app, in a project and a status, ordered within its status; proposed by an agent until a person accepts it",
   "titleField": "title",
@@ -155,9 +155,15 @@
           "id": "kind",
           "name": "Kind",
           "type": "text",
-          "description": "mail, message, event\u2026"
+          "description": "mail, message, event…"
         }
       ]
+    },
+    {
+      "id": "sourceLink",
+      "name": "Source link",
+      "type": "text",
+      "description": "The source's workbench: link, kept by tasks.task.create so an agent proposes one task per source"
     },
     {
       "id": "state",
@@ -209,8 +215,26 @@
           "name": "Updated",
           "type": "dateTime",
           "description": "When the card last changed"
+        },
+        {
+          "id": "list",
+          "name": "List",
+          "type": "text",
+          "description": "The card's list last seen"
+        },
+        {
+          "id": "synced",
+          "name": "Synced",
+          "type": "json",
+          "description": "What the task and its card both held when the sync last wrote it ({title, description, due, list}), so a change made here since is told from the sync's own writes"
         }
       ]
+    },
+    {
+      "id": "outsideId",
+      "name": "Card id",
+      "type": "text",
+      "description": "The card's id in the project's tracker, kept beside outside so the sync finds a task by its card"
     },
     {
       "id": "completedAt",
@@ -246,6 +270,18 @@
       "fields": [
         "state",
         "assignees"
+      ]
+    },
+    {
+      "id": "bySource",
+      "fields": [
+        "sourceLink"
+      ]
+    },
+    {
+      "id": "byOutside",
+      "fields": [
+        "outsideId"
       ]
     }
   ],

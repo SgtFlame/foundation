@@ -1,0 +1,27 @@
+{
+  "name": "Message",
+  "description": "One message in a channel (forge 26d-3): Markdown text, its author, whom it mentions, its files, and the message it replies to in a thread. Its id is the one its sender's browser made, so a message posted twice is one. Edited and deleted only by its author; a deleted message keeps its place with no text",
+  "owner": "app:nexus",
+  "titleField": "text",
+  "fields": [
+    {"id": "channel", "name": "Channel", "type": "text", "required": true, "description": "The channel's id"},
+    {"id": "author", "name": "Author", "type": "relation", "relation": {"entity": "user"}},
+    {"id": "authorName", "name": "Author (name)", "type": "text", "description": "Who wrote it when not a person of the tenant: an agent, or an outside author through a bridge"},
+    {"id": "text", "name": "Text", "type": "markdown", "searchable": true},
+    {"id": "parent", "name": "Reply to", "type": "text", "description": "The message whose thread it is in; empty in the channel itself"},
+    {"id": "mentions", "name": "Mentions", "type": "tags", "description": "The user ids it mentions"},
+    {"id": "files", "name": "Files", "type": "json", "description": "Its attachments: [{id, name, size, contentType}]"},
+    {"id": "private", "name": "Private", "type": "bool", "default": false, "description": "Its channel's, copied so the row rule needs no lookup"},
+    {"id": "edited", "name": "Edited", "type": "bool", "default": false},
+    {"id": "deleted", "name": "Deleted", "type": "bool", "default": false},
+    {"id": "createdAt", "name": "Sent", "type": "createdAt"}
+  ],
+  "indexes": [
+    {"id": "by_channel", "fields": ["channel", "createdAt"]},
+    {"id": "by_parent", "fields": ["parent", "createdAt"]}
+  ],
+  "access": {
+    "update": "principal.kind != 'user' || string(record.author) == principal.user",
+    "delete": "principal.kind != 'user'"
+  }
+}

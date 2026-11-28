@@ -1,0 +1,368 @@
+{
+  "id": "fn-nexus-readChannel",
+  "name": "Read a channel",
+  "description": "A channel's latest messages as the caller sees them (nexus.readChannel): oldest first, each {id, author, text, at, parent, replies?}, at most limit (30 when left out), with the channel's name and topic. A channel the caller may not read gives an error.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:nexus",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "channel",
+            "type": "string",
+            "description": "The channel's id"
+          },
+          {
+            "id": "limit",
+            "type": "number",
+            "optional": true,
+            "description": "How many messages, 30 when left out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cid",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "type": "string",
+        "expr": "channel ?? \"\""
+      }
+    },
+    {
+      "id": "chan",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusChannel"
+      }
+    },
+    {
+      "id": "q",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "type": "json",
+        "expr": "{where: {channel: channel ?? \"\", parent: \"\"}, sort: [{field: \"createdAt\", desc: true}], limit: int(limit ?? 30), expand: [\"author\"]}"
+      }
+    },
+    {
+      "id": "found",
+      "type": "records.query",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "entity": "nexusMessage"
+      }
+    },
+    {
+      "id": "out",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "{channel: {id: chan?._id ?? \"\", name: chan?.name ?? \"\", topic: chan?.topic ?? \"\", kind: chan?.kind ?? \"\"},\n messages: reverse(map(found ?? [], ({id: #._id, author: #._expanded?.author?._title ?? #.authorName ?? string(#.author ?? \"\"), text: (#.deleted ?? false) ? \"(deleted)\" : #.text ?? \"\", at: #.createdAt, files: len(#.files ?? [])})))}"
+      }
+    },
+    {
+      "id": "seen",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "type": "bool",
+        "expr": "chan != nil"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1360,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "type": "string",
+        "expr": "\"there is no channel \" + cid + \" you may read\""
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "channel",
+            "name": "channel",
+            "type": "json"
+          },
+          {
+            "id": "messages",
+            "name": "messages",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "no",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "name": "error",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ch",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "type": "json",
+        "expr": "out.channel"
+      }
+    },
+    {
+      "id": "ms",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 400
+      },
+      "config": {
+        "type": "json",
+        "expr": "out.messages"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "channel"
+      },
+      "to": {
+        "node": "cid",
+        "pin": "channel"
+      }
+    },
+    {
+      "from": {
+        "node": "cid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "chan",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "channel"
+      },
+      "to": {
+        "node": "q",
+        "pin": "channel"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "limit"
+      },
+      "to": {
+        "node": "q",
+        "pin": "limit"
+      }
+    },
+    {
+      "from": {
+        "node": "q",
+        "pin": "value"
+      },
+      "to": {
+        "node": "found",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "chan",
+        "pin": "record"
+      },
+      "to": {
+        "node": "out",
+        "pin": "chan"
+      }
+    },
+    {
+      "from": {
+        "node": "found",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "chan",
+        "pin": "record"
+      },
+      "to": {
+        "node": "seen",
+        "pin": "chan"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "seen",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "out",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ch",
+        "pin": "out"
+      }
+    },
+    {
+      "from": {
+        "node": "out",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ms",
+        "pin": "out"
+      }
+    },
+    {
+      "from": {
+        "node": "ch",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "channel"
+      }
+    },
+    {
+      "from": {
+        "node": "ms",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "messages"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "cid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "cid"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "error"
+      }
+    }
+  ]
+}

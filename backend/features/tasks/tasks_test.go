@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +33,11 @@ import (
 	jobsnodes "github.com/SgtFlame/foundation/backend/features/jobs/nodes"
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	"github.com/SgtFlame/foundation/backend/features/live/natsd"
+	"github.com/SgtFlame/foundation/backend/features/connectors"
+	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
+	connectorsnodes "github.com/SgtFlame/foundation/backend/features/connectors/nodes"
+	"github.com/SgtFlame/foundation/backend/features/tasks/tracker"
+	"github.com/SgtFlame/foundation/backend/features/tasks/tracker/trackerfake"
 	livenodes "github.com/SgtFlame/foundation/backend/features/live/nodes"
 	"github.com/SgtFlame/foundation/backend/features/live/project"
 	"github.com/SgtFlame/foundation/backend/features/live/subscribe"
@@ -66,6 +72,10 @@ type fixture struct {
 	runner  *jobs.Runner
 	n       atomic.Int64
 	botOnce sync.Once
+	// The connector stack, served by serveTracker (forge 30h)
+	srv        *natsd.Server
+	dispatcher *connectors.Dispatcher
+	connDeps   func() connections.Deps
 }
 
 type jobSettings struct{}
@@ -80,7 +90,7 @@ func (jobSettings) Resolved(features.ServiceArgs, string) (json.RawMessage, erro
 // triggers; and the Tasks app seeded into tenant 1, twice.
 func setup(t *testing.T) *fixture {
 	reg := extensions.NewRegistry()
-	reg.Declare(livenodes.TriggerEvents, tools.Tools, tools.Sources)
+	reg.Declare(livenodes.TriggerEvents, tools.Tools, tools.Sources, connectors.Contracts, connectors.Types)
 	cognitionnodes.Contribute(reg)
 	uinodes.Contribute(reg)
 	if err := uicomponents.Contribute(reg); err != nil {
@@ -96,6 +106,8 @@ func setup(t *testing.T) *fixture {
 		installDep installs.Deps
 		jobDeps    jobs.Deps
 		jobNodes   jobsnodes.Deps
+		cxDeps     connectors.Deps
+		connDeps   connections.Deps
 	)
 	livenodes.Contribute(reg, func() livenodes.Deps { return nodeDeps })
 	drafts.Contribute(reg, func() drafts.Deps { return draftDeps })
@@ -110,6 +122,15 @@ func setup(t *testing.T) *fixture {
 	jobsnodes.Contribute(reg, func() jobsnodes.Deps { return jobNodes })
 	authznodes.Contribute(reg)
 	authz.ContributeAgents(reg)
+	// Connectors, for the two-way sync (forge 30h): the tracker contract,
+	// the Tasks test server, connections and their event sources
+	connectors.Contribute(reg, func() connectors.Deps { return cxDeps })
+	connectorsnodes.Contribute(reg, func() connectors.Deps { return cxDeps })
+	connections.Contribute(reg, func() connections.Deps { return connDeps })
+	connections.ContributeTrigger(reg, func() connections.Deps { return connDeps })
+	tracker.Contribute(reg)
+	var dispatcher *connectors.Dispatcher
+	trackerfake.Contribute(reg, func() trackerfake.Dispatcher { return dispatcher })
 
 	gdb, err := db.Open(db.WithPath(filepath.Join(t.TempDir(), "test.db")))
 	if err != nil {
@@ -143,6 +164,15 @@ func setup(t *testing.T) *fixture {
 	f.bus.Resolve = installs.CommandFor(func() installs.Deps { return installDep }, livenodes.CommandFor(func() livenodes.Deps { return nodeDeps }))
 	f.subs.Resolve = installs.QueryFor(func() installs.Deps { return installDep }, livenodes.QueryFor(func() livenodes.Deps { return nodeDeps }))
 	jobDeps = jobs.Deps{Projections: p, Bus: f.bus, Engine: eng, Config: jobSettings{}}
+	registry := connectors.NewRegistry(reg, srv.JS())
+	registry.SetCheckEvery(50 * time.Millisecond)
+	t.Cleanup(registry.Close)
+	cx := connections.Connections{Deps: func() connections.Deps { return connDeps }}
+	dispatcher = &connectors.Dispatcher{NC: srv.Conn(), Registry: registry, Connections: cx, Failed: cx.Failed, Timeout: 10 * time.Second}
+	cxDeps = connectors.Deps{Registry: registry, Dispatcher: dispatcher}
+	connDeps = connections.Deps{Projections: p, Bus: f.bus, Registry: registry, Secrets: memSecrets{}, Dispatcher: dispatcher}
+	f.srv, f.dispatcher = srv, dispatcher
+	f.connDeps = func() connections.Deps { return connDeps }
 
 	// Access, before the app installs, so its roles are made
 	appDB, err := db.Open(db.WithPath(filepath.Join(t.TempDir(), "app.db")))
@@ -159,6 +189,8 @@ func setup(t *testing.T) *fixture {
 	ui.ContributeAccess(reg)
 	ui.ContributePrefabAccess(reg)
 	jobs.ContributeAccess(reg)
+	connectors.ContributeAccess(reg)
+	connections.ContributeAccess(reg)
 	pol := authz.NewPolicy(appDB, reg)
 	authz.Install(pol)
 	t.Cleanup(func() { authz.Install(nil) })
@@ -309,7 +341,7 @@ func eventually(t *testing.T, what string, within time.Duration, ok func() bool)
 func (f *fixture) newProject(as uint64, name string, members, guests []string) string {
 	f.t.Helper()
 	id := fmt.Sprintf("%d", time.Now().UnixNano())
-	f.okOn(as, "todos.project.create", tasks.EntityProject, id, map[string]any{"name": name, "members": members, "guests": guests})
+	f.okOn(as, "tasks.project.create", tasks.EntityProject, id, map[string]any{"name": name, "members": members, "guests": guests})
 	eventually(f.t, "the project's statuses", 10*time.Second, func() bool {
 		return len(f.find(user(owner), tasks.EntityStatus, map[string]any{"project": id})) == 4
 	})
@@ -339,7 +371,7 @@ func TestDocumentChecks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(d.Parts.Entities) != 6 || len(d.Parts.Graphs) < 15 {
+	if len(d.Parts.Entities) != 7 || len(d.Parts.Graphs) < 15 {
 		t.Fatalf("%d entity types and %d graphs", len(d.Parts.Entities), len(d.Parts.Graphs))
 	}
 }
@@ -382,13 +414,13 @@ func TestTaskModel(t *testing.T) {
 			a[k] = v
 		}
 		id := fmt.Sprintf("%d", time.Now().UnixNano())
-		f.okOn(as, "todos.task.create", tasks.EntityTask, id, a)
+		f.okOn(as, "tasks.task.create", tasks.EntityTask, id, a)
 		return id
 	}
 	hero := mk(alice, web, "Hero image", map[string]any{"assignees": []string{"2"}, "due": "2026-11-27", "description": "Wide.\n\nDark."})
 	copyT := mk(alice, web, "Copy", nil)
 	invoice := mk(bob, bill, "Invoice run", nil)
-	if res := f.doAs(user(alice), "todos.task.create", fmt.Sprint(time.Now().UnixNano()), map[string]any{"project": bill, "title": "Sneak"}); res.Common.Code < 300 {
+	if res := f.doAs(user(alice), "tasks.task.create", fmt.Sprint(time.Now().UnixNano()), map[string]any{"project": bill, "title": "Sneak"}); res.Common.Code < 300 {
 		t.Error("Alice made a task in a project she is not in")
 	}
 	h := f.get(tasks.EntityTask, hero)
@@ -405,12 +437,12 @@ func TestTaskModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.pol.Changed()
-	day := f.query(alice, "todos.myDay", map[string]any{"today": "2026-11-28"})
+	day := f.query(alice, "tasks.myDay", map[string]any{"today": "2026-11-28"})
 	if due, _ := day["due"].([]any); len(due) != 1 || due[0].(map[string]any)["id"] != hero {
 		t.Errorf("Alice's day: %v", day)
 	}
-	if mine := f.tool(user(alice), "todos.list", map[string]any{"assignee": "me"}); len(mine["tasks"].([]any)) != 1 {
-		t.Errorf("todos.list for me: %v", mine)
+	if mine := f.tool(user(alice), "tasks.list", map[string]any{"assignee": "me"}); len(mine["tasks"].([]any)) != 1 {
+		t.Errorf("tasks.list for me: %v", mine)
 	}
 
 	// Each sees only their projects
@@ -428,33 +460,33 @@ func TestTaskModel(t *testing.T) {
 	}
 
 	// A move to Done sets completedAt; back to Doing clears it
-	f.okOn(alice, "todos.task.move", tasks.EntityTask, hero, map[string]any{"status": ws["Done"]})
+	f.okOn(alice, "tasks.task.move", tasks.EntityTask, hero, map[string]any{"status": ws["Done"]})
 	if h := f.get(tasks.EntityTask, hero); h["status"] != ws["Done"] || h["completedAt"] == nil {
 		t.Errorf("moved to Done: %v", h)
 	}
-	f.okOn(alice, "todos.task.move", tasks.EntityTask, hero, map[string]any{"status": ws["Doing"]})
+	f.okOn(alice, "tasks.task.move", tasks.EntityTask, hero, map[string]any{"status": ws["Doing"]})
 	if h := f.get(tasks.EntityTask, hero); h["status"] != ws["Doing"] || h["completedAt"] != nil {
 		t.Errorf("moved back to Doing: %v", h)
 	}
 	// Between two tasks of the column
-	f.okOn(alice, "todos.task.move", tasks.EntityTask, copyT, map[string]any{"status": ws["Doing"], "before": hero})
+	f.okOn(alice, "tasks.task.move", tasks.EntityTask, copyT, map[string]any{"status": ws["Doing"], "before": hero})
 	if c, h := f.get(tasks.EntityTask, copyT), f.get(tasks.EntityTask, hero); fmt.Sprint(c["rank"]) >= fmt.Sprint(h["rank"]) {
 		t.Errorf("Copy is not above Hero image: %v, %v", c["rank"], h["rank"])
 	}
-	if res := f.doAs(user(alice), "todos.task.move", hero, map[string]any{"status": bs["Done"]}); res.Common.Code < 300 {
+	if res := f.doAs(user(alice), "tasks.task.move", hero, map[string]any{"status": bs["Done"]}); res.Common.Code < 300 {
 		t.Error("a task moved to another project's status")
 	}
 	// Complete, and the guest changes a status
-	f.okOn(alice, "todos.task.complete", tasks.EntityTask, copyT, map[string]any{})
+	f.okOn(alice, "tasks.task.complete", tasks.EntityTask, copyT, map[string]any{})
 	if c := f.get(tasks.EntityTask, copyT); c["status"] != ws["Done"] || c["completedAt"] == nil {
 		t.Errorf("completed: %v", c)
 	}
-	f.okOn(gus, "todos.task.move", tasks.EntityTask, invoice, map[string]any{"status": bs["Review"]})
-	f.okOn(alice, "todos.task.update", tasks.EntityTask, hero, map[string]any{"title": "Hero image, dark", "priority": "high"})
+	f.okOn(gus, "tasks.task.move", tasks.EntityTask, invoice, map[string]any{"status": bs["Review"]})
+	f.okOn(alice, "tasks.task.update", tasks.EntityTask, hero, map[string]any{"title": "Hero image, dark", "priority": "high"})
 	if h := f.get(tasks.EntityTask, hero); h["title"] != "Hero image, dark" || h["priority"] != "high" || h["status"] != ws["Doing"] {
 		t.Errorf("updated: %v", h)
 	}
-	f.okOn(alice, "todos.task.update", tasks.EntityTask, hero, map[string]any{"status": ws["Done"]})
+	f.okOn(alice, "tasks.task.update", tasks.EntityTask, hero, map[string]any{"status": ws["Done"]})
 	if h := f.get(tasks.EntityTask, hero); h["status"] != ws["Done"] || h["completedAt"] == nil {
 		t.Errorf("updated to Done: %v", h)
 	}
@@ -469,7 +501,7 @@ func TestTaskModel(t *testing.T) {
 	eventually(t, "Alice's grant back", 10*time.Second, func() bool { return has(alice, "member", web) })
 
 	// Queries
-	board := f.query(owner, "todos.projectTasks", map[string]any{"project": web})
+	board := f.query(owner, "tasks.projectTasks", map[string]any{"project": web})
 	if sts, _ := board["statuses"].([]any); len(sts) != 4 {
 		t.Errorf("the board's statuses: %v", board["statuses"])
 	}
@@ -483,42 +515,47 @@ func TestTaskModel(t *testing.T) {
 	for _, a := range []uint64{triage, planner} {
 		f.grantAgent(a, "member", tasks.EntityProject, web)
 	}
-	out := f.tool(f.asAgent(triage, ""), "todos.create", map[string]any{"project": web, "title": "Reply to Dana", "source": map[string]any{"link": "workbench:mailThread/7", "title": "Dana: invoice", "kind": "mail"}})
+	out := f.tool(f.asAgent(triage, ""), "tasks.create", map[string]any{"project": web, "title": "Reply to Dana", "source": map[string]any{"link": "workbench:mailThread/7", "title": "Dana: invoice", "kind": "mail"}})
 	proposal, _ := out["task"].(string)
 	eventually(t, "the proposal", 5*time.Second, func() bool { return f.get(tasks.EntityTask, proposal)["_id"] != nil })
 	if p := f.get(tasks.EntityTask, proposal); p["state"] != "proposed" || p["proposedBy"] != fmt.Sprintf("agent:%d", triage) {
 		t.Errorf("the suggest agent's task: %v", p)
 	}
-	out = f.tool(f.asAgent(planner, ""), "todos.create", map[string]any{"project": web, "title": "Plan the launch"})
+	// Forge 30f: an agent proposes one task per source
+	again := f.tool(f.asAgent(triage, ""), "tasks.create", map[string]any{"project": web, "title": "Reply to Dana again", "source": map[string]any{"link": "workbench:mailThread/7"}})
+	if again["made"] == true || !strings.Contains(fmt.Sprint(again["error"]), "already proposed") {
+		t.Errorf("a second proposal from one source: %v", again)
+	}
+	out = f.tool(f.asAgent(planner, ""), "tasks.create", map[string]any{"project": web, "title": "Plan the launch"})
 	drafted, _ := out["task"].(string)
 	eventually(t, "the drafted task", 5*time.Second, func() bool { return f.get(tasks.EntityTask, drafted)["_id"] != nil })
 	if p := f.get(tasks.EntityTask, drafted); p["state"] != "active" {
 		t.Errorf("the draft agent's task: %v", p)
 	}
-	if day := f.query(owner, "todos.projectTasks", map[string]any{"project": web}); len(day["proposals"].([]any)) != 1 {
+	if day := f.query(owner, "tasks.projectTasks", map[string]any{"project": web}); len(day["proposals"].([]any)) != 1 {
 		t.Errorf("the board's proposals: %v", day["proposals"])
 	}
-	f.okOn(alice, "todos.task.accept", tasks.EntityTask, proposal, map[string]any{})
+	f.okOn(alice, "tasks.task.accept", tasks.EntityTask, proposal, map[string]any{})
 	if p := f.get(tasks.EntityTask, proposal); p["state"] != "active" {
 		t.Errorf("accepted: %v", p)
 	}
 	// A run confined to one task changes only that one
 	confined := f.asAgent(planner, "taskItem:"+drafted)
-	if out := f.tool(confined, "todos.update", map[string]any{"task": proposal, "priority": "low"}); out["changed"] == true {
+	if out := f.tool(confined, "tasks.update", map[string]any{"task": proposal, "priority": "low"}); out["changed"] == true {
 		t.Error("a confined run changed another task")
 	}
-	if out := f.tool(confined, "todos.update", map[string]any{"task": drafted, "priority": "low"}); out["changed"] != true {
+	if out := f.tool(confined, "tasks.update", map[string]any{"task": drafted, "priority": "low"}); out["changed"] != true {
 		t.Errorf("a confined run could not change its own task: %v", out)
 	}
-	if out := f.tool(confined, "todos.comment", map[string]any{"task": drafted, "body": "On it."}); out["made"] != true {
+	if out := f.tool(confined, "tasks.comment", map[string]any{"task": drafted, "body": "On it."}); out["made"] != true {
 		t.Errorf("the comment: %v", out)
 	}
 	eventually(t, "the comment", 5*time.Second, func() bool {
 		return len(f.find(user(alice), tasks.EntityComment, map[string]any{"task": drafted})) == 1
 	})
-	listed := f.tool(user(alice), "todos.list", map[string]any{"project": web, "state": "all", "includeDone": true})
+	listed := f.tool(user(alice), "tasks.list", map[string]any{"project": web, "state": "all", "includeDone": true})
 	if ts, _ := listed["tasks"].([]any); len(ts) != 4 {
-		t.Errorf("todos.list: %v", listed)
+		t.Errorf("tasks.list: %v", listed)
 	}
 }
 

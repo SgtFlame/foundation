@@ -1,0 +1,487 @@
+{
+  "id": "cmd-game-dockShip",
+  "name": "game.dockShip",
+  "description": "Decides a ship being parked back on a free bay floor, whose docking clamp then holds it.",
+  "kind": "command",
+  "version": 1,
+  "spec": {
+    "command": "game.dockShip",
+    "title": "Park a ship on a bay",
+    "description": "Parks a cutter, hauler, freighter or barge back on a free bay floor (forge 360 V41); the target is the ship's id and bay the bay floor's. The bay's docking clamp holds the ship again (it is launched with game.launchShip before it flies), the bay floor holds it, and its pilot stands up. Refused for a ship that is not a chip ship, a ship already clamped, a ship someone else is flying, a ship still moving faster than 2 m/s, a bay floor that is not finished, holds another ship, is in another world or is more than 12 m from the ship.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "bay": {
+          "type": "string",
+          "description": "The finished, empty bay floor within 12 m to park on (its ship id)"
+        }
+      },
+      "required": [
+        "bay"
+      ]
+    },
+    "area": "game",
+    "targetType": "gameShip",
+    "projection": "game.ships",
+    "action": "game.play",
+    "events": [
+      "parked",
+      "docked"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "title": "On game.dockShip",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "bay",
+            "type": "string",
+            "description": "The bay floor to park on"
+          }
+        ]
+      }
+    },
+    {
+      "id": "shipKey",
+      "type": "data.expression",
+      "title": "The ship's key",
+      "position": {
+        "x": 250,
+        "y": 0
+      },
+      "config": {
+        "expr": "\"gameShip.\" + target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ship",
+      "type": "live.readProjection",
+      "title": "Read the ship",
+      "position": {
+        "x": 500,
+        "y": 0
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "bayKey",
+      "type": "data.expression",
+      "title": "The bay floor's key",
+      "position": {
+        "x": 250,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"gameShip.\" + ((bay ?? \"\") == \"\" ? \"none\" : bay)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "bayShip",
+      "type": "live.readProjection",
+      "title": "Read the bay floor",
+      "position": {
+        "x": 500,
+        "y": 200
+      },
+      "config": {
+        "projector": "game.ships"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "title": "Why it is refused",
+      "position": {
+        "x": 800,
+        "y": 0
+      },
+      "config": {
+        "expr": "let d2 = (!found || !hasBay) ? 0 : (shipVal.x - b.x) ** 2 + (shipVal.y - b.y) ** 2 + (shipVal.z - b.z) ** 2; let speed2 = !found ? 0 : shipVal.v[0] ** 2 + shipVal.v[1] ** 2 + shipVal.v[2] ** 2; !found ? \"there is no ship \" + target : !(shipVal.design in [\"cutter\", \"hauler\", \"freighter\", \"barge\"]) ? \"only a cutter, hauler, freighter or barge parks on a bay floor\" : (shipVal.bay ?? \"\") != \"\" ? \"a docking clamp already holds this ship\" : shipVal.pilot != \"\" && shipVal.pilot != user ? \"someone else is flying this ship\" : !hasBay || b.design != \"bay\" || b.world != shipVal.world ? \"there is no bay floor \" + (bay ?? \"\") : len(b.placed) < b.blocks ? \"that bay floor is not finished\" : (b.holds ?? \"\") != \"\" ? \"that bay floor already holds the ship \" + b.holds : d2 > 144 ? \"that bay floor is more than 12 m from the ship: fly over it\" : speed2 > 4 ? \"slow down to park: the ship is still moving faster than 2 m/s\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "data.expression",
+      "title": "Allowed?",
+      "position": {
+        "x": 1050,
+        "y": 0
+      },
+      "config": {
+        "expr": "problem == \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "branch",
+      "type": "flow.branch",
+      "title": "Can it park?",
+      "position": {
+        "x": 1300,
+        "y": 0
+      },
+      "config": {}
+    },
+    {
+      "id": "parkedEvt",
+      "type": "data.expression",
+      "title": "The parking",
+      "position": {
+        "x": 1300,
+        "y": -250
+      },
+      "config": {
+        "expr": "{world: shipVal.world, bay: bay}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "emit",
+      "type": "live.emit",
+      "title": "The ship settles on the bay",
+      "position": {
+        "x": 1550,
+        "y": -200
+      },
+      "config": {
+        "event": "parked"
+      }
+    },
+    {
+      "id": "dockedEvt",
+      "type": "data.expression",
+      "title": "The bay holds it",
+      "position": {
+        "x": 1550,
+        "y": -400
+      },
+      "config": {
+        "expr": "{world: shipVal.world, ship: target}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "bayTarget",
+      "type": "data.expression",
+      "title": "The bay floor",
+      "position": {
+        "x": 1550,
+        "y": -550
+      },
+      "config": {
+        "expr": "bay",
+        "type": "string"
+      }
+    },
+    {
+      "id": "emitBay",
+      "type": "live.emit",
+      "title": "The bay floor holds the ship",
+      "position": {
+        "x": 1800,
+        "y": -200
+      },
+      "config": {
+        "event": "docked",
+        "projection": "game.ships"
+      }
+    },
+    {
+      "id": "reject",
+      "type": "live.reject",
+      "title": "Refuse",
+      "position": {
+        "x": 1550,
+        "y": 150
+      },
+      "config": {
+        "path": "args",
+        "fix": "fly a cutter, hauler, freighter or barge slowly to within 12 m of a finished, empty bay floor and name it as bay"
+      }
+    },
+    {
+      "id": "user",
+      "type": "live.currentUser",
+      "title": "Who parks it",
+      "position": {
+        "x": 500,
+        "y": 400
+      },
+      "config": {}
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "shipKey",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "shipKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ship",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "bay"
+      },
+      "to": {
+        "node": "bayKey",
+        "pin": "bay"
+      }
+    },
+    {
+      "from": {
+        "node": "bayKey",
+        "pin": "value"
+      },
+      "to": {
+        "node": "bayShip",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "shipVal"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "bayShip",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "b"
+      }
+    },
+    {
+      "from": {
+        "node": "bayShip",
+        "pin": "exists"
+      },
+      "to": {
+        "node": "check",
+        "pin": "hasBay"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "check",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "bay"
+      },
+      "to": {
+        "node": "check",
+        "pin": "bay"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "ok",
+        "pin": "value"
+      },
+      "to": {
+        "node": "branch",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "true"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "parkedEvt",
+        "pin": "shipVal"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "bay"
+      },
+      "to": {
+        "node": "parkedEvt",
+        "pin": "bay"
+      }
+    },
+    {
+      "from": {
+        "node": "parkedEvt",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emit",
+        "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "emit",
+        "pin": "then"
+      },
+      "to": {
+        "node": "emitBay",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "bay"
+      },
+      "to": {
+        "node": "bayTarget",
+        "pin": "bay"
+      }
+    },
+    {
+      "from": {
+        "node": "bayTarget",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emitBay",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "ship",
+        "pin": "value"
+      },
+      "to": {
+        "node": "dockedEvt",
+        "pin": "shipVal"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "dockedEvt",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "dockedEvt",
+        "pin": "value"
+      },
+      "to": {
+        "node": "emitBay",
+        "pin": "data"
+      }
+    },
+    {
+      "from": {
+        "node": "branch",
+        "pin": "false"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "reject",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "check",
+        "pin": "user"
+      }
+    }
+  ]
+}

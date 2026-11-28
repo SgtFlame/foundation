@@ -1,0 +1,681 @@
+{
+  "id": "cmd-docs-page-add",
+  "name": "docs.page.add",
+  "description": "Adds a page record for a document file createPage has just made, at the end of its parent's subpages (or of its Volume's top level), with its ancestors, and counts it on its parent, in one batch. Refused without volume.write on the Volume, when the parent is missing, in another Volume or in the trash, or when the file is not the page's own.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:docs",
+  "spec": {
+    "command": "page.add",
+    "title": "Add a page",
+    "description": "Adds the target page (its id, from createPage) for its new document file: args {volume, file {volumeId, path: pages/\u003ctarget\u003e.doc.json}, parent?, title?, template?}. Use the createPage tool, which makes the file first; this alone makes no file.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "type": "string",
+          "description": "The Volume's id"
+        },
+        "file": {
+          "type": "object",
+          "description": "The page's new document file {volumeId, path}, pages/\u003ctarget\u003e.doc.json"
+        },
+        "parent": {
+          "type": "string",
+          "description": "The page it goes under; left out, the Volume's top level"
+        },
+        "title": {
+          "type": "string",
+          "description": "The page's title"
+        },
+        "template": {
+          "type": "boolean",
+          "description": "Make it a template"
+        }
+      },
+      "required": [
+        "volume",
+        "file"
+      ]
+    },
+    "area": "rec",
+    "targetType": "docsPage",
+    "projection": "records.record",
+    "action": "record.create",
+    "events": [
+      "created",
+      "updated"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "volumeId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "string(args.volume ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "write",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"write\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "may",
+      "type": "docs.mayUseVolume",
+      "title": "May change the Volume's pages",
+      "position": {
+        "x": 680,
+        "y": 0
+      }
+    },
+    {
+      "id": "parentId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "(args.parent ?? \"\") == \"\" ? \"none\" : string(args.parent)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "parent",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "lastQ",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "expr": "{where: {volume: string(args.volume ?? \"\"), parent: (args.parent ?? \"\") == \"\" ? nil : string(args.parent)}, sort: [{field: \"rank\", desc: true}], limit: 1, fields: [\"rank\"]}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "lastOnes",
+      "type": "records.query",
+      "title": "The last subpage",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "after",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "len(tail ?? []) == 0 ? \"\" : string(tail[0].rank ?? \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "endOf",
+      "type": "data.expression",
+      "title": "The end",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "expr": "\"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "rank",
+      "type": "records.rankBetween",
+      "position": {
+        "x": 1360,
+        "y": 0
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "let v = string(args.volume ?? \"\");\nlet p = (args.parent ?? \"\") == \"\" ? nil : string(args.parent);\nlet f = args.file ?? {};\n{problem: state != nil ? \"there is already a page \" + target\n  : !may ? \"you may not change the pages of Volume \" + v\n  : string(f.volumeId ?? \"\") != v || string(f.path ?? \"\") != \"pages/\" + target + \".doc.json\" ? \"the page's file is pages/\" + target + \".doc.json in its Volume: make pages with createPage\"\n  : p != nil \u0026\u0026 parent == nil ? \"there is no page \" + p\n  : p != nil \u0026\u0026 string(parent.volume ?? \"\") != v ? \"the parent page is in another Volume\"\n  : p != nil \u0026\u0026 parent.trashedAt != nil ? \"the parent page is in the trash\" : \"\",\n values: {title: string(args.title ?? \"\"), volume: v, file: {volumeId: v, path: \"pages/\" + target + \".doc.json\"}, parent: p,\n   ancestors: p == nil ? [] : concat(map(parent.ancestors ?? [], string(#)), [p]), childCount: 0, rank: rank, template: args.template ?? false},\n parentUpdate: p == nil ? [] : [{id: p, set: {childCount: int(parent.childCount ?? 0) + 1}, expect: parent._seq}]}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 2380,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 2720,
+        "y": 0
+      }
+    },
+    {
+      "id": "values",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.values",
+        "type": "json"
+      }
+    },
+    {
+      "id": "create",
+      "type": "records.create",
+      "position": {
+        "x": 2720,
+        "y": 200
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "w0list",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 600
+      },
+      "config": {
+        "expr": "plan.parentUpdate ?? []",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0",
+      "type": "flow.forEach",
+      "title": "count it on its parent",
+      "position": {
+        "x": 3060,
+        "y": 0
+      }
+    },
+    {
+      "id": "w0id",
+      "type": "data.expression",
+      "position": {
+        "x": 3400,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w0w",
+      "type": "records.update",
+      "position": {
+        "x": 3740,
+        "y": 0
+      },
+      "config": {
+        "entity": "docsPage"
+      }
+    },
+    {
+      "id": "w0s",
+      "type": "data.expression",
+      "position": {
+        "x": 3400,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0x",
+      "type": "data.expression",
+      "position": {
+        "x": 3400,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.expect",
+        "type": "number"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "volumeId",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "volumeId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "may",
+        "pin": "volume"
+      }
+    },
+    {
+      "from": {
+        "node": "write",
+        "pin": "value"
+      },
+      "to": {
+        "node": "may",
+        "pin": "access"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "parentId",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "parentId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "parent",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "lastQ",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "lastQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "lastOnes",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "lastOnes",
+        "pin": "records"
+      },
+      "to": {
+        "node": "after",
+        "pin": "tail"
+      }
+    },
+    {
+      "from": {
+        "node": "endOf",
+        "pin": "value"
+      },
+      "to": {
+        "node": "rank",
+        "pin": "before"
+      }
+    },
+    {
+      "from": {
+        "node": "after",
+        "pin": "value"
+      },
+      "to": {
+        "node": "rank",
+        "pin": "after"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "may",
+        "pin": "allowed"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "may"
+      }
+    },
+    {
+      "from": {
+        "node": "parent",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "parent"
+      }
+    },
+    {
+      "from": {
+        "node": "rank",
+        "pin": "rank"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "rank"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "values",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "create",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "create",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "values",
+        "pin": "value"
+      },
+      "to": {
+        "node": "create",
+        "pin": "values"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "create",
+        "pin": "then"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0s",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0s",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0x",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0x",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "expect"
+      }
+    }
+  ]
+}

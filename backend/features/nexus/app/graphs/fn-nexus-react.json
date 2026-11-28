@@ -1,0 +1,183 @@
+{
+  "id": "fn-nexus-react",
+  "name": "React to a message",
+  "description": "Toggles an emoji reaction (the character, such as 👍) on a message as the caller (nexus.reaction.toggle): added, or taken away when they had it.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:nexus",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "message",
+            "type": "string",
+            "description": "The message's id"
+          },
+          {
+            "id": "emoji",
+            "type": "string",
+            "description": "The emoji character"
+          }
+        ]
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "{emoji: emoji ?? \"\"}"
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "command": "nexus.reaction.toggle"
+      }
+    },
+    {
+      "id": "yes",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "type": "bool",
+        "expr": "true"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "done",
+            "name": "done",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "id": "refused",
+      "type": "flow.return",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "name": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "message"
+      },
+      "to": {
+        "node": "send",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "emoji"
+      },
+      "to": {
+        "node": "args",
+        "pin": "emoji"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "yes",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "done"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "error"
+      }
+    }
+  ]
+}

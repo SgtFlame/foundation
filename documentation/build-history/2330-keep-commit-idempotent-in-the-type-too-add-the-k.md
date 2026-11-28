@@ -1,0 +1,1 @@
+- keep `commit` idempotent in the type too: add the key with `git.WithKey` and look for it with `git.HasKey` within `git.KeyDepth` commits before pushing;

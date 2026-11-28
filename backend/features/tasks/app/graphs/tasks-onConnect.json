@@ -1,0 +1,226 @@
+{
+  "id": "tasks-onConnect",
+  "name": "A project was connected to a board",
+  "description": "Starts a project's import from its tracker (part 30h) when its tracker connection and board are set or changed, or when its sync state is set to retry: enqueues tasks-syncImport, one import at a time per project.",
+  "kind": "app.trigger",
+  "version": 1,
+  "owner": "app:tasks",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "records.onChanged",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "entity": "tasksProject",
+        "events": [
+          "created",
+          "updated"
+        ],
+        "ownChanges": false
+      }
+    },
+    {
+      "id": "start",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "type": "bool",
+        "expr": "let r = record ?? {};\nlet o = old ?? {};\nlet linked = string(r.connection ?? \"\") != \"\" \u0026\u0026 string(r.board ?? \"\") != \"\";\nlet moved = kind == \"created\" || string(o.connection ?? \"\") != string(r.connection ?? \"\") || string(o.board ?? \"\") != string(r.board ?? \"\");\nlet retry = string(r.sync?.state ?? \"\") == \"retry\" \u0026\u0026 string(o.sync?.state ?? \"\") != \"retry\";\nlinked \u0026\u0026 (moved || retry)"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 680,
+        "y": 0
+      }
+    },
+    {
+      "id": "key",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"sync-\" + id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "jobId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "expr": "\"import-\" + id + \"-\" + string(record._seq)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "inputs",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 600
+      },
+      "config": {
+        "expr": "{project: id, cursor: \"\"}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "enqueue",
+      "type": "jobs.enqueue",
+      "title": "Import the board",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "graph": "tasks-syncImport"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "event"
+      },
+      "to": {
+        "node": "start",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "start",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "old"
+      },
+      "to": {
+        "node": "start",
+        "pin": "old"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "start",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "key",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "jobId",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "record"
+      },
+      "to": {
+        "node": "jobId",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "inputs",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "key",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "jobId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "inputs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "inputs"
+      }
+    }
+  ]
+}

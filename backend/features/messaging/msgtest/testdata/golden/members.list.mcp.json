@@ -1,0 +1,59 @@
+{
+  "name": "chat_messaging_members_list",
+  "title": "List members",
+  "description": "The members of a channel, or of the whole workspace when no channel is given.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "The channel's id; the whole workspace when left out"
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "members": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "description": "A person or bot of the service",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Their id at the service"
+            },
+            "name": {
+              "type": "string",
+              "description": "Their display name"
+            },
+            "email": {
+              "type": "string",
+              "description": "Their email, when the service shares it"
+            },
+            "bot": {
+              "type": "boolean",
+              "description": "Whether it is a bot"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "description": "The members"
+      }
+    },
+    "required": [
+      "members"
+    ]
+  },
+  "annotations": {
+    "title": "List members",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}
