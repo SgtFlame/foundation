@@ -1,6 +1,6 @@
 {
   "id": "tasksProject",
-  "owner": "app:tasks",
+  "owner": "app:todos",
   "name": "Project",
   "description": "A project of the Tasks library app: its tasks, statuses and labels, and who may see it (admins, members and guests, each kept as a grant on the project by the app)",
   "titleField": "name",

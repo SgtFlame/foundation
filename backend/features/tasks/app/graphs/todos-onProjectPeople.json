@@ -1,10 +1,10 @@
 {
-  "id": "tasks-onProjectPeople",
+  "id": "todos-onProjectPeople",
   "name": "A project's people changed",
   "description": "Keeps a project's grants in step with its admins, members and guests: enqueues the project's grant sync, one at a time per project, also when the project is deleted",
   "kind": "app.trigger",
   "version": 1,
-  "owner": "app:tasks",
+  "owner": "app:todos",
   "nodes": [
     {
       "id": "event",
@@ -76,7 +76,7 @@
         "y": 0
       },
       "config": {
-        "graph": "tasks-syncAccess"
+        "graph": "todos-syncAccess"
       }
     }
   ],

@@ -1,10 +1,10 @@
 {
-  "id": "cmd-tasks-task-complete",
-  "name": "tasks.task.complete",
+  "id": "cmd-todos-task-complete",
+  "name": "todos.task.complete",
   "description": "Completes a task (the target): it moves last into its project's first done status, with when it was completed. Does nothing for a task already in a done status.",
   "kind": "command",
   "version": 1,
-  "owner": "app:tasks",
+  "owner": "app:todos",
   "spec": {
     "command": "task.complete",
     "title": "Complete a task",

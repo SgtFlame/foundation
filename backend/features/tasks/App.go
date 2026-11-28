@@ -31,7 +31,7 @@ import (
 var log = logging.In("tasks")
 
 // AppID is the Tasks library app.
-const AppID = "tasks"
+const AppID = "todos"
 
 // Its entity types.
 const (
@@ -133,7 +133,7 @@ func SeedApp(args features.ServiceArgs, tenant uint64, store live.Store, svc app
 		}
 	}
 	raw, _ := json.Marshal(map[string]any{"version": 1})
-	res := b.Execute(bus.Request{ServiceArgs: args, ID: fmt.Sprintf("tasks-install-%d", tenant), Type: "app.install", Target: AppID, Args: raw})
+	res := b.Execute(bus.Request{ServiceArgs: args, ID: fmt.Sprintf("todos-install-%d", tenant), Type: "app.install", Target: AppID, Args: raw})
 	if res.Common.Code >= 300 {
 		return log.Code("seed_failed").Errorf("cannot install the Tasks app: %s", res.Common.Message)
 	}

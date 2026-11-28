@@ -1,6 +1,6 @@
 {
   "id": "taskLabel",
-  "owner": "app:tasks",
+  "owner": "app:todos",
   "name": "Label",
   "description": "A label of a project, put on its tasks",
   "titleField": "name",

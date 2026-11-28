@@ -1,10 +1,10 @@
 {
-  "id": "tasks-syncAccess",
+  "id": "todos-syncAccess",
   "name": "Sync a project's grants",
   "description": "The job keeping a Tasks project's grants in step with its people, as the app, one at a time per project: Project admin for its admins, Member for its members and Guest for its guests, each granted on the project; grants it no longer gives are revoked, and every grant goes when the project is deleted. Idempotent: it reads the project and its grants afresh each time.",
   "kind": "server.action",
   "version": 1,
-  "owner": "app:tasks",
+  "owner": "app:todos",
   "nodes": [
     {
       "id": "call",

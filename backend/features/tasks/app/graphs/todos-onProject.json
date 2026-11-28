@@ -1,10 +1,10 @@
 {
-  "id": "tasks-onProject",
+  "id": "todos-onProject",
   "name": "A project was made",
   "description": "Sets a new project up as the app (project.setup): its statuses To do, Doing, Review and Done. The app does it because a project's maker holds no grant on it until the app gives one.",
   "kind": "app.trigger",
   "version": 1,
-  "owner": "app:tasks",
+  "owner": "app:todos",
   "nodes": [
     {
       "id": "event",
@@ -41,7 +41,7 @@
         "y": 0
       },
       "config": {
-        "command": "tasks.project.setup"
+        "command": "todos.project.setup"
       }
     },
     {

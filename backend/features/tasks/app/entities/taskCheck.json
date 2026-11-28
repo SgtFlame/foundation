@@ -1,6 +1,6 @@
 {
   "id": "taskCheck",
-  "owner": "app:tasks",
+  "owner": "app:todos",
   "name": "Checklist item",
   "description": "One item of a task's checklist",
   "titleField": "text",

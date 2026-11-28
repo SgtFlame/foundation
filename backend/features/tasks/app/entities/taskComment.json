@@ -1,6 +1,6 @@
 {
   "id": "taskComment",
-  "owner": "app:tasks",
+  "owner": "app:todos",
   "name": "Comment",
   "description": "A comment on a task",
   "titleField": "body",
