@@ -1,0 +1,380 @@
+{
+  "id": "cmd-todos-project-setup",
+  "name": "todos.project.setup",
+  "description": "Run by the Tasks app when a project is made (the target): gives it the statuses To do, Doing, Review and Done in that order. Does nothing for a project that has statuses already.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:todos",
+  "spec": {
+    "command": "project.setup",
+    "title": "Set a project up",
+    "description": "Run by the Tasks app when a project is made (the target): gives it the statuses To do, Doing, Review and Done in that order. Does nothing for a project that has statuses already.",
+    "args": {
+      "type": "object",
+      "properties": {}
+    },
+    "area": "rec",
+    "targetType": "tasksProject",
+    "projection": "records.record",
+    "action": "record.update",
+    "events": [
+      "created",
+      "updated",
+      "deleted"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "sq",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "{where: {project: target}, limit: 100}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "statuses",
+      "type": "records.query",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "tasksStatus"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "let skip = state == nil || len(statuses ?? []) \u003e 0;\nlet defaults = [{id: \"todo\", name: \"To do\", category: \"todo\", color: \"grey\", rank: \"8\"},\n  {id: \"doing\", name: \"Doing\", category: \"doing\", color: \"blue\", rank: \"G\"},\n  {id: \"review\", name: \"Review\", category: \"doing\", color: \"purple\", rank: \"O\"},\n  {id: \"done\", name: \"Done\", category: \"done\", color: \"green\", rank: \"W\"}];\n{problem: kind != \"app\" ? \"only the Tasks app sets a project up\" : state == nil ? \"there is no project \" + target : \"\",\n statuses: skip ? [] : map(defaults, ({id: target + \"-\" + #.id, values: {project: target, name: #.name, category: #.category, color: #.color, rank: #.rank}}))}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1700,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "w0list",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.statuses ?? []",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0",
+      "type": "flow.forEach",
+      "title": "create tasksStatus (statuses)",
+      "position": {
+        "x": 2040,
+        "y": 200
+      }
+    },
+    {
+      "id": "w0id",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w0w",
+      "type": "records.create",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "entity": "tasksStatus"
+      }
+    },
+    {
+      "id": "w0v",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.values",
+        "type": "json"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "me",
+        "pin": "kind"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "kind"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "sq",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "sq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "statuses",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "statuses",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "statuses"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0v",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0v",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "values"
+      }
+    }
+  ]
+}

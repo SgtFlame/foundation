@@ -1,0 +1,518 @@
+{
+  "id": "fn-todos-update",
+  "name": "Change a task",
+  "description": "Changes a task, as the caller (todos.task.update): only the fields given, of its title, assignees (user ids, replacing them), due and start dates (YYYY-MM-DD), priority (none, low, medium, high, urgent) and status (a status of its project, where it then goes last). An agent's run confined to some records changes only a task among them or of a project among them.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:todos",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "task",
+            "type": "string",
+            "description": "The task's id"
+          },
+          {
+            "id": "title",
+            "type": "string",
+            "optional": true,
+            "description": "What is to be done"
+          },
+          {
+            "id": "assignees",
+            "type": "json",
+            "optional": true,
+            "description": "User ids of the people who do it, a list replacing those it has"
+          },
+          {
+            "id": "due",
+            "type": "string",
+            "optional": true,
+            "description": "When it is due, YYYY-MM-DD"
+          },
+          {
+            "id": "start",
+            "type": "string",
+            "optional": true,
+            "description": "When work on it starts, YYYY-MM-DD"
+          },
+          {
+            "id": "priority",
+            "type": "string",
+            "optional": true,
+            "description": "none, low, medium, high or urgent"
+          },
+          {
+            "id": "status",
+            "type": "string",
+            "optional": true,
+            "description": "A status of its project to move it to"
+          }
+        ]
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "tid",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "(task ?? \"\") == \"\" ? \"none\" : task",
+        "type": "string"
+      }
+    },
+    {
+      "id": "t",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "taskItem"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "type": "string",
+        "expr": "let inside = len(reach ?? []) == 0 || any(reach, (#.entity == \"taskItem\" \u0026\u0026 string(#.id) == tid) || (#.entity == \"tasksProject\" \u0026\u0026 string(#.id) == string(t?.project ?? \"\")));\nt == nil ? \"there is no task \" + tid + \" you may see\" : !inside ? \"this run may change only the tasks it is about\" : \"\""
+      }
+    },
+    {
+      "id": "outside",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "check != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1700,
+        "y": 0
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "type": "json",
+        "expr": "fromPairs(filter(toPairs({title: title, assignees: assignees, due: due, start: start, priority: priority, status: status}), #[1] != nil \u0026\u0026 #[1] != \"\"))"
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "command": "todos.task.update"
+      }
+    },
+    {
+      "id": "yes",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "type": "bool",
+        "expr": "true"
+      }
+    },
+    {
+      "id": "no",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 600
+      },
+      "config": {
+        "type": "bool",
+        "expr": "false"
+      }
+    },
+    {
+      "id": "produced",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "type": "json",
+        "expr": "{entity: \"taskItem\", id: tid}"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "changed",
+            "type": "bool"
+          },
+          {
+            "id": "produced",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "refused",
+      "type": "flow.return",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "changed",
+            "type": "bool"
+          },
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kept",
+      "type": "flow.return",
+      "title": "Outside the run",
+      "position": {
+        "x": 2040,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "changed",
+            "type": "bool"
+          },
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "task"
+      },
+      "to": {
+        "node": "tid",
+        "pin": "task"
+      }
+    },
+    {
+      "from": {
+        "node": "tid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "t",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "reach"
+      },
+      "to": {
+        "node": "check",
+        "pin": "reach"
+      }
+    },
+    {
+      "from": {
+        "node": "tid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "tid"
+      }
+    },
+    {
+      "from": {
+        "node": "t",
+        "pin": "record"
+      },
+      "to": {
+        "node": "check",
+        "pin": "t"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "outside",
+        "pin": "check"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "outside",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "kept",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "no",
+        "pin": "value"
+      },
+      "to": {
+        "node": "kept",
+        "pin": "changed"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "kept",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "title"
+      },
+      "to": {
+        "node": "args",
+        "pin": "title"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "assignees"
+      },
+      "to": {
+        "node": "args",
+        "pin": "assignees"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "due"
+      },
+      "to": {
+        "node": "args",
+        "pin": "due"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "start"
+      },
+      "to": {
+        "node": "args",
+        "pin": "start"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "priority"
+      },
+      "to": {
+        "node": "args",
+        "pin": "priority"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "status"
+      },
+      "to": {
+        "node": "args",
+        "pin": "status"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "tid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "yes",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "changed"
+      }
+    },
+    {
+      "from": {
+        "node": "tid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "tid"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "produced"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "no",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "changed"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "error"
+      }
+    }
+  ]
+}

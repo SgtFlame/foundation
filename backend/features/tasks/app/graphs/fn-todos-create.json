@@ -1,0 +1,423 @@
+{
+  "id": "fn-todos-create",
+  "name": "Create a task",
+  "description": "Makes a task in a project, as the caller (todos.task.create): its title, and optionally a status, a plain-text description, assignees (user ids), due and start dates (YYYY-MM-DD), a priority (none, low, medium, high, urgent), labels, a parent task and the source it came from ({link, title, kind}). An agent whose autonomy is suggest makes a proposal a person accepts or dismisses; with autonomy draft, a task. Gives the new task's id.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:todos",
+  "variables": [
+    {
+      "id": "tid",
+      "name": "Task id",
+      "type": "string",
+      "description": "The new task's id, made once"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "project",
+            "type": "string",
+            "description": "The project's id (todos.list lists projects' tasks)"
+          },
+          {
+            "id": "title",
+            "type": "string",
+            "description": "What is to be done"
+          },
+          {
+            "id": "status",
+            "type": "string",
+            "optional": true,
+            "description": "The status's id; the project's first to-do status when left out"
+          },
+          {
+            "id": "description",
+            "type": "string",
+            "optional": true,
+            "description": "More about it, as plain text"
+          },
+          {
+            "id": "assignees",
+            "type": "json",
+            "optional": true,
+            "description": "User ids of the people who do it, a list"
+          },
+          {
+            "id": "due",
+            "type": "string",
+            "optional": true,
+            "description": "When it is due, YYYY-MM-DD"
+          },
+          {
+            "id": "priority",
+            "type": "string",
+            "optional": true,
+            "description": "none, low, medium, high or urgent"
+          },
+          {
+            "id": "source",
+            "type": "json",
+            "optional": true,
+            "description": "What it came from: {link, title, kind}, link a workbench: link"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fresh",
+      "type": "data.newId",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "keep",
+      "type": "data.setVariable",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "variable": "tid",
+        "type": "string"
+      }
+    },
+    {
+      "id": "taskId",
+      "type": "data.getVariable",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "variable": "tid",
+        "type": "string"
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "type": "json",
+        "expr": "fromPairs(filter(toPairs({project: project, title: title, status: status, description: description, assignees: assignees, due: due, priority: priority, source: source}), #[1] != nil \u0026\u0026 #[1] != \"\"))"
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "command": "todos.task.create"
+      }
+    },
+    {
+      "id": "yes",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 600
+      },
+      "config": {
+        "type": "bool",
+        "expr": "true"
+      }
+    },
+    {
+      "id": "no",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 800
+      },
+      "config": {
+        "type": "bool",
+        "expr": "false"
+      }
+    },
+    {
+      "id": "produced",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "type": "json",
+        "expr": "{entity: \"taskItem\", id: taskId}"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "made",
+            "type": "bool"
+          },
+          {
+            "id": "task",
+            "type": "string"
+          },
+          {
+            "id": "produced",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "refused",
+      "type": "flow.return",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "made",
+            "type": "bool"
+          },
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "keep",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "fresh",
+        "pin": "id"
+      },
+      "to": {
+        "node": "keep",
+        "pin": "value"
+      }
+    },
+    {
+      "from": {
+        "node": "keep",
+        "pin": "then"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "taskId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "project"
+      },
+      "to": {
+        "node": "args",
+        "pin": "project"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "title"
+      },
+      "to": {
+        "node": "args",
+        "pin": "title"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "status"
+      },
+      "to": {
+        "node": "args",
+        "pin": "status"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "description"
+      },
+      "to": {
+        "node": "args",
+        "pin": "description"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "assignees"
+      },
+      "to": {
+        "node": "args",
+        "pin": "assignees"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "due"
+      },
+      "to": {
+        "node": "args",
+        "pin": "due"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "priority"
+      },
+      "to": {
+        "node": "args",
+        "pin": "priority"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "source"
+      },
+      "to": {
+        "node": "args",
+        "pin": "source"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "yes",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "made"
+      }
+    },
+    {
+      "from": {
+        "node": "taskId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "task"
+      }
+    },
+    {
+      "from": {
+        "node": "taskId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "taskId"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "produced"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "no",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "made"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "error"
+      }
+    }
+  ]
+}

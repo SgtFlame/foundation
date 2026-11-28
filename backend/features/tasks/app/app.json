@@ -1,0 +1,234 @@
+{
+  "id": "todos",
+  "name": "Tasks",
+  "icon": "task_alt",
+  "description": "The tenant's to-dos in one place, as a library app other apps require (Mail, the Nexus, the CRM): projects with their people, statuses ordered as a board's columns, tasks ordered within their status with assignees, dates, priority, labels, checklists and comments, and tasks agents propose until a person accepts them. Forge's Tasks app shows them.",
+  "entities": [
+    "tasksProject",
+    "tasksStatus",
+    "taskItem",
+    "taskCheck",
+    "taskComment",
+    "taskLabel"
+  ],
+  "commands": [
+    {
+      "type": "project.create",
+      "graph": "cmd-todos-project-create",
+      "action": "entity:tasksProject.create",
+      "title": "New project",
+      "description": "Makes a project, its target the new project's id: its name, key, description, members and guests (user ids); its maker administers it, and the app gives it the statuses To do, Doing, Review and Done."
+    },
+    {
+      "type": "project.setup",
+      "graph": "cmd-todos-project-setup",
+      "action": "entity:tasksProject.update",
+      "title": "Set a project up",
+      "description": "Run by the Tasks app when a project is made: gives it its four statuses. Only the app may."
+    },
+    {
+      "type": "task.create",
+      "graph": "cmd-todos-task-create",
+      "action": "entity:taskItem.create",
+      "title": "New task",
+      "description": "Makes a task in a project, its target the new task's id, last in its status: title, description, assignees, dates, priority, labels, parent and source. An agent whose autonomy is suggest makes a proposal; with draft, a task."
+    },
+    {
+      "type": "task.update",
+      "graph": "cmd-todos-task-update",
+      "action": "entity:taskItem.update",
+      "title": "Change a task",
+      "description": "Changes the fields given of a task (the target): title, assignees, due, start, priority, labels; given a status of its project it moves there too."
+    },
+    {
+      "type": "task.move",
+      "graph": "cmd-todos-task-move",
+      "action": "entity:taskItem.update",
+      "title": "Move a task",
+      "description": "Moves a task (the target) to a status of its project between the tasks it was dropped between (after, before), setting or clearing when it was completed."
+    },
+    {
+      "type": "task.complete",
+      "graph": "cmd-todos-task-complete",
+      "action": "entity:taskItem.update",
+      "title": "Complete a task",
+      "description": "Moves a task (the target) last into its project's first done status, with when it was completed."
+    },
+    {
+      "type": "task.accept",
+      "graph": "cmd-todos-task-accept",
+      "action": "entity:taskItem.update",
+      "title": "Accept a proposed task",
+      "description": "Makes a task an agent proposed (the target) an active task."
+    },
+    {
+      "type": "task.dismiss",
+      "graph": "cmd-todos-task-dismiss",
+      "action": "entity:taskItem.update",
+      "title": "Dismiss a proposed task",
+      "description": "Archives a task an agent proposed (the target)."
+    }
+  ],
+  "queries": [
+    {
+      "name": "projectTasks",
+      "graph": "qry-todos-projectTasks",
+      "description": "A project's board: the project, its statuses in order, its active tasks in order, its labels and its proposals. params {project}"
+    },
+    {
+      "name": "myDay",
+      "graph": "qry-todos-myDay",
+      "description": "The viewer's unfinished tasks due by today, their others, and the proposals for them. params {today?}"
+    }
+  ],
+  "roles": [
+    {
+      "id": "manager",
+      "title": "Tasks manager",
+      "installer": true,
+      "description": "Sees and changes every project, its tasks and its people",
+      "actions": [
+        "entity:tasksProject.*",
+        "entity:tasksStatus.*",
+        "entity:taskItem.*",
+        "entity:taskCheck.*",
+        "entity:taskComment.*",
+        "entity:taskLabel.*"
+      ]
+    },
+    {
+      "id": "user",
+      "title": "Tasks user",
+      "description": "Makes projects (administering each) and sees the projects that name them as an admin, member or guest; a project's tasks need a role on it, which the app grants",
+      "actions": [
+        "entity:tasksProject.create",
+        "entity:tasksProject.read"
+      ],
+      "rowRules": {
+        "tasksProject": "principal.user in map(concat(record.admins ?? [], record.members ?? [], record.guests ?? []), string(#))"
+      }
+    },
+    {
+      "id": "projectAdmin",
+      "title": "Project admin",
+      "description": "Granted on one project by the app to its admins: changes the project, its people, statuses and labels, and every task, checklist and comment in it",
+      "actions": [
+        "entity:tasksProject.read",
+        "entity:tasksProject.update",
+        "entity:tasksProject.delete",
+        "entity:tasksStatus.*",
+        "entity:taskItem.*",
+        "entity:taskCheck.*",
+        "entity:taskComment.*",
+        "entity:taskLabel.*"
+      ],
+      "rowRules": {
+        "tasksStatus": "principal.hasRole('projectAdmin', record.project)",
+        "taskItem": "principal.hasRole('projectAdmin', record.project)",
+        "taskCheck": "principal.hasRole('projectAdmin', record.project)",
+        "taskComment": "principal.hasRole('projectAdmin', record.project)",
+        "taskLabel": "principal.hasRole('projectAdmin', record.project)",
+        "tasksProject": "principal.hasRole('projectAdmin', record._id)"
+      }
+    },
+    {
+      "id": "member",
+      "title": "Member",
+      "description": "Granted on one project by the app to its members: reads it, makes and changes its tasks, checklists and labels, and comments",
+      "actions": [
+        "entity:tasksProject.read",
+        "entity:tasksStatus.read",
+        "entity:taskItem.read",
+        "entity:taskItem.create",
+        "entity:taskItem.update",
+        "entity:taskCheck.*",
+        "entity:taskComment.read",
+        "entity:taskComment.create",
+        "entity:taskLabel.read",
+        "entity:taskLabel.create"
+      ],
+      "rowRules": {
+        "tasksStatus": "principal.hasRole('member', record.project)",
+        "taskItem": "principal.hasRole('member', record.project)",
+        "taskCheck": "principal.hasRole('member', record.project)",
+        "taskComment": "principal.hasRole('member', record.project)",
+        "taskLabel": "principal.hasRole('member', record.project)",
+        "tasksProject": "principal.hasRole('member', record._id)"
+      },
+      "agentWarning": "An agent that is a member may make and change every task of the project"
+    },
+    {
+      "id": "guest",
+      "title": "Guest",
+      "description": "Granted on one project by the app to its guests: reads that project alone, comments, and changes its tasks' status",
+      "actions": [
+        "entity:tasksProject.read",
+        "entity:tasksStatus.read",
+        "entity:taskItem.read",
+        "entity:taskItem.update",
+        "entity:taskCheck.read",
+        "entity:taskComment.read",
+        "entity:taskComment.create",
+        "entity:taskLabel.read"
+      ],
+      "rowRules": {
+        "tasksStatus": "principal.hasRole('guest', record.project)",
+        "taskItem": "principal.hasRole('guest', record.project)",
+        "taskCheck": "principal.hasRole('guest', record.project)",
+        "taskComment": "principal.hasRole('guest', record.project)",
+        "taskLabel": "principal.hasRole('guest', record.project)",
+        "tasksProject": "principal.hasRole('guest', record._id)"
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "id": "onProject",
+      "title": "A project was made",
+      "description": "Sets a new project up as the app (project.setup): its statuses To do, Doing, Review and Done.",
+      "graph": "todos-onProject"
+    },
+    {
+      "id": "onProjectPeople",
+      "title": "A project's people changed",
+      "description": "Keeps a project's grants equal to its admins, members and guests: enqueues the project's grant sync, one at a time per project.",
+      "graph": "todos-onProjectPeople"
+    }
+  ],
+  "tools": [
+    {
+      "name": "create",
+      "graph": "fn-todos-create",
+      "title": "Create a task",
+      "effect": "write",
+      "description": "Makes a task in a project, as the caller: title, status, description, assignees, due date, priority and source. From an agent whose autonomy is suggest it is a proposal a person accepts."
+    },
+    {
+      "name": "update",
+      "graph": "fn-todos-update",
+      "title": "Change a task",
+      "effect": "write",
+      "description": "Changes a task's title, assignees, dates, priority or status, as the caller; an agent's run changes only the tasks it is about."
+    },
+    {
+      "name": "list",
+      "graph": "fn-todos-list",
+      "title": "List tasks",
+      "effect": "read",
+      "description": "Lists the tasks the caller may see, by project, assignee (me) and state, with the caller's projects and their statuses."
+    },
+    {
+      "name": "comment",
+      "graph": "fn-todos-comment",
+      "title": "Comment on a task",
+      "effect": "write",
+      "description": "Adds a Markdown comment to a task, as the caller; an agent's run comments only on the tasks it is about."
+    }
+  ],
+  "requires": {
+    "primitives": [
+      "mui",
+      "record"
+    ]
+  }
+}

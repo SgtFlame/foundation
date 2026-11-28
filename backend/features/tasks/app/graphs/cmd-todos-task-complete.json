@@ -1,0 +1,488 @@
+{
+  "id": "cmd-todos-task-complete",
+  "name": "todos.task.complete",
+  "description": "Completes a task (the target): it moves last into its project's first done status, with when it was completed. Does nothing for a task already in a done status.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:todos",
+  "spec": {
+    "command": "task.complete",
+    "title": "Complete a task",
+    "description": "Completes a task (the target): it moves last into its project's first done status, with when it was completed. Does nothing for a task already in a done status.",
+    "args": {
+      "type": "object",
+      "properties": {}
+    },
+    "area": "rec",
+    "targetType": "taskItem",
+    "projection": "records.record",
+    "action": "record.update",
+    "events": [
+      "created",
+      "updated",
+      "deleted"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "sq",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "{where: {project: string(state?.project ?? \"0\")}, sort: [{field: \"rank\"}], limit: 100}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "statuses",
+      "type": "records.query",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "tasksStatus"
+      }
+    },
+    {
+      "id": "did",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "string(find(statuses ?? [], #.category == \"done\")?._id ?? \"0\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "lq",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "{where: {status: did}, sort: [{field: \"rank\", desc: true}], limit: 1}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "last",
+      "type": "records.query",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "entity": "taskItem"
+      }
+    },
+    {
+      "id": "clock",
+      "type": "data.now",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "let t = state;\nlet cur = find(statuses ?? [], #._id == string(t?.status ?? \"\"));\nlet done = find(statuses ?? [], #.category == \"done\");\nlet tail = first(rows ?? []);\n{problem: t == nil ? \"there is no task \" + target : done == nil ? \"the project has no done status\" : \"\",\n already: (cur?.category ?? \"\") == \"done\",\n after: tail == nil || tail._id == target ? \"\" : tail._id,\n set: {status: done?._id, completedAt: t?.completedAt ?? clock}}"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 2720,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 3060,
+        "y": 0
+      }
+    },
+    {
+      "id": "already",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.already",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "ifDone",
+      "type": "flow.branch",
+      "title": "Already done?",
+      "position": {
+        "x": 3060,
+        "y": 200
+      }
+    },
+    {
+      "id": "after",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 600
+      },
+      "config": {
+        "expr": "plan.after",
+        "type": "string"
+      }
+    },
+    {
+      "id": "before",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "expr": "\"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "set",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 800
+      },
+      "config": {
+        "expr": "plan.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "move",
+      "type": "records.move",
+      "position": {
+        "x": 3400,
+        "y": 0
+      },
+      "config": {
+        "entity": "taskItem",
+        "field": "rank"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "sq",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "sq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "statuses",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "statuses",
+        "pin": "records"
+      },
+      "to": {
+        "node": "did",
+        "pin": "statuses"
+      }
+    },
+    {
+      "from": {
+        "node": "did",
+        "pin": "value"
+      },
+      "to": {
+        "node": "lq",
+        "pin": "did"
+      }
+    },
+    {
+      "from": {
+        "node": "lq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "last",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "statuses",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "statuses"
+      }
+    },
+    {
+      "from": {
+        "node": "last",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "rows"
+      }
+    },
+    {
+      "from": {
+        "node": "clock",
+        "pin": "time"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "clock"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "already",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "ifDone",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "already",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ifDone",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "after",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "set",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "ifDone",
+        "pin": "false"
+      },
+      "to": {
+        "node": "move",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "move",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "after",
+        "pin": "value"
+      },
+      "to": {
+        "node": "move",
+        "pin": "after"
+      }
+    },
+    {
+      "from": {
+        "node": "before",
+        "pin": "value"
+      },
+      "to": {
+        "node": "move",
+        "pin": "before"
+      }
+    },
+    {
+      "from": {
+        "node": "set",
+        "pin": "value"
+      },
+      "to": {
+        "node": "move",
+        "pin": "set"
+      }
+    }
+  ]
+}

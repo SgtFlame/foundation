@@ -29,16 +29,20 @@
 package wiring
 
 import (
+	"context"
 	"os"
 	"slices"
 	"strings"
 	"sync"
 
 	"github.com/SgtFlame/foundation/backend/features/ai/providers"
+	"github.com/SgtFlame/foundation/backend/features/apps/services/appservice"
 	"github.com/SgtFlame/foundation/backend/features/connectors"
 	"github.com/SgtFlame/foundation/backend/features/connectors/adapter"
 	"github.com/SgtFlame/foundation/backend/features/connectors/connections"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
+	"github.com/SgtFlame/foundation/backend/features/live"
+	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
 	recordsfiles "github.com/SgtFlame/foundation/backend/features/records/files"
 	"github.com/SgtFlame/foundation/backend/features/services"
@@ -60,6 +64,18 @@ type Feature struct {
 	// serve has made the services they call (optional), so a process whose
 	// set runs one serves it from the start (forge 40c: parse).
 	Services func(env *Env)
+	// Start runs once the server's live core and services are up, before
+	// it serves requests (optional): seeding a library app, for one. It
+	// must be idempotent, since every process runs it at every start.
+	Start func(ctx context.Context, s Started) error
+}
+
+// Started is what a feature's Start may use.
+type Started struct {
+	Store   live.Store
+	Apps    appservice.Service
+	Bus     *bus.Bus
+	Tenants func() ([]uint64, error)
 }
 
 // Env is what a feature's contributions may read from the server. Its fields
@@ -201,4 +217,17 @@ func Adapters(o *adapter.Options) {
 			f.Adapter(o)
 		}
 	}
+}
+
+// StartAll runs every registered feature's Start, in name order.
+func StartAll(ctx context.Context, s Started) error {
+	for _, f := range Features() {
+		if f.Start == nil {
+			continue
+		}
+		if err := f.Start(ctx, s); err != nil {
+			return err
+		}
+	}
+	return nil
 }

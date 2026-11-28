@@ -1,0 +1,505 @@
+{
+  "id": "fn-todos-comment",
+  "name": "Comment on a task",
+  "description": "Adds a comment to a task, as the caller: its body in Markdown. An agent's run confined to some records comments only on a task among them or of a project among them. Gives the comment's id.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:todos",
+  "variables": [
+    {
+      "id": "cid",
+      "name": "Comment id",
+      "type": "string",
+      "description": "The new comment's id, made once"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "task",
+            "type": "string",
+            "description": "The task's id"
+          },
+          {
+            "id": "body",
+            "type": "string",
+            "description": "The comment, in Markdown"
+          }
+        ]
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "tid",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "(task ?? \"\") == \"\" ? \"none\" : task",
+        "type": "string"
+      }
+    },
+    {
+      "id": "t",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "taskItem"
+      }
+    },
+    {
+      "id": "check",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "type": "string",
+        "expr": "let inside = len(reach ?? []) == 0 || any(reach, (#.entity == \"taskItem\" \u0026\u0026 string(#.id) == tid) || (#.entity == \"tasksProject\" \u0026\u0026 string(#.id) == string(t?.project ?? \"\")));\nt == nil ? \"there is no task \" + tid + \" you may see\" : !inside ? \"this run may comment only on the tasks it is about\" : trim(body ?? \"\") == \"\" ? \"give the comment a body\" : \"\""
+      }
+    },
+    {
+      "id": "outside",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "check != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1700,
+        "y": 0
+      }
+    },
+    {
+      "id": "fresh",
+      "type": "data.newId",
+      "position": {
+        "x": 0,
+        "y": 400
+      }
+    },
+    {
+      "id": "keep",
+      "type": "data.setVariable",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "variable": "cid",
+        "type": "string"
+      }
+    },
+    {
+      "id": "commentId",
+      "type": "data.getVariable",
+      "position": {
+        "x": 0,
+        "y": 600
+      },
+      "config": {
+        "variable": "cid",
+        "type": "string"
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "type": "json",
+        "expr": "{entity: \"taskComment\", values: {task: tid, project: string(t?.project ?? \"\"), body: body}}"
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "command": "record.create"
+      }
+    },
+    {
+      "id": "yes",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 800
+      },
+      "config": {
+        "type": "bool",
+        "expr": "true"
+      }
+    },
+    {
+      "id": "no",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 1000
+      },
+      "config": {
+        "type": "bool",
+        "expr": "false"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "made",
+            "type": "bool"
+          },
+          {
+            "id": "comment",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "refused",
+      "type": "flow.return",
+      "position": {
+        "x": 2720,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "made",
+            "type": "bool"
+          },
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kept",
+      "type": "flow.return",
+      "title": "Not commented",
+      "position": {
+        "x": 2040,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "made",
+            "type": "bool"
+          },
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "task"
+      },
+      "to": {
+        "node": "tid",
+        "pin": "task"
+      }
+    },
+    {
+      "from": {
+        "node": "tid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "t",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "reach"
+      },
+      "to": {
+        "node": "check",
+        "pin": "reach"
+      }
+    },
+    {
+      "from": {
+        "node": "tid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "check",
+        "pin": "tid"
+      }
+    },
+    {
+      "from": {
+        "node": "t",
+        "pin": "record"
+      },
+      "to": {
+        "node": "check",
+        "pin": "t"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "body"
+      },
+      "to": {
+        "node": "check",
+        "pin": "body"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "outside",
+        "pin": "check"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "outside",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "kept",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "no",
+        "pin": "value"
+      },
+      "to": {
+        "node": "kept",
+        "pin": "made"
+      }
+    },
+    {
+      "from": {
+        "node": "check",
+        "pin": "value"
+      },
+      "to": {
+        "node": "kept",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "keep",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "fresh",
+        "pin": "id"
+      },
+      "to": {
+        "node": "keep",
+        "pin": "value"
+      }
+    },
+    {
+      "from": {
+        "node": "keep",
+        "pin": "then"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "commentId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "tid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "args",
+        "pin": "tid"
+      }
+    },
+    {
+      "from": {
+        "node": "t",
+        "pin": "record"
+      },
+      "to": {
+        "node": "args",
+        "pin": "t"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "body"
+      },
+      "to": {
+        "node": "args",
+        "pin": "body"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "yes",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "made"
+      }
+    },
+    {
+      "from": {
+        "node": "commentId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "comment"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "no",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "made"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "error"
+      }
+    }
+  ]
+}

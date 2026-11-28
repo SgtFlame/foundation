@@ -1,0 +1,69 @@
+{
+  "id": "tasksStatus",
+  "owner": "app:todos",
+  "name": "Status",
+  "description": "One column of a project's board: a status its tasks are in, with a category (to do, doing, done) that says what it means",
+  "titleField": "name",
+  "fields": [
+    {
+      "id": "project",
+      "name": "Project",
+      "type": "relation",
+      "description": "The project it belongs to",
+      "relation": {
+        "entity": "tasksProject"
+      },
+      "required": true
+    },
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "The status's name, such as Review",
+      "required": true
+    },
+    {
+      "id": "category",
+      "name": "Category",
+      "type": "enum",
+      "description": "What being in it means: a task moved to a done status is complete",
+      "options": [
+        {
+          "id": "todo",
+          "name": "To do"
+        },
+        {
+          "id": "doing",
+          "name": "Doing"
+        },
+        {
+          "id": "done",
+          "name": "Done"
+        }
+      ],
+      "default": "todo"
+    },
+    {
+      "id": "color",
+      "name": "Colour",
+      "type": "text",
+      "description": "A theme palette name or a CSS colour"
+    },
+    {
+      "id": "rank",
+      "name": "Position",
+      "type": "rank",
+      "description": "Its place among the project's statuses",
+      "scope": "project"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "byProject",
+      "fields": [
+        "project",
+        "rank"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "id": "taskComment",
+  "owner": "app:todos",
+  "name": "Comment",
+  "description": "A comment on a task",
+  "titleField": "body",
+  "fields": [
+    {
+      "id": "task",
+      "name": "Task",
+      "type": "relation",
+      "description": "The task it is on",
+      "relation": {
+        "entity": "taskItem"
+      },
+      "required": true
+    },
+    {
+      "id": "project",
+      "name": "Project",
+      "type": "relation",
+      "description": "The task's project, which decides who sees it",
+      "relation": {
+        "entity": "tasksProject"
+      },
+      "required": true
+    },
+    {
+      "id": "body",
+      "name": "Body",
+      "type": "markdown",
+      "description": "The comment",
+      "required": true,
+      "searchable": true
+    },
+    {
+      "id": "mentions",
+      "name": "Mentions",
+      "type": "relation",
+      "description": "People it mentions",
+      "relation": {
+        "entity": "user",
+        "many": true
+      }
+    },
+    {
+      "id": "createdAt",
+      "name": "Created",
+      "type": "createdAt",
+      "description": "When it was written"
+    },
+    {
+      "id": "author",
+      "name": "Author",
+      "type": "createdBy",
+      "description": "Who wrote it"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "byTask",
+      "fields": [
+        "task",
+        "createdAt"
+      ]
+    }
+  ]
+}

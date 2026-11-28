@@ -1,0 +1,461 @@
+{
+  "id": "cmd-todos-task-move",
+  "name": "todos.task.move",
+  "description": "Moves a task (the target) to a status of its project, between the tasks it was dropped between (after: the one above, before: the one below; both left out puts it last). A move to a done status sets when it was completed; a move out of one clears it.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:todos",
+  "spec": {
+    "command": "task.move",
+    "title": "Move a task",
+    "description": "Moves a task (the target) to a status of its project, between the tasks it was dropped between (after: the one above, before: the one below; both left out puts it last). A move to a done status sets when it was completed; a move out of one clears it.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "description": "The status's id"
+        },
+        "after": {
+          "type": "string",
+          "description": "The id of the task it goes after; empty for the top"
+        },
+        "before": {
+          "type": "string",
+          "description": "The id of the task it goes before; empty for the bottom"
+        }
+      },
+      "required": [
+        "status"
+      ]
+    },
+    "area": "rec",
+    "targetType": "taskItem",
+    "projection": "records.record",
+    "action": "record.update",
+    "events": [
+      "created",
+      "updated",
+      "deleted"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "sid",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "trim(string(args.status ?? \"\")) == \"\" ? \"none\" : trim(string(args.status))",
+        "type": "string"
+      }
+    },
+    {
+      "id": "st",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "tasksStatus"
+      }
+    },
+    {
+      "id": "lq",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "{where: {status: sid}, sort: [{field: \"rank\", desc: true}], limit: 1}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "last",
+      "type": "records.query",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "taskItem"
+      }
+    },
+    {
+      "id": "clock",
+      "type": "data.now",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "let a = args;\nlet t = state;\nlet done = st?.category == \"done\";\nlet tail = first(rows ?? []);\nlet after = string(a.after ?? \"\");\nlet before = string(a.before ?? \"\");\nlet atEnd = after == \"\" \u0026\u0026 before == \"\";\n{problem: t == nil ? \"there is no task \" + target : st == nil ? \"there is no status \" + sid : string(st.project) != string(t.project) ? \"that status is another project's\" : \"\",\n after: atEnd ? (tail == nil || tail._id == target ? \"\" : tail._id) : after, before: before,\n set: {status: st?._id, completedAt: done ? (t?.completedAt ?? clock) : nil}}"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 2380,
+        "y": 0
+      }
+    },
+    {
+      "id": "after",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.after",
+        "type": "string"
+      }
+    },
+    {
+      "id": "before",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 600
+      },
+      "config": {
+        "expr": "plan.before",
+        "type": "string"
+      }
+    },
+    {
+      "id": "set",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 800
+      },
+      "config": {
+        "expr": "plan.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "move",
+      "type": "records.move",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "entity": "taskItem",
+        "field": "rank"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "sid",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "sid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "st",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "sid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "lq",
+        "pin": "sid"
+      }
+    },
+    {
+      "from": {
+        "node": "lq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "last",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "state"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "st",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "st"
+      }
+    },
+    {
+      "from": {
+        "node": "sid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "sid"
+      }
+    },
+    {
+      "from": {
+        "node": "last",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "rows"
+      }
+    },
+    {
+      "from": {
+        "node": "clock",
+        "pin": "time"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "clock"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "after",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "before",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "set",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "move",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "move",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "after",
+        "pin": "value"
+      },
+      "to": {
+        "node": "move",
+        "pin": "after"
+      }
+    },
+    {
+      "from": {
+        "node": "before",
+        "pin": "value"
+      },
+      "to": {
+        "node": "move",
+        "pin": "before"
+      }
+    },
+    {
+      "from": {
+        "node": "set",
+        "pin": "value"
+      },
+      "to": {
+        "node": "move",
+        "pin": "set"
+      }
+    }
+  ]
+}
