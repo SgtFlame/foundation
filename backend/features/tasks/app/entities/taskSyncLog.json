@@ -1,0 +1,97 @@
+{
+  "id": "taskSyncLog",
+  "owner": "app:tasks",
+  "name": "Sync log entry",
+  "description": "What the two-way sync with a project's tracker (part 30h) could not apply cleanly: a conflict, where both sides changed a task and the later change was kept, or a failure",
+  "titleField": "summary",
+  "fields": [
+    {
+      "id": "summary",
+      "name": "Summary",
+      "type": "text",
+      "description": "One line on what happened",
+      "required": true
+    },
+    {
+      "id": "project",
+      "name": "Project",
+      "type": "relation",
+      "description": "The project",
+      "relation": {
+        "entity": "tasksProject"
+      },
+      "required": true
+    },
+    {
+      "id": "task",
+      "name": "Task",
+      "type": "relation",
+      "description": "The task, when there is one",
+      "relation": {
+        "entity": "taskItem"
+      }
+    },
+    {
+      "id": "kind",
+      "name": "Kind",
+      "type": "enum",
+      "description": "conflict or failure",
+      "options": [
+        {
+          "id": "conflict",
+          "name": "Conflict"
+        },
+        {
+          "id": "failure",
+          "name": "Failure"
+        }
+      ],
+      "default": "conflict"
+    },
+    {
+      "id": "fields",
+      "name": "Fields",
+      "type": "text",
+      "description": "The fields both sides changed, comma separated"
+    },
+    {
+      "id": "kept",
+      "name": "Kept",
+      "type": "text",
+      "description": "ours or theirs: whose change was kept"
+    },
+    {
+      "id": "lost",
+      "name": "Lost values",
+      "type": "longText",
+      "description": "The values not kept, as JSON by field"
+    },
+    {
+      "id": "oursAt",
+      "name": "Our change at",
+      "type": "dateTime",
+      "description": "When the task last changed here"
+    },
+    {
+      "id": "theirsAt",
+      "name": "Their change at",
+      "type": "dateTime",
+      "description": "When the card last changed in the tracker"
+    },
+    {
+      "id": "createdAt",
+      "name": "Logged",
+      "type": "createdAt",
+      "description": "When it was logged"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "byProject",
+      "fields": [
+        "project",
+        "createdAt"
+      ]
+    }
+  ]
+}

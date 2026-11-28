@@ -215,8 +215,20 @@
           "name": "Updated",
           "type": "dateTime",
           "description": "When the card last changed"
+        },
+        {
+          "id": "list",
+          "name": "List",
+          "type": "text",
+          "description": "The card's list last seen"
         }
       ]
+    },
+    {
+      "id": "outsideId",
+      "name": "Card id",
+      "type": "text",
+      "description": "The card's id in the project's tracker, kept beside outside so the sync finds a task by its card"
     },
     {
       "id": "completedAt",
@@ -258,6 +270,12 @@
       "id": "bySource",
       "fields": [
         "sourceLink"
+      ]
+    },
+    {
+      "id": "byOutside",
+      "fields": [
+        "outsideId"
       ]
     }
   ],

@@ -1,0 +1,199 @@
+{
+  "id": "tasks-onCardChanged",
+  "name": "A card changed in a tracker",
+  "description": "Takes a card's change from a tracker connection (part 30h): each card.changed event enqueues tasks-syncPull, one pull at a time per card, once per event.",
+  "kind": "app.trigger",
+  "version": 1,
+  "owner": "app:tasks",
+  "nodes": [
+    {
+      "id": "event",
+      "type": "connector.on",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "contract": "tasks.tracker@1",
+        "event": "card.changed",
+        "outputs": [
+          {
+            "id": "id",
+            "name": "id",
+            "type": "string"
+          },
+          {
+            "id": "card",
+            "name": "card",
+            "type": "string"
+          },
+          {
+            "id": "board",
+            "name": "board",
+            "type": "string"
+          },
+          {
+            "id": "change",
+            "name": "change",
+            "type": "string"
+          },
+          {
+            "id": "version",
+            "name": "version",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "inputs",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "{connection: connection, card: card, version: version}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "key",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"card-\" + card",
+        "type": "string"
+      }
+    },
+    {
+      "id": "jobId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 400
+      },
+      "config": {
+        "expr": "\"pull-\" + connection + \"-\" + id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "enqueue",
+      "type": "jobs.enqueue",
+      "title": "Pull the card",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "graph": "tasks-syncPull"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "connection"
+      },
+      "to": {
+        "node": "inputs",
+        "pin": "connection"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "card"
+      },
+      "to": {
+        "node": "inputs",
+        "pin": "card"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "version"
+      },
+      "to": {
+        "node": "inputs",
+        "pin": "version"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "card"
+      },
+      "to": {
+        "node": "key",
+        "pin": "card"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "connection"
+      },
+      "to": {
+        "node": "jobId",
+        "pin": "connection"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "id"
+      },
+      "to": {
+        "node": "jobId",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "inputs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "inputs"
+      }
+    },
+    {
+      "from": {
+        "node": "key",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "jobId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "enqueue",
+        "pin": "id"
+      }
+    }
+  ]
+}

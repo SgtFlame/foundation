@@ -45,3 +45,49 @@ One connector contract for outside task trackers, so the two-way sync of 30h is 
 - **`tasks.fake.control@1`**: `seed {board {id, name, lists, labels, members}, cards, count}` (a board with its cards, `count` more made up as *Card 1*…, spread over the lists; seeding raises no event; 500 for the iteration's acceptance test), `change {card, set, comment?}` (an outside edit of the `card.update` fields plus `list`, `position` and `archived`, with a new version and `card.changed`; a comment raises `comment.created`), `fail {operation, times, kind}`, `slow {operation, ms}` and `state` (boards with card counts, events raised, faults pending).
 - The live call **`tasks.fake.control {connection, operation, args}`** runs a control operation on a connection through the dispatcher, as the caller (who must be able to use the connection), ending with one `result` event; Forge's `forge trackertest` uses it.
 - Test with `go test ./features/tasks/...`: the suite on the fake with its events, the type and control contract checks, 500 seeded cards listed by pages, an outside change's events and conflict, injected failures, the control call.
+
+## Built in forge 30h
+Two-way sync between a project and one board of a `tasks.tracker@1` tracker. It is built and tested on the Tasks test server (`tasks.fake`, 30g). Every part is a blueprint of the `tasks` library app, and runs as the app's principal.
+
+- **Connecting.** A project admin sets the project's `connection` (a tracker connection they may use) and `board` (the outside board's id) with `record.update`. Setting them, or setting `sync.state` to `retry`, starts an import through the trigger `onConnect` (`tasks-onConnect`). The app's own writes never start one. Clearing the connection stops syncing and keeps the tasks.
+- **Import** (`tasks-syncImport`, a job keyed `sync-<project>`):
+  - Its first run maps the board's open lists to the project's statuses. A status matches a list by its `outsideList`, or else by name. Each list with no match gets a new status, placed after the last one, with a category guessed from its name. The run then marks `sync` `importing`.
+  - Each later run imports one page of `card.list` (100 cards) through `tasks.task.create`, passing `outside`. Cards already imported (`outsideId`) are skipped.
+  - The last page marks `sync` `ok`, with the count passed from page to page as `imported`.
+  - A non-retryable tracker error marks `sync` `failed` with its message. A retryable error fails the run, so the job retries.
+- **Push** (`tasks-onTaskChanged` → `tasks-syncPush`, keyed `task-<id>`):
+  - It fires when a task of a connected project is made, or its title, description, due date, status or state changes, by anyone but the app. So pulled changes never echo back.
+  - A task with no card gets `card.create`, keyed by the task's id, in its status's list.
+  - A task with a card gets `card.update` with the version last seen. When its status's list differs from the card's, it also gets `card.move`.
+  - The card's new version is kept on the task (`outside`), and the push is skipped when the task's last change was the app's own.
+  - A `conflict` enqueues the card's pull. Any other refusal writes a *Sync log* entry.
+- **Pull** (`tasks-onCardChanged` on `card.changed` → `tasks-syncPull`, keyed `card-<id>`):
+  - An event whose version the task already holds is the echo of our own push, and is dropped.
+  - A card with no task, on a board a project of that connection is connected to, becomes a task.
+  - Otherwise the job reads the card (`card.get`) and takes its title, description, due date, list (as status) and archiving.
+- **Conflicts.** "Changed here since the sync" means the task's last writer is not the app (`_updatedBy` is not 0).
+  - When both sides changed, the later change wins (`_updatedAt` against the card's `updatedAt`), field by field.
+  - The losing values go to a `taskSyncLog` record: `kind: conflict`, `fields`, `kept` (`ours` or `theirs`), `lost` as JSON, and both times.
+  - When ours wins, the task is pushed again with `force`.
+- **New fields:**
+  - *Project*: `board`, and `sync {state, lastSync, imported, error}`.
+  - *Status*: `outsideList`.
+  - *Task*: `outsideId` (index `byOutside`), and `list` inside `outside`.
+- **New type** *Sync log entry* `taskSyncLog`. Project admins and members read it on their projects. Managers may change it.
+- `task.create` takes `outside` from the app's own principal only.
+- **Not built yet:**
+  - mapping members by email (cards import unassigned);
+  - labels, the checklist and comments;
+  - removing a status's list;
+  - archiving a card when its task is deleted;
+  - the browser walk;
+  - two runners in two simulated processes;
+  - the 500-card import's timing at scale.
+- Test with `go test ./features/tasks/ -run TestTwoWaySync`, on the test server:
+  - 500 cards import once, and a list with no status gets one;
+  - an outside change arrives once and is not pushed back;
+  - our change reaches the card once, and its echo is dropped;
+  - both sides changed, ours later: ours is kept and pushed back, and theirs logged;
+  - both sides changed, theirs later: theirs is kept, ours logged, and the retried push sends nothing;
+  - a task made here gets a card in its status's list.
+
