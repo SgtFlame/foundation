@@ -1,0 +1,589 @@
+{
+  "id": "cmd-crm-deal-moveStage",
+  "name": "crm.deal.moveStage",
+  "description": "Moves the target deal to a stage of its pipeline, placed between the deals after and before name (at the end of the column when neither is given), and logs the move as a note activity on the deal, all in one commit. The probability follows the new stage's default when it was the old stage's default (or empty); one set by hand is kept. Two people moving one deal at once both commit, in turn: the later move wins and both are logged.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:crm",
+  "spec": {
+    "command": "deal.moveStage",
+    "title": "Move a deal to a stage",
+    "description": "Moves the target deal to stage (a crmStage id of the deal's pipeline), between the deal after and the deal before (crmDeal ids in that stage; at the end of the column when neither is given), and logs the move as an activity on the deal in the same commit. The probability follows the stage's default unless it was changed by hand.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "stage": {
+          "type": "string",
+          "description": "The stage's id (crmStage), one of the deal's pipeline's"
+        },
+        "after": {
+          "type": "string",
+          "description": "The id of the deal it goes after in the stage's column; left out, it goes first when before is given, else last"
+        },
+        "before": {
+          "type": "string",
+          "description": "The id of the deal it goes before; left out, it goes last"
+        }
+      },
+      "required": [
+        "stage"
+      ]
+    },
+    "area": "rec",
+    "targetType": "crmDeal",
+    "projection": "records.record",
+    "action": "record.update",
+    "events": [
+      "created",
+      "updated"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "now",
+      "type": "data.now",
+      "position": {
+        "x": 0,
+        "y": 400
+      }
+    },
+    {
+      "id": "stageId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "(args.stage ?? \"\") == \"\" ? \"none\" : args.stage",
+        "type": "string"
+      }
+    },
+    {
+      "id": "stage",
+      "type": "records.get",
+      "title": "The stage it moves to",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmStage"
+      }
+    },
+    {
+      "id": "oldId",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "string(deal?.stage ?? \"\") == \"\" ? \"none\" : string(deal.stage)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "old",
+      "type": "records.get",
+      "title": "The stage it was in",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "entity": "crmStage"
+      }
+    },
+    {
+      "id": "lastQ",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "expr": "{where: {stage: stageId}, sort: [{field: \"position\", desc: true}], limit: 2}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "last",
+      "type": "records.query",
+      "title": "The column's last deals",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmDeal"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "let lastOther = find(lastDeals ?? [], #._id != target);\nlet before = args.before ?? \"\";\nlet after = (args.after ?? \"\") != \"\" ? args.after : before == \"\" ? (lastOther?._id ?? \"\") : \"\";\nlet followed = deal?.probability == nil || (old != nil \u0026\u0026 deal.probability == old.probability);\nlet set = followed \u0026\u0026 stage?.probability != nil ? {stage: stageId, probability: stage.probability} : {stage: stageId};\n{problem: deal == nil ? \"there is no deal \" + target\n  : stage == nil ? \"there is no stage \" + stageId\n  : string(stage.pipeline) != string(deal.pipeline ?? \"\") ? \"the stage \" + stage.name + \" is not in the deal's pipeline\"\n  : after == target || before == target ? \"a deal cannot go beside itself\" : \"\",\n after: after, before: before, set: set,\n activity: {type: \"note\", subject: \"Moved \" + string(deal?.name ?? \"\") + \" from \" + string(old?.name ?? \"no stage\") + \" to \" + string(stage?.name ?? \"\"),\n   done: true, at: clock, deal: target, company: deal?.company, owner: user == \"\" ? nil : user}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 2380,
+        "y": 0
+      }
+    },
+    {
+      "id": "after",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.after",
+        "type": "string"
+      }
+    },
+    {
+      "id": "before",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 600
+      },
+      "config": {
+        "expr": "plan.before",
+        "type": "string"
+      }
+    },
+    {
+      "id": "set",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 800
+      },
+      "config": {
+        "expr": "plan.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "mv",
+      "type": "records.move",
+      "title": "Move it into the stage's column",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "entity": "crmDeal",
+        "field": "position"
+      }
+    },
+    {
+      "id": "values",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 1000
+      },
+      "config": {
+        "expr": "plan.activity",
+        "type": "json"
+      }
+    },
+    {
+      "id": "log",
+      "type": "records.create",
+      "title": "Log the move",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmActivity"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "stageId",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "stageId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "stage",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "oldId",
+        "pin": "deal"
+      }
+    },
+    {
+      "from": {
+        "node": "oldId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "old",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "stageId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "lastQ",
+        "pin": "stageId"
+      }
+    },
+    {
+      "from": {
+        "node": "lastQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "last",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "deal"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "stageId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "stageId"
+      }
+    },
+    {
+      "from": {
+        "node": "stage",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "stage"
+      }
+    },
+    {
+      "from": {
+        "node": "old",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "old"
+      }
+    },
+    {
+      "from": {
+        "node": "last",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "lastDeals"
+      }
+    },
+    {
+      "from": {
+        "node": "now",
+        "pin": "time"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "clock"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "mv",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "mv",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "after",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "before",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "set",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "after",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mv",
+        "pin": "after"
+      }
+    },
+    {
+      "from": {
+        "node": "before",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mv",
+        "pin": "before"
+      }
+    },
+    {
+      "from": {
+        "node": "set",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mv",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "mv",
+        "pin": "then"
+      },
+      "to": {
+        "node": "log",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "values",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "values",
+        "pin": "value"
+      },
+      "to": {
+        "node": "log",
+        "pin": "values"
+      }
+    }
+  ]
+}

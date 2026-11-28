@@ -52,6 +52,8 @@ func Contribute(reg *extensions.Registry, deps func() data.Deps) {
 	contributeWrites(reg, deps)
 	contributeReads(reg, deps)
 	contributeFiles(reg, deps)
+	contributePrepare(reg, deps) // Prepare rows (forge 40c)
+	contributeParseCSV(reg)      // Parse CSV (forge 40c), its deps from SetParse
 	contributeDefinitions(reg, deps)
 	node(reg, 690, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "records.rankBetween"}, Title: "Rank between",

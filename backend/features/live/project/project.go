@@ -460,6 +460,14 @@ func (p *Projections) fold(pr live.Projector, kv jetstream.KeyValue, msg jetstre
 	}
 	e.Stream, e.Seq = meta.Stream, meta.Sequence.Stream
 	events := []live.Event{e}
+	if e.Batch != nil && e.Batch.Index < e.Batch.Count && p.folded(ctx, pr, kv, e) {
+		// A later event of a batch its first event already folded: the
+		// batch was written whole, so there is nothing to read again (reading
+		// the rest of the batch for each of its events is quadratic: a
+		// 500-row record.upsert took minutes, forge 40d)
+		_ = msg.Ack()
+		return
+	}
 	if e.Batch != nil && e.Batch.Index < e.Batch.Count {
 		// The rest of the batch is folded now and written with this event,
 		// so no read of the projection sees half a batch. Its later events
@@ -552,6 +560,25 @@ func (p *Projections) fold(pr live.Projector, kv jetstream.KeyValue, msg jetstre
 		return
 	}
 	_ = msg.Ack()
+}
+
+// folded tells whether e's own key already holds e or a later event, as it
+// does once the batch e belongs to was folded from an earlier event.
+func (p *Projections) folded(ctx context.Context, pr live.Projector, kv jetstream.KeyValue, e live.Event) bool {
+	if e.Type == live.EventBranched && !pr.Branchable {
+		return false
+	}
+	if len(pr.Types) > 0 && !slices.Contains(pr.Types, e.Target.Type) {
+		return false
+	}
+	key := e.Target.Key()
+	if pr.KeyOf != nil {
+		if key = pr.KeyOf(e); key == "" {
+			return false
+		}
+	}
+	old, _, err := getRev(ctx, kv, key)
+	return err == nil && old.Seq >= e.Seq
 }
 
 // batchFrom is e and the events after it in its batch that the projector

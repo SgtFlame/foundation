@@ -1,0 +1,1 @@
+**Imports** (forge 40c, `documentation/Records.md` › *Built in forge 40c*): rows go in with `record.upsert` (at most 500 a command, matched on a field), checked first by *Prepare rows*; files are read only by `parseservice` (*Parse CSV*), a service that can move out of process, where a new parser is a new operation.

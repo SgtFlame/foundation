@@ -1,0 +1,1 @@
+| [ServerUI.md](ServerUI.md) › *Built in forge 40a and 40b* | Charts, stat values and the relation picker (forge 40a, 40b): `mui.chart` (bar, line, area, pie, funnel over aggregates, the dashboard palette), `mui.metric`, `mui.relationPicker` (search as you type, used by `record.fieldEditor`) |

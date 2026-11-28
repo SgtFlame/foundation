@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { log } from '../../../logging/index.ts'
 import { Conversations } from '../../../services/Conversation.ts'
 import { Usage, type SummaryGroup, type UsageTotals } from '../../../services/Usage.ts'
-import { maxSeries } from './palette.ts'
+import { maxSeries } from '../../../components/charts/palette.ts'
 
 export interface DaySeries {
   days: string[] // "2026-10-23", oldest first, in the viewer's time zone

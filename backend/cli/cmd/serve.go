@@ -634,6 +634,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		var conversationLive conversationservice.Service
 		var collabLive collabservice.Service
 		var transcriptFiles recordsfiles.Files // Parse transcript's files, once the store is made (forge 18e)
+		var wiringEnv *wiring.Env              // what features/wiring reads from the server
 		registry := extensions.NewRegistry()
 		registry.Declare(config.Sections, config.SectionSources, conversation.ContextProviders, conversation.Modes, conversation.RoundFollowers, conversation.RoundEnds, retrieval.Sources, cognition.Nodes, cognition.Graphs, cognition.Types, cognition.Kinds, cognition.Conversions, tools.Tools, tools.Sources, authz.ResourceTypes,
 			live.Commands, live.Projectors, live.Queries, live.Calls, live.Extensions, ui.Components, ui.Apps, ui.Pages, ui.EditorKinds, ui.AppSources, livenodes.TriggerEvents, connectors.Contracts, connectors.Types, connections.Validators, authz.ContributedRoles, infra.ResourceKinds)
@@ -772,7 +773,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// tasks, …): a new feature adds a file there, not lines here
 		var gitMirrors volumeservice.Mirrors // the mirrored Volumes (forge 24e), set once the file events exist
 		var imageProvider providers.Images   // set once the AI provider is made (forge 35f-7)
-		wiringEnv := &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Records: &recordDeps, Images: &imageProvider, Mirrors: &gitMirrors, KB: &kbToolDeps}
+		wiringEnv = &wiring.Env{ConnectorDeps: &connectorDeps, ConnectionDeps: &connectionDeps, Files: &transcriptFiles, Images: &imageProvider, Locator: loc, Records: &recordDeps, Mirrors: &gitMirrors, KB: &kbToolDeps}
 		if err := wiring.ContributeAll(registry, wiringEnv); err != nil {
 			return err
 		}
@@ -1142,6 +1143,7 @@ backend/scripts/victorialogs.sh runs VictoriaLogs for development.`,
 		// The record files' data service (forge 21d-4), served over NATS by
 		// serve --services (21g-1)
 		_ = filesproxy.Use(loc, func() filesservice.Service { return filesimpl.CreateService(filesimpl.WithStore(recordFiles)) })
+		wiring.ServicesAll(wiringEnv) // features' own services (features/wiring: parse), after the files service
 		transcriptFiles = recordFiles
 		recordTables, err := recordsdata.NewTables(gdb, projections) // large tables in the tenant database (forge 07k)
 		if err != nil {

@@ -97,6 +97,22 @@ var graphs = []cognition.Graph{
 			Area: "rec", TargetType: "plan", Projection: data.Projector, Action: "record.create", Events: []string{"created", "updated", "added", "removed", "deleted"}}),
 	},
 	{
+		// A card dropped in a column: moved and a task logged, in one commit
+		ID: "cmd-card-drop", Name: "card.drop", Kind: livenodes.KindCommand,
+		Nodes: []cognition.Node{
+			node("event", livenodes.OnCommand, map[string]any{"outputs": []any{
+				map[string]any{"id": "after", "type": "string"}, map[string]any{"id": "before", "type": "string"}, map[string]any{"id": "status", "type": "string"}}}),
+			node("set", "data.expression", map[string]any{"expr": "{status: status}", "type": "json"}),
+			node("log", "data.expression", map[string]any{"expr": "{title: \"dropped in \" + status}", "type": "json"}),
+			node("mv", "records.move", map[string]any{"entity": "card", "field": "pos"}),
+			node("c", "records.create", map[string]any{"entity": "task"}),
+		},
+		Edges: edges("event.then -> mv.then", "mv.then -> c.then", "event.target -> mv.id", "event.after -> mv.after", "event.before -> mv.before",
+			"event.status -> set.status", "set.value -> mv.set", "event.status -> log.status", "log.value -> c.values"),
+		Spec: spec(livenodes.CommandSpec{Command: "card.drop", Title: "Drop", Description: "Moves a card and logs it.",
+			Area: "rec", TargetType: "card", Projection: data.Projector, Action: "record.update", Events: []string{"created", "updated"}}),
+	},
+	{
 		ID: "qry-task-open", Name: "task.open", Kind: livenodes.KindQuery,
 		Nodes: []cognition.Node{
 			node("event", livenodes.OnQuery, nil),
@@ -249,6 +265,54 @@ func TestWriteNodesCommitAsOneBatch(t *testing.T) {
 	bad = f.on("task.plan", "p3", map[string]any{"existing": "e1", "gone": "e1"})
 	if bad.Common.Code != 422 || !strings.Contains(fmt.Sprint(bad.Problems), "required") {
 		t.Errorf("want the missing title refused, got %d %+v", bad.Common.Code, bad.Problems)
+	}
+}
+
+func TestMoveNodeMovesWithTheCommand(t *testing.T) {
+	f := setup(t)
+	f.ok("entity.create", "card", map[string]any{"name": "Card", "fields": []any{
+		map[string]any{"id": "title", "name": "Title", "type": "text"},
+		map[string]any{"id": "status", "name": "Status", "type": "text"},
+		map[string]any{"id": "pos", "name": "Position", "type": "rank", "scope": "status"},
+	}})
+	res := f.ok("entity.publish", "card", map[string]any{"rev": 1})
+	f.wait(entities.PublishedProjector, "entity.card", res.Seq)
+	mk := func(id, title, status, after string) {
+		f.ok("record.create", id, map[string]any{"entity": "card", "values": map[string]any{"title": title, "status": status}})
+		a := map[string]any{"entity": "card", "field": "pos"}
+		if after != "" {
+			a["after"] = after
+		}
+		f.ok("record.move", id, a)
+	}
+	mk("a", "A", "todo", "")
+	mk("b", "B", "doing", "")
+	mk("c", "C", "doing", "b")
+
+	res = f.ok("card.drop", "a", map[string]any{"after": "b", "before": "c", "status": "doing"})
+	if err := f.p.Settle(context.Background(), features.LocalTenantID, data.Projector); err != nil {
+		t.Fatal(err)
+	}
+	cards, err := data.Find(args(), f.deps, data.Query{Entity: "card", Filter: &data.Filter{Field: "status", Value: json.RawMessage(`"doing"`)}, Sort: []data.Sort{{Field: "pos"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, r := range cards.Records {
+		var s string
+		_ = json.Unmarshal(r["title"], &s)
+		order = append(order, s)
+	}
+	if strings.Join(order, ",") != "B,A,C" {
+		t.Errorf("want A between B and C in doing, got %v", order)
+	}
+	if f.tasks()["dropped in doing"] == nil {
+		t.Errorf("the log task was not created with the move")
+	}
+	// A move the record command refuses refuses the whole command
+	bad := f.on("card.drop", "a", map[string]any{"after": "a", "status": "doing"})
+	if bad.Common.Code != 422 || !strings.Contains(fmt.Sprint(bad.Problems), "beside itself") {
+		t.Errorf("want a move beside itself refused, got %d %+v", bad.Common.Code, bad.Problems)
 	}
 }
 

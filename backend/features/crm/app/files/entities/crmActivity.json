@@ -1,0 +1,141 @@
+{
+  "id": "crmActivity",
+  "name": "Activity",
+  "owner": "app:crm",
+  "description": "Something done or to do with a contact, company or deal (forge 40d): a call, email, meeting, note or message, shown newest first on their timelines. Logged by hand, by crm.logActivity, by deal.moveStage and by Mail and the Nexus.",
+  "titleField": "subject",
+  "storage": {
+    "projection": "sql"
+  },
+  "fields": [
+    {
+      "id": "type",
+      "name": "Type",
+      "type": "enum",
+      "description": "What kind of activity it is",
+      "options": [
+        {
+          "id": "call",
+          "name": "Call"
+        },
+        {
+          "id": "email",
+          "name": "Email"
+        },
+        {
+          "id": "meeting",
+          "name": "Meeting"
+        },
+        {
+          "id": "note",
+          "name": "Note"
+        },
+        {
+          "id": "message",
+          "name": "Message"
+        }
+      ],
+      "default": "note"
+    },
+    {
+      "id": "subject",
+      "name": "Subject",
+      "type": "text",
+      "description": "A one-line summary",
+      "required": true,
+      "searchable": true
+    },
+    {
+      "id": "body",
+      "name": "Body",
+      "type": "markdown",
+      "description": "The details, in Markdown"
+    },
+    {
+      "id": "due",
+      "name": "Due",
+      "type": "dateTime",
+      "description": "When a planned activity is due"
+    },
+    {
+      "id": "done",
+      "name": "Done",
+      "type": "bool",
+      "description": "Whether it has happened",
+      "default": true
+    },
+    {
+      "id": "contact",
+      "name": "Contact",
+      "type": "relation",
+      "description": "The contact it is with",
+      "relation": {
+        "entity": "crmContact"
+      }
+    },
+    {
+      "id": "company",
+      "name": "Company",
+      "type": "relation",
+      "description": "The company it concerns",
+      "relation": {
+        "entity": "crmCompany"
+      }
+    },
+    {
+      "id": "deal",
+      "name": "Deal",
+      "type": "relation",
+      "description": "The deal it concerns",
+      "relation": {
+        "entity": "crmDeal"
+      }
+    },
+    {
+      "id": "source",
+      "name": "Source",
+      "type": "json",
+      "description": "Where it came from: {link (a workbench: link), title, kind}, such as a mail thread"
+    },
+    {
+      "id": "at",
+      "name": "At",
+      "type": "dateTime",
+      "description": "When it happened (or was logged)"
+    },
+    {
+      "id": "owner",
+      "name": "Owner",
+      "type": "user",
+      "description": "The person responsible for it; empty for a shared record any sales rep may change or claim. Changed by managers with record.reassign"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "by_contact",
+      "fields": [
+        "contact",
+        "at"
+      ]
+    },
+    {
+      "id": "by_company",
+      "fields": [
+        "company",
+        "at"
+      ]
+    },
+    {
+      "id": "by_deal",
+      "fields": [
+        "deal",
+        "at"
+      ]
+    }
+  ],
+  "access": {
+    "create": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant') || (record.owner ?? '') == '' || string(record.owner) == principal.user",
+    "update": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant') || (record.owner ?? '') == '' || string(record.owner) == principal.user",
+    "delete": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant') || (record.owner ?? '') == '' || string(record.owner) == principal.user"
+  }
+}

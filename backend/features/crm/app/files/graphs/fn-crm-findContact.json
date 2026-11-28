@@ -1,0 +1,237 @@
+{
+  "id": "fn-crm-findContact",
+  "name": "Find a contact",
+  "description": "Finds contacts by email (exact, any case) or by name (a part of it), read as the caller: each with its company and the open deals it is part of or its company has. At most 5 contacts.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:crm",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "email",
+            "type": "string",
+            "optional": true,
+            "description": "The email address, matched exactly in any case"
+          },
+          {
+            "id": "name",
+            "type": "string",
+            "optional": true,
+            "description": "Part of the name, when there is no email"
+          }
+        ]
+      }
+    },
+    {
+      "id": "q",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "let e = lower(trim(email ?? \"\"));\nlet n = trim(name ?? \"\");\n{filter: e != \"\" ? {field: \"email\", op: \"eq\", value: e} : {field: \"name\", op: \"contains\", value: n == \"\" ? \"\\u0000\" : n}, limit: 5, expand: [\"company\"]}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "contacts",
+      "type": "records.query",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmContact"
+      }
+    },
+    {
+      "id": "dq",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "let ids = map(contacts ?? [], #._id);\nlet cos = filter(map(contacts ?? [], string(#.company ?? \"\")), # != \"\");\n{filter: {\"or\": concat(map(ids, ({field: \"contacts\", op: \"contains\", value: #})), len(cos) \u003e 0 ? [{field: \"company\", op: \"in\", value: cos}] : [{field: \"company\", op: \"eq\", value: \"none\"}])},\n limit: 100, expand: [\"stage\"]}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "deals",
+      "type": "records.query",
+      "title": "Their open deals",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmDeal"
+      }
+    },
+    {
+      "id": "out",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "let open = filter(deals ?? [], (#._expanded?.stage?.category ?? \"open\") == \"open\");\nmap(contacts ?? [], { let c = #;\n  {id: c._id, name: c.name, email: c.email ?? \"\", phone: c.phone ?? \"\", title: c.title ?? \"\", owner: c.owner ?? \"\", tags: c.tags ?? [],\n   company: c._expanded?.company == nil ? nil : {id: c._expanded.company._id, name: c._expanded.company.name, domain: c._expanded.company.domain ?? \"\"},\n   deals: map(filter(open, c._id in (#.contacts ?? []) || (string(c.company ?? \"\") != \"\" \u0026\u0026 string(#.company ?? \"\") == string(c.company))),\n     ({id: #._id, name: #.name, amount: #.amount, stage: #.stage, stageName: #._expanded?.stage?.name ?? \"\", state: #.state ?? \"active\"}))} })",
+        "type": "json"
+      }
+    },
+    {
+      "id": "count",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "expr": "len(found)",
+        "type": "number"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "contacts",
+            "type": "json"
+          },
+          {
+            "id": "count",
+            "type": "number"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "email"
+      },
+      "to": {
+        "node": "q",
+        "pin": "email"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "name"
+      },
+      "to": {
+        "node": "q",
+        "pin": "name"
+      }
+    },
+    {
+      "from": {
+        "node": "q",
+        "pin": "value"
+      },
+      "to": {
+        "node": "contacts",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "contacts",
+        "pin": "records"
+      },
+      "to": {
+        "node": "dq",
+        "pin": "contacts"
+      }
+    },
+    {
+      "from": {
+        "node": "dq",
+        "pin": "value"
+      },
+      "to": {
+        "node": "deals",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "contacts",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "contacts"
+      }
+    },
+    {
+      "from": {
+        "node": "deals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "out",
+        "pin": "deals"
+      }
+    },
+    {
+      "from": {
+        "node": "out",
+        "pin": "value"
+      },
+      "to": {
+        "node": "count",
+        "pin": "found"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "out",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "contacts"
+      }
+    },
+    {
+      "from": {
+        "node": "count",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "count"
+      }
+    }
+  ]
+}

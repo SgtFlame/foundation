@@ -244,6 +244,7 @@ func Contribute(reg *extensions.Registry, deps func() Deps) {
 		}
 		live.Commands.Register(reg, cmd)
 	}
+	contributeUpsert(reg, deps) // record.upsert (forge 40c)
 	contributeQueries(reg, deps)
 	contributeSearch(reg, deps)
 }

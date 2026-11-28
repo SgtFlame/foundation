@@ -1,0 +1,1 @@
+**CRM** (`features/crm/app`, forge 40d, `documentation/CRM.md`): the `crm` library app, laid out as Calendar's; owner-based writes are the types' own `create|update|delete` rules (`principal.hasRole('manager', 'tenant')` or `record.owner == principal.user`), and a deal moves only through `deal.moveStage`, which uses *Move record* (`records.move`) to move and log in one commit.

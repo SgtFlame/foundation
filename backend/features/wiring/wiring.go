@@ -47,6 +47,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/live/bus"
 	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
 	recordsfiles "github.com/SgtFlame/foundation/backend/features/records/files"
+	"github.com/SgtFlame/foundation/backend/features/services"
 )
 
 // Feature is one feature's wiring.
@@ -61,6 +62,10 @@ type Feature struct {
 	// Adapter adds the connector types, contracts and implementations that
 	// the server's in-process adapter serves for the feature (optional).
 	Adapter func(o *adapter.Options)
+	// Services creates the feature's services through env.Services() once
+	// serve has made the services they call (optional), so a process whose
+	// set runs one serves it from the start (forge 40c: parse).
+	Services func(env *Env)
 	// Start starts the feature's background work once the server's
 	// services are made (optional; forge 35a-2): serve calls StartAll. It
 	// must not block, and stops when ctx ends.
@@ -89,6 +94,9 @@ type Env struct {
 	// Files is the record files store, set once it is made (files a node
 	// reads, such as an uploaded .ics or transcript).
 	Files *recordsfiles.Files
+	// Locator hands out services as the process's set has them (forge 40c:
+	// a feature's own service, parseproxy.Use)
+	Locator *services.Locator
 	// Records is the records' deps, set once the projections and bus are
 	// made (features that read or write records as the service principal).
 	Records *recordsdata.Deps
@@ -129,6 +137,22 @@ func (e *Env) VolumeMirrors() *volumeservice.Mirrors {
 	return e.Mirrors
 }
 
+// Services is the locator, or nil (every service real, in process).
+func (e *Env) Services() *services.Locator {
+	if e == nil {
+		return nil
+	}
+	return e.Locator
+}
+
+// RecordDeps is the records' deps, or empty ones.
+func (e *Env) RecordDeps() recordsdata.Deps {
+	if e == nil || e.Records == nil {
+		return recordsdata.Deps{}
+	}
+	return *e.Records
+}
+
 // Connectors is the connectors' deps, or empty ones.
 func (e *Env) Connectors() connectors.Deps {
 	if e == nil || e.ConnectorDeps == nil {
@@ -151,14 +175,6 @@ func (e *Env) RecordFiles() recordsfiles.Files {
 		return nil
 	}
 	return *e.Files
-}
-
-// RecordDeps is the records' deps, or empty ones.
-func (e *Env) RecordDeps() recordsdata.Deps {
-	if e == nil || e.Records == nil {
-		return recordsdata.Deps{}
-	}
-	return *e.Records
 }
 
 // ImageProvider is the AI image provider, or nil before it is made.
@@ -223,6 +239,15 @@ func ContributeAll(reg *extensions.Registry, env *Env) error {
 		}
 	}
 	return nil
+}
+
+// ServicesAll creates every registered feature's services, in name order.
+func ServicesAll(env *Env) {
+	for _, f := range Features() {
+		if f.Services != nil {
+			f.Services(env)
+		}
+	}
 }
 
 // StartAll starts every registered feature's background work, in name

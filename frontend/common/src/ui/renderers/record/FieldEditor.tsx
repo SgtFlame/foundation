@@ -23,11 +23,12 @@ import {
   Typography,
 } from '@mui/material'
 import { useQuery } from '../../../live/useQuery.ts'
-import { docFromText, plainText, Records, type FileRef, type RecordPage, type RichTextDoc } from '../../../services/Records.ts'
+import { docFromText, plainText, Records, type FileRef, type RichTextDoc } from '../../../services/Records.ts'
 import type { RendererProps } from '../../points.ts'
 import type { ConnectionList } from '../../../services/Connectors.ts'
 import { isComputed, same, type Field } from './fields.ts'
-import { FieldDisplay, titleOf } from './FieldValue.tsx'
+import { FieldDisplay } from './FieldValue.tsx'
+import { RelationPicker } from '../mui/relation/RelationPicker.tsx'
 
 const str = (v: unknown) => (v === undefined || v === null ? '' : String(v))
 
@@ -116,29 +117,33 @@ function toLocal(v: unknown): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-// A relation's choices: the target type's records, named by its title field
-function RelationInput({ field, value, onChange, label, problem, disabled }: FieldInputProps) {
-  const target = field.relation?.entity ?? ''
+// A relation's choices: the target type's records through
+// mui.relationPicker (forge 40b), searched as typed and named by its title
+// field; a relation to user picks among the tenant's people
+function RelationInput(p: FieldInputProps) {
+  const target = p.field.relation?.entity ?? ''
+  if (target === 'user') return <UserInput {...p} />
+  return (
+    <RelationPicker entity={target} value={p.value} multiple={!!p.field.relation?.many} label={p.label} problem={p.problem} disabled={p.disabled}
+      onChange={(v) => p.onChange(v)} />
+  )
+}
+
+// People are the tenant's members by name (forge 18a), when the person may
+// list them; otherwise their ids are typed
+function UserInput({ field, value, onChange, label, problem, disabled }: FieldInputProps) {
   const many = !!field.relation?.many
-  const toUsers = target === 'user'
-  const { data: type } = useQuery<{ entity?: { titleField?: string } }>(toUsers ? undefined : 'entity.describe', { id: target, published: true })
-  const { data: page } = useQuery<RecordPage>(toUsers ? undefined : 'records.find', { entity: target, limit: 200 })
-  const titleField = type?.entity?.titleField
-  // People are the tenant's members by name (forge 18a), when the person
-  // may list them; otherwise their ids are typed
   const users = useUserNames()
-  const options = toUsers
-    ? [...users].map(([id, name]) => ({ id, label: name })).sort((x, y) => x.label.localeCompare(y.label))
-    : (page?.records ?? []).map((r) => ({ id: str(r._id), label: str(titleField ? r[titleField] : '') || titleOf(r) }))
+  const options = [...users].map(([id, name]) => ({ id, label: name })).sort((x, y) => x.label.localeCompare(y.label))
   const labelOf = (id: string) => options.find((o) => o.id === id)?.label ?? id
   const ids = many ? ((value as string[] | null) ?? []) : value ? [str(value)] : []
   return (
-    <Autocomplete size="small" multiple={many} freeSolo={toUsers} disabled={disabled}
+    <Autocomplete size="small" multiple={many} freeSolo disabled={disabled}
       options={options.map((o) => o.id)} getOptionLabel={(id) => labelOf(String(id))}
       value={many ? ids : (ids[0] ?? null)}
       onChange={(_, v) => onChange(many ? ((v as string[]) ?? []) : ((v as string | null) ?? null))}
       renderValue={many ? (vals, getItemProps) => (Array.isArray(vals) ? vals : [vals]).map((id, index) => <Chip size="small" label={labelOf(String(id))} {...getItemProps({ index })} key={String(id)} />) : undefined}
-      renderInput={(params) => <TextField {...params} label={label} error={!!problem} helperText={problem || (toUsers && options.length === 0 ? 'User ids' : undefined)} />} />
+      renderInput={(params) => <TextField {...params} label={label} error={!!problem} helperText={problem || (options.length === 0 ? 'User ids' : undefined)} />} />
   )
 }
 

@@ -1,0 +1,338 @@
+{
+  "id": "fn-crm-importContacts",
+  "name": "Import contacts",
+  "description": "Imports up to 500 contacts as one batch through record.upsert, matched on email (trimmed and lower-cased first), so importing the same people again updates them rather than adding them twice. Rows without an email are refused. Every row commits or none does; send more than 500 as several calls.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:crm",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "rows",
+            "type": "json",
+            "description": "The contacts, at most 500: [{name, email, phone, title, company (a company id), owner (a user id), tags, source}]"
+          }
+        ]
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "let rs = rows ?? [];\nlet blank = filter(map(rs, ({row: #index, email: trim(string(#.email ?? \"\"))})), #.email == \"\");\n{problem: len(rs) == 0 ? \"give the rows to import\" : len(rs) \u003e 500 ? \"at most 500 rows at once; send the rest in another call\"\n  : len(blank) \u003e 0 ? \"every contact needs an email to match on; rows without one: \" + join(map(blank, string(#.row)), \", \") : \"\",\n args: {entity: \"crmContact\", match: \"email\",\n   rows: map(rs, fromPairs(concat(filter(toPairs(#), #[0] != \"email\"), [[\"email\", lower(trim(string(#.email ?? \"\")))]])))},\n count: len(rs)}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refusedP",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1020,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "early",
+      "type": "flow.return",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.args",
+        "type": "json"
+      }
+    },
+    {
+      "id": "newId",
+      "type": "data.newId",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "command": "record.upsert"
+      }
+    },
+    {
+      "id": "count",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 600
+      },
+      "config": {
+        "expr": "plan.count",
+        "type": "number"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "count",
+            "type": "number"
+          }
+        ]
+      }
+    },
+    {
+      "id": "refused",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          },
+          {
+            "id": "problems",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "rows"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "rows"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refusedP",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refusedP",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "early",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "early",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "newId",
+        "pin": "id"
+      },
+      "to": {
+        "node": "send",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "args",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "count",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "count",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "count"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "problems"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "problems"
+      }
+    }
+  ]
+}

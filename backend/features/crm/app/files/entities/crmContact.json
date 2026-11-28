@@ -1,0 +1,96 @@
+{
+  "id": "crmContact",
+  "name": "Contact",
+  "owner": "app:crm",
+  "description": "A person the CRM library app keeps (forge 40d), usually of a company. Sales reps change the contacts they own (and shared ones); Sales managers change every one. Imported with crm.importContacts, matched on email.",
+  "titleField": "name",
+  "storage": {
+    "projection": "sql"
+  },
+  "fields": [
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "The person's name",
+      "required": true,
+      "searchable": true
+    },
+    {
+      "id": "email",
+      "name": "Email",
+      "type": "text",
+      "description": "Their email address in lower case; imports match on it"
+    },
+    {
+      "id": "phone",
+      "name": "Phone",
+      "type": "text",
+      "description": "Their phone number"
+    },
+    {
+      "id": "title",
+      "name": "Job title",
+      "type": "text",
+      "description": "Their role at the company"
+    },
+    {
+      "id": "company",
+      "name": "Company",
+      "type": "relation",
+      "description": "The company they work for",
+      "relation": {
+        "entity": "crmCompany"
+      }
+    },
+    {
+      "id": "owner",
+      "name": "Owner",
+      "type": "user",
+      "description": "The person responsible for it; empty for a shared record any sales rep may change or claim. Changed by managers with record.reassign"
+    },
+    {
+      "id": "tags",
+      "name": "Tags",
+      "type": "tags",
+      "description": "Free-form tags"
+    },
+    {
+      "id": "source",
+      "name": "Source",
+      "type": "text",
+      "description": "Where the contact came from, such as import, mail or a form"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "by_email",
+      "fields": [
+        "email"
+      ]
+    },
+    {
+      "id": "by_owner",
+      "fields": [
+        "owner"
+      ]
+    },
+    {
+      "id": "by_company",
+      "fields": [
+        "company"
+      ]
+    },
+    {
+      "id": "by_name",
+      "fields": [
+        "name"
+      ]
+    }
+  ],
+  "access": {
+    "create": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant') || (record.owner ?? '') == '' || string(record.owner) == principal.user",
+    "update": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant') || (record.owner ?? '') == '' || string(record.owner) == principal.user",
+    "delete": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant') || (record.owner ?? '') == '' || string(record.owner) == principal.user"
+  }
+}

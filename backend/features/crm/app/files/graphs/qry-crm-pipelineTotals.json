@@ -1,0 +1,244 @@
+{
+  "id": "qry-crm-pipelineTotals",
+  "name": "pipelineTotals",
+  "description": "A pipeline's active deals summed for the dashboard: per stage (in the stages' order, with names, zero for an empty stage) or per owner, each with the count, the total amount and the weighted amount (amount × probability), and the grand totals. params {pipeline, groupBy: stage|owner}.",
+  "kind": "data.query",
+  "version": 1,
+  "owner": "app:crm",
+  "spec": {
+    "query": "pipelineTotals",
+    "title": "A pipeline's totals",
+    "description": "Count, total amount and weighted amount of a pipeline's active deals per stage or per owner, plus the totals. params {pipeline, groupBy stage|owner (stage when left out)}.",
+    "params": {
+      "type": "object",
+      "properties": {
+        "pipeline": {
+          "type": "string",
+          "description": "The pipeline's id"
+        },
+        "groupBy": {
+          "type": "string",
+          "enum": [
+            "stage",
+            "owner"
+          ],
+          "description": "stage (the default) or owner"
+        }
+      }
+    },
+    "action": "record.read"
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onQuery",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "pipeline",
+            "name": "pipeline",
+            "type": "string"
+          },
+          {
+            "id": "groupBy",
+            "name": "groupBy",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "pid",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "(pipeline ?? \"\") == \"\" ? \"none\" : pipeline",
+        "type": "string"
+      }
+    },
+    {
+      "id": "stagesQ",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "{where: {pipeline: pid}, sort: [{field: \"position\"}], limit: 50}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "stages",
+      "type": "records.query",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmStage"
+      }
+    },
+    {
+      "id": "dealsQ",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "{where: {pipeline: pid, state: \"active\"}, limit: 5000}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "deals",
+      "type": "records.query",
+      "title": "The pipeline's active deals",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "entity": "crmDeal"
+      }
+    },
+    {
+      "id": "totals",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "let ds = deals ?? [];\nlet byOwner = (grouping ?? \"\") == \"owner\";\nlet groupKeys = byOwner ? uniq(map(ds, string(#.owner ?? \"\"))) : map(stages ?? [], #._id);\n{groupBy: byOwner ? \"owner\" : \"stage\",\n groups: map(groupKeys, { let k = #; let xs = filter(ds, (byOwner ? string(#.owner ?? \"\") : string(#.stage ?? \"\")) == k);\n   let st = byOwner ? nil : find(stages ?? [], #._id == k);\n   {key: k, name: byOwner ? k : string(st?.name ?? \"\"), category: st?.category ?? \"\", count: len(xs),\n    total: sum(map(xs, float(#.amount ?? \"0\"))), weighted: sum(map(xs, float(#.amount ?? \"0\") * float(#.probability ?? 0) / 100))} }),\n count: len(ds), total: sum(map(ds, float(#.amount ?? \"0\"))), weighted: sum(map(ds, float(#.amount ?? \"0\") * float(#.probability ?? 0) / 100))}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "result",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "pipeline"
+      },
+      "to": {
+        "node": "pid",
+        "pin": "pipeline"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "stagesQ",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "stagesQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "stages",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "dealsQ",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "dealsQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "deals",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "stages",
+        "pin": "records"
+      },
+      "to": {
+        "node": "totals",
+        "pin": "stages"
+      }
+    },
+    {
+      "from": {
+        "node": "deals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "totals",
+        "pin": "deals"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "groupBy"
+      },
+      "to": {
+        "node": "totals",
+        "pin": "grouping"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "totals",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "result"
+      }
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Box, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography, useTheme } from '@mui/material'
 import { formatCost } from '../../../components/chat/levels.ts'
-import { otherColor, seriesColors } from './palette.ts'
+import { otherColor, seriesColors } from '../../../components/charts/palette.ts'
 import { other, type DaySeries } from './useUsage.ts'
 
 const height = 200

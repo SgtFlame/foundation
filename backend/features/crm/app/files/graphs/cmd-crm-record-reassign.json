@@ -1,0 +1,839 @@
+{
+  "id": "cmd-crm-record-reassign",
+  "name": "crm.record.reassign",
+  "description": "Gives a company, contact, deal or activity a new owner, for Sales managers only (a sales rep may not hand their records to someone else). The target is the record's id.",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:crm",
+  "spec": {
+    "command": "record.reassign",
+    "title": "Reassign a record",
+    "description": "Sets the owner of the target record (its id) of entity crmCompany, crmContact, crmDeal or crmActivity to owner (a user id; empty for shared). Sales managers only.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "string",
+          "enum": [
+            "crmCompany",
+            "crmContact",
+            "crmDeal",
+            "crmActivity"
+          ],
+          "description": "The record's entity type"
+        },
+        "owner": {
+          "type": "string",
+          "description": "The new owner's user id; empty makes it shared"
+        }
+      },
+      "required": [
+        "entity",
+        "owner"
+      ]
+    },
+    "area": "rec",
+    "targetType": "reassign",
+    "projection": "records.record",
+    "action": "record.update",
+    "events": [
+      "updated"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "tenant",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "\"tenant\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "mgr",
+      "type": "authz.hasRole",
+      "title": "Is a Sales manager?",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "role": "manager"
+      }
+    },
+    {
+      "id": "entity",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "args.entity in [\"crmCompany\", \"crmContact\", \"crmDeal\", \"crmActivity\"] ? args.entity : \"crmDeal\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "rec",
+      "type": "records.get",
+      "title": "The record",
+      "position": {
+        "x": 680,
+        "y": 0
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "let owner = trim(args.owner ?? \"\");\nlet set = {owner: owner == \"\" ? nil : owner};\nlet w = [{id: target, set: set}];\n{problem: !mgr ? \"only a Sales manager may reassign records\"\n  : !(args.entity in [\"crmCompany\", \"crmContact\", \"crmDeal\", \"crmActivity\"]) ? \"the entity is crmCompany, crmContact, crmDeal or crmActivity\"\n  : rec == nil ? \"there is no \" + args.entity + \" \" + target : \"\",\n company: args.entity == \"crmCompany\" ? w : [],\n contact: args.entity == \"crmContact\" ? w : [],\n deal: args.entity == \"crmDeal\" ? w : [],\n activity: args.entity == \"crmActivity\" ? w : []}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1700,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "w0list",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.company",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0",
+      "type": "flow.forEach",
+      "title": "update crmCompany",
+      "position": {
+        "x": 2040,
+        "y": 200
+      }
+    },
+    {
+      "id": "w0id",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w0s",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w0w",
+      "type": "records.update",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmCompany"
+      }
+    },
+    {
+      "id": "w1list",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 600
+      },
+      "config": {
+        "expr": "plan.contact",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w1",
+      "type": "flow.forEach",
+      "title": "update crmContact",
+      "position": {
+        "x": 2380,
+        "y": 400
+      }
+    },
+    {
+      "id": "w1id",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w1s",
+      "type": "data.expression",
+      "position": {
+        "x": 2720,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w1w",
+      "type": "records.update",
+      "position": {
+        "x": 3060,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmContact"
+      }
+    },
+    {
+      "id": "w2list",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 800
+      },
+      "config": {
+        "expr": "plan.deal",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w2",
+      "type": "flow.forEach",
+      "title": "update crmDeal",
+      "position": {
+        "x": 2720,
+        "y": 600
+      }
+    },
+    {
+      "id": "w2id",
+      "type": "data.expression",
+      "position": {
+        "x": 3060,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w2s",
+      "type": "data.expression",
+      "position": {
+        "x": 3060,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w2w",
+      "type": "records.update",
+      "position": {
+        "x": 3400,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmDeal"
+      }
+    },
+    {
+      "id": "w3list",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 1000
+      },
+      "config": {
+        "expr": "plan.activity",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w3",
+      "type": "flow.forEach",
+      "title": "update crmActivity",
+      "position": {
+        "x": 3060,
+        "y": 600
+      }
+    },
+    {
+      "id": "w3id",
+      "type": "data.expression",
+      "position": {
+        "x": 3400,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "w3s",
+      "type": "data.expression",
+      "position": {
+        "x": 3400,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "w3w",
+      "type": "records.update",
+      "position": {
+        "x": 3740,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmActivity"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "tenant",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mgr",
+        "pin": "record"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "entity",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "rec",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "entity",
+        "pin": "value"
+      },
+      "to": {
+        "node": "rec",
+        "pin": "entity"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "mgr",
+        "pin": "has"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "mgr"
+      }
+    },
+    {
+      "from": {
+        "node": "rec",
+        "pin": "record"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "rec"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "w0list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w0s",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w0s",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w0w",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "w0",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "w1",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w1list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "w1list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w1",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w1",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w1w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w1",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w1id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w1id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w1w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w1",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w1s",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w1s",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w1w",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "w1",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "w2",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w2list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "w2list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w2",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w2",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w2w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w2",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w2id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w2id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w2w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w2",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w2s",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w2s",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w2w",
+        "pin": "set"
+      }
+    },
+    {
+      "from": {
+        "node": "w2",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "w3",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w3list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "w3list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w3",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "w3",
+        "pin": "body"
+      },
+      "to": {
+        "node": "w3w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "w3",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w3id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w3id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w3w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "w3",
+        "pin": "item"
+      },
+      "to": {
+        "node": "w3s",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "w3s",
+        "pin": "value"
+      },
+      "to": {
+        "node": "w3w",
+        "pin": "set"
+      }
+    }
+  ]
+}

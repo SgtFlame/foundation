@@ -1,0 +1,74 @@
+{
+  "id": "crmStage",
+  "name": "Stage",
+  "owner": "app:crm",
+  "description": "A stage of a pipeline (forge 40d), in order by position within its pipeline: a deal moves through them with deal.moveStage. probability is the default chance a deal in it closes; category says whether it is still open, won or lost.",
+  "titleField": "name",
+  "fields": [
+    {
+      "id": "pipeline",
+      "name": "Pipeline",
+      "type": "relation",
+      "description": "The pipeline it belongs to",
+      "required": true,
+      "relation": {
+        "entity": "crmPipeline"
+      }
+    },
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "The stage's name, such as Qualified",
+      "required": true
+    },
+    {
+      "id": "position",
+      "name": "Position",
+      "type": "rank",
+      "description": "Its place in its pipeline",
+      "scope": "pipeline"
+    },
+    {
+      "id": "probability",
+      "name": "Probability",
+      "type": "number",
+      "description": "The default chance (0 to 100) that a deal in it closes"
+    },
+    {
+      "id": "category",
+      "name": "Category",
+      "type": "enum",
+      "description": "open while a deal is still being worked, won or lost once decided",
+      "options": [
+        {
+          "id": "open",
+          "name": "Open"
+        },
+        {
+          "id": "won",
+          "name": "Won"
+        },
+        {
+          "id": "lost",
+          "name": "Lost"
+        }
+      ],
+      "default": "open"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "by_pipeline",
+      "fields": [
+        "pipeline",
+        "position"
+      ]
+    }
+  ],
+  "access": {
+    "create": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant')",
+    "update": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant')",
+    "delete": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant')"
+  }
+}
