@@ -707,12 +707,26 @@ Docking bays and launches (the user's industry plan: a new ship needs an empty d
 - `game.launchShip {tower?}` lets a finished ship go: `launched` on the ship (clears `Bay`) and `undocked {ship}` on its bay floor (clears `Holds`). A cutter or hauler launches anywhere; a freighter or barge only through a spaceport tower within 40 m whose port is open (V39).
 - `game.flyShip` refuses a pilot in a ship still clamped (*launch it first*).
 - Engine: `ship/Dock.ts` (`docked`, `launchPlan`, `launchTower`, `bayFree`). F at a clamped ship's cockpit launches it (through the nearest open tower for a freighter or barge) and sits; the hint says why when it cannot.
-- Not built: the shipyard's own bay launching the hauler, parking back on a bay, fuel burned by launches.
+- Not built: the shipyard's own bay launching the hauler, fuel burned by launches (parking back on a bay is V41).
 - Tests: `TestDocking`, `Dock.test.ts`.
 
 ## Built in S35 (forge 375)
 
 The letter is read: in Aldermere a palace gate stands in the middle of the area's north edge (`story/Palace.ts`, `gateSpot`, drawn as two towers, an arch and the king's banners). Walking up to it after `aldermere` plays the scene a caption at a time (the gate guard, a clerk, the King's Steward, who has two more letters like it: Millbrook and Carrow Fell) and reaches step `steward`: the king's council sits at the new moon. Placeholder people and lines; the king is not named.
+
+## Built in V41 (forge 360)
+
+Parking back on a bay: a flown cutter, hauler, freighter or barge brought slowly over a free bay floor parks on it, so a ship comes home to the yard.
+
+- `game.dockShip {bay}` (target the ship): `parked {bay}` on the ship (sets `Bay`, clears `Pilot` and `V`) and `docked {ship}` on the bay floor (`Holds`) in one batch. Refused for a ship that is not a chip ship, one already clamped, one someone else flies, one moving faster than 2 m/s, or a bay floor that is unfinished, full, in another world or more than 12 m away.
+- A parked ship is clamped as in V40: `game.flyShip` refuses it until `game.launchShip`, and no new ship starts on its bay.
+- Engine: `ship/Dock.ts` (`freeBayNear`, `parkPlan`, `PARK_SPEED`). While flying near a free bay floor the hint offers *P: park* (or asks to slow down); P stands the pilot up beside the cockpit and sends the `dock` intent.
+- Not built: the shipyard's own bay launching the hauler, fuel burned by launches.
+- Tests: `TestDocking` (parking), `Dock.test.ts`.
+
+## Built in S36 (forge 375)
+
+The new moon and the king's council (`story/NewMoon.ts`). After `steward`, the Lantern inn stands by the middle of Aldermere's south edge (a timber house with a lit lantern). R at its door takes a room and passes the days to dusk on the next night of the greater moon's dark (`waitForNewMoon`; nights where `night % 30 == 0`), reaching `waited`. On that night the palace gate opens again: walking up to it plays the council a caption at a time (nine chairs, the Steward with the four letters, a doubting councillor, the king asking whether any were killed) and reaches `kingscouncil`: riders go north at dawn, and the player and Corran Vey go with them. Placeholder people and lines; nobody from the books is named. Missing the night means waiting at the inn for the next new moon.
 
 ## Decisions to review after seeing it
 
