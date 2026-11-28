@@ -227,6 +227,20 @@
       "description": "Holds given slots [{start, end}] as tentative events on the caller's own calendar, grouped in a Hold that is released after a few days unless one is chosen; give purpose and optionally subject {entity, id}"
     },
     {
+      "name": "answerInvitation",
+      "graph": "fn-calendar-answerInvitation",
+      "title": "Answer an invitation received",
+      "effect": "write",
+      "description": "Answers an invitation that came from outside (an event Parse iCalendar read from a mail's .ics) as the caller: accepted or tentative puts it on their own calendar, declined takes it off; returns the iTIP REPLY {to, text} to send the organizer. Args {invitation, attendee, answer, comment?, calendar?}"
+    },
+    {
+      "name": "applyReply",
+      "graph": "fn-calendar-applyReply",
+      "title": "Apply an answer received",
+      "effect": "write",
+      "description": "Applies an iTIP message from outside (an attendee's REPLY a mail carried) to the event it is about, found by its UID: sets that attendee's answer, or updates or cancels the event. Args {method, message}"
+    },
+    {
       "name": "holds",
       "graph": "fn-calendar-holds",
       "title": "Open holds",

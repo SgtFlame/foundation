@@ -1,0 +1,641 @@
+{
+  "id": "fn-calendar-answerInvitation",
+  "name": "Answer an invitation received",
+  "description": "Answers an invitation that came from outside, such as an .ics a mail carried (Parse iCalendar's event), as the caller: accepted or tentative puts the event on the caller's own calendar (the first they own unless calendar is given) with their answer, declined takes it off again, and the iTIP REPLY to send the organizer comes back as {to, text}. Answering again replaces the answer; the event's id is made from the calendar and the invitation's UID, so it is never made twice. Args {invitation, attendee (the caller's address the invitation was sent to), answer, comment?, calendar?}.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "invitation",
+            "type": "json",
+            "description": "The invitation's event, as Parse iCalendar gives it"
+          },
+          {
+            "id": "attendee",
+            "type": "string",
+            "description": "The caller's address the invitation was sent to"
+          },
+          {
+            "id": "answer",
+            "type": "string",
+            "description": "accepted, tentative or declined"
+          },
+          {
+            "id": "comment",
+            "type": "string",
+            "optional": true,
+            "description": "A note to the organizer"
+          },
+          {
+            "id": "calendar",
+            "type": "string",
+            "optional": true,
+            "description": "The calendar to put it on, in place of the caller's first own calendar"
+          }
+        ]
+      }
+    },
+    {
+      "id": "me",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "calQuery",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "{filter: {field: \"owner\", op: \"eq\", value: user != \"\" ? user : \"0\"}, sort: [{field: \"_createdAt\"}], limit: 50}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "cals",
+      "type": "records.query",
+      "title": "The caller's own calendars",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "calCalendar"
+      }
+    },
+    {
+      "id": "where",
+      "type": "data.expression",
+      "title": "The calendar it goes on",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "(calendar ?? \"\") != \"\" ? calendar : (let own = filter(records ?? [], !(#.room ?? false)); len(own) \u003e 0 ? string(own[0]._id) : \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "problem",
+      "type": "data.expression",
+      "title": "May it be answered?",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "let inv = invitation ?? {}; let me = lower(trim(attendee ?? \"\")); !(answer in [\"accepted\", \"tentative\", \"declined\"]) ? \"the answer is accepted, tentative or declined\" : (inv.iCalUID ?? \"\") == \"\" ? \"the invitation has no UID\" : (inv.organizer?.email ?? \"\") == \"\" ? \"the invitation names no organizer to answer\" : !any(inv.attendees ?? [], lower(#.email ?? \"\") == me) ? \"you (\" + me + \") are not among the invitation's attendees\" : where == \"\" ? \"you have no calendar of your own to put it on\" : \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "ifRefused",
+      "type": "flow.branch",
+      "position": {
+        "x": 2040,
+        "y": 0
+      }
+    },
+    {
+      "id": "reply",
+      "type": "calendar.itipReply",
+      "title": "The REPLY to the organizer",
+      "position": {
+        "x": 340,
+        "y": 200
+      }
+    },
+    {
+      "id": "target",
+      "type": "data.expression",
+      "title": "The event's id, from the calendar and the UID",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "expr": "where + \"_i_\" + replace(replace(replace(toBase64(invitation.iCalUID), \"+\", \"-\"), \"/\", \"_\"), \"=\", \"\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "mirrorArgs",
+      "type": "data.expression",
+      "title": "The invitation as the caller's event",
+      "position": {
+        "x": 1360,
+        "y": 400
+      },
+      "config": {
+        "expr": "let me = lower(trim(attendee)); let inv = invitation; {calendar: where, removed: answer == \"declined\", event: fromPairs(concat(toPairs(inv), [[\"id\", \"\"], [\"status\", answer == \"tentative\" ? \"tentative\" : \"confirmed\"], [\"etag\", \"itip-\" + string(inv.sequence ?? 0) + \"-\" + answer], [\"attendees\", map(inv.attendees ?? [], lower(#.email ?? \"\") == me ? fromPairs(concat(toPairs(#), [[\"response\", answer], [\"user\", user]])) : #)]]))}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "mirror",
+      "type": "live.sendCommand",
+      "title": "Put it on the calendar (or take it off)",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "command": "calendar.event.mirror"
+      }
+    },
+    {
+      "id": "eventOut",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "expr": "answer == \"declined\" ? \"\" : target",
+        "type": "string"
+      }
+    },
+    {
+      "id": "produced",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 400
+      },
+      "config": {
+        "expr": "answer == \"declined\" ? nil : ({entity: \"calEvent\", id: target})",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "event",
+            "type": "string"
+          },
+          {
+            "id": "to",
+            "type": "string"
+          },
+          {
+            "id": "text",
+            "type": "string"
+          },
+          {
+            "id": "produced",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "failed",
+      "type": "flow.return",
+      "position": {
+        "x": 2720,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "notAnswered",
+      "type": "flow.return",
+      "title": "Not answered",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "calQuery",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "calQuery",
+        "pin": "value"
+      },
+      "to": {
+        "node": "cals",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "cals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "where",
+        "pin": "records"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "calendar"
+      },
+      "to": {
+        "node": "where",
+        "pin": "calendar"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "invitation"
+      },
+      "to": {
+        "node": "problem",
+        "pin": "invitation"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "attendee"
+      },
+      "to": {
+        "node": "problem",
+        "pin": "attendee"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "answer"
+      },
+      "to": {
+        "node": "problem",
+        "pin": "answer"
+      }
+    },
+    {
+      "from": {
+        "node": "where",
+        "pin": "value"
+      },
+      "to": {
+        "node": "problem",
+        "pin": "where"
+      }
+    },
+    {
+      "from": {
+        "node": "problem",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "problem"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ifRefused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ifRefused",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "ifRefused",
+        "pin": "true"
+      },
+      "to": {
+        "node": "notAnswered",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "problem",
+        "pin": "value"
+      },
+      "to": {
+        "node": "notAnswered",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "invitation"
+      },
+      "to": {
+        "node": "reply",
+        "pin": "invitation"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "attendee"
+      },
+      "to": {
+        "node": "reply",
+        "pin": "attendee"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "answer"
+      },
+      "to": {
+        "node": "reply",
+        "pin": "answer"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "comment"
+      },
+      "to": {
+        "node": "reply",
+        "pin": "comment"
+      }
+    },
+    {
+      "from": {
+        "node": "where",
+        "pin": "value"
+      },
+      "to": {
+        "node": "target",
+        "pin": "where"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "invitation"
+      },
+      "to": {
+        "node": "target",
+        "pin": "invitation"
+      }
+    },
+    {
+      "from": {
+        "node": "where",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mirrorArgs",
+        "pin": "where"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "invitation"
+      },
+      "to": {
+        "node": "mirrorArgs",
+        "pin": "invitation"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "attendee"
+      },
+      "to": {
+        "node": "mirrorArgs",
+        "pin": "attendee"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "answer"
+      },
+      "to": {
+        "node": "mirrorArgs",
+        "pin": "answer"
+      }
+    },
+    {
+      "from": {
+        "node": "me",
+        "pin": "user"
+      },
+      "to": {
+        "node": "mirrorArgs",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "ifRefused",
+        "pin": "false"
+      },
+      "to": {
+        "node": "mirror",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "target",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mirror",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "mirrorArgs",
+        "pin": "value"
+      },
+      "to": {
+        "node": "mirror",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "answer"
+      },
+      "to": {
+        "node": "eventOut",
+        "pin": "answer"
+      }
+    },
+    {
+      "from": {
+        "node": "target",
+        "pin": "value"
+      },
+      "to": {
+        "node": "eventOut",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "answer"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "answer"
+      }
+    },
+    {
+      "from": {
+        "node": "target",
+        "pin": "value"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "mirror",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "eventOut",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "event"
+      }
+    },
+    {
+      "from": {
+        "node": "reply",
+        "pin": "to"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "to"
+      }
+    },
+    {
+      "from": {
+        "node": "reply",
+        "pin": "text"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "text"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "produced"
+      }
+    },
+    {
+      "from": {
+        "node": "mirror",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "failed",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "mirror",
+        "pin": "message"
+      },
+      "to": {
+        "node": "failed",
+        "pin": "error"
+      }
+    }
+  ]
+}
