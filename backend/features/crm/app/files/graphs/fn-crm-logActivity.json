@@ -1,0 +1,534 @@
+{
+  "id": "fn-crm-logActivity",
+  "name": "Log an activity",
+  "description": "Logs a call, email, meeting, note or message on a contact, company or deal (at least one), as the caller, who owns it. An agent confined to some records (its run's reach) may log only on those. Gives the activity's id.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:crm",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "type",
+            "type": "string",
+            "description": "call, email, meeting, note or message"
+          },
+          {
+            "id": "subject",
+            "type": "string",
+            "description": "A one-line summary"
+          },
+          {
+            "id": "body",
+            "type": "string",
+            "optional": true,
+            "description": "The details, in Markdown"
+          },
+          {
+            "id": "contact",
+            "type": "string",
+            "optional": true,
+            "description": "The contact's id"
+          },
+          {
+            "id": "company",
+            "type": "string",
+            "optional": true,
+            "description": "The company's id"
+          },
+          {
+            "id": "deal",
+            "type": "string",
+            "optional": true,
+            "description": "The deal's id"
+          },
+          {
+            "id": "at",
+            "type": "string",
+            "optional": true,
+            "description": "When it happened, RFC 3339; now when left out"
+          },
+          {
+            "id": "due",
+            "type": "string",
+            "optional": true,
+            "description": "When a planned activity is due, RFC 3339; it is then not done yet"
+          },
+          {
+            "id": "source",
+            "type": "json",
+            "optional": true,
+            "description": "Where it came from: {link (a workbench: link), title, kind}"
+          }
+        ]
+      }
+    },
+    {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "now",
+      "type": "data.now",
+      "position": {
+        "x": 0,
+        "y": 400
+      }
+    },
+    {
+      "id": "newId",
+      "type": "data.newId",
+      "position": {
+        "x": 0,
+        "y": 600
+      }
+    },
+    {
+      "id": "actId",
+      "type": "data.expression",
+      "title": "The new activity's id, read once",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "string(fresh)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "let refs = filter([{entity: \"crmContact\", id: contact ?? \"\"}, {entity: \"crmCompany\", id: company ?? \"\"}, {entity: \"crmDeal\", id: deal ?? \"\"}], #.id != \"\");\nlet reached = len(reach ?? []) == 0 || any(refs, { let r = #; any(reach, #.entity == r.entity \u0026\u0026 string(#.id) == r.id) });\n{problem: len(refs) == 0 ? \"name the contact, company or deal it is on\"\n  : !reached ? \"this run may only log activities on the records it was started for\" : \"\",\n args: {entity: \"crmActivity\", values: {type: actType ?? \"note\", subject: subject ?? \"\", body: body ?? \"\", contact: (contact ?? \"\") == \"\" ? nil : contact,\n   company: (company ?? \"\") == \"\" ? nil : company, deal: (deal ?? \"\") == \"\" ? nil : deal, at: (at ?? \"\") == \"\" ? clock : at,\n   due: (due ?? \"\") == \"\" ? nil : due, done: (due ?? \"\") == \"\", source: source, owner: user == \"\" ? nil : user}}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refusedP",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1020,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "early",
+      "type": "flow.return",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.args",
+        "type": "json"
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "command": "record.create"
+      }
+    },
+    {
+      "id": "produced",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 600
+      },
+      "config": {
+        "expr": "{entity: \"crmActivity\", id: id}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "id",
+            "type": "string"
+          },
+          {
+            "id": "produced",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "refused",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "newId",
+        "pin": "id"
+      },
+      "to": {
+        "node": "actId",
+        "pin": "fresh"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "type"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "actType"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "subject"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "subject"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "body"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "body"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "contact"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "contact"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "company"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "company"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "deal"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "deal"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "at"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "at"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "due"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "due"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "source"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "source"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "reach"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "reach"
+      }
+    },
+    {
+      "from": {
+        "node": "now",
+        "pin": "time"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "clock"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refusedP",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refusedP",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "early",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "early",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "actId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "args",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "actId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "actId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "produced"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "error"
+      }
+    }
+  ]
+}

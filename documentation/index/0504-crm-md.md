@@ -1,0 +1,1 @@
+| [CRM.md](CRM.md) › *Built in forge 40d* | The `crm` library app (forge 40d): companies, contacts, pipelines and stages, deals, activities and saved views; Sales rep and Sales manager by owner rules; `deal.moveStage`, `pipeline.create`, `record.reassign`; the `crm.*` tools |

@@ -1,0 +1,151 @@
+{
+  "id": "crm",
+  "name": "CRM",
+  "icon": "handshake",
+  "description": "The CRM library app (forge 40d): companies, contacts, pipelines with their stages, deals moving through them, activities on their timelines and saved views, with the Sales rep and Sales manager roles and the tools chat and agents use. Forge's CRM app (40e) requires it for its pages; Invoicing, Support, the Nexus and Forms use its companies and contacts.",
+  "entities": [
+    "crmCompany",
+    "crmContact",
+    "crmPipeline",
+    "crmStage",
+    "crmDeal",
+    "crmActivity",
+    "crmSavedView"
+  ],
+  "commands": [
+    {
+      "type": "deal.moveStage",
+      "graph": "cmd-crm-deal-moveStage",
+      "action": "entity:crmDeal.update",
+      "title": "Move a deal to a stage",
+      "description": "Moves the target deal to a stage of its pipeline, between two deals of that column (at its end when neither is given), and logs the move as an activity in the same commit: args {stage, after?, before?}"
+    },
+    {
+      "type": "deal.accept",
+      "graph": "cmd-crm-deal-accept",
+      "action": "entity:crmDeal.update",
+      "title": "Accept a proposed deal",
+      "description": "Makes the target proposed deal active"
+    },
+    {
+      "type": "deal.dismiss",
+      "graph": "cmd-crm-deal-dismiss",
+      "action": "entity:crmDeal.delete",
+      "title": "Dismiss a proposed deal",
+      "description": "Deletes the target proposed deal"
+    },
+    {
+      "type": "pipeline.create",
+      "graph": "cmd-crm-pipeline-create",
+      "action": "entity:crmPipeline.create",
+      "title": "Make a pipeline",
+      "description": "Makes a pipeline at the target id with its stages (Lead, Qualified, Proposal, Won and Lost when none are given): args {name, default?, stages?}; Sales managers only"
+    },
+    {
+      "type": "record.reassign",
+      "graph": "cmd-crm-record-reassign",
+      "action": "entity:crmDeal.update",
+      "title": "Reassign a record",
+      "description": "Gives the target company, contact, deal or activity a new owner: args {entity, owner}; Sales managers only"
+    }
+  ],
+  "queries": [
+    {
+      "name": "pipelineDeals",
+      "graph": "qry-crm-pipelineDeals",
+      "description": "A pipeline's stages in order with their active deals, for the board: params {pipeline}"
+    },
+    {
+      "name": "timeline",
+      "graph": "qry-crm-timeline",
+      "description": "The activities on a contact, company or deal, newest first: params {contact?, company?, deal?}"
+    },
+    {
+      "name": "pipelineTotals",
+      "graph": "qry-crm-pipelineTotals",
+      "description": "Count, total and weighted amount of a pipeline's active deals per stage or owner: params {pipeline, groupBy}"
+    }
+  ],
+  "roles": [
+    {
+      "id": "manager",
+      "title": "Sales manager",
+      "installer": true,
+      "description": "Uses the CRM, changes every company, contact, deal and activity, reassigns them (record.reassign) and makes pipelines",
+      "actions": [
+        "entity:crmCompany.*",
+        "entity:crmContact.*",
+        "entity:crmPipeline.*",
+        "entity:crmStage.*",
+        "entity:crmDeal.*",
+        "entity:crmActivity.*",
+        "entity:crmSavedView.*"
+      ]
+    },
+    {
+      "id": "rep",
+      "title": "Sales rep",
+      "description": "Uses the CRM: reads every record, and changes the companies, contacts, deals and activities they own and shared ones with no owner",
+      "actions": [
+        "entity:crmCompany.*",
+        "entity:crmContact.*",
+        "entity:crmPipeline.*",
+        "entity:crmStage.*",
+        "entity:crmDeal.*",
+        "entity:crmActivity.*",
+        "entity:crmSavedView.*"
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "name": "findContact",
+      "graph": "fn-crm-findContact",
+      "title": "Find a contact",
+      "effect": "read",
+      "description": "Finds contacts by email (exact) or name (a part of it), each with its company and its open deals"
+    },
+    {
+      "name": "logActivity",
+      "graph": "fn-crm-logActivity",
+      "title": "Log an activity",
+      "effect": "write",
+      "description": "Logs a call, email, meeting, note or message on a contact, company or deal, owned by the caller"
+    },
+    {
+      "name": "createDeal",
+      "graph": "fn-crm-createDeal",
+      "title": "Create a deal",
+      "effect": "write",
+      "description": "Makes a deal owned by the caller in a pipeline and stage (the default pipeline's first open stage when left out); a proposal when propose is set or the calling agent's autonomy is suggest"
+    },
+    {
+      "name": "updateDeal",
+      "graph": "fn-crm-updateDeal",
+      "title": "Update a deal",
+      "effect": "write",
+      "description": "Changes a deal's name, amount, close date, probability, company or contacts"
+    },
+    {
+      "name": "moveDeal",
+      "graph": "fn-crm-moveDeal",
+      "title": "Move a deal",
+      "effect": "write",
+      "description": "Moves a deal to another stage of its pipeline, logging the move"
+    },
+    {
+      "name": "importContacts",
+      "graph": "fn-crm-importContacts",
+      "title": "Import contacts",
+      "effect": "write",
+      "description": "Imports up to 500 contacts as one batch, matched on email, so importing again updates them"
+    },
+    {
+      "name": "agentOptions",
+      "graph": "fn-crm-agentOptions",
+      "title": "Agent options",
+      "effect": "read",
+      "description": "What the CRM gives agents: its tools and what each does, its records, proposals and how an agent gets access"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "id": "crmSavedView",
+  "name": "Saved view",
+  "owner": "app:crm",
+  "description": "A saved filter over one of the CRM's lists (forge 40d): its owner's own, or shared with everyone using the CRM.",
+  "titleField": "name",
+  "fields": [
+    {
+      "id": "entity",
+      "name": "Entity",
+      "type": "text",
+      "description": "The entity type it lists, such as crmContact",
+      "required": true
+    },
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "The view's name, such as My open deals",
+      "required": true
+    },
+    {
+      "id": "where",
+      "name": "Where",
+      "type": "json",
+      "description": "Field id \u2192 value the records must have"
+    },
+    {
+      "id": "filter",
+      "name": "Filter",
+      "type": "json",
+      "description": "A records filter: {field, op, value}, or {and|or: [filters]}"
+    },
+    {
+      "id": "sort",
+      "name": "Sort",
+      "type": "json",
+      "description": "[{field, desc}]"
+    },
+    {
+      "id": "owner",
+      "name": "Owner",
+      "type": "user",
+      "description": "The person responsible for it; empty for a shared record any sales rep may change or claim. Changed by managers with record.reassign"
+    },
+    {
+      "id": "shared",
+      "name": "Shared",
+      "type": "bool",
+      "description": "Shown to everyone using the CRM, not only its owner",
+      "default": false
+    }
+  ],
+  "indexes": [
+    {
+      "id": "by_owner",
+      "fields": [
+        "owner"
+      ]
+    }
+  ],
+  "access": {
+    "read": "principal.kind == 'app' || record.shared == true || string(record.owner ?? '') == principal.user",
+    "create": "principal.kind == 'app' || string(record.owner ?? '') == principal.user",
+    "update": "principal.kind == 'app' || string(record.owner ?? '') == principal.user",
+    "delete": "principal.kind == 'app' || principal.owner || string(record.owner ?? '') == principal.user"
+  }
+}

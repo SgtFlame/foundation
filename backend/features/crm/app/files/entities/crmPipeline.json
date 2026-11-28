@@ -1,0 +1,28 @@
+{
+  "id": "crmPipeline",
+  "name": "Pipeline",
+  "owner": "app:crm",
+  "description": "A sales pipeline of the CRM library app (forge 40d): its stages are crmStage records in order. Made with pipeline.create; only Sales managers change pipelines.",
+  "titleField": "name",
+  "fields": [
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "The pipeline's name",
+      "required": true
+    },
+    {
+      "id": "default",
+      "name": "Default",
+      "type": "bool",
+      "description": "The pipeline new deals go to when none is named",
+      "default": false
+    }
+  ],
+  "access": {
+    "create": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant')",
+    "update": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant')",
+    "delete": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant')"
+  }
+}

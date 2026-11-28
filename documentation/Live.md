@@ -243,3 +243,6 @@ The first part of the Control Plane (forge `documentation/plans/020a-1-DeployedN
 ## Changed in game V36 (forge 360)
 
 *Emit event* (`live.emit`) takes an optional `target` pin, another target of the command target's type and area, with a `projection` config naming the projection its state is read from: the node calls `Decision.Read` on it, so the commit expects it unchanged, and the event (`NewEvent.Target`) commits in the command's batch. The game's `game.smelt {from}` and `game.takeIngots {into}` use it to change a storage building with the forge.
+
+## Changed in forge 40d
+A projector folds an atomic batch from its first event, reading the rest from the stream, and writes the batch's keys in one KV batch. Before this, each later event of the batch read the rest of the batch again before finding itself folded, which made a batch of n events cost about n²/2 stream reads. A 500-row `record.upsert` took minutes to project, and a second import read records that were not projected yet. Now `Projections.fold` first asks whether the event's own key already holds it or a later event (`folded`), and acks it at once when it does. Test: `records/data` `TestUpsertFullBatches` (two full 500-row batches back to back, both projected).

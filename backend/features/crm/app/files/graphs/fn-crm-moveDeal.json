@@ -1,0 +1,395 @@
+{
+  "id": "fn-crm-moveDeal",
+  "name": "Move a deal",
+  "description": "Moves a deal to another stage of its pipeline as the caller, at the end of that stage's column unless after or before name a deal there, through deal.moveStage, which logs the move. An agent confined to some records (its run's reach) may move only a deal among them.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:crm",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "deal",
+            "type": "string",
+            "description": "The deal's id"
+          },
+          {
+            "id": "stage",
+            "type": "string",
+            "description": "The stage's id (crmStage), one of the deal's pipeline's"
+          },
+          {
+            "id": "after",
+            "type": "string",
+            "optional": true,
+            "description": "The id of the deal it goes after in the column"
+          },
+          {
+            "id": "before",
+            "type": "string",
+            "optional": true,
+            "description": "The id of the deal it goes before in the column"
+          }
+        ]
+      }
+    },
+    {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "let reached = len(reach ?? []) == 0 || any(reach, #.entity == \"crmDeal\" \u0026\u0026 string(#.id) == (deal ?? \"\"));\n{problem: (deal ?? \"\") == \"\" ? \"name the deal\" : (stage ?? \"\") == \"\" ? \"name the stage\" : !reached ? \"this run may only move the deals it was started for\" : \"\",\n args: {stage: stage, after: (after ?? \"\") == \"\" ? nil : after, before: (before ?? \"\") == \"\" ? nil : before}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refusedP",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1020,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "early",
+      "type": "flow.return",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.args",
+        "type": "json"
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "command": "crm.deal.moveStage"
+      }
+    },
+    {
+      "id": "produced",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"crmDeal\", id: id}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "id",
+            "type": "string"
+          },
+          {
+            "id": "produced",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "refused",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "deal"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "deal"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "stage"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "stage"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "after"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "after"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "before"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "before"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "reach"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "reach"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refusedP",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refusedP",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "early",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "early",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "deal"
+      },
+      "to": {
+        "node": "send",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "args",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "deal"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "deal"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "produced"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "error"
+      }
+    }
+  ]
+}

@@ -1,0 +1,140 @@
+{
+  "id": "crmDeal",
+  "name": "Deal",
+  "owner": "app:crm",
+  "description": "A deal of the CRM library app (forge 40d): an amount moving through a pipeline's stages, in order by position within its stage (the board's columns). Move it with deal.moveStage, which logs the move as an activity; a proposed deal (from an agent) waits for a person's deal.accept or deal.dismiss. Sales reps change the deals they own.",
+  "titleField": "name",
+  "storage": {
+    "projection": "sql"
+  },
+  "fields": [
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "What the deal is, such as Acme renewal",
+      "required": true,
+      "searchable": true
+    },
+    {
+      "id": "amount",
+      "name": "Amount",
+      "type": "money",
+      "description": "Its value",
+      "currency": "USD"
+    },
+    {
+      "id": "pipeline",
+      "name": "Pipeline",
+      "type": "relation",
+      "description": "The pipeline it moves through",
+      "required": true,
+      "relation": {
+        "entity": "crmPipeline"
+      }
+    },
+    {
+      "id": "stage",
+      "name": "Stage",
+      "type": "relation",
+      "description": "The stage it is in, one of its pipeline's",
+      "required": true,
+      "relation": {
+        "entity": "crmStage"
+      }
+    },
+    {
+      "id": "position",
+      "name": "Position",
+      "type": "rank",
+      "description": "Its place in its stage's column",
+      "scope": "stage"
+    },
+    {
+      "id": "closeDate",
+      "name": "Close date",
+      "type": "date",
+      "description": "When it is expected to close"
+    },
+    {
+      "id": "probability",
+      "name": "Probability",
+      "type": "number",
+      "description": "The chance (0 to 100) it closes; follows the stage's default until changed by hand"
+    },
+    {
+      "id": "company",
+      "name": "Company",
+      "type": "relation",
+      "description": "The customer",
+      "relation": {
+        "entity": "crmCompany"
+      }
+    },
+    {
+      "id": "contacts",
+      "name": "Contacts",
+      "type": "relation",
+      "description": "The people involved",
+      "relation": {
+        "entity": "crmContact",
+        "many": true
+      }
+    },
+    {
+      "id": "owner",
+      "name": "Owner",
+      "type": "user",
+      "description": "The person responsible for it; empty for a shared record any sales rep may change or claim. Changed by managers with record.reassign"
+    },
+    {
+      "id": "state",
+      "name": "State",
+      "type": "enum",
+      "description": "proposed when an agent suggested it and no one has accepted it yet; active otherwise",
+      "options": [
+        {
+          "id": "active",
+          "name": "Active"
+        },
+        {
+          "id": "proposed",
+          "name": "Proposed"
+        }
+      ],
+      "default": "active"
+    }
+  ],
+  "indexes": [
+    {
+      "id": "by_stage",
+      "fields": [
+        "stage",
+        "position"
+      ]
+    },
+    {
+      "id": "by_pipeline",
+      "fields": [
+        "pipeline"
+      ]
+    },
+    {
+      "id": "by_owner",
+      "fields": [
+        "owner"
+      ]
+    },
+    {
+      "id": "by_company",
+      "fields": [
+        "company"
+      ]
+    }
+  ],
+  "access": {
+    "create": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant') || (record.owner ?? '') == '' || string(record.owner) == principal.user",
+    "update": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant') || (record.owner ?? '') == '' || string(record.owner) == principal.user",
+    "delete": "principal.kind == 'app' || principal.owner || principal.hasRole('manager', 'tenant') || (record.owner ?? '') == '' || string(record.owner) == principal.user"
+  }
+}

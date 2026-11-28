@@ -1,0 +1,251 @@
+{
+  "id": "qry-crm-pipelineDeals",
+  "name": "pipelineDeals",
+  "description": "A pipeline as a board: its stages in order, each with its active deals in order (with their company), how many and their total amount. Proposed deals are left out. params {pipeline}.",
+  "kind": "data.query",
+  "version": 1,
+  "owner": "app:crm",
+  "spec": {
+    "query": "pipelineDeals",
+    "title": "A pipeline's deals by stage",
+    "description": "A pipeline's stages in order, each with its active deals in order, their count and total amount; for the board. params {pipeline}.",
+    "params": {
+      "type": "object",
+      "properties": {
+        "pipeline": {
+          "type": "string",
+          "description": "The pipeline's id"
+        }
+      }
+    },
+    "action": "record.read"
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onQuery",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "pipeline",
+            "name": "pipeline",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "pid",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "(pipeline ?? \"\") == \"\" ? \"none\" : pipeline",
+        "type": "string"
+      }
+    },
+    {
+      "id": "p",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmPipeline"
+      }
+    },
+    {
+      "id": "stagesQ",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "{where: {pipeline: pid}, sort: [{field: \"position\"}], limit: 50}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "stages",
+      "type": "records.query",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmStage"
+      }
+    },
+    {
+      "id": "dealsQ",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "expr": "{where: {pipeline: pid}, sort: [{field: \"position\"}], limit: 2000, expand: [\"company\"]}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "deals",
+      "type": "records.query",
+      "position": {
+        "x": 1020,
+        "y": 200
+      },
+      "config": {
+        "entity": "crmDeal"
+      }
+    },
+    {
+      "id": "board",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "let active = filter(deals ?? [], (#.state ?? \"active\") == \"active\");\n{pipeline: p == nil ? nil : {id: p._id, name: p.name, default: p.default ?? false},\n columns: map(stages ?? [], { let s = #; let ds = filter(active, string(#.stage ?? \"\") == s._id);\n   {id: s._id, name: s.name, category: s.category ?? \"open\", probability: s.probability ?? 0, count: len(ds),\n    total: sum(map(ds, float(#.amount ?? \"0\"))),\n    deals: map(ds, ({id: #._id, name: #.name, amount: #.amount, owner: #.owner, closeDate: #.closeDate, probability: #.probability, position: #.position,\n      company: #.company, companyName: #._expanded?.company?.name ?? \"\"}))} })}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "result",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "pipeline"
+      },
+      "to": {
+        "node": "pid",
+        "pin": "pipeline"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "p",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "stagesQ",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "stagesQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "stages",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "dealsQ",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "dealsQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "deals",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "p",
+        "pin": "record"
+      },
+      "to": {
+        "node": "board",
+        "pin": "p"
+      }
+    },
+    {
+      "from": {
+        "node": "stages",
+        "pin": "records"
+      },
+      "to": {
+        "node": "board",
+        "pin": "stages"
+      }
+    },
+    {
+      "from": {
+        "node": "deals",
+        "pin": "records"
+      },
+      "to": {
+        "node": "board",
+        "pin": "deals"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "board",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "result"
+      }
+    }
+  ]
+}

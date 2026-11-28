@@ -105,3 +105,22 @@ func TestUpsert(t *testing.T) {
 	}
 	f.rejected(data.UpsertID, "", map[string]any{"entity": "contact", "rows": rows}, "rows")
 }
+
+// Two full batches back to back are both projected (forge 40d: the CRM's
+// contact import).
+func TestUpsertFullBatches(t *testing.T) {
+	f := setup(t)
+	f.contacts()
+	for b := range 2 {
+		var rows []any
+		for i := range data.MaxUpsertRows {
+			n := b*data.MaxUpsertRows + i
+			rows = append(rows, map[string]any{"name": fmt.Sprintf("P%d", n), "email": fmt.Sprintf("p%04d@example.com", n)})
+		}
+		f.ok(data.UpsertID, "", map[string]any{"entity": "contact", "match": "email", "rows": rows})
+	}
+	f.settle()
+	if got := f.all("contact"); len(got) != 2*data.MaxUpsertRows {
+		t.Fatalf("want %d contacts, got %d", 2*data.MaxUpsertRows, len(got))
+	}
+}

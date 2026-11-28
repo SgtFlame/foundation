@@ -1,0 +1,551 @@
+{
+  "id": "cmd-crm-pipeline-create",
+  "name": "crm.pipeline.create",
+  "description": "Makes a pipeline at the target id with its stages in order: Lead, Qualified, Proposal, Won and Lost when none are given. With default, it becomes the pipeline new deals go to, and the one that was stops being. Only Sales managers may (the stage and pipeline rules).",
+  "kind": "command",
+  "version": 1,
+  "owner": "app:crm",
+  "spec": {
+    "command": "pipeline.create",
+    "title": "Make a pipeline",
+    "description": "Makes a pipeline (the target is its new id) named name, with stages in order ([{name, probability 0-100, category open|won|lost}], at most 11; Lead 10, Qualified 25, Proposal 60, Won 100 and Lost 0 when left out). default makes it the pipeline new deals go to. Sales managers only.",
+    "args": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The pipeline's name, such as Sales"
+        },
+        "default": {
+          "type": "boolean",
+          "description": "Make it the pipeline new deals go to"
+        },
+        "stages": {
+          "type": "array",
+          "maxItems": 11,
+          "description": "Its stages in order, [{name, probability, category}]; the five usual ones when left out",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "probability": {
+                "type": "number"
+              },
+              "category": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "won",
+                  "lost"
+                ]
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "area": "rec",
+    "targetType": "crmPipeline",
+    "projection": "records.record",
+    "action": "record.create",
+    "events": [
+      "created",
+      "updated"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onCommand",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "defaults",
+      "type": "records.query",
+      "title": "The pipelines that are the default now",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "entity": "crmPipeline",
+        "where": {
+          "default": true
+        },
+        "limit": 50
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "let given = args.stages ?? [];\nlet usual = [{name: \"Lead\", probability: 10, category: \"open\"}, {name: \"Qualified\", probability: 25, category: \"open\"}, {name: \"Proposal\", probability: 60, category: \"open\"}, {name: \"Won\", probability: 100, category: \"won\"}, {name: \"Lost\", probability: 0, category: \"lost\"}];\nlet stages = len(given) \u003e 0 ? given : usual;\nlet ranks = [\"5\", \"A\", \"F\", \"K\", \"P\", \"U\", \"Z\", \"e\", \"j\", \"o\", \"t\"];\nlet name = trim(args.name ?? \"\");\nlet isDefault = args.default ?? false;\n{problem: pipeline != nil ? \"there is already a pipeline \" + target\n  : name == \"\" ? \"give the pipeline a name\"\n  : len(stages) \u003e 11 ? \"a pipeline has at most 11 stages\" : \"\",\n pipelineValues: {name: name, default: isDefault},\n stageCreates: map(stages, ({values: {pipeline: target, name: #.name, probability: #.probability ?? 0, category: #.category ?? \"open\", position: ranks[#index]}})),\n undefault: isDefault ? map(filter(defaults ?? [], #._id != target), ({id: #._id, set: {default: false}})) : []}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refused",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 1020,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "no",
+      "type": "live.reject",
+      "position": {
+        "x": 1360,
+        "y": 0
+      }
+    },
+    {
+      "id": "pv",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.pipelineValues",
+        "type": "json"
+      }
+    },
+    {
+      "id": "make",
+      "type": "records.create",
+      "title": "Make the pipeline",
+      "position": {
+        "x": 1360,
+        "y": 200
+      },
+      "config": {
+        "entity": "crmPipeline"
+      }
+    },
+    {
+      "id": "s0list",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 600
+      },
+      "config": {
+        "expr": "plan.stageCreates",
+        "type": "json"
+      }
+    },
+    {
+      "id": "s0",
+      "type": "flow.forEach",
+      "title": "Make each stage",
+      "position": {
+        "x": 1700,
+        "y": 0
+      }
+    },
+    {
+      "id": "s0v",
+      "type": "data.expression",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "expr": "item.values",
+        "type": "json"
+      }
+    },
+    {
+      "id": "s0w",
+      "type": "records.create",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmStage"
+      }
+    },
+    {
+      "id": "d0list",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 800
+      },
+      "config": {
+        "expr": "plan.undefault",
+        "type": "json"
+      }
+    },
+    {
+      "id": "d0",
+      "type": "flow.forEach",
+      "title": "The other pipelines stop being the default",
+      "position": {
+        "x": 2040,
+        "y": 200
+      }
+    },
+    {
+      "id": "d0id",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 200
+      },
+      "config": {
+        "expr": "item.id",
+        "type": "string"
+      }
+    },
+    {
+      "id": "d0s",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 400
+      },
+      "config": {
+        "expr": "item.set",
+        "type": "json"
+      }
+    },
+    {
+      "id": "d0w",
+      "type": "records.update",
+      "position": {
+        "x": 2720,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmPipeline"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "args"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "state"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "pipeline"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "defaults",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "defaults"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refused",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "no",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "no",
+        "pin": "message"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "make",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "target"
+      },
+      "to": {
+        "node": "make",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "pv",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "pv",
+        "pin": "value"
+      },
+      "to": {
+        "node": "make",
+        "pin": "values"
+      }
+    },
+    {
+      "from": {
+        "node": "make",
+        "pin": "then"
+      },
+      "to": {
+        "node": "s0",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "s0list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "s0list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "s0",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "s0",
+        "pin": "body"
+      },
+      "to": {
+        "node": "s0w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "s0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "s0v",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "s0v",
+        "pin": "value"
+      },
+      "to": {
+        "node": "s0w",
+        "pin": "values"
+      }
+    },
+    {
+      "from": {
+        "node": "s0",
+        "pin": "completed"
+      },
+      "to": {
+        "node": "d0",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "d0list",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "d0list",
+        "pin": "value"
+      },
+      "to": {
+        "node": "d0",
+        "pin": "list"
+      }
+    },
+    {
+      "from": {
+        "node": "d0",
+        "pin": "body"
+      },
+      "to": {
+        "node": "d0w",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "d0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "d0id",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "d0id",
+        "pin": "value"
+      },
+      "to": {
+        "node": "d0w",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "d0",
+        "pin": "item"
+      },
+      "to": {
+        "node": "d0s",
+        "pin": "item"
+      }
+    },
+    {
+      "from": {
+        "node": "d0s",
+        "pin": "value"
+      },
+      "to": {
+        "node": "d0w",
+        "pin": "set"
+      }
+    }
+  ]
+}

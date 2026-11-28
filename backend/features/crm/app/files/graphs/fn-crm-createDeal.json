@@ -1,0 +1,799 @@
+{
+  "id": "fn-crm-createDeal",
+  "name": "Create a deal",
+  "description": "Makes a deal as the caller, who owns it, in a pipeline (the default one when left out) at a stage (its first open one when left out), at the end of that stage's column, its probability the stage's. It is a proposal (state proposed, waiting for a person's deal.accept) when propose is set or the calling agent's autonomy is suggest. An agent confined to some records (its run's reach) may make one only for a company or contact among them. Gives the deal's id and whether it is a proposal.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:crm",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "name",
+            "type": "string",
+            "description": "What the deal is, such as Acme renewal"
+          },
+          {
+            "id": "amount",
+            "type": "string",
+            "optional": true,
+            "description": "Its value in USD, such as \"12000.00\""
+          },
+          {
+            "id": "company",
+            "type": "string",
+            "optional": true,
+            "description": "The customer's company id"
+          },
+          {
+            "id": "contacts",
+            "type": "json",
+            "optional": true,
+            "description": "The contact ids involved, a list"
+          },
+          {
+            "id": "pipeline",
+            "type": "string",
+            "optional": true,
+            "description": "The pipeline's id; the default pipeline when left out"
+          },
+          {
+            "id": "stage",
+            "type": "string",
+            "optional": true,
+            "description": "The stage's id; the pipeline's first open stage when left out"
+          },
+          {
+            "id": "closeDate",
+            "type": "string",
+            "optional": true,
+            "description": "When it should close, YYYY-MM-DD"
+          },
+          {
+            "id": "propose",
+            "type": "bool",
+            "optional": true,
+            "description": "Make it a proposal a person accepts"
+          }
+        ]
+      }
+    },
+    {
+      "id": "user",
+      "type": "live.currentUser",
+      "position": {
+        "x": 0,
+        "y": 200
+      }
+    },
+    {
+      "id": "pipes",
+      "type": "records.query",
+      "title": "The pipelines, the default first",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "config": {
+        "entity": "crmPipeline",
+        "sort": [
+          {
+            "field": "name"
+          }
+        ],
+        "limit": 50
+      }
+    },
+    {
+      "id": "pid",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "(pipeline ?? \"\") != \"\" ? pipeline : (find(pipes ?? [], #.default == true)?._id ?? (first(pipes ?? [])?._id ?? \"none\"))",
+        "type": "string"
+      }
+    },
+    {
+      "id": "stagesQ",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "{where: {pipeline: pid}, sort: [{field: \"position\"}], limit: 50}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "stages",
+      "type": "records.query",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmStage"
+      }
+    },
+    {
+      "id": "sid",
+      "type": "data.expression",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "expr": "(stage ?? \"\") != \"\" ? stage : (find(stages ?? [], (#.category ?? \"open\") == \"open\")?._id ?? \"none\")",
+        "type": "string"
+      }
+    },
+    {
+      "id": "lastQ",
+      "type": "data.expression",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "config": {
+        "expr": "{where: {stage: sid}, sort: [{field: \"position\", desc: true}], limit: 1}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "last",
+      "type": "records.query",
+      "title": "The column's last deal",
+      "position": {
+        "x": 2040,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmDeal"
+      }
+    },
+    {
+      "id": "afterRank",
+      "type": "data.expression",
+      "position": {
+        "x": 2380,
+        "y": 0
+      },
+      "config": {
+        "expr": "first(lastDeals ?? [])?.position ?? \"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "none",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 600
+      },
+      "config": {
+        "expr": "\"\"",
+        "type": "string"
+      }
+    },
+    {
+      "id": "rank",
+      "type": "records.rankBetween",
+      "title": "At the end of the column",
+      "position": {
+        "x": 2720,
+        "y": 0
+      }
+    },
+    {
+      "id": "newId",
+      "type": "data.newId",
+      "position": {
+        "x": 0,
+        "y": 800
+      }
+    },
+    {
+      "id": "dealId",
+      "type": "data.expression",
+      "title": "The new deal's id, read once",
+      "position": {
+        "x": 340,
+        "y": 200
+      },
+      "config": {
+        "expr": "string(fresh)",
+        "type": "string"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "data.expression",
+      "position": {
+        "x": 3060,
+        "y": 0
+      },
+      "config": {
+        "expr": "let st = find(stages ?? [], #._id == sid);\nlet cs = contacts ?? [];\nlet refs = concat((company ?? \"\") != \"\" ? [{entity: \"crmCompany\", id: company}] : [], map(cs, ({entity: \"crmContact\", id: string(#)})));\nlet reached = len(reach ?? []) == 0 || any(refs, { let r = #; any(reach, #.entity == r.entity \u0026\u0026 string(#.id) == r.id) });\nlet proposed = (propose ?? false) || string(agentRecord?.autonomy ?? \"\") == \"suggest\";\n{problem: trim(name ?? \"\") == \"\" ? \"give the deal a name\"\n  : pid == \"none\" ? \"there is no pipeline yet: make one with pipeline.create\"\n  : st == nil ? \"there is no stage \" + sid + \" in the pipeline\"\n  : !reached ? \"this run may only make deals for the company or contacts it was started for\" : \"\",\n proposed: proposed,\n args: {entity: \"crmDeal\", values: {name: trim(name ?? \"\"), amount: (amount ?? \"\") == \"\" ? nil : amount, pipeline: pid, stage: sid, position: rank,\n   probability: st?.probability, company: (company ?? \"\") == \"\" ? nil : company, contacts: cs, closeDate: (closeDate ?? \"\") == \"\" ? nil : closeDate,\n   owner: user == \"\" ? nil : user, state: proposed ? \"proposed\" : \"active\"}}}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "refusedP",
+      "type": "data.expression",
+      "position": {
+        "x": 3400,
+        "y": 0
+      },
+      "config": {
+        "expr": "plan.problem != \"\"",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "if",
+      "type": "flow.branch",
+      "position": {
+        "x": 3740,
+        "y": 0
+      }
+    },
+    {
+      "id": "why",
+      "type": "data.expression",
+      "position": {
+        "x": 3400,
+        "y": 200
+      },
+      "config": {
+        "expr": "plan.problem",
+        "type": "string"
+      }
+    },
+    {
+      "id": "early",
+      "type": "flow.return",
+      "position": {
+        "x": 4080,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "args",
+      "type": "data.expression",
+      "position": {
+        "x": 3400,
+        "y": 400
+      },
+      "config": {
+        "expr": "plan.args",
+        "type": "json"
+      }
+    },
+    {
+      "id": "send",
+      "type": "live.sendCommand",
+      "position": {
+        "x": 4080,
+        "y": 200
+      },
+      "config": {
+        "command": "record.create"
+      }
+    },
+    {
+      "id": "proposed",
+      "type": "data.expression",
+      "position": {
+        "x": 3400,
+        "y": 600
+      },
+      "config": {
+        "expr": "plan.proposed",
+        "type": "bool"
+      }
+    },
+    {
+      "id": "produced",
+      "type": "data.expression",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "expr": "{entity: \"crmDeal\", id: id}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 4420,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "id",
+            "type": "string"
+          },
+          {
+            "id": "proposed",
+            "type": "bool"
+          },
+          {
+            "id": "produced",
+            "type": "json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "refused",
+      "type": "flow.return",
+      "position": {
+        "x": 4420,
+        "y": 200
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "error",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "pipeline"
+      },
+      "to": {
+        "node": "pid",
+        "pin": "pipeline"
+      }
+    },
+    {
+      "from": {
+        "node": "pipes",
+        "pin": "records"
+      },
+      "to": {
+        "node": "pid",
+        "pin": "pipes"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "stagesQ",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "stagesQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "stages",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "stage"
+      },
+      "to": {
+        "node": "sid",
+        "pin": "stage"
+      }
+    },
+    {
+      "from": {
+        "node": "stages",
+        "pin": "records"
+      },
+      "to": {
+        "node": "sid",
+        "pin": "stages"
+      }
+    },
+    {
+      "from": {
+        "node": "sid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "lastQ",
+        "pin": "sid"
+      }
+    },
+    {
+      "from": {
+        "node": "lastQ",
+        "pin": "value"
+      },
+      "to": {
+        "node": "last",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "last",
+        "pin": "records"
+      },
+      "to": {
+        "node": "afterRank",
+        "pin": "lastDeals"
+      }
+    },
+    {
+      "from": {
+        "node": "afterRank",
+        "pin": "value"
+      },
+      "to": {
+        "node": "rank",
+        "pin": "after"
+      }
+    },
+    {
+      "from": {
+        "node": "none",
+        "pin": "value"
+      },
+      "to": {
+        "node": "rank",
+        "pin": "before"
+      }
+    },
+    {
+      "from": {
+        "node": "newId",
+        "pin": "id"
+      },
+      "to": {
+        "node": "dealId",
+        "pin": "fresh"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "name"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "name"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "amount"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "amount"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "company"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "company"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "contacts"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "contacts"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "closeDate"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "closeDate"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "propose"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "propose"
+      }
+    },
+    {
+      "from": {
+        "node": "pid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "pid"
+      }
+    },
+    {
+      "from": {
+        "node": "sid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "sid"
+      }
+    },
+    {
+      "from": {
+        "node": "stages",
+        "pin": "records"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "stages"
+      }
+    },
+    {
+      "from": {
+        "node": "rank",
+        "pin": "rank"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "rank"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "user"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "user"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "reach"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "reach"
+      }
+    },
+    {
+      "from": {
+        "node": "user",
+        "pin": "agentRecord"
+      },
+      "to": {
+        "node": "plan",
+        "pin": "agentRecord"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "refusedP",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "if",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "refusedP",
+        "pin": "value"
+      },
+      "to": {
+        "node": "if",
+        "pin": "condition"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "why",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "true"
+      },
+      "to": {
+        "node": "early",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "why",
+        "pin": "value"
+      },
+      "to": {
+        "node": "early",
+        "pin": "error"
+      }
+    },
+    {
+      "from": {
+        "node": "if",
+        "pin": "false"
+      },
+      "to": {
+        "node": "send",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "dealId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "target"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "args",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "args",
+        "pin": "value"
+      },
+      "to": {
+        "node": "send",
+        "pin": "args"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "ok"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "dealId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "plan",
+        "pin": "value"
+      },
+      "to": {
+        "node": "proposed",
+        "pin": "plan"
+      }
+    },
+    {
+      "from": {
+        "node": "proposed",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "proposed"
+      }
+    },
+    {
+      "from": {
+        "node": "dealId",
+        "pin": "value"
+      },
+      "to": {
+        "node": "produced",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "produced",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "produced"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "rejected"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "send",
+        "pin": "message"
+      },
+      "to": {
+        "node": "refused",
+        "pin": "error"
+      }
+    }
+  ]
+}

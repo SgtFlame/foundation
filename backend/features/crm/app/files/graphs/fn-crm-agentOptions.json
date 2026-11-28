@@ -1,0 +1,100 @@
+{
+  "id": "fn-crm-agentOptions",
+  "name": "Agent options",
+  "description": "What the CRM gives agents (forge 40d), for the Agent Builder chat mode: the CRM tools an agent of another app (such as Mail's) may be given and what each does, the records they read and write, how proposals work, and how an agent gets access. Read as the caller.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:crm",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": []
+      }
+    },
+    {
+      "id": "pipes",
+      "type": "records.query",
+      "title": "The pipelines the caller can see",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "entity": "crmPipeline",
+        "sort": [
+          {
+            "field": "name"
+          }
+        ],
+        "limit": 50
+      }
+    },
+    {
+      "id": "options",
+      "type": "data.expression",
+      "title": "The options",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "{\n  app: \"crm\",\n  hostsAgents: false,\n  tools: [\n    {name: \"crm.findContact\", effect: \"read\", does: \"Finds contacts by email or name, with their company and open deals\"},\n    {name: \"crm.logActivity\", effect: \"write\", does: \"Logs a call, email, meeting, note or message on a contact, company or deal\"},\n    {name: \"crm.createDeal\", effect: \"write\", does: \"Makes a deal; a proposal a person accepts when the agent's autonomy is suggest\"},\n    {name: \"crm.updateDeal\", effect: \"write\", does: \"Changes a deal's name, amount, close date, probability, company or contacts\"},\n    {name: \"crm.moveDeal\", effect: \"write\", does: \"Moves a deal to another stage of its pipeline, logging the move\"},\n    {name: \"crm.importContacts\", effect: \"write\", does: \"Imports up to 500 contacts, matched on email\"},\n    {name: \"crm.agentOptions\", effect: \"read\", does: \"This description\"}\n  ],\n  entities: [\n    {id: \"crmCompany\", label: \"Companies\"}, {id: \"crmContact\", label: \"Contacts\"}, {id: \"crmDeal\", label: \"Deals\"},\n    {id: \"crmActivity\", label: \"Activities\"}, {id: \"crmPipeline\", label: \"Pipelines\"}, {id: \"crmStage\", label: \"Stages\"}\n  ],\n  pipelines: map(pipes ?? [], ({id: #._id, name: #.name, default: #.default ?? false})),\n  proposals: \"A deal an agent makes with autonomy suggest is proposed: it stays off the board until a person sends deal.accept (or deal.dismiss)\",\n  reach: \"The write tools keep to the run's reach: an agent started for some records changes only those\",\n  access: \"An agent needs a CRM role to read or write: grant it Sales rep (writes the records it owns) or Sales manager in the Share dialog\"\n}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "options",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "pipes",
+        "pin": "records"
+      },
+      "to": {
+        "node": "options",
+        "pin": "pipes"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "options",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "options"
+      }
+    }
+  ]
+}

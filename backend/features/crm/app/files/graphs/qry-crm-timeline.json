@@ -1,0 +1,183 @@
+{
+  "id": "qry-crm-timeline",
+  "name": "timeline",
+  "description": "The activities on a contact, a company or a deal, newest first (at most 200), live: calls, emails, meetings, notes and messages, logged by hand or by Mail, the Nexus and deal moves. params {contact?, company?, deal?}; the first given is used.",
+  "kind": "data.query",
+  "version": 1,
+  "owner": "app:crm",
+  "spec": {
+    "query": "timeline",
+    "title": "A timeline of activities",
+    "description": "Activities on a contact, company or deal, newest first, at most 200. params {contact?, company?, deal?}: give one.",
+    "params": {
+      "type": "object",
+      "properties": {
+        "contact": {
+          "type": "string",
+          "description": "A contact's id"
+        },
+        "company": {
+          "type": "string",
+          "description": "A company's id"
+        },
+        "deal": {
+          "type": "string",
+          "description": "A deal's id"
+        }
+      }
+    },
+    "action": "record.read"
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onQuery",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "contact",
+            "name": "contact",
+            "type": "string"
+          },
+          {
+            "id": "company",
+            "name": "company",
+            "type": "string"
+          },
+          {
+            "id": "deal",
+            "name": "deal",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "q",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "expr": "let field = (contact ?? \"\") != \"\" ? \"contact\" : (company ?? \"\") != \"\" ? \"company\" : \"deal\";\nlet id = (contact ?? \"\") != \"\" ? contact : (company ?? \"\") != \"\" ? company : ((deal ?? \"\") != \"\" ? deal : \"none\");\n{filter: {field: field, op: \"eq\", value: id}, sort: [{field: \"at\", desc: true}], limit: 200, expand: [\"contact\", \"company\", \"deal\"]}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "acts",
+      "type": "records.query",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "crmActivity"
+      }
+    },
+    {
+      "id": "items",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "expr": "{activities: map(acts ?? [], ({id: #._id, type: #.type ?? \"note\", subject: #.subject, body: #.body ?? \"\", at: #.at, due: #.due, done: #.done ?? true, owner: #.owner, source: #.source,\n  contact: #.contact, contactName: #._expanded?.contact?.name ?? \"\", company: #.company, companyName: #._expanded?.company?.name ?? \"\", deal: #.deal, dealName: #._expanded?.deal?.name ?? \"\"}))}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "result",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "contact"
+      },
+      "to": {
+        "node": "q",
+        "pin": "contact"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "company"
+      },
+      "to": {
+        "node": "q",
+        "pin": "company"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "deal"
+      },
+      "to": {
+        "node": "q",
+        "pin": "deal"
+      }
+    },
+    {
+      "from": {
+        "node": "q",
+        "pin": "value"
+      },
+      "to": {
+        "node": "acts",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "acts",
+        "pin": "records"
+      },
+      "to": {
+        "node": "items",
+        "pin": "acts"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "items",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "result"
+      }
+    }
+  ]
+}
