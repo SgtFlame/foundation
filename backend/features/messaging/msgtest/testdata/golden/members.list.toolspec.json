@@ -1,0 +1,16 @@
+{
+  "name": "chat.messaging.members.list",
+  "title": "List members",
+  "description": "The members of a channel, or of the whole workspace when no channel is given.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "The channel's id; the whole workspace when left out"
+      }
+    }
+  },
+  "effect": "read",
+  "source": "connector"
+}

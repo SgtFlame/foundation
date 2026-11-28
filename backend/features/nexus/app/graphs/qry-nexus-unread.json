@@ -1,0 +1,180 @@
+{
+  "id": "qry-nexus-unread",
+  "name": "unread",
+  "description": "A channel's message count and its last message's time ({count, lastAt}, kept current), for a member's unread count (count less their membership's seen); nothing for a channel the caller cannot see. params {channel}.",
+  "kind": "data.query",
+  "version": 1,
+  "owner": "app:nexus",
+  "spec": {
+    "query": "unread",
+    "title": "A channel's counts",
+    "description": "A channel's message count and its last message's time ({count, lastAt}, kept current), for a member's unread count (count less their membership's seen); nothing for a channel the caller cannot see. params {channel}.",
+    "params": {
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": "string",
+          "description": "The channel's id"
+        }
+      },
+      "required": [
+        "channel"
+      ]
+    },
+    "action": "record.read"
+  },
+  "nodes": [
+    {
+      "id": "event",
+      "type": "live.onQuery",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "channel",
+            "name": "channel",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cid",
+      "type": "data.expression",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "type": "string",
+        "expr": "channel ?? \"\""
+      }
+    },
+    {
+      "id": "chan",
+      "type": "records.get",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "entity": "nexusChannel"
+      }
+    },
+    {
+      "id": "counts",
+      "type": "live.readProjection",
+      "position": {
+        "x": 680,
+        "y": 200
+      },
+      "config": {
+        "projector": "app.nexus.unread"
+      }
+    },
+    {
+      "id": "out",
+      "type": "data.expression",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "type": "json",
+        "expr": "chan == nil ? {count: 0, lastAt: nil} : {count: value?.count ?? 0, lastAt: value?.lastAt}"
+      }
+    },
+    {
+      "id": "ret",
+      "type": "flow.return",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "result",
+            "name": "result",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "event",
+        "pin": "channel"
+      },
+      "to": {
+        "node": "cid",
+        "pin": "channel"
+      }
+    },
+    {
+      "from": {
+        "node": "cid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "chan",
+        "pin": "id"
+      }
+    },
+    {
+      "from": {
+        "node": "cid",
+        "pin": "value"
+      },
+      "to": {
+        "node": "counts",
+        "pin": "key"
+      }
+    },
+    {
+      "from": {
+        "node": "chan",
+        "pin": "record"
+      },
+      "to": {
+        "node": "out",
+        "pin": "chan"
+      }
+    },
+    {
+      "from": {
+        "node": "counts",
+        "pin": "value"
+      },
+      "to": {
+        "node": "out",
+        "pin": "value"
+      }
+    },
+    {
+      "from": {
+        "node": "event",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "out",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ret",
+        "pin": "result"
+      }
+    }
+  ]
+}

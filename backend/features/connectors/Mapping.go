@@ -156,6 +156,9 @@ func OpenAPI(c Contract) json.RawMessage {
 	}
 	paths := map[string]any{}
 	for _, op := range c.Operations {
+		if op.Secret {
+			continue
+		}
 		o := map[string]any{"operationId": WireName(ToolName(c.ID, op.ID)), "summary": op.Title, "description": op.Description,
 			"requestBody": map[string]any{"required": true, "content": content(op.Args)},
 			"responses": map[string]any{

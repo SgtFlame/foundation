@@ -1,4 +1,4 @@
-import { docked, launchPlan } from '../ship/Dock.ts'
+import { docked, launchPlan, parkPlan } from '../ship/Dock.ts'
 import { padCharge, padUnder, portOf, portPads, PORT_ICE, PORT_RATE } from '../ship/Pad.ts'
 import { BAY_TOP, bayNear, clamped, needsBay } from '../ship/Bay.ts'
 import { blockCost, costLine, pay, shortOf, type Cost } from '../ship/Blueprint.ts'
@@ -99,6 +99,7 @@ export type ShipIntent =
   | { kind: 'armBuild'; id: string; ship: string; from: string } // V38: the shipyard's arms place a ship's blocks from storage
   | { kind: 'openPort'; id: string; pad: string; pad2?: string; from: string } // V39: a spaceport opened over its landing pads
   | { kind: 'launch'; id: string; tower?: string } // V40: a ship's docking clamp lets it go (a freighter or barge through an open spaceport)
+  | { kind: 'dock'; id: string; bay: string } // V41: a flown ship parked back on a free bay floor
   | { kind: 'fabricate'; id: string; item: FabItem } // V23: a circuit board (V24: or an ion thruster kit) started at a cabin's fabricator
   | { kind: 'fitKit'; id: string } // V24: an ion thruster kit fitted to a ship
   | { kind: 'fitDrive'; id: string } // V27: a jump drive fitted to a ship
@@ -638,7 +639,7 @@ export class VoxelViewport {
   private updateHint(): void {
     if (this.shipLayer.pilotOf) {
       this.hint.textContent = this.input.locked
-        ? `W/S forward and back · A/D sideways · Space up · C down · mouse to turn · Q/E roll · ${this.shipLayer.ships().find((s) => s.id === this.shipLayer.pilotOf)?.jump ? 'M: jump · ' : ''}F to leave the seat · Esc: release`
+        ? `W/S forward and back · A/D sideways · Space up · C down · mouse to turn · Q/E roll · ${this.shipLayer.ships().find((s) => s.id === this.shipLayer.pilotOf)?.jump ? 'M: jump · ' : ''}${this.parkHint()}F to leave the seat · Esc: release`
         : 'Click to fly the ship'
       return
     }
@@ -2189,6 +2190,40 @@ export class VoxelViewport {
     return plan.ok ? `F: launch the ${st.design} from its bay${plan.tower ? ' through the spaceport' : ''} and fly · ` : `The docking clamp holds the ${st.design}: ${plan.why} · `
   }
 
+  private lastParkHint = ''
+
+  // V41: what parking the flown ship on a bay floor needs right now
+  private parkNow() {
+    const id = this.shipLayer.pilotOf
+    const b = this.shipLayer.body
+    const st = id ? this.shipLayer.ships().find((s) => s.id === id) : undefined
+    if (!id || !b || !st) return null
+    const s = b.state()
+    return { id, st, plan: parkPlan(st, s, Math.hypot(b.v.x, b.v.y, b.v.z), this.shipLayer.ships()) }
+  }
+
+  // V41: P while flying over a free bay floor parks the ship on it
+  private parkHint(): string {
+    const p = this.parkNow()
+    if (!p || !p.plan.ok) return p && /slow down/.test(p.plan.ok ? '' : p.plan.why) ? 'Slow down to park on the bay · ' : ''
+    return `P: park the ${p.st.design} on the bay · `
+  }
+
+  // V41: the clamp takes the ship back and the pilot stands up beside it
+  park(): boolean {
+    const p = this.parkNow()
+    if (!p) return false
+    if (!p.plan.ok) {
+      this.flashHint(`Can't park: ${p.plan.why}`)
+      return false
+    }
+    const bay = p.plan.bay
+    this.leaveSeat()
+    this.opts.onShipIntent?.({ kind: 'dock', id: p.id, bay })
+    this.flashHint(`The docking clamp takes the ${p.st.design}`)
+    return true
+  }
+
   // Leaves the seat, standing beside the cockpit
   leaveSeat(): void {
     const id = this.shipLayer.pilotOf
@@ -2277,6 +2312,10 @@ export class VoxelViewport {
       return
     }
     if (input.locked && input.pressed('KeyM')) this.jump()
+    if (input.locked && input.pressed('KeyP')) {
+      this.park()
+      return
+    }
     this.lastHelm = this.helm()
     this.shipLayer.step(dt, this.lastHelm)
     if (this.crashed()) return
@@ -2284,6 +2323,12 @@ export class VoxelViewport {
     if (this.packTick <= 0) {
       this.packTick = 0.2
       this.drawPack()
+      // V41: show P to park as the ship comes over a free bay floor
+      const park = this.parkHint()
+      if (park !== this.lastParkHint) {
+        this.lastParkHint = park
+        this.updateHint()
+      }
     }
     this.flyTick -= dt
     if (this.flyTick <= 0) {

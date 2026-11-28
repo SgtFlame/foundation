@@ -1,7 +1,7 @@
 {
   "id": "calendar-push",
   "name": "Push an edit to the outside calendar",
-  "description": "Sends an edit made here to the event's outside calendar, as a job keyed by the event: event.create keyed by the record's id (so a retried job makes one outside event), then the outside id and etag written back; event.update with the etag the edit was based on, and on conflict the outside version kept, the edit recorded as the event's refusedChange and a delta pull enqueued; event.delete for a deleted event. Does nothing for a calendar without a connection.",
+  "description": "Sends an edit made here to the event's outside calendar, as a job keyed by the event: event.create keyed by the record's id (so a retried job makes one outside event), then the outside id and etag written back; event.update with the etag the edit was based on, and on conflict the outside version kept, the edit recorded as the event's refusedChange and a delta pull enqueued; event.delete for a deleted event. Does nothing for a calendar without a connection, or a read-only one (a feed).",
   "kind": "server.action",
   "version": 1,
   "owner": "app:calendar",
@@ -215,7 +215,7 @@
         "y": 200
       },
       "config": {
-        "expr": "let connected = cal != nil \u0026\u0026 (cal.connection ?? \"\") != \"\" \u0026\u0026 (cal.outsideId ?? \"\") != \"\";\n!connected ? \"none\" : ((deleted ?? false) ? (outId != \"\" ? \"delete\" : \"none\") : (outId == \"\" ? \"create\" : \"update\"))",
+        "expr": "let connected = cal != nil \u0026\u0026 (cal.connection ?? \"\") != \"\" \u0026\u0026 (cal.outsideId ?? \"\") != \"\" \u0026\u0026 !(cal.readOnly ?? false);\n!connected ? \"none\" : ((deleted ?? false) ? (outId != \"\" ? \"delete\" : \"none\") : (outId == \"\" ? \"create\" : \"update\"))",
         "type": "string"
       }
     },

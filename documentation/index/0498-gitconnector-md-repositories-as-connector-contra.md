@@ -1,0 +1,1 @@
+| [GitConnector.md](GitConnector.md) | Repositories as connector contracts (forge 24): `git.repo@1` (refs, trees, files, compare, keyed commits to a branch, `pushed`) and `git.review@1` (pull requests), the Git test server `gittest.repo` with `gittest.control@1`, and the suite every type passes |

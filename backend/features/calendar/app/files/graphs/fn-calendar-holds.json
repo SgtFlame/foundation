@@ -1,0 +1,132 @@
+{
+  "id": "fn-calendar-holds",
+  "name": "Open holds",
+  "description": "The open Holds of a proposal's subject that the caller may see, newest first: each {hold, title, calendar, expires, slots: [{start, end, event}]}, so an agent reading a reply can tell which held time it picks and call choose. Args {subject: {entity, id}}.",
+  "kind": "function",
+  "version": 1,
+  "owner": "app:calendar",
+  "nodes": [
+    {
+      "id": "call",
+      "type": "event.call",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "subject",
+            "type": "json",
+            "description": "What the proposals are about, {entity, id} (a mail thread, a conversation)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "q",
+      "type": "data.expression",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "expr": "{filter: {field: \"status\", op: \"eq\", value: \"open\"}, sort: [{field: \"_createdAt\", desc: true}], limit: 200}",
+        "type": "json"
+      }
+    },
+    {
+      "id": "list",
+      "type": "records.query",
+      "title": "Open Holds the caller may see",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "config": {
+        "entity": "calHold"
+      }
+    },
+    {
+      "id": "mine",
+      "type": "data.expression",
+      "title": "The subject's, in the tool's shape",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "config": {
+        "expr": "let e = string(subject?.entity ?? \"\"); let i = string(subject?.id ?? \"\"); map(filter(records ?? [], string(#.subject?.entity ?? \"\") == e \u0026\u0026 string(#.subject?.id ?? \"\") == i), ({hold: string(#._id), title: #.title ?? \"\", calendar: string(#.calendar ?? \"\"), expires: #.expires ?? \"\", slots: #.slots ?? []}))",
+        "type": "json"
+      }
+    },
+    {
+      "id": "ok",
+      "type": "flow.return",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "config": {
+        "outputs": [
+          {
+            "id": "holds",
+            "type": "json"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "call",
+        "pin": "then"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "then"
+      }
+    },
+    {
+      "from": {
+        "node": "q",
+        "pin": "value"
+      },
+      "to": {
+        "node": "list",
+        "pin": "query"
+      }
+    },
+    {
+      "from": {
+        "node": "list",
+        "pin": "records"
+      },
+      "to": {
+        "node": "mine",
+        "pin": "records"
+      }
+    },
+    {
+      "from": {
+        "node": "call",
+        "pin": "subject"
+      },
+      "to": {
+        "node": "mine",
+        "pin": "subject"
+      }
+    },
+    {
+      "from": {
+        "node": "mine",
+        "pin": "value"
+      },
+      "to": {
+        "node": "ok",
+        "pin": "holds"
+      }
+    }
+  ]
+}
