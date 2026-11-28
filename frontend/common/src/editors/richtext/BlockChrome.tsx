@@ -168,7 +168,7 @@ export function BlockChrome({ editor, items, locked, onCommand, children }: {
     const n = editor.state.doc.childCount
     for (let i = 0; i < n; i++) {
       const r = blockRect(editor, i)
-      if (r && y < r.top + r.height / 2) return i
+      if (r && y <= r.top + r.height / 2) return i
     }
     return n
   }
