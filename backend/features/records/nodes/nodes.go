@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/SgtFlame/foundation/backend/features/authz"
 	"github.com/SgtFlame/foundation/backend/features/cognition"
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/live"
@@ -291,6 +292,19 @@ func request[T any](x *cognition.Exec, in cognition.Values, pin string) (T, erro
 const queryProps = `"where":{"type":"object","title":"Where","description":"Field id → value the records must have"},
   "filter":{"type":"object","title":"Filter","description":"{field, op, value}, or {and: [filters]} or {or: [filters]}"}`
 
+// mayRead checks record.read on an entity type for the run's principal, as
+// the records.get, records.find and records.aggregate queries do when they
+// are subscribed: data.Get, Find and Summarize apply the row rules but not
+// the type's own grant, so without it a person with no role on an app's
+// type (or whose role was revoked) still read its records through a graph.
+func mayRead(x *cognition.Exec, entity string) error {
+	if entity == "" {
+		return nil // the read itself names the missing entity type
+	}
+	resource := records.Resource(x.Principal, entity)
+	return authz.Check(x.Context(), x.Principal, "record.read", resource).Err("record.read", resource)
+}
+
 func contributeReads(reg *extensions.Registry, deps func() data.Deps) {
 	node(reg, 650, cognition.NodeType{
 		Descriptor: extensions.Descriptor{ID: "records.get"}, Title: "Get record", Volatile: true,
@@ -316,6 +330,9 @@ func contributeReads(reg *extensions.Registry, deps func() data.Deps) {
 				return nil, "", fmt.Errorf("Get record names no entity type: set it in the config or join Entity")
 			}
 			id, _ := cognition.Get[string](in, "id")
+			if err := mayRead(x, c.Entity); err != nil {
+				return nil, "", err
+			}
 			d := deps().For(x.ServiceArgs)
 			if q, ok := x.Host.(*livenodes.QueryHost); ok {
 				q.Reads = append(q.Reads, livenodes.Read{Projector: data.Projector, Key: data.Key(c.Entity, id)},
@@ -352,6 +369,9 @@ func contributeReads(reg *extensions.Registry, deps func() data.Deps) {
 			if err != nil {
 				return nil, "", err
 			}
+			if err := mayRead(x, q.Entity); err != nil {
+				return nil, "", err
+			}
 			d := deps().For(x.ServiceArgs)
 			watch(x, d, related(x, d, q.Entity, q.Expand)...)
 			res, err := data.Find(x.ServiceArgs, d, q)
@@ -384,6 +404,9 @@ func contributeReads(reg *extensions.Registry, deps func() data.Deps) {
 			}
 			if len(a.Aggregates) == 0 {
 				a.Aggregates = []data.Aggregate{{Op: "count"}}
+			}
+			if err := mayRead(x, a.Entity); err != nil {
+				return nil, "", err
 			}
 			d := deps().For(x.ServiceArgs)
 			watch(x, d, a.Entity)
