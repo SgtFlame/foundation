@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,14 +23,20 @@ func init() {
 	connectors.LeaseTTL = 1500 * time.Millisecond
 }
 
-// memSecrets is a secret store for connections with no secrets.
+// memSecrets keeps connections' secrets in memory.
 type memSecrets struct{}
 
-func (memSecrets) Put(_ context.Context, ref config.SecretRef, _ string) (map[string]any, error) {
+var secretValues sync.Map
+
+func (memSecrets) Put(_ context.Context, ref config.SecretRef, value string) (map[string]any, error) {
+	secretValues.Store(ref.Name(), value)
 	return map[string]any{"$mem": ref.Name()}, nil
 }
-func (memSecrets) Get(context.Context, config.SecretRef, map[string]any) (string, error) {
-	return "", fmt.Errorf("no secrets here")
+func (memSecrets) Get(_ context.Context, ref config.SecretRef, _ map[string]any) (string, error) {
+	if v, ok := secretValues.Load(ref.Name()); ok {
+		return v.(string), nil
+	}
+	return "", fmt.Errorf("no secret %s", ref.Name())
 }
 func (memSecrets) Delete(context.Context, config.SecretRef) error { return nil }
 func (memSecrets) Hints() bool                                     { return false }
