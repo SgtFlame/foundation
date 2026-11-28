@@ -531,3 +531,43 @@ Record commands do not take `heldBy` yet: setting a file someone else uploaded o
 - **Backfill** needs nothing new: an event with `delivery: [watch, callback]` keeps its leased `Watch`, which publishes with the same ids, so a callback that arrives late is dropped by `CX_<tenant>`'s duplicate window and reaches a trigger once.
 - **Not yet**: *On connector event*'s `correlate` filter (a callback's correlation key matched against the record that started its operation).
 - **Tests**: `connections`' `TestHookRegistration` (three processes reconciling at once register once with the fake service `connectorstest.Hooks`, the signing secret resolved and verifying a callback, unregistered when the app is uninstalled) and `TestBackfillThenLateCallbacks` (three events watched, their callbacks then posted, three trigger runs).
+
+## Built in forge 26f-1
+
+`chat.messaging@1` is the one contract for outside chat services (Slack, Discord, Teams), and `msgtest.chat` is the Messaging test server that implements it with no outside service (forge's part 26f-1, [026f-1-MessagingContract.md](../../forge/documentation/plans/026f-1-MessagingContract.md)).
+
+- **The contract** (`features/messaging`, `messaging.Contract()`, a builtin that passes `CheckContract`). Its shapes are `messaging.Channel` (`kind`: `channel`, `private`, `direct` or `group`), `Member` and `Message`. A message has its `thread`, its `key` when it was posted through the contract, `author`, Markdown `text` with mentions as `@<member id>`, `mentions`, `files`, `reactions` per emoji, `replies`, `posted` and `edited`.
+  - Operations:
+    - `channels.list` and `members.list {channel?}`.
+    - `messages.list {channel, thread?, since?, limit?}`: the latest messages oldest first, or with `since` the messages posted or edited after that cursor plus the ids `deleted`, always with the next `cursor`. An expired cursor is `invalid` with `cursor_expired` (`messaging.CodeCursorExpired`).
+    - `message.post {channel, key, text, thread?, files?}`, keyed, effect `send`.
+    - `message.edit` and `message.delete`, refused as `invalid` on someone else's message. Deleting a message that is gone answers `deleted: false`.
+    - `reaction.add` and `reaction.remove`, both idempotent.
+    - `file.upload {channel, name, contentType, data}`, with base64 `data`.
+    - `check`.
+  - Events: `messagePosted` and `messageEdited` (with the whole message), `messageDeleted`, `reactionChanged {message, emoji, user, added}` and `channelChanged`. Each is keyed by its notice `id` and delivered by `watch` or `callback`, so Slack and Teams use 26b's hooks and Discord its gateway.
+  - A connection's own posts are raised too. A bridge knows them by `key`.
+- **The test server** (`messaging/msgtest`) has the Calendar test server's form (question 28.6): a Go builtin over in-memory workspaces, scripted through `msgtest.control@1`. It is not a scripted sample app, so every Foundation package tests against it without installing anything.
+  - Connections whose settings name the same `workspace` share it, as two people in one Slack do. `user` is the account's member id.
+  - A workspace starts with `#general` and `#random` and the members `u-dana` and `u-lee`. A private channel is seen only by its members.
+  - Control operations:
+    - the outside world: `post` (as another member), `edit`, `delete`, `react` and `addChannel`;
+    - faults: `fail` (the next calls of an operation), `expireCursor` and `dropNotifications` (the change stays in `messages.list`);
+    - `state`.
+  - `Watch` raises every change in the workspace on each connection's session, with notice ids `<connection>-<seq>`.
+  - The `msgtest.call` live call runs one operation as the caller, which `forge msgtest` uses.
+  - Wired in `features/wiring/messaging.go`. Give the type one adapter instance, since its state lives in that process.
+- **The suite** (`messaging/contracttest.Run`) is what every `chat.messaging@1` type passes. It checks that:
+  - a post is keyed;
+  - replies are listed under their thread only;
+  - lists are oldest first;
+  - a cursor gives only the changes since, with deletions;
+  - edits are reported;
+  - reactions count once;
+  - files attach;
+  - delete is idempotent;
+  - an expired cursor is `cursor_expired`.
+- **Tests**:
+  - `go test ./features/messaging/...`: the suite against the test server, the checks, the golden tool shapes of every operation (`msgtest/testdata/golden`, `-update` after a deliberate change), and faults and private channels.
+  - `TestWatchBothWays`: two connections in one workspace each get every notice in order, and a dropped notice is still listed.
+- **Not yet**: the two-way fixture through *Call connector* and *On connector event* comes with 26f-2's bridges, whose blueprints it tests.
