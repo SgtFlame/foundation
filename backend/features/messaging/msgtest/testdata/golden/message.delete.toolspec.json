@@ -1,0 +1,24 @@
+{
+  "name": "chat.messaging.message.delete",
+  "title": "Delete a message",
+  "description": "Deletes a message the connection's account posted. Deleting one that is gone succeeds, with deleted false.",
+  "input": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "The channel's id"
+      },
+      "id": {
+        "type": "string",
+        "description": "The message's id"
+      }
+    },
+    "required": [
+      "channel",
+      "id"
+    ]
+  },
+  "effect": "external",
+  "source": "connector"
+}

@@ -1,0 +1,230 @@
+{
+  "id": "nexus",
+  "name": "Nexus",
+  "icon": "forum",
+  "description": "Native channels (forge 26d-3): channels, private channels and direct conversations, their members, messages with mentions, files and threads, and reactions, with the unread counts and the tools agents use. A library app: Forge's Messaging app draws it, bridges and agents build on it.",
+  "entities": [
+    "nexusChannel",
+    "nexusMember",
+    "nexusMessage",
+    "nexusReaction"
+  ],
+  "commands": [
+    {
+      "type": "channel.addMember",
+      "graph": "cmd-nexus-channel-addMember",
+      "action": "entity:nexusChannel.read",
+      "title": "Add someone to a channel",
+      "description": "Adds a person (args.user, a user id) to the target channel as a member. Only a member adds people to a private channel; nobody is added to a direct conversation or an archived channel. Adding a member again changes nothing."
+    },
+    {
+      "type": "channel.archive",
+      "graph": "cmd-nexus-channel-archive",
+      "action": "entity:nexusChannel.update",
+      "title": "Archive a channel",
+      "description": "Archives the target channel: it stays readable, but no one posts in it or joins it. Only its owner archives it."
+    },
+    {
+      "type": "channel.create",
+      "graph": "cmd-nexus-channel-create",
+      "action": "entity:nexusChannel.create",
+      "title": "New channel",
+      "description": "Makes a channel, its target the new channel's id: its name (lower case, without #), topic, and whether it is private (seen only by its members; fixed once made). Its maker becomes its owner and first member, an admin."
+    },
+    {
+      "type": "channel.join",
+      "graph": "cmd-nexus-channel-join",
+      "action": "entity:nexusChannel.read",
+      "title": "Join a channel",
+      "description": "Joins the target channel as a member, so its messages count as unread and posting is allowed. Only a channel that is not private or archived; joining again changes nothing."
+    },
+    {
+      "type": "channel.leave",
+      "graph": "cmd-nexus-channel-leave",
+      "action": "entity:nexusChannel.read",
+      "title": "Leave a channel",
+      "description": "Leaves the target channel: the caller's membership ends, and with it, for a private channel, their access to it."
+    },
+    {
+      "type": "channel.markRead",
+      "graph": "cmd-nexus-channel-markRead",
+      "action": "entity:nexusChannel.read",
+      "title": "Mark a channel read",
+      "description": "Marks the target channel read for the caller: args.count is the channel's message count they have seen (the unread query's count), so their unread count is the channel's count less it."
+    },
+    {
+      "type": "dm.open",
+      "graph": "cmd-nexus-dm-open",
+      "action": "entity:nexusChannel.create",
+      "title": "Open a direct conversation",
+      "description": "Opens the direct conversation between the caller and args.user, its target dm-<lower id>-<higher id> (user ids compared as text), making it and both memberships the first time; opening it again changes nothing."
+    },
+    {
+      "type": "message.delete",
+      "graph": "cmd-nexus-message-delete",
+      "action": "entity:nexusMessage.update",
+      "title": "Delete a message",
+      "description": "Deletes the target message: it keeps its place in the channel, with no text, mentions or files. Only its author deletes it."
+    },
+    {
+      "type": "message.edit",
+      "graph": "cmd-nexus-message-edit",
+      "action": "entity:nexusMessage.update",
+      "title": "Edit a message",
+      "description": "Replaces the text of the target message. Only its author edits it, and not once it is deleted."
+    },
+    {
+      "type": "message.post",
+      "graph": "cmd-nexus-message-post",
+      "action": "entity:nexusMessage.create",
+      "title": "Post a message",
+      "description": "Posts a message, its target the id the sender's browser made (so a message sent twice is one): in args.channel, Markdown text, the user ids it mentions, its files ({id, name, size, contentType}, uploaded as files of nexusMessage) and, in a thread, the message it replies to (parent). Only a member of the channel posts, and not in an archived one."
+    },
+    {
+      "type": "reaction.toggle",
+      "graph": "cmd-nexus-reaction-toggle",
+      "action": "entity:nexusMessage.read",
+      "title": "React to a message",
+      "description": "Adds the emoji (args.emoji, the character) to the caller's reactions to the target message, or takes it away when they already reacted with it."
+    }
+  ],
+  "queries": [
+    {
+      "name": "channels",
+      "graph": "qry-nexus-channels",
+      "description": "The caller's channels and direct conversations, from their memberships ({channels: [{id, name, topic, kind, private, archived, peer, peerName, role, seen}]}), named channels by name, then direct conversations; with the unread query per channel for its counts."
+    },
+    {
+      "name": "messages",
+      "graph": "qry-nexus-messages",
+      "description": "A channel's latest messages, newest first ({messages}, with each author expanded), or a thread's replies when parent is given, oldest first; limit 50 when left out. Pages show channels with a reversed mui.virtualList over nexusMessage instead. params {channel, parent?, limit?}."
+    },
+    {
+      "name": "unread",
+      "graph": "qry-nexus-unread",
+      "description": "A channel's message count and its last message's time ({count, lastAt}, kept current), for a member's unread count (count less their membership's seen); nothing for a channel the caller cannot see. params {channel}."
+    }
+  ],
+  "projectors": [
+    {
+      "name": "unread",
+      "title": "Channel counts",
+      "description": "Each channel's message count and last message time, keyed by channel, for unread counts",
+      "entities": [
+        "nexusMessage"
+      ],
+      "key": "string(record?.channel ?? \"\")",
+      "graph": "nexus-unread"
+    }
+  ],
+  "roles": [
+    {
+      "id": "admin",
+      "title": "Nexus administrator",
+      "installer": true,
+      "description": "Sees every channel, private ones too, with their members and messages, and changes them",
+      "actions": [
+        "entity:nexusChannel.*",
+        "entity:nexusMember.*",
+        "entity:nexusMessage.*",
+        "entity:nexusReaction.*"
+      ]
+    },
+    {
+      "id": "user",
+      "title": "Nexus user",
+      "description": "Makes channels and direct conversations, joins channels that are not private, posts, edits and deletes their own messages and reacts; sees a private channel only once a member",
+      "actions": [
+        "entity:nexusChannel.read",
+        "entity:nexusChannel.create",
+        "entity:nexusChannel.update",
+        "entity:nexusMember.read",
+        "entity:nexusMember.create",
+        "entity:nexusMember.update",
+        "entity:nexusMember.delete",
+        "entity:nexusMessage.read",
+        "entity:nexusMessage.create",
+        "entity:nexusMessage.update",
+        "entity:nexusReaction.read",
+        "entity:nexusReaction.create",
+        "entity:nexusReaction.update",
+        "entity:nexusReaction.delete"
+      ],
+      "rowRules": {
+        "nexusChannel": "!(record.private ?? false) || principal.hasRole('member', record._id) || string(record.owner ?? '') == principal.user",
+        "nexusMember": "!(record.private ?? false) || principal.hasRole('member', record.channel) || string(record.user ?? '') == principal.user || string(record.owner ?? '') == principal.user",
+        "nexusMessage": "!(record.private ?? false) || principal.hasRole('member', record.channel)",
+        "nexusReaction": "!(record.private ?? false) || principal.hasRole('member', record.channel)"
+      }
+    },
+    {
+      "id": "member",
+      "title": "Private channel member",
+      "description": "Granted on one private channel by the app to each of its members: sees the channel, its members, messages and reactions",
+      "actions": [
+        "entity:nexusChannel.read",
+        "entity:nexusMember.read",
+        "entity:nexusMessage.read",
+        "entity:nexusReaction.read"
+      ],
+      "rowRules": {
+        "nexusChannel": "principal.hasRole('member', record._id)",
+        "nexusMember": "principal.hasRole('member', record.channel)",
+        "nexusMessage": "principal.hasRole('member', record.channel)",
+        "nexusReaction": "principal.hasRole('member', record.channel)"
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "id": "onMember",
+      "title": "A membership changed",
+      "description": "Keeps private channels' access in step with their memberships, as the app: a new member of a private channel gets the member role on it when whoever added them is its owner or holds that role there; a member who leaves loses it.",
+      "graph": "nexus-onMember"
+    },
+    {
+      "id": "onMessage",
+      "title": "A message was posted",
+      "description": "Notifies the people a new message mentions, as the app, once per message and person (key nexus:<message>:mention): in a private channel only its members, and never its author. The notification links to the message.",
+      "graph": "nexus-onMessage"
+    }
+  ],
+  "tools": [
+    {
+      "name": "readChannel",
+      "graph": "fn-nexus-readChannel",
+      "title": "Read a channel",
+      "effect": "read",
+      "description": "A channel's latest messages as the caller sees them (nexus.readChannel): oldest first, each {id, author, text, at, parent, replies?}, at most limit (30 when left out), with the channel's name and topic. A channel the caller may not read gives an error."
+    },
+    {
+      "name": "search",
+      "graph": "fn-nexus-search",
+      "title": "Search messages",
+      "effect": "read",
+      "description": "Searches the messages the caller may read for text (nexus.search), best first: each {id, channel, author, text, at}, at most limit (10 when left out)."
+    },
+    {
+      "name": "post",
+      "graph": "fn-nexus-post",
+      "title": "Post a message",
+      "effect": "write",
+      "description": "Posts a message to a channel as the caller (nexus.message.post): Markdown text, optionally a reply in the thread of parent, mentioning the user ids in mentions. Gives the new message's id, or why it was refused (not a member, archived)."
+    },
+    {
+      "name": "react",
+      "graph": "fn-nexus-react",
+      "title": "React to a message",
+      "effect": "write",
+      "description": "Toggles an emoji reaction (the character, such as 👍) on a message as the caller (nexus.reaction.toggle): added, or taken away when they had it."
+    }
+  ],
+  "ephemeral": [
+    {
+      "topic": "typing",
+      "title": "Typing",
+      "description": "Who is typing in a channel, keyed by the channel's id: sent by the composer at most every three seconds with {name}, never stored; read by whoever may see the channel",
+      "read": "entity:nexusChannel.read"
+    }
+  ]
+}

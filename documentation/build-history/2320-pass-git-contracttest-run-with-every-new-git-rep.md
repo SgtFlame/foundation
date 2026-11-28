@@ -1,0 +1,1 @@
+- pass `git/contracttest.Run` with every new `git.repo@1` type (24b against cassettes, 24c against a smart-HTTP server in the test);

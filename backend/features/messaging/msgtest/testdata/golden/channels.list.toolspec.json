@@ -1,0 +1,11 @@
+{
+  "name": "chat.messaging.channels.list",
+  "title": "List channels",
+  "description": "The channels the connection's account can see or is in, with their kind (channel, private, direct, group), topic and member count.",
+  "input": {
+    "type": "object",
+    "properties": {}
+  },
+  "effect": "read",
+  "source": "connector"
+}

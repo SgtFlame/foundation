@@ -155,6 +155,13 @@ type Operation struct {
 	// Remote is the outside name a discovered operation was found under,
 	// which the adapter sends (75c).
 	Remote string `json:"remote,omitempty"`
+	// Secret marks an operation whose args hold a secret (git.ssh's
+	// unlock, with a passphrase; forge 24f). It is sent only by the
+	// connection.secretCall live call, whose frame DevTools never records:
+	// never by Call connector, a tool, a script or a job, whose args are
+	// stored in traces, so the dispatcher refuses it elsewhere
+	// (WithSecretCall), and no mapping offers it.
+	Secret bool `json:"secret,omitempty"`
 }
 
 // Example is one call: args and the result they give.
@@ -225,6 +232,10 @@ type Type struct {
 	// AdapterServices; with svc.connectors they are all NATS lets it
 	// reach (AdapterPermissions).
 	Services []string `json:"services,omitempty"`
+	// OAuth signs a connection in with a provider (forge 26a-1): its
+	// tokens are the connection's oauth secret, and the adapter is given
+	// accessToken and expiresAt in its settings.
+	OAuth *OAuth `json:"oauth,omitempty"`
 }
 
 // AdapterServices are the services a type may declare its adapter calls.

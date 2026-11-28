@@ -1,0 +1,82 @@
+{
+  "name": "Channel",
+  "description": "A place people talk (forge 26d-3): a named channel anyone may join, a private one only its members see, or a direct conversation between two people. Made by channel.create or dm.open; its members are its nexusMember records",
+  "owner": "app:nexus",
+  "titleField": "name",
+  "fields": [
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "description": "What it is called, without the #; empty for a direct conversation"
+    },
+    {
+      "id": "topic",
+      "name": "Topic",
+      "type": "text",
+      "description": "One line on what it is for"
+    },
+    {
+      "id": "kind",
+      "name": "Kind",
+      "type": "enum",
+      "options": [
+        {
+          "id": "channel",
+          "name": "Channel"
+        },
+        {
+          "id": "direct",
+          "name": "Direct conversation"
+        }
+      ],
+      "default": "channel"
+    },
+    {
+      "id": "private",
+      "name": "Private",
+      "type": "bool",
+      "default": false,
+      "description": "Seen only by its members; fixed when it is made"
+    },
+    {
+      "id": "owner",
+      "name": "Owner",
+      "type": "relation",
+      "relation": {
+        "entity": "user"
+      },
+      "description": "Who made it, who archives it and whose additions to a private channel need no membership; the one who opened a direct conversation"
+    },
+    {
+      "id": "peer",
+      "name": "With",
+      "type": "relation",
+      "relation": {
+        "entity": "user"
+      },
+      "description": "A direct conversation's other person"
+    },
+    {
+      "id": "archived",
+      "name": "Archived",
+      "type": "bool",
+      "default": false,
+      "description": "Read-only: no one posts or joins"
+    },
+    {
+      "id": "createdAt",
+      "name": "Made",
+      "type": "createdAt"
+    },
+    {
+      "id": "createdBy",
+      "name": "Made by",
+      "type": "createdBy"
+    }
+  ],
+  "access": {
+    "update": "principal.kind != 'user' || string(record.owner) == principal.user",
+    "delete": "principal.kind != 'user'"
+  }
+}

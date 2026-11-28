@@ -1,0 +1,29 @@
+{
+  "type": "function",
+  "function": {
+    "name": "chat_messaging_message_edit",
+    "description": "Replaces the text of a message the connection's account posted. Editing someone else's message is refused as invalid.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": "string",
+          "description": "The channel's id"
+        },
+        "id": {
+          "type": "string",
+          "description": "The message's id"
+        },
+        "text": {
+          "type": "string",
+          "description": "The new text as Markdown"
+        }
+      },
+      "required": [
+        "channel",
+        "id",
+        "text"
+      ]
+    }
+  }
+}

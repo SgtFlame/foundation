@@ -42,6 +42,7 @@ import (
 	"github.com/SgtFlame/foundation/backend/features/extensions"
 	"github.com/SgtFlame/foundation/backend/features/kb/services/volumeservice"
 	kbtools "github.com/SgtFlame/foundation/backend/features/kb/tools"
+	recordsdata "github.com/SgtFlame/foundation/backend/features/records/data"
 	recordsfiles "github.com/SgtFlame/foundation/backend/features/records/files"
 )
 
@@ -72,6 +73,9 @@ type Env struct {
 	// Files is the record files store, set once it is made (files a node
 	// reads, such as an uploaded .ics or transcript).
 	Files *recordsfiles.Files
+	// Records is the records' deps, set once the projections and bus are
+	// made (features that read or write records as the service principal).
+	Records *recordsdata.Deps
 	// Images is the AI image provider, usage-recorded (forge 35f-7), set
 	// once the AI provider is made.
 	Images *providers.Images
@@ -80,6 +84,9 @@ type Env struct {
 	KB *kbtools.Deps
 	// FileEvents is the Volumes' file events (forge 35a-2), set once made.
 	FileEvents *volumeservice.FileEvents
+	// Mirrors writes the mirrored Volumes (forge 24e), set once the file
+	// events exist; nil without a knowledge base.
+	Mirrors *volumeservice.Mirrors
 }
 
 // Knowledge is the knowledge base's root and services, or empty ones.
@@ -96,6 +103,14 @@ func (e *Env) VolumeFiles() volumeservice.FileEvents {
 		return nil
 	}
 	return *e.FileEvents
+}
+
+// VolumeMirrors is the mirrored Volumes' writer, or nil before it is made.
+func (e *Env) VolumeMirrors() *volumeservice.Mirrors {
+	if e == nil || e.Mirrors == nil || e.Mirrors.Root == "" {
+		return nil
+	}
+	return e.Mirrors
 }
 
 // Connectors is the connectors' deps, or empty ones.
@@ -120,6 +135,14 @@ func (e *Env) RecordFiles() recordsfiles.Files {
 		return nil
 	}
 	return *e.Files
+}
+
+// RecordDeps is the records' deps, or empty ones.
+func (e *Env) RecordDeps() recordsdata.Deps {
+	if e == nil || e.Records == nil {
+		return recordsdata.Deps{}
+	}
+	return *e.Records
 }
 
 // ImageProvider is the AI image provider, or nil before it is made.

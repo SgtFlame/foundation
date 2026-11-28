@@ -24,6 +24,9 @@ func Resource(p features.Principal, root, dir string) string {
 // Check checks read or write ("read"/"write") on dir: volume.<access> inside
 // a Volume, kb.<access> outside one. It fails with authz.Status.
 func Check(args features.ServiceArgs, root, dir, access string) *features.ServiceResponse {
+	if access == "write" && Mirrored(root, dir) {
+		return args.Fail(authz.Status, Log.Code("volume_read_only").Errorf("this Volume mirrors a git repository: change the repository instead"))
+	}
 	res := Resource(args.Principal, root, dir)
 	action := "kb." + access
 	if filepath.Base(res) != "kb" {
@@ -38,10 +41,26 @@ func Check(args features.ServiceArgs, root, dir, access string) *features.Servic
 // May tells whether the principal has access ("read"/"write") to dir,
 // without failing.
 func May(args features.ServiceArgs, root, dir, access string) bool {
+	if access == "write" && Mirrored(root, dir) {
+		return false
+	}
 	res := Resource(args.Principal, root, dir)
 	action := "kb." + access
 	if filepath.Base(res) != "kb" {
 		action = "volume." + access
 	}
 	return authz.Check(args.Context(), args.Principal, action, res).Allowed
+}
+
+// Mirrored tells whether dir lies in a Volume that mirrors a git
+// repository (forge 24e), which no person may write.
+func Mirrored(root, dir string) bool {
+	for ; ; dir = filepath.Dir(dir) {
+		if marker, err := ReadMarker(dir); err == nil {
+			return marker.Mirror != nil
+		}
+		if dir == root || dir == filepath.Dir(dir) {
+			return false
+		}
+	}
 }
